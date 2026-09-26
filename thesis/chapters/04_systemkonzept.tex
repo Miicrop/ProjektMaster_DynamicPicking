@@ -1,0 +1,20 @@
+\chapter{Systemkonzept}
+\label{ch:systemkonzept}
+
+\section{Anforderungen}
+% TODO: Funktionale Anforderungen (Erkennen, Greifen, Prüfen, Sortieren) und
+% nicht-funktionale Anforderungen (Genauigkeit, Taktzeit, Robustheit) als Tabelle.
+
+\section{Hardwareaufbau}
+% TODO: Foto/Skizze der Zelle, Roboter, Greifer, Kameras, Beleuchtung, Ablagen.
+
+\section{Softwarearchitektur}
+Die Software ist modular aufgebaut. Ein zentraler Orchestrator steuert den Ablauf über
+einen Zustandsautomaten und tauscht mit den Modulen ausschließlich definierte Datenobjekte
+aus (\texttt{ObjectPose}, \texttt{InspectionResult}, \texttt{RobotTarget}). Jedes Modul
+besitzt eine Mock-Implementierung, wodurch die Module unabhängig voneinander entwickelt
+und getestet werden können.
+% TODO: Architekturdiagramm, Zustandsautomat (Abbildung), Schnittstellentabelle.
+
+\section{Koordinatensysteme}
+% TODO: Bild-KS -> Arbeitsbereich-KS (Homographie) -> Roboter-Basis-KS (Starrkörpertransformation).

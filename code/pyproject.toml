@@ -1,0 +1,9 @@
+[project]
+name = "dynamic-grasping"
+version = "0.1.0"
+description = "Dynamic grasping with a Neura robot and visual inspection"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["common", "m1_vision_topdown", "m2_robot_control", "m3_inspection", "orchestrator", "gui"]

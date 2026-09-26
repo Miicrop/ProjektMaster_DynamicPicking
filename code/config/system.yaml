@@ -1,0 +1,111 @@
+# System configuration. All values marked "tbd" must be measured / taught on the real setup.
+# Units: mm and degrees everywhere in this file (M2 converts to m / rad for the Neura API).
+
+# Default for `python -m orchestrator` (GUI: selectable). detector: mock|replay|camera|ai, robot: mock|sim|real, inspector: mock|replay|camera
+implementations:
+  detector: mock
+  robot: mock
+  inspector: mock
+
+logging:
+  level: INFO
+  cycle_dir: logs
+
+# --- M1: top-down camera ----------------------------------------------------
+topdown_camera:
+  # int = OpenCV device index, string = image file / glob (replay, relative to code/).
+  # Three cameras: topdown_camera (M1), inspection_camera (M3), wrist_camera (M4) - each needs its own index.
+  source: 0
+  width: 1920
+  height: 1080
+  calibration_file: null        # tbd, e.g. config/topdown_intrinsics.yaml
+
+workspace:
+  # aruco: 4 markers | white_frame: inner edge of the white frame | auto: aruco, fallback white_frame
+  method: auto
+  # Inner size of the white frame [mm] = extent of the workspace frame (tbd, measure)
+  size_mm: [400.0, 400.0]
+  px_per_mm: 2.0                # resolution of the rectified workspace image
+  border_mm: 5.0                # ignored margin along the frame edge
+  aruco_dictionary: DICT_4X4_50
+  # Marker centre positions in the workspace frame [mm]. Origin = inner bottom-left corner
+  # of the white frame, x to the right, y up (as seen by the camera). (tbd, measure + check IDs)
+  markers_mm:
+    0: [-25.0, -25.0]
+    1: [425.0, -25.0]
+    2: [425.0, 425.0]
+    3: [-25.0, 425.0]
+
+part_topdown:
+  # Part = pixels clearly brighter OR more saturated than the (dark grey) board median
+  brightness_delta: 50
+  saturation_delta: 40
+  value_min: 60
+  min_area_mm2: 300
+  max_area_mm2: 20000
+  chamfer_min_frac: 0.08        # chamfer depth relative to short side to count as found
+
+# 2D rigid transform workspace frame -> robot base frame (tbd, from teach-in of frame corners)
+workspace_to_robot:
+  rotation_deg: 0.0
+  translation_mm: [300.0, -200.0]
+  table_z_mm: 0.0
+
+# --- M2: robot (Neura LARA, neurapy v5.0.8) ------------------------------------
+robot:
+  host: 192.168.2.20            # IP printed on the robot base (tbd: verify, Neura default is 192.168.2.13)
+  tool_name: RobotiQ            # tool as created in the Neura GUI (found in robot backup)
+  home_point: Home              # named point stored on the robot
+  override: 0.2                 # global speed override 0..1 (keep low while testing)
+  joint_speed_percent: 20
+  linear_speed_mps: 0.10
+  approach_speed_mps: 0.03      # final linear approach / retreat
+  approach_height_mm: 80
+  grasp_height_mm: 10           # TCP height above table when grasping (depends on part / gripper)
+  gripper_angle_offset_deg: 90.0  # close gripper across the short side of the part
+  grip_wait_s: 1.0
+  # Software workspace limits in robot base frame [mm]
+  limits_mm:
+    x: [100.0, 900.0]
+    y: [-500.0, 500.0]
+    z: [-10.0, 600.0]
+  # Named poses: [x, y, z, rx, ry, rz] in mm / deg (tbd, teach on real robot)
+  # "home" is the Home point from the robot backup (0.42 m, 0, 0.434 m, rpy = pi, 0, pi).
+  poses:
+    home: [420.0, 0.0, 434.0, 180.0, 0.0, 180.0]
+    inspection: [700.0, 300.0, 50.0, 180.0, 0.0, 180.0]
+    bin_good: [700.0, -300.0, 100.0, 180.0, 0.0, 180.0]
+    bin_bad: [500.0, -400.0, 100.0, 180.0, 0.0, 180.0]
+
+# --- Wrist camera on the robot (planned, for M4 / AI grasping) -----------------
+wrist_camera:
+  source: 2                     # tbd; find indices with: python -m common.camera
+  width: 1280
+  height: 720
+  calibration_file: null
+
+# --- M3: inspection ----------------------------------------------------------
+inspection_camera:
+  source: 1
+  width: 3840
+  height: 2160
+  calibration_file: null
+
+inspection:
+  # Part colour in HSV (OpenCV: H 0..180). Test part is purple (H ~ 125-131).
+  part_hue: [115, 165]
+  part_saturation_min: 50
+  part_value_min: 80
+  face_brightness_frac: 0.85    # darker than this fraction of the face = hole / notch
+  face_saturation_delta: 40     # saturation differing more than this from the face = hole / notch
+  # Feature regions relative to the part bounding box [x0, y0, x1, y1] (0..1)
+  label_roi: [0.0, 0.0, 0.58, 1.0]
+  hole_roi: [0.52, 0.0, 0.86, 1.0]
+  notch_roi: [0.84, 0.1, 1.0, 0.9]
+  # Scale: visible part height in the side view is the length reference (tbd, measure part)
+  part_height_mm: 15.0
+  serial_pattern: "^[0-9]{5}$"
+  ocr_min_confidence: 0.4
+  # Placeholder: test photos give D/H = 0.655 -> 9.8 mm for a 15 mm part (tbd, from drawing)
+  hole_nominal_mm: 9.8
+  hole_tolerance_mm: 0.4

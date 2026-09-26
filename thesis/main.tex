@@ -1,0 +1,87 @@
+% !TeX program = pdflatex
+% !BIB program = biber
+\documentclass[
+  a4paper,
+  12pt,
+  oneside,
+  parskip=half,
+  bibliography=totoc,
+  listof=totoc,
+  numbers=noenddot
+]{scrreprt}
+
+% --- Sprache und Schrift -------------------------------------------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[ngerman]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[autostyle=true,german=quotes]{csquotes}
+
+% --- Layout --------------------------------------------------------------------
+\usepackage[left=3cm,right=2.5cm,top=2.5cm,bottom=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% --- Inhalte -------------------------------------------------------------------
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{amsmath,amssymb}
+\usepackage{siunitx}
+\sisetup{locale=DE}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single,language=Python,
+        numbers=left,numberstyle=\tiny,showstringspaces=false}
+\usepackage{xcolor}
+\usepackage{acro}
+
+% --- Literatur (IEEE) ----------------------------------------------------------
+\usepackage[backend=biber,style=ieee,dashed=false]{biblatex}
+\addbibresource{references.bib}
+
+% --- Links (zuletzt laden) -----------------------------------------------------
+\usepackage[hidelinks]{hyperref}
+\usepackage[ngerman]{cleveref}
+
+% --- Abkürzungen ---------------------------------------------------------------
+\input{chapters/00_abkuerzungen}
+
+% --- Metadaten -----------------------------------------------------------------
+\newcommand{\thesistitle}{Dynamisches Greifen und automatisierte Sichtprüfung mit einem kollaborativen Roboter}
+\newcommand{\thesisauthors}{Name~1, Name~2, Name~3, Name~4}
+\newcommand{\thesiscourse}{Studiengang / Modul}
+\newcommand{\thesissupervisor}{Prof.~Dr.~N.~N.}
+\newcommand{\thesisdate}{\today}
+
+\hypersetup{pdftitle={\thesistitle},pdfauthor={\thesisauthors}}
+
+\begin{document}
+
+\pagenumbering{Roman}
+\input{chapters/titlepage}
+\input{chapters/01_abstract}
+\tableofcontents
+\listoffigures
+\listoftables
+\printacronyms[name=Abkürzungsverzeichnis]
+
+\cleardoublepage
+\pagenumbering{arabic}
+\input{chapters/02_einleitung}
+\input{chapters/03_grundlagen}
+\input{chapters/04_systemkonzept}
+\input{chapters/05_objekterkennung}
+\input{chapters/06_robotersteuerung}
+\input{chapters/07_sichtpruefung}
+\input{chapters/08_ki_greifen}
+\input{chapters/09_evaluation}
+\input{chapters/10_fazit}
+
+\printbibliography[heading=bibintoc,title=Literaturverzeichnis]
+
+\appendix
+\input{chapters/A_anhang}
+
+\end{document}
