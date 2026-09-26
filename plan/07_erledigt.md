@@ -2,6 +2,14 @@
 
 Neueste Einträge oben. Format: `YYYY-MM-DD – Wer – Was`
 
+## 2026-09-26 (6) – Niklas
+- **Thesis:** Gesamtplan im geführten Dialog erstellt (`thesis/blueprint.md`).
+- Entwürfe für Kurzfassung, Einleitung, Grundlagen, Systemkonzept, M1–M3 und das neue Kapitel
+  „Integration und Bedienung“; Gerüste für Evaluation und Fazit. Offene Stellen als `\todo`.
+- Kapitelfolge: `09_integration.tex` neu, Evaluation → `10_evaluation.tex`, Fazit → `11_fazit.tex`.
+- `main.tex`: Titelblatt korrigiert, Pakete für TikZ, Pseudocode (deutsch) und `todonotes`.
+- 8 Literaturquellen ergänzt (DOI über Crossref geprüft). Baut lokal mit MiKTeX (`latexmk main.tex`).
+
 ## 2026-09-26 (5) – Niklas
 - **Bugfix:** Nach NOT-STOPP + „Fehler quittieren“ ließ sich der Ablauf nicht neu starten, weil
   `init_program()` fehlte (neurapy `stop()` beendet das Programm auf der Steuerung). Jetzt: nach

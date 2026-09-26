@@ -167,9 +167,52 @@ Aus `references.bib` sind bereits verwendbar: `garrido2014`, `zhang2000`, `hartl
 - In `references.bib` ergänzt, DOI jeweils über Crossref geprüft: `fitzgibbon1999`, `smith1978`, `brunelli2009`, `suzuki1985`, `hu1962`, `canny1986`, `baek2019`, `shi2017`.
 - Noch offen aus §5: Quellen für die Motivation (Kap. 1) und die Normen zu kollaborativen Robotern (Kap. 2.6).
 
-## 7. Nächste Schritte
+## 7. So geht es weiter
 
-1. Nebenbefunde (§6) korrigieren, neue Kapiteldatei anlegen und umbenennen.
-2. Kapitel für Kapitel entwerfen, in dieser Reihenfolge: Kap. 3 Systemkonzept → Kap. 4–6 Module → Kap. 8 Integration → Kap. 2 Grundlagen → Kap. 1 Einleitung → Gerüste für Kap. 9/10. Pro Kapitel optional vorher `/ars-outline`.
-3. Quellen aus §5 beschaffen und prüfen, bevor die entsprechenden Absätze final werden.
-4. Nach den Versuchen: Kap. 9 und 10 füllen, Probleme in den Modulkapiteln ergänzen, den offenen Beitrag (§2) einordnen.
+Die Entwurfsphase aus dem ersten Durchgang ist abgeschlossen (siehe §6a). Ab jetzt wird
+anlassbezogen weitergearbeitet. Zu Beginn einer neuen Claude-Session immer sagen:
+*„Lies `thesis/blueprint.md` und arbeite danach weiter.“* Dann den passenden Fall unten nennen.
+
+Offene Stellen findet man im PDF als orange `\todo`-Boxen oder mit
+`grep -n "todo" thesis/chapters/*.tex`.
+
+### Fall A – Mehr Text in einem Kapitel nötig
+- Kapitel und gewünschten Umfang nennen, z. B. *„Kap. 05 um 2 Seiten erweitern, v. a. Segmentierung“*.
+- Grundlage ist immer der aktuelle Code (`code/…`); beschrieben wird nur, was umgesetzt ist.
+- Umfangsziel beachten (§4, gesamt ca. 43–58 Seiten ohne M4).
+
+### Fall B – Ihr habt selbst Text ergänzt oder geändert
+- Sagen, welche Kapitel betroffen sind. Claude liest sie, gleicht Begriffe, Querverweise
+  (`\cref`), Abkürzungen (`\ac`) und Stil an und prüft, ob die Aussagen zum Code passen.
+- Optional ein Kurz-Review mit `/ars-reviewer` auf das Kapitel.
+
+### Fall C – Unterlagen von Person 4 (M4, KI-Greifen) sind da
+- Unterlagen ablegen (z. B. `plan/05_modul4_ki_greifen.md` ergänzen, Code unter `code/m4_ai_grasping/`).
+- Dann füllen: Kap. 08 (`08_ki_greifen.tex`, Gliederung legt Person 4 fest), Grundlagen-Abschnitt
+  „Lernbasiertes Greifen“ (`\label{sec:ki-greifen-grundlagen}`, Quelle `morrison2018` vorhanden),
+  Abschnitt „Vergleich klassischer und KI-basierter Ansatz“ in Kap. 10.
+- Neue Quellen nur mit geprüfter DOI in `references.bib`.
+
+### Fall D – Aufbau vor Ort geklärt (Hardware, Kalibrierung, Maße)
+- Die `\todo`s in Kap. 04 (Hardwaretabelle, Koordinatensysteme), 05 (Kamera, Kalibrierung,
+  Parallaxe), 06 (Greifer, Posen, Kalibrierung) und 07 (Beleuchtung, Anschlag, Bauteilmaße) ersetzen.
+- Fotos der Zelle und GUI-Screenshots nach `thesis/figures/` legen; die `\missingfigure`-Platzhalter
+  werden dann durch `\includegraphics` ersetzt.
+
+### Fall E – Versuche durchgeführt
+- CSV-Protokolle (`code/logs/cycles_*.csv`) und ggf. Debug-Bilder bereitstellen, vorher klären,
+  welche Kennzahlen gewünscht sind (siehe `plan/08_offene_fragen.md`).
+- Dann füllen: Kap. 10 (Ergebnisse beider Versuchsreihen), Zwischenfazits in Kap. 05–07,
+  tatsächlich aufgetretene Probleme in den Modulkapiteln, Kap. 11 (Zusammenfassung, Diskussion,
+  Ausblick) und den Ergebnissatz der Kurzfassung.
+
+### Fall F – Abschluss vor der Abgabe
+1. `/ars-citation-check` – Zitate gegen `references.bib` prüfen.
+2. `/ars-reviewer` – simuliertes Gutachten der ganzen Arbeit; danach `/ars-revision` für die Überarbeitung.
+3. Kurzfassung final, ggf. englisches Abstract mit `/ars-abstract`.
+4. Alle `\todo` und `\missingfigure` entfernen, dann in `main.tex` das Paket `todonotes`
+   mit Option `disable` laden (blendet vergessene Todos aus) und das Todo-Verzeichnis prüfen.
+5. `/ars-disclosure`, falls die Hochschule eine Erklärung zur KI-Nutzung verlangt.
+
+### Offene Entscheidungen
+Stehen gesammelt in `plan/08_offene_fragen.md`, Abschnitt „Thesis“.

@@ -71,9 +71,16 @@ Die detaillierten Aufgaben stehen in den Moduldateien:
 
 ## Thesis
 
-- [x] Gliederung
-- [ ] Grundlagenkapitel (je Modul von der verantwortlichen Person)
-- [ ] Systemkonzept / Architektur
-- [ ] Umsetzungskapitel M1–M4
-- [ ] Evaluation mit Messdaten
-- [ ] Fazit, Korrekturlesen, Abgabe
+Plan, Stand und Vorgehen fürs Weiterschreiben: [../thesis/blueprint.md](../thesis/blueprint.md).
+`[~]` = Entwurf steht, Durchsicht durch die verantwortliche Person offen.
+
+- [x] Gliederung und Gesamtplan (Blueprint)
+- [~] Kurzfassung (Ergebnissatz fehlt)
+- [~] Einleitung
+- [~] Grundlagen (Abschnitt lernbasiertes Greifen: Person 4)
+- [~] Systemkonzept / Architektur (Kalibrierung offen)
+- [~] Umsetzungskapitel M1, M2, M3 (Durchsicht durch Person 1–3, Zwischenfazits nach den Tests)
+- [ ] Umsetzungskapitel M4 (Person 4)
+- [~] Integration und Bedienung (Screenshots fehlen)
+- [ ] Evaluation mit Messdaten (Gerüst steht)
+- [ ] Fazit, Korrekturlesen, Abgabe (Gerüst steht)

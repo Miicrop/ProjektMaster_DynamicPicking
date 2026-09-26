@@ -25,10 +25,18 @@
 
 ### Organisation
 - [ ] Abgabetermin und Umfang der Ausarbeitung?
-- [ ] Gemeinsame Thesis oder Einzelteile pro Person?
+- [x] Gemeinsame Thesis oder Einzelteile pro Person? → **gemeinsame** Arbeit, Modulkapitel je Person (2026-09-26)
 - [ ] Git-Hosting (GitHub/GitLab der Hochschule)? Achtung: Neura-Client und -Doku sind proprietär → Repo **privat** halten
-- [ ] Thesis gemeinsam auf Overleaf oder lokal (MiKTeX installieren)? Das Gerüst wurde noch nicht kompiliert.
-- [ ] Hochschule/Studiengang/Betreuer auf dem Titelblatt (`thesis/main.tex`) eintragen.
+- [~] Thesis gemeinsam auf Overleaf oder lokal? → baut lokal mit MiKTeX (`latexmk`); Overleaf weiterhin möglich
+- [x] Hochschule/Studiengang/Betreuer auf dem Titelblatt eingetragen (2026-09-26)
+
+### Thesis (Inhalt, siehe [../thesis/blueprint.md](../thesis/blueprint.md))
+- [ ] Weiterverwendung im Pflegerobotik-Projekt (Mensch ärgere dich nicht mit Senioren) in der Arbeit erwähnen? Wenn ja: Einleitung, Fazit oder Ausblick?
+- [ ] Evaluation: Anzahl Durchläufe je Versuchsreihe und ob/welche Kennzahlen ausgewertet werden
+- [ ] Ausblick: welche offenen Punkte werden genannt?
+- [ ] Englisches Abstract zusätzlich zur Kurzfassung nötig?
+- [ ] Quellen für die Motivation (Kap. 1) und Normen zu Cobots (ISO 10218, ISO/TS 15066) aufnehmen?
+- [ ] Kalibrierung Arbeitsbereich → Roboter: Verfahren klären, dann in Kap. 3.4 / 4 / 5 beschreiben
 - [ ] GitHub-Repo mit den bisherigen Robotertests bereitstellen
 
 ## Entscheidungen
@@ -47,4 +55,6 @@
 | 2026-09-26 | OCR mit EasyOCR | Läuft per `pip` ohne separate Tesseract-Installation; alle Testbilder korrekt |
 | 2026-09-26 | Kerbe = eckige Öffnung in der Seitenansicht | Bestätigt durch Niklas |
 | 2026-09-26 | Neura-VM vorerst nicht nötig | Eigener Simulator deckt Softwaretests ab |
+| 2026-09-26 | Thesis als begleitender Projektbericht ohne Forschungsfrage; Erfolg = vollautomatischer Durchlauf, Messwerte nur demonstrativ | Selbst gewähltes Interessensprojekt; Details in `thesis/blueprint.md` |
+| 2026-09-26 | Thesis: kein Quellcode im Text, nur Diagramme und Pseudocode; offene Punkte als `\todo` | Lesbarkeit; offene Stellen bleiben im PDF sichtbar |
 | 2026-09-26 | `opencv-python-headless` statt `opencv-contrib-python` | EasyOCR bringt headless mit, zwei cv2-Pakete kollidieren; ArUco ist seit 4.7 im Hauptpaket |
