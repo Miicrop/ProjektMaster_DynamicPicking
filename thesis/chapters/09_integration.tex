@@ -1,0 +1,194 @@
+\chapter{Integration und Bedienung}
+\label{ch:integration}
+
+Die \cref{ch:objekterkennung,ch:robotersteuerung,ch:sichtpruefung} haben die Module einzeln
+beschrieben. Dieses Kapitel zeigt, wie sie zu einem lauffähigen Gesamtsystem zusammengesetzt
+werden: wie ein Arbeitszyklus abläuft, wie das System konfiguriert und bedient wird, wie es
+auf Fehler reagiert und wie die Ergebnisse protokolliert werden.
+
+% ------------------------------------------------------------------------------
+\section{Ablauf eines Zyklus}
+\label{sec:int-zyklus}
+
+Ein Arbeitszyklus folgt dem Zustandsautomaten aus \cref{sec:architektur}.
+\Cref{fig:sequenz} zeigt die Aufrufe, die der Orchestrator dabei an die Module richtet.
+Zuerst liefert die Objekterkennung die Pose des Bauteils. Die Robotersteuerung greift das
+Bauteil, legt es an der Prüfposition ab und fährt anschließend in die Ruheposition, damit der
+Roboterarm das Sichtfeld der Seitenkamera freigibt. Danach prüft die Sichtprüfung das Bauteil.
+Abhängig vom Ergebnis nimmt der Roboter das Bauteil wieder auf, legt es auf der Ablage für
+Gut- oder Schlechtteile ab und kehrt in die Ruheposition zurück. Damit ist der Zyklus
+beendet, und der nächste kann beginnen.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[
+      head/.style={draw, rounded corners, fill=black!5, minimum width=24mm, minimum height=8mm, font=\small},
+      msg/.style={-{Stealth[length=2mm]}, thick},
+      ret/.style={-{Stealth[length=2mm]}, dashed},
+      lbl/.style={font=\scriptsize, above, inner sep=1pt}]
+    \def\yend{-11.2}
+    \foreach \x/\n/\t in {0/o/Orchestrator, 3.8/m1/M1 Erkennung, 7.6/m2/M2 Roboter, 11.4/m3/M3 Prüfung} {
+      \node[head] (\n) at (\x,0) {\t};
+      \draw[black!40] (\x,-0.4) -- (\x,\yend);
+    }
+    \draw[msg] (0,-1.0) -- node[lbl] {\texttt{detect()}} (3.8,-1.0);
+    \draw[ret] (3.8,-1.6) -- node[lbl] {\texttt{ObjectPose}} (0,-1.6);
+    \draw[msg] (0,-2.4) -- node[lbl, pos=0.75] {\texttt{pick(pose)}} (7.6,-2.4);
+    \draw[msg] (0,-3.2) -- node[lbl, pos=0.75] {\texttt{place(inspection)}} (7.6,-3.2);
+    \draw[msg] (0,-4.0) -- node[lbl, pos=0.75] {\texttt{home()}} (7.6,-4.0);
+    \draw[msg] (0,-4.8) -- node[lbl, pos=0.85] {\texttt{inspect()}} (11.4,-4.8);
+    \draw[ret] (11.4,-5.4) -- node[lbl, pos=0.15] {\texttt{InspectionResult}} (0,-5.4);
+    \draw[msg] (0,-6.2) -- node[lbl, pos=0.75] {\texttt{pick(inspection)}} (7.6,-6.2);
+    \draw[black!50, rounded corners] (-0.6,-6.7) rectangle (12.4,-9.6);
+    \node[font=\scriptsize, anchor=north west, fill=black!5, draw=black!50] at (-0.6,-6.7) {alt};
+    \node[font=\scriptsize, anchor=west] at (0.4,-7.05) {[Gutteil]};
+    \draw[msg] (0,-7.5) -- node[lbl, pos=0.75] {\texttt{place(bin\_good)}} (7.6,-7.5);
+    \draw[black!50, dash pattern=on 2pt off 2pt] (-0.6,-8.1) -- (12.4,-8.1);
+    \node[font=\scriptsize, anchor=west] at (0.4,-8.45) {[Schlechtteil]};
+    \draw[msg] (0,-8.9) -- node[lbl, pos=0.75] {\texttt{place(bin\_bad)}} (7.6,-8.9);
+    \draw[msg] (0,-10.4) -- node[lbl, pos=0.75] {\texttt{home()}} (7.6,-10.4);
+  \end{tikzpicture}
+  \caption{Aufrufe des Orchestrators an die Module während eines Arbeitszyklus}
+  \label{fig:sequenz}
+\end{figure}
+
+Findet die Objekterkennung kein Bauteil, endet der Zyklus ohne Fehler, bevor sich der Roboter
+bewegt. Im Dauerbetrieb wiederholt der Orchestrator den Zyklus, bis er angehalten wird oder
+ein Fehler auftritt.
+
+Da die Module nur über ihre Schnittstellen angesprochen werden, läuft dieser Ablauf
+unabhängig davon, welche Implementierung eines Moduls gewählt ist. Derselbe Zyklus lässt sich
+daher vollständig gemockt, mit gespeicherten Testfotos und simuliertem Roboter oder an der
+realen Anlage ausführen (\cref{sec:teststrategie}).
+
+% ------------------------------------------------------------------------------
+\section{Konfiguration}
+\label{sec:int-konfiguration}
+
+Alle Werte, die vom konkreten Aufbau abhängen, stehen in einer zentralen
+Konfigurationsdatei im YAML-Format. Dazu gehören:
+\begin{itemize}
+  \item Kameraquellen und Auflösungen,
+  \item Größe des Arbeitsbereichs, Wörterbuch und Positionen der ArUco-Marker,
+  \item Schwellwerte der Bildverarbeitung für Segmentierung und Prüfmerkmale,
+  \item Transformation vom Arbeitsbereich in das Roboter-\ac{ks},
+  \item Netzwerkadresse, Werkzeug, Geschwindigkeiten, Arbeitsraumgrenzen und feste Posen des
+        Roboters,
+  \item Sollwerte und Format der Prüfmerkmale,
+  \item die standardmäßig verwendete Implementierung jedes Moduls.
+\end{itemize}
+
+Die Module werden über eine gemeinsame Fabrikfunktion erzeugt, die zu einem Modul und einem
+Variantennamen die passende Implementierung liefert (\cref{tab:varianten}). Diese Funktion
+nutzen sowohl der Start über die Kommandozeile als auch die Bedienoberfläche, sodass beide
+Wege dasselbe System aufbauen.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Wählbare Varianten der Module}
+  \label{tab:varianten}
+  \begin{tabularx}{\textwidth}{@{}l l X@{}}
+    \toprule
+    Modul & Variante & Bedeutung \\
+    \midrule
+    Erkennung & \texttt{mock}   & zufällige Pose, keine Kamera \\
+              & \texttt{replay} & Objekterkennung auf gespeicherten Testfotos \\
+              & \texttt{camera} & Objekterkennung auf dem Live-Bild der Top-down-Kamera \\
+              & \texttt{ai}     & lernbasierter Ansatz aus \cref{ch:kigreifen} \\
+    \midrule
+    Roboter   & \texttt{mock}   & Bewegungen werden nur protokolliert \\
+              & \texttt{sim}    & Robotersteuerung gegen die Nachbildung der Steuerung \\
+              & \texttt{real}   & realer Roboter \\
+    \midrule
+    Prüfung   & \texttt{mock}   & zufälliges Prüfergebnis, keine Kamera \\
+              & \texttt{replay} & Sichtprüfung auf gespeicherten Testfotos \\
+              & \texttt{camera} & Sichtprüfung auf dem Live-Bild der Seitenkamera \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------------------------
+\section{Bedienoberfläche}
+\label{sec:int-gui}
+
+Für Inbetriebnahme und Betrieb gibt es eine grafische Bedienoberfläche (\ac{gui}), die mit
+dem Framework Qt über dessen Python-Anbindung PySide6 umgesetzt ist. Sie ist in fünf Reiter
+gegliedert (\cref{tab:gui-reiter}). Unter den Reitern zeigt ein Protokollfenster laufend die
+Meldungen aller Module an.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Reiter der Bedienoberfläche}
+  \label{tab:gui-reiter}
+  \begin{tabularx}{\textwidth}{@{}l X@{}}
+    \toprule
+    Reiter & Funktion \\
+    \midrule
+    Ablauf & Auswahl der Varianten, einzelner Zyklus oder Dauerbetrieb, Anzeige des aktuellen
+             Zustands, der Bilder von Erkennung und Prüfung, einer Draufsicht auf den
+             Roboterarbeitsraum sowie einer Tabelle und Zählung der Ergebnisse \\
+    M1 Erkennung & Bild aus Kamera, Testfoto oder Datei holen und analysieren, optional
+             fortlaufend; Anzeige des Kamerabilds mit erkannten Markern und der entzerrten
+             Draufsicht mit Pose \\
+    M2 Roboter & Verbinden mit Simulator oder realem Roboter, Status, Greifer öffnen und
+             schließen, feste Posen anfahren, aktuelle Roboterpose als feste Pose übernehmen
+             (Teachen), Stopp und Freigabe \\
+    M3 Prüfung & wie M1 für die Seitenkamera; Anzeige der Prüfbereiche und der erkannten
+             Merkmale zum Einstellen der Parameter \\
+    Einstellungen & alle Werte der Konfigurationsdatei als bearbeitbarer Baum; Änderungen
+             wirken sofort, Speichern schreibt die Datei unter Erhalt der Kommentare \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \missingfigure[figwidth=0.9\textwidth]{Screenshot Reiter \enquote{Ablauf} während eines Zyklus}
+  \caption{Bedienoberfläche, Reiter \enquote{Ablauf}}
+  \label{fig:gui-ablauf}
+\end{figure}
+
+Alle Reiter greifen auf eine gemeinsame Sitzung zu, die Konfiguration, Kameras und
+Roboterverbindung hält. Eine Kamera oder eine Roboterverbindung wird dadurch nur einmal
+geöffnet, auch wenn sie in mehreren Reitern genutzt wird, und Einzeltests in den Modulreitern
+und der automatische Ablauf verwenden dieselbe Hardware.
+
+Damit die Oberfläche während langer Roboterbewegungen oder Bildverarbeitungsschritte
+bedienbar bleibt, laufen diese Aufgaben in eigenen Hintergrund-Threads. Alle Befehle an den
+Roboter werden in einem einzigen Thread strikt nacheinander ausgeführt, sodass sich zwei
+Bewegungsbefehle nie überschneiden können. Der Zustandsautomat meldet jeden Zustandswechsel an
+die Oberfläche, die den aktuellen Zustand farbig in der Ablaufkette hervorhebt.
+
+% ------------------------------------------------------------------------------
+\section{Fehlerbehandlung und Sicherheit im Ablauf}
+\label{sec:int-fehler}
+
+Jedes Modul meldet Fehler über eine eigene Ausnahme (\cref{sec:schnittstellen}). Tritt
+während eines Zyklus eine Ausnahme auf, gleich in welchem Modul, wechselt der Orchestrator in
+den Zustand \texttt{ERROR}, hält die Fehlermeldung zusammen mit dem Zustand fest, in dem sie
+auftrat, und stoppt den Roboter. Ein Dauerbetrieb wird dabei beendet. Weiter geht es erst,
+wenn der Bediener den Fehler quittiert: Dann wird der Roboter erneut vorbereitet
+(\cref{sec:m2-api}), fährt in die Ruheposition, und der Automat kehrt nach \texttt{IDLE}
+zurück.
+
+Zusätzlich gibt es in der Oberfläche einen Stopp-Knopf, der den Roboter unabhängig vom
+Zustand des Ablaufs sofort anhält. Er läuft in einem eigenen Thread, damit er nicht hinter
+einer gerade laufenden Bewegung in der Warteschlange des Roboter-Threads wartet. Der
+Software-Stopp ergänzt den Hardware-Not-Halt, ersetzt ihn aber nicht.
+
+Bevor der Roboter an der realen Anlage aus der Oberfläche heraus bewegt wird, fragt ein Dialog,
+ob der Arbeitsraum frei ist und der Not-Halt in Reichweite. Im Dauerbetrieb kann der Ablauf
+außerdem so angehalten werden, dass der laufende Zyklus noch zu Ende geführt wird.
+
+% ------------------------------------------------------------------------------
+\section{Protokollierung}
+\label{sec:int-protokoll}
+
+Jeder Zyklus wird als Zeile in einer \ac{csv}-Datei protokolliert; pro Tag entsteht eine
+Datei. Eine Zeile enthält Zeitpunkt und Nummer des Zyklus, ob er erfolgreich war, bei einem
+Fehler dessen Meldung, die Dauer, die erkannte Pose, die Prüfergebnisse (Seriennummer,
+Lochdurchmesser, Kerbe), das Gesamturteil und die Gründe für ein Schlechtteil. Optional werden
+zu jedem Zyklus die Zwischenbilder von Objekterkennung und Sichtprüfung mit eingezeichneten
+Ergebnissen gespeichert, sodass sich einzelne Zyklen nachträglich nachvollziehen lassen.
+
+Diese Protokolle sind die Datengrundlage für die Evaluation in \cref{ch:evaluation}.

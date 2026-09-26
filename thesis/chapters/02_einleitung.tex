@@ -2,8 +2,31 @@
 \label{ch:einleitung}
 
 \section{Motivation}
-% TODO: Flexible Automatisierung, kleine Losgrößen, Bauteile ohne feste Zuführung,
-% Qualitätssicherung inline statt stichprobenartig.
+
+In vielen Automatisierungsanwendungen liegen Bauteile nicht an einer exakt festgelegten
+Position, sondern werden von Hand, über ein Förderband oder aus einem vorgelagerten Prozess mit
+wechselnder Lage bereitgestellt. Ein Roboter, der nur fest programmierte Positionen anfährt,
+kann solche Teile nicht greifen. Mit einer Kamera, die Position und Orientierung des Bauteils
+bestimmt, lässt sich die Greifbewegung dagegen für jedes Teil neu berechnen. Dieses dynamische
+Handhaben macht mechanische Vorrichtungen zur exakten Ausrichtung der Teile überflüssig.
+
+Eine zweite Aufgabe, die sich mit Kameras automatisieren lässt, ist die Qualitätsprüfung.
+Wird jedes Teil direkt im Prozess geprüft, statt nur stichprobenartig am Ende, lassen sich
+fehlerhafte Teile sofort aussortieren. Werden Handhabung und Prüfung in einer Zelle
+kombiniert, übernimmt der Roboter neben dem Transport auch das Zuführen zur Prüfung und das
+Sortieren nach dem Ergebnis.
+
+Das vorliegende Projekt verbindet beide Aufgaben in einem Demonstrator. Die Aufgabe hat sich
+die Projektgruppe selbst gestellt. Sie ist bewusst industrienah gewählt: Eingesetzt werden ein
+realer kollaborativer Industrieroboter mit seiner Herstellerschnittstelle, Kameras und
+Verfahren der klassischen Bildverarbeitung, die bewusst einfach und nachvollziehbar gehalten
+sind. Im Vordergrund steht, ein durchgängig funktionierendes Gesamtsystem aufzubauen, und
+nicht, einzelne Verfahren zu optimieren.
+
+\todo[inline]{Optional: Aussagen zur Bedeutung von flexibler Handhabung und Inline-Prüfung in
+der Automatisierung mit Quellen belegen (Quellen mit DOI).}
+\todo[inline]{Offen: Weiterverwendung im Pflegerobotik-Projekt erwähnen? (Einleitung, Fazit
+oder Ausblick, siehe Blueprint)}
 
 \section{Aufgabenstellung}
 Ziel des Projekts ist ein Demonstrator, der ein Bauteil mit beliebiger Position und
@@ -12,8 +35,37 @@ Roboter greift und an einer Prüfstation ablegt. Dort wird eine Seriennummer aus
 ein Lochdurchmesser vermessen und das Vorhandensein einer Kerbe geprüft. Abhängig vom
 Prüfergebnis sortiert der Roboter das Bauteil als Gut- oder Schlechtteil aus.
 
+Das System ist in vier Module gegliedert: die Objekterkennung mit einer Kamera über dem
+Arbeitsbereich, die Robotersteuerung, die Sichtprüfung mit einer seitlichen Kamera und ein
+lernbasierter Ansatz zum Greifen, der als Alternative zur klassischen Objekterkennung
+entwickelt wird. Ein zentraler Ablauf verbindet die Module zu einem Gesamtsystem.
+
+\section{Zielsetzung}
+
+Das Projekt gilt als erfolgreich, wenn der Ablauf aus Erkennen, Greifen, Prüfen und Sortieren
+vollständig automatisch durchläuft, ohne dass ein Bediener eingreifen muss. Die Prüfmerkmale
+dienen dabei der Demonstration: Toleranzen und Grenzwerte sind so gewählt, dass die Funktion
+der Prüfung gezeigt werden kann, und entsprechen keinen Fertigungsvorgaben.
+
+\section{Abgrenzung}
+
+Um den Umfang des Projekts zu begrenzen, gelten folgende Annahmen und Einschränkungen:
+\begin{itemize}
+  \item Im Arbeitsbereich liegt jeweils nur ein Bauteil. Das Vereinzeln von Teilen aus einer
+        ungeordneten Menge wird nicht betrachtet.
+  \item Das Bauteil liegt flach auf dem Tisch. Seine Lage ist damit durch die Position in der
+        Tischebene und einen Drehwinkel vollständig beschrieben, die Greifhöhe ist bekannt.
+  \item Die Anlage ist nicht sicherheitszertifiziert. Sie wird nur unter Aufsicht und mit
+        reduzierter Geschwindigkeit betrieben.
+  \item Der lernbasierte Greifansatz ist eine Alternative zur klassischen Objekterkennung und
+        keine Voraussetzung für den Demonstrator.
+\end{itemize}
+
 \section{Aufbau der Arbeit}
-\Cref{ch:grundlagen} stellt die theoretischen Grundlagen vor. In \cref{ch:systemkonzept}
-wird das Gesamtkonzept beschrieben, die \cref{ch:objekterkennung,ch:robotersteuerung,ch:sichtpruefung,ch:kigreifen}
-behandeln die Umsetzung der einzelnen Module. \Cref{ch:evaluation} bewertet das System
-anhand von Messreihen, \cref{ch:fazit} fasst die Ergebnisse zusammen.
+\Cref{ch:grundlagen} stellt die Grundlagen der verwendeten Verfahren aus Bildverarbeitung,
+Messtechnik und Robotik vor. In \cref{ch:systemkonzept} wird das Gesamtkonzept mit
+Anforderungen, Hardwareaufbau und Softwarearchitektur beschrieben. Die
+\cref{ch:objekterkennung,ch:robotersteuerung,ch:sichtpruefung,ch:kigreifen} behandeln die
+Umsetzung der einzelnen Module. \Cref{ch:integration} zeigt, wie die Module zu einem
+Gesamtsystem zusammengesetzt und bedient werden. \Cref{ch:evaluation} beschreibt die
+Erprobung des Systems, und \cref{ch:fazit} fasst die Ergebnisse zusammen.

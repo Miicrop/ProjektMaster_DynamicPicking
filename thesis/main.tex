@@ -36,6 +36,27 @@
         numbers=left,numberstyle=\tiny,showstringspaces=false}
 \usepackage{xcolor}
 \usepackage{acro}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,automata,fit}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\floatname{algorithm}{Algorithmus}
+\algrenewcommand\algorithmicrequire{\textbf{Eingabe:}}
+\algrenewcommand\algorithmicensure{\textbf{Ausgabe:}}
+\algrenewcommand\algorithmicif{\textbf{wenn}}
+\algrenewcommand\algorithmicthen{\textbf{dann}}
+\algrenewcommand\algorithmicelse{\textbf{sonst}}
+\algrenewcommand\algorithmicfor{\textbf{für}}
+\algrenewcommand\algorithmicforall{\textbf{für alle}}
+\algrenewcommand\algorithmicdo{\textbf{tue}}
+\algrenewcommand\algorithmicwhile{\textbf{solange}}
+\algrenewcommand\algorithmicreturn{\textbf{gib zurück}}
+\algrenewcommand\algorithmicfunction{\textbf{Funktion}}
+\algrenewcommand\algorithmicprocedure{\textbf{Prozedur}}
+\algrenewcommand\algorithmicend{\textbf{Ende}}
+\algrenewcommand{\algorithmiccomment}[1]{\hfill$\triangleright$ #1}
+\renewcommand{\listalgorithmname}{Algorithmenverzeichnis}
+\usepackage[colorinlistoftodos,textsize=footnotesize]{todonotes}
 
 % --- Literatur (IEEE) ----------------------------------------------------------
 \usepackage[backend=biber,style=ieee,dashed=false]{biblatex}
@@ -44,15 +65,16 @@
 % --- Links (zuletzt laden) -----------------------------------------------------
 \usepackage[hidelinks]{hyperref}
 \usepackage[ngerman]{cleveref}
+\crefname{algorithm}{Algorithmus}{Algorithmen}
 
 % --- Abkürzungen ---------------------------------------------------------------
 \input{chapters/00_abkuerzungen}
 
 % --- Metadaten -----------------------------------------------------------------
 \newcommand{\thesistitle}{Dynamisches Greifen und automatisierte Sichtprüfung mit einem kollaborativen Roboter}
-\newcommand{\thesisauthors}{Name~1, Name~2, Name~3, Name~4}
-\newcommand{\thesiscourse}{Studiengang / Modul}
-\newcommand{\thesissupervisor}{Prof.~Dr.~N.~N.}
+\newcommand{\thesisauthors}{Niklas Tollmann, Joshua Junt, Felix Krawczyk, Jeremy Zid}
+\newcommand{\thesiscourse}{Automatisierungstechnik und Robotik}
+\newcommand{\thesissupervisor}{Prof.~Dr.~Tobias~Weiser}
 \newcommand{\thesisdate}{\today}
 
 \hypersetup{pdftitle={\thesistitle},pdfauthor={\thesisauthors}}
@@ -76,8 +98,9 @@
 \input{chapters/06_robotersteuerung}
 \input{chapters/07_sichtpruefung}
 \input{chapters/08_ki_greifen}
-\input{chapters/09_evaluation}
-\input{chapters/10_fazit}
+\input{chapters/09_integration}
+\input{chapters/10_evaluation}
+\input{chapters/11_fazit}
 
 \printbibliography[heading=bibintoc,title=Literaturverzeichnis]
 

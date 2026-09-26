@@ -2,8 +2,180 @@
 \label{ch:objekterkennung}
 % Verantwortlich: Person 1
 
-\section{Kamerakalibrierung}
+Die Objekterkennung bestimmt aus einem Bild der Top-down-Kamera, wo das Bauteil im
+Arbeitsbereich liegt und wie es gedreht ist. Das Ergebnis übergibt sie als
+\texttt{ObjectPose} im Roboter-\ac{ks} an den Orchestrator (\cref{sec:schnittstellen}). Da
+das Bauteil flach auf dem Tisch liegt, genügen dafür die Position $(x, y)$ in der Tischebene
+und der Drehwinkel $\theta$ um die Hochachse; die Höhe ist durch die Tischhöhe festgelegt.
+
+Die Verarbeitung ist als Kette von Einzelschritten aufgebaut (\cref{fig:m1-kette}). Sie
+arbeitet ausschließlich auf dem übergebenen Bild und greift selbst nicht auf die Kamera zu.
+Dadurch lässt sie sich mit gespeicherten Fotos genauso ausführen wie mit Live-Bildern
+(\cref{sec:teststrategie}).
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[
+      box/.style={draw, rounded corners, align=center, minimum height=12mm, text width=38mm, font=\small},
+      arr/.style={-{Stealth[length=2.2mm]}, thick},
+      node distance=6mm and 8mm]
+    \node[box] (a) {Kamerabild};
+    \node[box, right=of a] (b) {Arbeitsbereich finden\\(ArUco-Marker)};
+    \node[box, right=of b] (c) {Entzerrte Draufsicht\\(Homographie)};
+    \node[box, below=of c] (d) {Bauteil segmentieren};
+    \node[box, left=of d] (e) {Pose bestimmen\\(Schwerpunkt, Fase)};
+    \node[box, left=of e] (f) {Transformation in\\das Roboter-\ac{ks}};
+    \draw[arr] (a) -- (b);
+    \draw[arr] (b) -- (c);
+    \draw[arr] (c) -- (d);
+    \draw[arr] (d) -- (e);
+    \draw[arr] (e) -- (f);
+  \end{tikzpicture}
+  \caption{Verarbeitungskette der Objekterkennung}
+  \label{fig:m1-kette}
+\end{figure}
+
+% ------------------------------------------------------------------------------
+\section{Bildaufnahme und Kamerakalibrierung}
+\label{sec:m1-kalibrierung}
+
+Die Top-down-Kamera ist fest über dem Arbeitsbereich montiert und liefert Bilder mit
+$1920 \times 1080$~Pixeln. Für reproduzierbare Ergebnisse soll die Belichtung fest
+eingestellt und nicht automatisch nachgeregelt werden.
+
+Eine Korrektur der Linsenverzeichnung mit einer intrinsischen Kalibrierung nach Zhang
+(\cref{sec:kalibrierung}) ist vorgesehen, aber noch nicht umgesetzt. Die Verarbeitung
+arbeitet derzeit direkt auf dem unkorrigierten Bild.
+
+\todo[inline]{Kameramodell, Montagehöhe und Belichtungseinstellung ergänzen. Intrinsische
+Kalibrierung durchführen und beschreiben, sofern sie umgesetzt wird.}
+
+% ------------------------------------------------------------------------------
 \section{Detektion des Arbeitsbereichs}
-\section{Segmentierung und Posenbestimmung}
+\label{sec:m1-arbeitsbereich}
+
+Der Arbeitsbereich wird durch einen weißen Rahmen begrenzt, an dessen vier Ecken
+ArUco-Marker aus dem Wörterbuch \texttt{DICT\_4X4\_50} mit den IDs~0 bis~3 angebracht
+sind~\cite{garrido2014}. Die Mittelpunkte der Marker sind im Arbeitsbereich-\ac{ks}
+vermessen und in der Konfiguration hinterlegt.
+
+Die Marker werden mit dem ArUco-Detektor von OpenCV~\cite{bradski2000opencv} im
+Graustufenbild gesucht; die Markerecken werden dabei subpixelgenau verfeinert. Aus den vier
+Ecken jedes Markers wird dessen Mittelpunkt berechnet. Fehlt einer der vier Marker, bricht
+die Verarbeitung mit einem Fehler ab, da die Lage des Arbeitsbereichs dann nicht eindeutig
+bestimmt ist.
+
+Die vier Markermittelpunkte im Bild und ihre bekannten Positionen im Arbeitsbereich bilden
+vier Punktkorrespondenzen, aus denen eine Homographie zwischen Bildebene und Tischebene
+berechnet wird (\cref{sec:aruco}). Mit ihr wird das Kamerabild in eine entzerrte Draufsicht
+des Arbeitsbereichs umgerechnet. Diese Draufsicht hat einen festen Maßstab von
+\SI{2}{Pixel\per\milli\metre}; ein Pixel entspricht also \SI{0,5}{\milli\metre} auf dem
+Tisch, und die Perspektive der schräg oder außermittig montierten Kamera ist ausgeglichen.
+Alle weiteren Schritte arbeiten in dieser Draufsicht.
+
+Als Rückfallebene kann der Arbeitsbereich auch ohne Marker über die Innenkante des weißen
+Rahmens gefunden werden. Dazu wird der größte viereckige, innen liegende Rand eines hellen,
+ungesättigten Bereichs gesucht und seine vier Ecken dienen als Korrespondenzen. Im Regelbetrieb
+werden die ArUco-Marker verwendet.
+
+% ------------------------------------------------------------------------------
+\section{Segmentierung des Bauteils}
+\label{sec:m1-segmentierung}
+
+In der entzerrten Draufsicht muss das Bauteil vom Hintergrund getrennt werden. Die Platte
+des Arbeitsbereichs ist dunkelgrau, das Bauteil dagegen heller oder farbiger. Die
+Segmentierung nutzt dazu den \ac{hsv}-Farbraum (\cref{sec:farbraeume}), in dem Helligkeit
+(V) und Sättigung (S) getrennt vorliegen.
+
+Anstelle fester Schwellwerte werden die Grenzen relativ zur Platte bestimmt. Da das Bauteil
+nur einen kleinen Teil des Arbeitsbereichs bedeckt, beschreibt der Median von Helligkeit und
+Sättigung über die gesamte Draufsicht die Platte. Ein Pixel gilt als Bauteil, wenn er
+deutlich heller als die Platte ist oder deutlich stärker gesättigt und dabei nicht zu dunkel.
+Ändert sich das Raumlicht, verschieben sich Platte und Bauteil gemeinsam, und die Schwelle
+wandert mit. Außerdem funktioniert die Segmentierung unabhängig von der Farbe des Bauteils,
+solange es sich in Helligkeit oder Sättigung von der Platte abhebt. Ein globales
+Schwellwertverfahren wie das nach Otsu (\cref{sec:bildverarbeitung}) wäre eine Alternative,
+setzt aber ein deutlich zweigipfliges Histogramm voraus, das bei einem kleinen Bauteil auf
+großer Fläche nicht gegeben ist.
+
+Die entstehende Binärmaske wird am Rand des Arbeitsbereichs beschnitten, damit der Rahmen
+nicht als Bauteil erkannt wird, und anschließend morphologisch bereinigt: Ein Öffnen
+entfernt einzelne Störpixel, ein Schließen füllt kleine Lücken im Bauteil. Von den
+gefundenen Konturen werden nur solche mit plausibler Fläche betrachtet; die größte davon
+ist das Bauteil. Wird keine passende Kontur gefunden, meldet das Modul \enquote{kein Bauteil},
+und der Orchestrator kehrt ohne Fehler in den Ruhezustand zurück.
+
+% ------------------------------------------------------------------------------
+\section{Bestimmung der Pose}
+\label{sec:m1-pose}
+
+Die Position des Bauteils ist der Flächenschwerpunkt der Kontur, der sich aus den
+Bildmomenten nullter und erster Ordnung ergibt. Für die Orientierung wird das kleinste
+umschließende Rechteck der Kontur bestimmt; seine lange Seite gibt die Längsachse des
+Bauteils an.
+
+Die Längsachse allein legt die Orientierung nur bis auf \ang{180} fest, da ein Quader in der
+Draufsicht punktsymmetrisch ist. Eindeutig wird sie über die abgeschrägte Ecke des Bauteils:
+An der Fase fehlt dem Bauteil eine Ecke, sodass genau eine Ecke des umschließenden Rechtecks
+deutlich außerhalb der Kontur liegt. Für jede Rechteckecke wird der Abstand zur Kontur
+berechnet. Liegt die am weitesten entfernte Ecke mehr als einen festen Anteil der
+Bauteilbreite außerhalb, gilt die Fase als gefunden, und die Längsachse wird so ausgerichtet,
+dass sie zur Fase zeigt. Der Winkel ist dann im Bereich \ang{0} bis \ang{360} eindeutig. Wird
+keine Fase gefunden, wird der Winkel auf \ang{0} bis \ang{180} begrenzt und die Konfidenz der
+Pose herabgesetzt. \Cref{alg:m1-pose} fasst das Vorgehen zusammen.
+
+\begin{algorithm}[htbp]
+  \caption{Posenbestimmung mit Fasenerkennung}
+  \label{alg:m1-pose}
+  \begin{algorithmic}[1]
+    \Require Kontur $K$ des Bauteils in der Draufsicht
+    \Ensure Schwerpunkt $(u, v)$, Winkel $\theta$, Konfidenz $c$
+    \State $(u, v) \gets$ Schwerpunkt von $K$ aus den Bildmomenten
+    \State $R \gets$ kleinstes umschließendes Rechteck von $K$
+    \State $\vec{a} \gets$ Einheitsvektor entlang der langen Seite von $R$
+    \ForAll{Ecken $e_i$ von $R$}
+      \State $d_i \gets$ Abstand von $e_i$ zur Kontur $K$ (positiv außerhalb)
+    \EndFor
+    \State $k \gets \arg\max_i d_i$
+    \If{$d_k > f \cdot \text{Breite}(R)$} \Comment{Fase gefunden}
+      \If{$(e_k - m_R) \cdot \vec{a} < 0$} \Comment{$m_R$: Mitte von $R$}
+        \State $\vec{a} \gets -\vec{a}$
+      \EndIf
+      \State $\theta \gets \operatorname{atan2}(a_y, a_x) \bmod \ang{360}$; \quad $c \gets 1$
+    \Else
+      \State $\theta \gets \operatorname{atan2}(a_y, a_x) \bmod \ang{180}$; \quad $c \gets 0{,}5$
+    \EndIf
+    \State \Return $(u, v), \theta, c$
+  \end{algorithmic}
+\end{algorithm}
+
+% ------------------------------------------------------------------------------
 \section{Transformation in das Roboterkoordinatensystem}
+\label{sec:m1-transformation}
+
+Schwerpunkt und Winkel liegen zunächst in Pixeln der Draufsicht vor. Wegen des festen
+Maßstabs ergibt sich die Position im Arbeitsbereich-\ac{ks} durch Division durch den Maßstab.
+Da die Bildzeilen nach unten, die $y$-Achse des Arbeitsbereichs aber nach oben zeigt, werden
+dabei die $y$-Koordinate gespiegelt und das Vorzeichen des Winkels umgekehrt.
+
+Anschließend wird die Pose mit der ebenen Starrkörpertransformation aus
+\cref{sec:koordinatensysteme} in das Roboter-\ac{ks} überführt: Die Position wird gedreht und
+verschoben, zum Winkel wird der Drehwinkel der Transformation addiert. Als Höhe wird die
+Tischhöhe eingetragen. Das Ergebnis wird zusammen mit der Konfidenz und einem Debug-Bild als
+\texttt{ObjectPose} zurückgegeben.
+
+\begin{figure}[htbp]
+  \centering
+  \missingfigure[figwidth=0.9\textwidth]{Kamerabild mit erkannten Markern und Bauteilkontur (links) und entzerrte Draufsicht mit Pose und Fase (rechts)}
+  \caption{Zwischenergebnisse der Objekterkennung}
+  \label{fig:m1-debug}
+\end{figure}
+
+\todo[inline]{Kalibrierung Arbeitsbereich $\rightarrow$ Roboter: Verfahren noch offen (siehe
+\cref{sec:koordinatensysteme}).}
+\todo[inline]{Parallaxe: Die Kamera sieht die Oberseite des Bauteils, die um die
+Bauteilhöhe über dem Tisch liegt. Einfluss auf die Position bewerten und ggf. korrigieren.}
+
+% ------------------------------------------------------------------------------
 \section{Zwischenfazit}
+\todo[inline]{Nach den Versuchen ergänzen: Was hat funktioniert, welche Probleme traten auf?}

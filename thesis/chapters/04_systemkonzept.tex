@@ -1,20 +1,342 @@
 \chapter{Systemkonzept}
 \label{ch:systemkonzept}
 
+Dieses Kapitel beschreibt das Gesamtsystem, bevor die \cref{ch:objekterkennung,ch:robotersteuerung,ch:sichtpruefung,ch:kigreifen}
+die einzelnen Module im Detail behandeln. Ausgehend von den Anforderungen werden der
+Hardwareaufbau, die Softwarearchitektur mit ihren Schnittstellen, die verwendeten
+Koordinatensysteme und die schrittweise Inbetriebnahme vorgestellt.
+
+% ------------------------------------------------------------------------------
 \section{Anforderungen}
-% TODO: Funktionale Anforderungen (Erkennen, Greifen, Prüfen, Sortieren) und
-% nicht-funktionale Anforderungen (Genauigkeit, Taktzeit, Robustheit) als Tabelle.
+\label{sec:anforderungen}
 
+Das Projekt ist erfolgreich, wenn ein Bauteil, das von Hand an beliebiger Stelle in den
+Arbeitsbereich gelegt wurde, ohne weiteren Eingriff erkannt, gegriffen, geprüft und
+entsprechend dem Prüfergebnis abgelegt wird. Die Prüfmerkmale dienen dabei der
+Demonstration; es werden keine industriellen Toleranzen angestrebt. Aus dieser Zielsetzung
+ergeben sich die funktionalen Anforderungen in \cref{tab:anf-funktional} und die
+nicht-funktionalen Anforderungen in \cref{tab:anf-nichtfunktional}.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Funktionale Anforderungen}
+  \label{tab:anf-funktional}
+  \begin{tabularx}{\textwidth}{@{}lX@{}}
+    \toprule
+    Nr. & Anforderung \\
+    \midrule
+    F1 & Das System erkennt ein Bauteil im Arbeitsbereich und bestimmt dessen Position und
+         Orientierung in der Tischebene. \\
+    F2 & Der Roboter greift das Bauteil an der erkannten Pose und legt es an einer festen
+         Prüfposition ab. \\
+    F3 & An der Prüfposition werden die Seriennummer ausgelesen, der Lochdurchmesser
+         bestimmt und das Vorhandensein der Kerbe geprüft. \\
+    F4 & Aus den Prüfmerkmalen wird entschieden, ob ein Gut- oder ein Schlechtteil vorliegt;
+         bei einem Schlechtteil werden die Gründe festgehalten. \\
+    F5 & Der Roboter nimmt das Bauteil an der Prüfposition wieder auf und legt es auf der
+         Ablage für Gut- bzw. Schlechtteile ab. \\
+    F6 & Der gesamte Ablauf aus F1 bis F5 läuft ohne manuellen Eingriff als Zyklus durch. \\
+    F7 & Tritt ein Fehler auf, stoppt der Roboter und das System wartet auf eine Quittierung
+         durch den Bediener. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Nicht-funktionale Anforderungen}
+  \label{tab:anf-nichtfunktional}
+  \begin{tabularx}{\textwidth}{@{}lX@{}}
+    \toprule
+    Nr. & Anforderung \\
+    \midrule
+    N1 & \textbf{Robustheit:} Erkennung und Prüfung funktionieren bei normalem Raumlicht und
+         leichten Schatten. \\
+    N2 & \textbf{Modularität:} Erkennung, Robotersteuerung und Prüfung sind voneinander
+         getrennt und über definierte Schnittstellen verbunden; ein Modul lässt sich
+         austauschen, ohne die übrigen zu ändern. \\
+    N3 & \textbf{Sicherheit:} Der Roboter bewegt sich mit reduzierter Geschwindigkeit und nur
+         innerhalb eines festgelegten Arbeitsraums; ein Stopp ist jederzeit möglich. \\
+    N4 & \textbf{Konfigurierbarkeit:} Aufbauabhängige Werte wie Posen, Kameraeinstellungen und
+         Prüfgrenzen stehen in einer Konfigurationsdatei und nicht im Programmcode. \\
+    N5 & \textbf{Nachvollziehbarkeit:} Jeder Zyklus wird mit seinem Ergebnis protokolliert. \\
+    N6 & \textbf{Einfachheit:} Es werden bewusst einfache, nachvollziehbare Verfahren der
+         klassischen Bildverarbeitung eingesetzt. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------------------------
 \section{Hardwareaufbau}
-% TODO: Foto/Skizze der Zelle, Roboter, Greifer, Kameras, Beleuchtung, Ablagen.
+\label{sec:hardware}
 
+Der Demonstrator besteht aus einem Roboter mit Greifer, zwei fest montierten Kameras,
+einem durch Marker begrenzten Arbeitsbereich und drei Ablagepositionen. Gesteuert wird er
+von einem Rechner, der über \ac{lan} mit der Robotersteuerung verbunden ist.
+\Cref{fig:aufbau} zeigt den Aufbau, \cref{tab:hardware} fasst die Komponenten zusammen.
+
+\begin{figure}[htbp]
+  \centering
+  \missingfigure[figwidth=0.9\textwidth]{Foto oder Skizze der Roboterzelle: Roboter, Arbeitsbereich mit Markern, Top-down-Kamera, Prüfposition mit Seitenkamera, Ablagen GUT/SCHLECHT}
+  \caption{Aufbau des Demonstrators}
+  \label{fig:aufbau}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Komponenten des Demonstrators}
+  \label{tab:hardware}
+  \begin{tabularx}{\textwidth}{@{}lX@{}}
+    \toprule
+    Komponente & Beschreibung \\
+    \midrule
+    Roboter & Neura Robotics LARA, sechs Achsen, Steuerungssoftware Version~5.0.8,
+              Ansteuerung über die Python-Schnittstelle NeuraPy~\cite{neura2025neurapy} \\
+    Greifer & Parallelgreifer, in der Steuerung als Werkzeug \enquote{RobotiQ} angelegt
+              \todo[inline]{Greifermodell und Montage prüfen} \\
+    Top-down-Kamera & über dem Arbeitsbereich, Auflösung $1920 \times 1080$~Pixel
+              \todo[inline]{Kameramodell und Montagehöhe} \\
+    Seitenkamera & an der Prüfposition, Auflösung $3840 \times 2160$~Pixel
+              \todo[inline]{Kameramodell, Abstand, Beleuchtung} \\
+    Arbeitsbereich & weißer Rahmen auf dunkler Platte, vier ArUco-Marker an den Ecken
+              (Wörterbuch \texttt{DICT\_4X4\_50}, IDs~0 bis~3)
+              \todo[inline]{Innenmaß des Rahmens vermessen} \\
+    Bauteil & 3D-gedruckter Quader mit einer abgeschrägten Ecke (Fase); an einer
+              Seitenfläche ein aufgeklebtes Etikett mit fünfstelliger Seriennummer, ein
+              Durchgangsloch und eine kleine rechteckige Öffnung (Kerbe)
+              \todo[inline]{Maße aus der Zeichnung} \\
+    Ablagen & Prüfposition, Ablage GUT und Ablage SCHLECHT als feste Posen
+              \todo[inline]{mechanischer Anschlag an der Prüfposition?} \\
+    Rechner & Windows-Laptop mit Python~3.11, \ac{lan}-Verbindung zur Robotersteuerung \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Die Fase des Bauteils ist für die Erkennung wichtig: Ohne sie wäre die Draufsicht des
+Quaders punktsymmetrisch und die Orientierung nur bis auf \ang{180} bestimmbar. Mit der
+Fase ist die Lage eindeutig, sodass das Bauteil an der Prüfposition immer mit derselben
+Seite zur Seitenkamera abgelegt werden kann.
+
+Eine dritte Kamera am Handgelenk des Roboters ist für das lernbasierte Greifen in
+\cref{ch:kigreifen} vorgesehen und für den Grundablauf nicht erforderlich.
+
+% ------------------------------------------------------------------------------
 \section{Softwarearchitektur}
-Die Software ist modular aufgebaut. Ein zentraler Orchestrator steuert den Ablauf über
-einen Zustandsautomaten und tauscht mit den Modulen ausschließlich definierte Datenobjekte
-aus (\texttt{ObjectPose}, \texttt{InspectionResult}, \texttt{RobotTarget}). Jedes Modul
-besitzt eine Mock-Implementierung, wodurch die Module unabhängig voneinander entwickelt
-und getestet werden können.
-% TODO: Architekturdiagramm, Zustandsautomat (Abbildung), Schnittstellentabelle.
+\label{sec:architektur}
 
+\subsection{Modulstruktur}
+
+Die Software ist in Python geschrieben und in vier Module sowie einen zentralen
+Orchestrator gegliedert (\cref{fig:architektur}). Der Orchestrator steuert den Ablauf; die
+Module kennen sich gegenseitig nicht und tauschen ausschließlich festgelegte Datenobjekte
+aus. Gemeinsam genutzte Funktionen wie Konfiguration, Kamerazugriff und
+Koordinatentransformationen liegen in einem Paket \texttt{common}.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[
+      node distance=12mm and 6mm,
+      box/.style={draw, rounded corners, align=center, minimum height=11mm, text width=30mm, font=\small},
+      arr/.style={-{Stealth[length=2.5mm]}, thick},
+      lbl/.style={font=\scriptsize, fill=white, inner sep=1pt}]
+    \node[box, text width=42mm, fill=black!5] (orch) {\textbf{Orchestrator}\\Zustandsautomat};
+    \node[box, below=of orch] (m2) {\textbf{M2}\\Robotersteuerung};
+    \node[box, left=of m2] (m1) {\textbf{M1 / M4}\\Objekterkennung};
+    \node[box, right=of m2] (m3) {\textbf{M3}\\Sichtprüfung};
+    \node[box, below=10mm of m2, text width=100mm, fill=black!5] (common)
+      {\textbf{common}: Schnittstellen, Konfiguration, Kamerazugriff, Transformationen};
+    \node[box, above=8mm of orch, text width=42mm] (gui) {Bedienoberfläche / Kommandozeile};
+    \draw[arr] (m1.north) |- node[lbl, pos=0.25] {\texttt{ObjectPose}} ([yshift=-2mm]orch.west);
+    \draw[arr] (orch.south) -- node[lbl] {\texttt{ObjectPose}, \texttt{RobotTarget}} (m2.north);
+    \draw[arr] (m3.north) |- node[lbl, pos=0.25] {\texttt{InspectionResult}} ([yshift=-2mm]orch.east);
+    \draw[arr] (gui) -- (orch);
+    \foreach \m in {m1,m2,m3} \draw[dashed] (\m.south) -- (\m.south |- common.north);
+  \end{tikzpicture}
+  \caption{Modulstruktur der Software}
+  \label{fig:architektur}
+\end{figure}
+
+Für jedes Modul gibt es eine abstrakte Schnittstelle und mehrere Implementierungen,
+darunter immer eine Mock-Implementierung, die zufällige, aber plausible Ergebnisse liefert,
+ohne auf Hardware zuzugreifen. Welche Implementierung verwendet wird, legt die Konfiguration fest.
+Dadurch lässt sich jedes Modul isoliert entwickeln, während die übrigen gemockt werden, und
+die Objekterkennung aus \cref{ch:objekterkennung} kann ohne Codeänderung gegen den
+lernbasierten Ansatz aus \cref{ch:kigreifen} getauscht werden.
+
+\subsection{Ablaufsteuerung}
+
+Der Orchestrator bildet einen Arbeitszyklus als endlichen Zustandsautomaten ab
+(\cref{fig:zustandsautomat}). Jeder Zustand ruft genau eine Methode eines Moduls auf; die
+Zuordnung zeigt \cref{tab:zustaende}. Wird im Zustand \texttt{DETECT} kein Bauteil gefunden,
+kehrt der Automat ohne Fehler nach \texttt{IDLE} zurück. Jede Ausnahme eines Moduls führt
+in den Zustand \texttt{ERROR}, in dem der Roboter gestoppt wird. Erst nach einer Quittierung
+durch den Bediener geht es von dort zurück nach \texttt{IDLE}. Details zur Fehlerbehandlung
+und zur Bedienung folgen in \cref{ch:integration}.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[
+      state/.style={draw, rounded corners, minimum width=26mm, minimum height=8mm, font=\small\ttfamily},
+      arr/.style={-{Stealth[length=2.2mm]}, thick},
+      lbl/.style={font=\scriptsize, midway, fill=white, inner sep=1pt},
+      node distance=9mm and 14mm]
+    \node[state, fill=black!5] (idle) {IDLE};
+    \node[state, below=of idle] (detect) {DETECT};
+    \node[state, below=of detect] (pick) {PICK};
+    \node[state, below=of pick] (placei) {PLACE\_INSPECT};
+    \node[state, right=32mm of placei] (inspect) {INSPECT};
+    \node[state, above=of inspect] (picki) {PICK\_INSPECT};
+    \node[state, above=of picki] (sort) {SORT};
+    \node[state, fill=red!10, right=12mm of picki] (error) {ERROR};
+    \draw[arr] (idle) -- node[lbl] {Start} (detect);
+    \draw[arr] (detect) -- node[lbl] {Pose erkannt} (pick);
+    \draw[arr] (pick) -- node[lbl] {gegriffen} (placei);
+    \draw[arr] (placei) -- node[lbl] {abgelegt} (inspect);
+    \draw[arr] (inspect) -- node[lbl] {Ergebnis} (picki);
+    \draw[arr] (picki) -- node[lbl] {gegriffen} (sort);
+    \draw[arr] (sort) |- node[lbl, pos=0.75] {abgelegt} (idle);
+    \draw[arr] (detect.west) to[bend left=40] node[lbl, left] {kein Bauteil} (idle.west);
+    \draw[arr, dashed, red!70!black] (error.north) |- node[lbl, pos=0.75] {Quittierung} ([yshift=7mm]idle.north) -- (idle.north);
+  \end{tikzpicture}
+  \caption{Zustandsautomat eines Arbeitszyklus. Aus jedem Zustand außer \texttt{IDLE} führt
+           ein Fehler in den Zustand \texttt{ERROR} (nicht eingezeichnet).}
+  \label{fig:zustandsautomat}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Zustände des Arbeitszyklus und beteiligte Module}
+  \label{tab:zustaende}
+  \begin{tabularx}{\textwidth}{@{}l X l@{}}
+    \toprule
+    Zustand & Aktion & Modul \\
+    \midrule
+    \texttt{IDLE}          & Warten auf Start bzw.\ nächsten Zyklus & -- \\
+    \texttt{DETECT}        & Bild aufnehmen, Pose des Bauteils bestimmen & M1 / M4 \\
+    \texttt{PICK}          & Bauteil an der erkannten Pose greifen & M2 \\
+    \texttt{PLACE\_INSPECT} & An der Prüfposition ablegen, Sichtfeld der Seitenkamera freigeben & M2 \\
+    \texttt{INSPECT}       & Seriennummer, Lochdurchmesser und Kerbe prüfen & M3 \\
+    \texttt{PICK\_INSPECT}  & Bauteil an der Prüfposition greifen & M2 \\
+    \texttt{SORT}          & Auf Ablage GUT oder SCHLECHT ablegen & M2 \\
+    \texttt{ERROR}         & Roboter stoppen, Fehler protokollieren, auf Quittierung warten & alle \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Schnittstellen}
+\label{sec:schnittstellen}
+
+Zwischen den Modulen werden drei Datenobjekte ausgetauscht (\cref{tab:datenobjekte}).
+Längen werden durchgehend in Millimetern, Winkel in Grad angegeben; die Umrechnung in die
+Einheiten der Roboterschnittstelle übernimmt die Robotersteuerung.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Zwischen den Modulen ausgetauschte Datenobjekte}
+  \label{tab:datenobjekte}
+  \begin{tabularx}{\textwidth}{@{}l l X@{}}
+    \toprule
+    Datenobjekt & Richtung & Inhalt \\
+    \midrule
+    \texttt{ObjectPose} & M1/M4 $\rightarrow$ M2 &
+      Position $x$, $y$, $z$ und Drehwinkel $\theta$ um die Hochachse im Roboter-\ac{ks},
+      Konfidenz, Zeitstempel, optional ein Debug-Bild \\
+    \texttt{RobotTarget} & Konfiguration $\rightarrow$ M2 &
+      Name und kartesische Pose (Position und drei Drehwinkel) einer festen Roboterposition,
+      z.\,B.\ Prüfposition oder Ablage \\
+    \texttt{InspectionResult} & M3 $\rightarrow$ Orchestrator &
+      gelesene Seriennummer, gemessener Lochdurchmesser, Kerbe vorhanden, Gesamturteil
+      gut/schlecht und Liste der Gründe für ein Schlechtteil \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Jedes Modul implementiert eine abstrakte Schnittstelle mit wenigen Methoden
+(\cref{tab:modulschnittstellen}). Fehler meldet ein Modul über eine eigene Ausnahme
+(Bildverarbeitungs-, Roboter- bzw.\ Prüffehler), auf die der Orchestrator mit dem Wechsel in
+den Zustand \texttt{ERROR} reagiert.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Schnittstellen der Module}
+  \label{tab:modulschnittstellen}
+  \begin{tabularx}{\textwidth}{@{}l l X@{}}
+    \toprule
+    Schnittstelle & Modul & Methoden \\
+    \midrule
+    \texttt{ObjectDetector} & M1, M4 & \texttt{detect()}: liefert eine \texttt{ObjectPose} oder
+      \enquote{kein Bauteil} \\
+    \texttt{RobotController} & M2 & \texttt{connect()}, \texttt{home()},
+      \texttt{pick(pose)}, \texttt{place(target)}, \texttt{stop()}, \texttt{reset()} \\
+    \texttt{Inspector} & M3 & \texttt{inspect()}: liefert ein \texttt{InspectionResult} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------------------------
 \section{Koordinatensysteme}
-% TODO: Bild-KS -> Arbeitsbereich-KS (Homographie) -> Roboter-Basis-KS (Starrkörpertransformation).
+\label{sec:koordinatensysteme}
+
+Damit der Roboter ein Bauteil greifen kann, das die Top-down-Kamera erkannt hat, muss
+dessen Lage vom Kamerabild in das Koordinatensystem des Roboters überführt werden. Dafür
+werden drei Koordinatensysteme unterschieden:
+
+\begin{description}
+  \item[Bild-\ac{ks}] Pixelkoordinaten $(u, v)$ im Bild der Top-down-Kamera.
+  \item[Arbeitsbereich-\ac{ks}] Metrisches \ac{ks} in der Tischebene mit Ursprung in der
+    inneren linken unteren Ecke des weißen Rahmens (aus Kamerasicht), $x$-Achse nach rechts,
+    $y$-Achse nach oben. Die Lage der vier ArUco-Marker ist in diesem \ac{ks} bekannt.
+  \item[Roboter-Basis-\ac{ks}] Das \ac{ks} der Robotersteuerung, in dem alle Bewegungsbefehle
+    angegeben werden.
+\end{description}
+
+Da das Bauteil flach auf dem Tisch liegt, genügt für den Übergang vom Bild in den
+Arbeitsbereich eine Homographie zwischen Bildebene und Tischebene
+(\cref{sec:aruco}). Sie wird bei jeder Aufnahme aus den vier erkannten Markern berechnet.
+Der Übergang vom Arbeitsbereich in das Roboter-\ac{ks} ist eine ebene
+Starrkörpertransformation aus Drehung und Verschiebung (\cref{sec:transformationen}), ergänzt
+um die bekannte Tischhöhe. Die Objekterkennung liefert die \texttt{ObjectPose} bereits im
+Roboter-\ac{ks}, sodass die Robotersteuerung keine Kenntnis über die Kamera benötigt.
+
+\todo[inline]{Kalibrierung Arbeitsbereich $\rightarrow$ Roboter: Verfahren noch offen, wird
+ergänzt, sobald es am Aufbau erprobt ist.}
+
+% ------------------------------------------------------------------------------
+\section{Test- und Inbetriebnahmestrategie}
+\label{sec:teststrategie}
+
+Die Module wurden parallel entwickelt, während Kameras und Roboter nur zeitweise zur
+Verfügung standen. Die Architektur erlaubt deshalb, jedes Modul in mehreren Stufen zu
+betreiben, die sich schrittweise der realen Anlage annähern (\cref{tab:stufen}). Die Stufe
+wird pro Modul in der Konfiguration oder in der Bedienoberfläche gewählt, sodass sich
+beliebige Kombinationen bilden lassen, etwa eine reale Kamera zusammen mit einem simulierten
+Roboter.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Betriebsstufen der Module}
+  \label{tab:stufen}
+  \begin{tabularx}{\textwidth}{@{}l X X X@{}}
+    \toprule
+    Stufe & Erkennung (M1) & Roboter (M2) & Prüfung (M3) \\
+    \midrule
+    Mock & zufällige Pose im Arbeitsbereich & Bewegungen werden nur protokolliert, Arbeitsraumgrenzen werden geprüft & zufälliges Prüfergebnis, überwiegend Gutteile \\
+    Wiedergabe & gespeicherte Testfotos & -- & gespeicherte Testfotos \\
+    Simulation & -- & Nachbildung der Robotersteuerung mit gleichem Protokoll & -- \\
+    Real & Live-Bild der Top-down-Kamera & realer Roboter & Live-Bild der Seitenkamera \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+In der Mock-Stufe läuft der vollständige Zyklus ohne jede Hardware und prüft das Zusammenspiel
+von Orchestrator und Schnittstellen. In der Wiedergabe-Stufe verarbeiten Erkennung und Prüfung
+gespeicherte Fotos des echten Aufbaus. Da die Bildverarbeitung in beiden Modulen vom
+Kamerazugriff getrennt ist, durchläuft ein Testfoto denselben Programmcode wie ein Live-Bild.
+In der Simulationsstufe spricht die Robotersteuerung mit einer Nachbildung der Steuerung,
+die dasselbe Kommunikationsprotokoll verwendet. So wird der komplette Programmpfad der
+Robotersteuerung einschließlich der unveränderten Herstellerbibliothek ausgeführt, ohne dass
+sich ein Roboter bewegt.
+
+Damit lassen sich große Teile der Software ohne Roboter testen. Das ersetzt jedoch nicht die
+Erprobung an der realen Anlage, bei der Einflüsse wie Beleuchtung, Greifverhalten und
+Positioniergenauigkeit erst sichtbar werden.

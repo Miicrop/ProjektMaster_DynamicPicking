@@ -2,9 +2,183 @@
 \label{ch:sichtpruefung}
 % Verantwortlich: Person 3
 
+Die Sichtprüfung beurteilt das Bauteil an der Prüfposition anhand von drei Merkmalen auf
+seiner Seitenfläche: Sie liest die aufgeklebte Seriennummer, bestimmt den Durchmesser des
+Durchgangslochs und prüft, ob die Kerbe vorhanden ist. Aus diesen Merkmalen entscheidet sie,
+ob ein Gut- oder ein Schlechtteil vorliegt, und gibt das Ergebnis als
+\texttt{InspectionResult} an den Orchestrator zurück (\cref{sec:schnittstellen}).
+
+Wie die Objekterkennung ist auch die Sichtprüfung in eine reine Bildverarbeitung und den
+Kamerazugriff getrennt, sodass sie sich mit gespeicherten Bildern testen lässt
+(\cref{sec:teststrategie}). \Cref{fig:m3-kette} zeigt den Ablauf.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[
+      box/.style={draw, rounded corners, align=center, minimum height=11mm, text width=28mm, font=\small},
+      arr/.style={-{Stealth[length=2.2mm]}, thick},
+      node distance=5mm and 7mm]
+    \node[box] (img) {Bild der\\Seitenkamera};
+    \node[box, right=of img] (loc) {Bauteil lokalisieren,\\Maßstab bestimmen};
+    \node[box, right=of loc, yshift=15mm] (ocr) {Seriennummer\\(\acs{ocr})};
+    \node[box, right=of loc] (hole) {Lochdurchmesser};
+    \node[box, right=of loc, yshift=-15mm] (notch) {Kerbe};
+    \node[box, right=of hole] (dec) {Gut-/Schlecht-\\Entscheidung};
+    \draw[arr] (img) -- (loc);
+    \draw[arr] (loc.east) -- ++(4mm,0) |- (ocr.west);
+    \draw[arr] (loc) -- (hole);
+    \draw[arr] (loc.east) -- ++(4mm,0) |- (notch.west);
+    \draw[arr] (ocr.east) -- ++(4mm,0) |- (dec.west);
+    \draw[arr] (hole) -- (dec);
+    \draw[arr] (notch.east) -- ++(4mm,0) |- (dec.west);
+  \end{tikzpicture}
+  \caption{Ablauf der Sichtprüfung. Die drei Merkmale werden unabhängig voneinander bestimmt
+           und gemeinsam bewertet.}
+  \label{fig:m3-kette}
+\end{figure}
+
+% ------------------------------------------------------------------------------
 \section{Aufbau der Prüfstation}
+\label{sec:m3-aufbau}
+
+Die Seitenkamera ist fest neben der Prüfposition montiert und liefert Bilder mit
+$3840 \times 2160$~Pixeln. Sie blickt möglichst senkrecht auf die Seitenfläche des Bauteils,
+da eine schräge Ansicht die Längen im Bild perspektivisch verzerren würde. Da die Objekterkennung die
+Orientierung über die Fase eindeutig bestimmt (\cref{sec:m1-pose}) und der Roboter das
+Bauteil immer in derselben Lage relativ zum Greifer aufnimmt, liegt es an der Prüfposition
+stets gleich orientiert, mit Etikett, Loch und Kerbe zur Kamera.
+
+\begin{figure}[htbp]
+  \centering
+  \missingfigure[figwidth=0.9\textwidth]{Bild der Seitenkamera mit Bauteil-Box, den drei Prüfbereichen (Etikett, Loch, Kerbe) und den erkannten Merkmalen}
+  \caption{Seitenansicht des Bauteils mit Prüfbereichen}
+  \label{fig:m3-rois}
+\end{figure}
+
+\todo[inline]{Kameramodell, Abstand und Beleuchtung der Prüfstation ergänzen. Mechanischer
+Anschlag an der Prüfposition?}
+
+% ------------------------------------------------------------------------------
+\section{Lokalisierung des Bauteils und Maßstab}
+\label{sec:m3-lokalisierung}
+
+Zuerst wird das Bauteil im Bild gesucht. Da es sich farblich deutlich vom Hintergrund
+abhebt, geschieht das über eine Farbschwelle im \ac{hsv}-Farbraum (\cref{sec:farbraeume}):
+Pixel mit dem Farbton des Bauteils und ausreichender Sättigung und Helligkeit gehören zum
+Bauteil. Das weiße Etikett, das Loch und die Kerbe haben nicht die Farbe des Bauteils und
+erscheinen in der Maske zunächst als Lücken. Ein morphologisches Schließen mit einem
+Strukturelement in der Höhe des Bauteils füllt diese Lücken, sodass das umschließende
+Rechteck die gesamte Seitenfläche erfasst.
+
+Die drei Prüfbereiche (\ac{roi}) für Etikett, Loch und Kerbe sind relativ zu diesem Rechteck
+festgelegt, jeweils als Bruchteil von dessen Breite und Höhe. Sie passen sich damit
+automatisch an, wenn das Bauteil etwas näher an der Kamera oder etwas versetzt liegt.
+
+Für die Umrechnung von Pixeln in Millimeter wird die sichtbare Höhe des Bauteils als Maßstab
+verwendet: Da die tatsächliche Bauteilhöhe bekannt ist, ergibt ihr Verhältnis zur Höhe des
+Rechtecks in Pixeln den Maßstab in Millimetern pro Pixel. Eine separate Kalibrierung mit
+einer Messplatte ist dadurch nicht nötig, und der Maßstab bleibt auch bei kleinen
+Abstandsänderungen richtig. Voraussetzung ist, dass Seitenfläche und Kamera annähernd
+parallel stehen.
+
+% ------------------------------------------------------------------------------
 \section{Auslesen der Seriennummer}
+\label{sec:m3-ocr}
+
+Die Seriennummer ist eine fünfstellige Zahl auf dem Etikett. Sie wird mit EasyOCR
+gelesen~\cite{easyocr}, einer lernbasierten \ac{ocr}-Bibliothek, die ohne separate
+Installation einer \ac{ocr}-Software auskommt (\cref{sec:ocr}). Tesseract~\cite{smith2007}
+wäre eine Alternative gewesen.
+
+Der Etikettbereich wird ausgeschnitten und bei geringer Höhe vergrößert, da die
+Texterkennung auf sehr kleine Schrift schlechter anspricht. Die Erkennung ist auf Ziffern
+beschränkt. Aus den erkannten Textkandidaten wird derjenige mit der höchsten Konfidenz
+gewählt, der dem erwarteten Format entspricht; das Format ist als regulärer Ausdruck für
+genau fünf Ziffern in der Konfiguration hinterlegt. Liegt die Konfidenz unter einer
+Mindestschwelle, gilt die Seriennummer als nicht lesbar.
+
+% ------------------------------------------------------------------------------
 \section{Vermessung des Lochdurchmessers}
+\label{sec:m3-loch}
+
+Im Lochbereich ist die Seitenfläche des Bauteils hell und farbig. Das Loch hebt sich davon ab,
+allerdings je nach Beleuchtung unterschiedlich: Die Bohrungswand erscheint dunkel, durch das
+Loch hindurch kann aber auch heller Hintergrund sichtbar sein. Deshalb wird nicht nach einer
+bestimmten Farbe des Lochs gesucht, sondern nach allem, was nicht zur hellen Seitenfläche
+gehört. Als Referenz für die Helligkeit der Fläche dient ein hohes Perzentil der
+bauteilfarbenen Pixel im Bereich.
+
+Die so gefundenen Regionen werden morphologisch bereinigt und auf eine Mindestgröße gefiltert.
+Für jede Region wird ihre Rundheit bestimmt, also das Verhältnis ihrer Fläche zur Fläche des
+kleinsten umschließenden Kreises. Die rundeste Region ist das Loch, sofern ihre Rundheit eine
+Mindestschwelle überschreitet. An ihre Kontur wird eine Ellipse nach der Methode der
+kleinsten Quadrate angepasst (\cref{sec:messtechnik}); der Mittelwert der beiden Achsenlängen
+ergibt den Durchmesser in Pixeln, der mit dem Maßstab aus \cref{sec:m3-lokalisierung} in
+Millimeter umgerechnet wird. Die Ellipse berücksichtigt, dass ein kreisrundes Loch bei leicht
+schräger Ansicht elliptisch erscheint. Eine Kreisdetektion mit der Hough-Transformation
+(\cref{sec:messtechnik}) wäre möglich, liefert den Radius aber nur in der Auflösung ihres
+Akkumulators, während der Ellipsen-Fit alle Konturpunkte nutzt.
+
+% ------------------------------------------------------------------------------
 \section{Prüfung auf Kerbe}
+\label{sec:m3-kerbe}
+
+Die Kerbe ist eine kleine rechteckige Öffnung am Rand der Seitenfläche. Je nach Licht ist sie
+dunkler als die Fläche, anders gefärbt oder nur an ihren Kanten zu erkennen. Deshalb werden
+Kandidaten auf zwei Wegen gesucht:
+\begin{itemize}
+  \item \textbf{Regionenbasiert:} Pixel, die deutlich dunkler oder deutlich anders gesättigt
+        sind als die umgebende Fläche. Die Referenz für die Fläche ist der Median am Rand des
+        Kerbenbereichs.
+  \item \textbf{Kantenbasiert:} geschlossene Kantenzüge aus einer Kantendetektion, für den Fall,
+        dass die Öffnung dieselbe Farbe wie die Fläche hat und sich nur durch ihre Ränder
+        abzeichnet.
+\end{itemize}
+
+Aus allen Kandidaten werden nur solche betrachtet, die vollständig im Kerbenbereich liegen,
+eine plausible Größe haben und annähernd quadratisch bis mäßig länglich sind. Für jeden wird
+die Rechteckigkeit bestimmt, also das Verhältnis seiner Fläche zur Fläche des kleinsten
+umschließenden Rechtecks. Überschreitet der rechteckigste Kandidat eine Mindestschwelle, gilt
+die Kerbe als vorhanden. Ein Template-Matching gegen ein Referenzbild der Kerbe
+(\cref{sec:messtechnik}) wäre eine Alternative, reagiert aber im Allgemeinen empfindlicher
+auf Änderungen von Beleuchtung und Lage.
+
+% ------------------------------------------------------------------------------
 \section{Gut-/Schlecht-Entscheidung}
+\label{sec:m3-entscheidung}
+
+Ein Bauteil ist ein Gutteil, wenn alle drei Merkmale erfüllt sind: Die Seriennummer ist
+lesbar und entspricht dem Format, das Loch wurde gefunden und sein Durchmesser liegt innerhalb
+der Toleranz um den Sollwert, und die Kerbe ist vorhanden. Andernfalls ist es ein Schlechtteil,
+und jeder nicht erfüllte Punkt wird als Grund im Prüfergebnis festgehalten
+(\cref{alg:m3-entscheidung}). Die Toleranz des Lochdurchmessers dient der Demonstration und
+entspricht keiner Fertigungsvorgabe.
+
+\begin{algorithm}[htbp]
+  \caption{Gut-/Schlecht-Entscheidung}
+  \label{alg:m3-entscheidung}
+  \begin{algorithmic}[1]
+    \Require Seriennummer $s$, Lochdurchmesser $d$, Kerbe vorhanden $k$
+    \Ensure Urteil gut/schlecht, Liste der Gründe $G$
+    \State $G \gets \emptyset$
+    \If{$s$ nicht lesbar \textbf{oder} $s$ entspricht nicht dem Format}
+      \State $G \gets G \cup \{\text{\enquote{Seriennummer ungültig}}\}$
+    \EndIf
+    \If{kein Loch gefunden}
+      \State $G \gets G \cup \{\text{\enquote{Loch nicht gefunden}}\}$
+    \ElsIf{$|d - d_\text{soll}| > \Delta d$}
+      \State $G \gets G \cup \{\text{\enquote{Durchmesser außerhalb der Toleranz}}\}$
+    \EndIf
+    \If{\textbf{nicht} $k$}
+      \State $G \gets G \cup \{\text{\enquote{Kerbe fehlt}}\}$
+    \EndIf
+    \State \Return (gut, falls $G = \emptyset$, sonst schlecht), $G$
+  \end{algorithmic}
+\end{algorithm}
+
+\todo[inline]{Bauteilmaße aus der Zeichnung übernehmen: Bauteilhöhe (Maßstab),
+Soll-Durchmesser und Toleranz des Lochs.}
+
+% ------------------------------------------------------------------------------
 \section{Zwischenfazit}
+\todo[inline]{Nach den Versuchen ergänzen: Was hat funktioniert, welche Probleme traten auf?}

@@ -1,0 +1,58 @@
+\chapter{Evaluation}
+\label{ch:evaluation}
+
+Die Evaluation soll zeigen, ob das Gesamtsystem die Zielsetzung aus \cref{ch:einleitung}
+erfüllt: Ein Bauteil wird ohne Eingriff eines Bedieners erkannt, gegriffen, geprüft und
+richtig sortiert. Sie ist als Funktionsnachweis angelegt und nicht als Messkampagne zur
+Genauigkeit einzelner Verfahren. Grundlage sind die Zyklusprotokolle aus
+\cref{sec:int-protokoll}.
+
+\section{Versuchsaufbau und Vorgehen}
+\label{sec:eval-vorgehen}
+
+Alle Versuche finden an der realen Anlage statt, mit allen Modulen in der Betriebsstufe
+\enquote{Real} (\cref{sec:teststrategie}). Es werden zwei Versuchsreihen durchgeführt.
+
+\paragraph{Versuchsreihe 1: Wiederholbarkeit.}
+Ein Gutteil wird wiederholt von Hand an zufälliger Position und mit zufälliger Orientierung in
+den Arbeitsbereich gelegt, und jeweils ein vollständiger Zyklus wird gestartet. Die Reihe zeigt,
+ob Erkennung, Greifen, Ablegen an der Prüfposition und Prüfung für unterschiedliche Lagen
+zuverlässig zusammenspielen und das Teil jedes Mal als Gutteil sortiert wird.
+
+\paragraph{Versuchsreihe 2: Aussortierung.}
+Es werden gezielt fehlerhafte Bauteile gefertigt, bei denen jeweils eines der Prüfmerkmale
+nicht erfüllt ist (\cref{tab:eval-fehlerteile}). Jedes dieser Teile durchläuft den Zyklus wie
+in Versuchsreihe~1. Die Reihe zeigt, ob das System die Fehler erkennt und die Teile als
+Schlechtteil ablegt.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Fehlerhafte Bauteile für Versuchsreihe 2}
+  \label{tab:eval-fehlerteile}
+  \begin{tabularx}{\textwidth}{@{}l X X@{}}
+    \toprule
+    Teil & Fehler & Erwartetes Ergebnis \\
+    \midrule
+    A & Kerbe fehlt & Schlechtteil, Grund \enquote{Kerbe fehlt} \\
+    B & Lochdurchmesser außerhalb der Toleranz & Schlechtteil, Grund \enquote{Durchmesser außerhalb der Toleranz} \\
+    C & Etikett mit Seriennummer entfernt & Schlechtteil, Grund \enquote{Seriennummer ungültig} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\todo[inline]{Anzahl der Durchläufe je Versuchsreihe festlegen. Festlegen, ob und welche
+Kennzahlen ausgewertet werden (z.\,B.\ Anteil erfolgreicher Zyklen, Fehler je Zustand,
+Zyklusdauer).}
+
+\section{Ergebnisse Versuchsreihe 1: Wiederholbarkeit}
+\label{sec:eval-vr1}
+\todo[inline]{Ergebnisse nach den Versuchen ergänzen.}
+
+\section{Ergebnisse Versuchsreihe 2: Aussortierung}
+\label{sec:eval-vr2}
+\todo[inline]{Ergebnisse nach den Versuchen ergänzen.}
+
+\section{Vergleich klassischer und KI-basierter Ansatz}
+\label{sec:eval-vergleich}
+\todo[inline]{Person 4: Vergleich der Objekterkennung (\cref{ch:objekterkennung}) mit dem
+lernbasierten Ansatz (\cref{ch:kigreifen}).}

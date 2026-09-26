@@ -1,7 +1,34 @@
 \chapter*{Kurzfassung}
 \addcontentsline{toc}{chapter}{Kurzfassung}
 
-% TODO: Am Ende schreiben (ca. 150–250 Wörter): Problem, Vorgehen, Ergebnisse, Fazit.
-In dieser Arbeit wird eine Roboterzelle aufgebaut, die ein beliebig im Arbeitsbereich
-liegendes Bauteil kamerabasiert lokalisiert, mit einem Roboter von Neura Robotics greift,
-einer automatischen Sichtprüfung zuführt und anschließend in Gut- und Schlechtteile sortiert.
+In vielen Automatisierungsanwendungen liegen Bauteile nicht an einer festen Position, sondern
+werden mit wechselnder Lage bereitgestellt. Gleichzeitig soll ihre Qualität möglichst direkt im
+Prozess geprüft werden. In dieser Projektarbeit wird dazu ein Demonstrator aufgebaut, der beide
+Aufgaben verbindet: Ein kollaborativer Roboter vom Typ LARA der Firma Neura Robotics greift ein
+Bauteil, das an beliebiger Position und in beliebiger Orientierung in einem Arbeitsbereich liegt,
+führt es einer automatischen Sichtprüfung zu und sortiert es anschließend als Gut- oder
+Schlechtteil aus.
+
+Das System besteht aus mehreren Modulen, die über fest definierte Schnittstellen miteinander
+verbunden sind. Die Objekterkennung findet den Arbeitsbereich im Bild einer Kamera über vier
+ArUco-Marker, erzeugt daraus eine entzerrte Draufsicht und bestimmt Position und Orientierung
+des Bauteils. Eine abgeschrägte Ecke des Bauteils macht die Orientierung dabei eindeutig. Die
+Robotersteuerung rechnet diese Lage in eine Greifpose um und führt die Greif- und Ablegebewegungen
+mit reduzierter Geschwindigkeit innerhalb fester Arbeitsraumgrenzen aus. An der Prüfstation
+liest die Sichtprüfung mit einer seitlichen Kamera eine fünfstellige Seriennummer mittels
+Texterkennung, misst den Durchmesser eines Durchgangslochs über eine Ellipsenanpassung und prüft,
+ob eine Kerbe vorhanden ist. Ein lernbasierter Greifansatz wird als Alternative zur klassischen
+Objekterkennung entwickelt und kann über dieselbe Schnittstelle eingebunden werden.
+
+Ein zentraler Zustandsautomat steuert den Ablauf aus Erkennen, Greifen, Prüfen und Sortieren,
+reagiert auf Fehler mit einem Stopp des Roboters und protokolliert jeden Zyklus. Bedient wird
+das System über eine grafische Oberfläche. Jedes Modul kann mit Platzhaltern, gespeicherten
+Testbildern, einer Nachbildung der Robotersteuerung oder der realen Hardware betrieben werden,
+sodass sich die Module unabhängig voneinander entwickeln und schrittweise in Betrieb nehmen
+lassen. Die eingesetzten Verfahren der Bildverarbeitung sind bewusst einfach und
+nachvollziehbar gehalten.
+
+Die Erprobung an der realen Anlage umfasst wiederholte Durchläufe mit einem Gutteil in
+zufälliger Lage sowie gezielt fehlerhafte Bauteile ohne Kerbe, mit abweichendem
+Lochdurchmesser und ohne Seriennummer.
+\todo[inline]{Ergebnisse der Versuche in ein bis zwei Sätzen ergänzen.}

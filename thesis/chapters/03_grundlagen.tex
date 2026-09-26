@@ -1,40 +1,418 @@
 \chapter{Grundlagen}
 \label{ch:grundlagen}
 
+Dieses Kapitel stellt die Verfahren vor, auf denen die Umsetzung in den
+\cref{ch:objekterkennung,ch:robotersteuerung,ch:sichtpruefung} aufbaut. Es beschreibt dabei
+auch Alternativen, gegen die sich die Umsetzung entschieden hat; die jeweilige Begründung
+folgt in den Modulkapiteln.
+
+% ==============================================================================
 \section{Digitale Bildverarbeitung}
 \label{sec:bildverarbeitung}
-% TODO: Bildaufnahme, Graustufen, Filterung, Schwellwertverfahren nach Otsu~\cite{otsu1979},
-% Morphologie, Konturen, Bildmomente. Verwendete Bibliothek: OpenCV~\cite{bradski2000opencv}.
 
+\subsection{Digitale Bilder}
+
+Ein digitales Grauwertbild ist eine Matrix $I(u, v)$, deren Elemente (Pixel) die Helligkeit
+an der Stelle mit Spalte $u$ und Zeile $v$ angeben, üblicherweise als ganze Zahl von 0
+(schwarz) bis 255 (weiß). Ein Farbbild besteht aus drei solchen Matrizen, den Farbkanälen.
+Der Ursprung liegt in der linken oberen Ecke, die $v$-Achse zeigt nach unten. Für die
+Verarbeitung wird im Projekt die Bibliothek OpenCV~\cite{bradski2000opencv} eingesetzt, die
+die im Folgenden beschriebenen Verfahren bereitstellt.
+
+\subsection{Filterung}
+
+Bildrauschen erschwert viele nachfolgende Schritte. Es wird meist durch eine Glättung
+verringert, bei der jeder Pixel durch einen gewichteten Mittelwert seiner Nachbarschaft
+ersetzt wird. Mathematisch ist das eine Faltung des Bildes mit einem Filterkern. Beim
+Gaußfilter folgen die Gewichte einer zweidimensionalen Normalverteilung, sodass nahe Pixel
+stärker eingehen als entfernte. Die Glättung verringert das Rauschen, macht aber auch Kanten
+unschärfer; die Größe des Filterkerns ist deshalb ein Kompromiss.
+
+\subsection{Schwellwertverfahren}
+\label{sec:schwellwert}
+
+Eine Segmentierung trennt Bildbereiche, die zu einem Objekt gehören, vom Hintergrund. Das
+einfachste Verfahren ist ein Schwellwert $T$: Pixel mit $I(u, v) > T$ werden dem Objekt
+zugeordnet, alle anderen dem Hintergrund. Das Ergebnis ist ein Binärbild (Maske).
+
+Ein fester Schwellwert ist empfindlich gegenüber Änderungen der Beleuchtung. Das Verfahren
+von Otsu~\cite{otsu1979} bestimmt den Schwellwert deshalb automatisch aus dem Histogramm des
+Bildes. Es wählt denjenigen Wert $T$, der die Varianz zwischen den beiden entstehenden
+Klassen maximiert:
+\begin{equation}
+  \sigma_B^2(T) = \omega_0(T)\,\omega_1(T)\,\bigl(\mu_0(T) - \mu_1(T)\bigr)^2 .
+\end{equation}
+Dabei sind $\omega_0$ und $\omega_1$ die Anteile der Pixel unterhalb und oberhalb von $T$
+und $\mu_0$, $\mu_1$ deren mittlere Grauwerte. Das Verfahren funktioniert gut, wenn das
+Histogramm zwei deutlich getrennte Häufungen aufweist, also Objekt und Hintergrund ähnlich
+große Flächen einnehmen und sich klar unterscheiden. Nimmt das Objekt nur einen kleinen Teil
+des Bildes ein, ist seine Häufung im Histogramm schwach ausgeprägt, und der Schwellwert
+orientiert sich überwiegend an den Schwankungen des Hintergrunds.
+
+Neben globalen Verfahren gibt es adaptive Schwellwerte, die für jeden Pixel aus seiner lokalen
+Umgebung berechnet werden, sowie Schwellwerte, die relativ zu einer bekannten Referenz wie der
+Helligkeit des Hintergrunds festgelegt werden.
+
+\subsection{Morphologische Operationen}
+
+Binärmasken nach einer Schwellwertbildung enthalten oft einzelne Störpixel oder kleine Lücken.
+Morphologische Operationen bearbeiten die Form der Bereiche mithilfe eines
+Strukturelements, etwa eines kleinen Quadrats:
+\begin{itemize}
+  \item Die \textbf{Erosion} setzt einen Pixel nur dann auf Objekt, wenn das gesamte
+        Strukturelement an dieser Stelle im Objekt liegt; Bereiche schrumpfen.
+  \item Die \textbf{Dilatation} setzt einen Pixel auf Objekt, sobald das Strukturelement
+        irgendwo das Objekt berührt; Bereiche wachsen.
+  \item Das \textbf{Öffnen} (Erosion, dann Dilatation) entfernt Strukturen, die kleiner als
+        das Strukturelement sind, und erhält die übrigen weitgehend in ihrer Form.
+  \item Das \textbf{Schließen} (Dilatation, dann Erosion) füllt Lücken und Einbuchtungen,
+        die kleiner als das Strukturelement sind.
+\end{itemize}
+
+\subsection{Konturen und Bildmomente}
+\label{sec:momente}
+
+Die zusammenhängenden Bereiche einer Binärmaske lassen sich durch ihre Randlinien, die
+Konturen, beschreiben. OpenCV bestimmt sie mit dem Randverfolgungsverfahren nach Suzuki und
+Abe~\cite{suzuki1985}, das auch die Verschachtelung von äußeren Rändern und Löchern liefert.
+Aus einer Kontur lassen sich Fläche, Umfang und umschließende Formen wie das kleinste
+umschließende Rechteck oder der kleinste umschließende Kreis berechnen.
+
+Lage und Ausrichtung eines Bereichs werden über Bildmomente beschrieben~\cite{hu1962}. Für
+einen Bereich mit den Pixeln $(u, v)$ sind die Momente
+\begin{equation}
+  m_{pq} = \sum_{u}\sum_{v} u^p\, v^q\, I(u, v) ,
+\end{equation}
+wobei $I(u, v)$ in einer Binärmaske 1 für Objektpixel und 0 sonst ist. Das Moment $m_{00}$
+ist die Fläche, und der Flächenschwerpunkt ergibt sich zu
+\begin{equation}
+  \bar{u} = \frac{m_{10}}{m_{00}}, \qquad \bar{v} = \frac{m_{01}}{m_{00}} .
+\end{equation}
+Die zentralen Momente zweiter Ordnung $\mu_{20}$, $\mu_{02}$ und $\mu_{11}$ werden auf den
+Schwerpunkt bezogen berechnet und beschreiben die Streuung des Bereichs. Aus ihnen folgt der
+Winkel der Hauptachse
+\begin{equation}
+  \theta = \tfrac{1}{2} \operatorname{atan2}\bigl(2\mu_{11},\ \mu_{20} - \mu_{02}\bigr) .
+\end{equation}
+Die Hauptachse und die lange Seite des kleinsten umschließenden Rechtecks geben bei
+länglichen Objekten die Orientierung an, allerdings nur bis auf \ang{180}: Eine Achse hat keine
+Richtung. Für eine eindeutige Orientierung braucht es ein zusätzliches, asymmetrisches Merkmal
+des Objekts.
+
+% ==============================================================================
+\section{Farbräume}
+\label{sec:farbraeume}
+
+Kameras liefern Farbbilder meist im RGB-Farbraum mit je einem Kanal für Rot, Grün und Blau.
+In diesem Raum sind Farbe und Helligkeit miteinander verknüpft: Wird ein Objekt heller
+beleuchtet, steigen alle drei Kanäle, obwohl sich seine Farbe nicht ändert. Für eine
+Segmentierung nach Farbe ist das ungünstig.
+
+Der \ac{hsv}-Farbraum~\cite{smith1978} trennt diese Eigenschaften. Er beschreibt eine Farbe
+durch drei Größen:
+\begin{description}
+  \item[Farbton (H)] die Farbart als Winkel auf einem Farbkreis, z.\,B.\ Rot, Gelb, Grün oder
+    Violett;
+  \item[Sättigung (S)] wie rein die Farbe ist, von grau (S = 0) bis zur reinen Farbe;
+  \item[Hellwert (V)] die Helligkeit.
+\end{description}
+Mit $M = \max(R, G, B)$ und $m = \min(R, G, B)$ gilt
+\begin{equation}
+  V = M, \qquad S = \begin{cases} (M - m)/M, & M > 0 \\ 0, & M = 0 \end{cases}
+\end{equation}
+und der Farbton ergibt sich daraus, welcher Kanal am größten ist und wie sich die beiden
+anderen zueinander verhalten. In OpenCV wird der Farbton bei 8-Bit-Bildern auf den Bereich 0
+bis 180 abgebildet, Sättigung und Hellwert auf 0 bis 255.
+
+Für die Bildverarbeitung ergeben sich daraus zwei Vorteile. Ein farbiges Objekt lässt sich
+über ein Intervall des Farbtons finden, das weitgehend unabhängig von der Beleuchtung ist.
+Und unbunte Flächen wie eine graue Platte oder ein weißes Etikett unterscheiden sich von
+farbigen Objekten durch ihre geringe Sättigung, auch wenn sie ähnlich hell sind.
+
+% ==============================================================================
 \section{Kameramodell und Kalibrierung}
 \label{sec:kalibrierung}
-% TODO: Lochkameramodell, intrinsische/extrinsische Parameter, Linsenverzeichnung,
-% Kalibrierung nach Zhang~\cite{zhang2000}. Vertiefung in~\cite{hartley2004}.
 
+Die Abbildung eines Punkts im Raum auf das Kamerabild wird meist mit dem Lochkameramodell
+beschrieben~\cite{hartley2004}. Ein Punkt $\mathbf{X} = (X, Y, Z)^\top$ im Welt-\ac{ks} wird
+auf den Bildpunkt $(u, v)$ abgebildet gemäß
+\begin{equation}
+  \lambda \begin{pmatrix} u \\ v \\ 1 \end{pmatrix}
+  = \mathbf{K}\, \bigl[\mathbf{R} \mid \mathbf{t}\bigr]
+    \begin{pmatrix} X \\ Y \\ Z \\ 1 \end{pmatrix},
+  \qquad
+  \mathbf{K} = \begin{pmatrix} f_x & 0 & c_x \\ 0 & f_y & c_y \\ 0 & 0 & 1 \end{pmatrix} .
+  \label{eq:lochkamera}
+\end{equation}
+Die \emph{extrinsischen} Parameter $\mathbf{R}$ und $\mathbf{t}$ beschreiben Lage und
+Ausrichtung der Kamera im Raum. Die \emph{intrinsischen} Parameter in der Kameramatrix
+$\mathbf{K}$ sind die Brennweiten $f_x$, $f_y$ in Pixeln und der Hauptpunkt $(c_x, c_y)$, an
+dem die optische Achse die Bildebene trifft. Der Faktor $\lambda$ berücksichtigt, dass alle
+Punkte auf einem Sehstrahl auf denselben Bildpunkt fallen.
+
+Reale Objektive weichen von diesem Modell ab. Am stärksten wirkt die radiale Verzeichnung,
+bei der gerade Linien zum Bildrand hin gekrümmt erscheinen. Sie wird durch ein Polynom im
+Abstand $r$ von der Bildmitte modelliert,
+\begin{equation}
+  x_\text{verz} = x \bigl(1 + k_1 r^2 + k_2 r^4 + k_3 r^6\bigr),
+\end{equation}
+und analog für $y$; hinzu kommen kleinere tangentiale Anteile.
+
+Bei der Kalibrierung werden die intrinsischen Parameter und die Verzeichnungskoeffizienten
+bestimmt. Verbreitet ist das Verfahren nach Zhang~\cite{zhang2000}: Ein ebenes Muster mit
+bekannter Geometrie, etwa ein Schachbrett, wird aus mehreren Blickwinkeln aufgenommen. Aus
+den Punktkorrespondenzen jeder Aufnahme wird zunächst eine geschlossene Lösung berechnet und
+diese anschließend durch eine nichtlineare Optimierung des Rückprojektionsfehlers verfeinert.
+Mit den ermittelten Parametern lässt sich jedes Bild der Kamera entzerren.
+
+% ==============================================================================
 \section{Fiducial Marker und Homographie}
 \label{sec:aruco}
-% TODO: ArUco-Marker~\cite{garrido2014}, Detektion, Homographie zwischen zwei Ebenen
-% (Direct Linear Transform)~\cite{hartley2004}, perspektivische Entzerrung.
 
+\subsection{ArUco-Marker}
+
+Fiducial Marker sind künstliche Muster, die in einem Bild zuverlässig gefunden und eindeutig
+identifiziert werden können. ArUco-Marker~\cite{garrido2014} sind quadratisch und bestehen
+aus einem schwarzen Rand und einem inneren Gitter aus schwarzen und weißen Feldern, das eine
+Kennung codiert. Die zulässigen Codes sind in Wörterbüchern zusammengefasst; ein Wörterbuch
+wie \texttt{DICT\_4X4\_50} enthält 50 Marker mit $4 \times 4$ Datenbits, die so gewählt sind,
+dass sie sich möglichst stark voneinander unterscheiden. Dadurch lassen sich einzelne falsch
+gelesene Bits erkennen oder korrigieren.
+
+Die Detektion läuft in mehreren Schritten ab~\cite{garrido2014}: Das Graustufenbild wird mit
+einem adaptiven Schwellwert binarisiert, Konturen werden gesucht und durch Polygone
+angenähert, und nur konvexe Vierecke bleiben als Kandidaten übrig. Jeder Kandidat wird
+perspektivisch auf ein Quadrat entzerrt, in das Gitter der Marker unterteilt und bitweise
+ausgelesen. Stimmt das Bitmuster, gegebenenfalls in einer der vier Drehlagen, mit einem Marker
+des Wörterbuchs überein, gilt er als erkannt. Die Ecken des Markers sind dann im Bild
+subpixelgenau bekannt, und aus der Drehlage ergibt sich, welche Ecke welche ist.
+
+Eine Voraussetzung ist, dass der schwarze Rand des Markers sich klar von seiner Umgebung
+abhebt. Marker werden deshalb üblicherweise mit einem weißen Rand gedruckt.
+
+\subsection{Homographie}
+\label{sec:homographie}
+
+Liegen alle betrachteten Punkte in einer Ebene, etwa der Tischebene, vereinfacht sich das
+Kameramodell aus \cref{eq:lochkamera}. Wählt man das Welt-\ac{ks} so, dass die Ebene
+$Z = 0$ ist, entfällt die dritte Spalte von $\mathbf{R}$, und die Abbildung zwischen einem
+Punkt $(x, y)$ der Ebene und seinem Bildpunkt $(u, v)$ ist eine Homographie~\cite{hartley2004}:
+\begin{equation}
+  \lambda \begin{pmatrix} u \\ v \\ 1 \end{pmatrix}
+  = \mathbf{H} \begin{pmatrix} x \\ y \\ 1 \end{pmatrix},
+  \qquad \mathbf{H} \in \mathbb{R}^{3 \times 3} .
+\end{equation}
+Da $\mathbf{H}$ nur bis auf einen Faktor bestimmt ist, hat sie acht Freiheitsgrade. Jede
+Punktkorrespondenz liefert zwei Gleichungen, sodass vier Korrespondenzen, von denen keine drei
+auf einer Geraden liegen, zur Bestimmung genügen. Beim Direct Linear Transform (DLT) werden
+die Gleichungen aller Korrespondenzen zu einem linearen Gleichungssystem
+$\mathbf{A}\mathbf{h} = \mathbf{0}$ für die neun Einträge $\mathbf{h}$ von $\mathbf{H}$
+zusammengefasst. Die Lösung ist der rechte Singulärvektor von $\mathbf{A}$ zum kleinsten
+Singulärwert~\cite{hartley2004}. Bei mehr als vier Korrespondenzen liefert dasselbe Vorgehen
+eine Lösung im Sinne der kleinsten Quadrate.
+
+Mit der Umkehrung von $\mathbf{H}$ lässt sich jedes Kamerabild in eine Draufsicht der Ebene
+umrechnen, in der Längen und Winkel unabhängig von der Kameraperspektive sind. Das gilt jedoch
+nur für Punkte in der Ebene selbst. Punkte oberhalb der Ebene, etwa die Oberseite eines
+Objekts, werden in der Draufsicht versetzt abgebildet (Parallaxe), und zwar umso stärker, je
+höher sie liegen und je weiter sie von dem Punkt direkt unter der Kamera entfernt sind.
+
+% ==============================================================================
 \section{Koordinatentransformationen}
 \label{sec:transformationen}
-% TODO: Homogene Koordinaten, Starrkörpertransformation, Bestimmung aus Punktkorrespondenzen
-% nach der Methode der kleinsten Quadrate~\cite{umeyama1991}.
 
+Lagen und Bewegungen in der Robotik werden in verschiedenen Koordinatensystemen angegeben,
+zwischen denen umgerechnet werden muss. Eine Starrkörpertransformation besteht aus einer
+Drehung $\mathbf{R}$ und einer Verschiebung $\mathbf{t}$ und erhält Längen und Winkel. In
+homogenen Koordinaten, bei denen einem Punkt eine zusätzliche 1 angehängt wird, lässt sie sich
+als eine einzige Matrixmultiplikation schreiben. In der Ebene gilt
+\begin{equation}
+  \begin{pmatrix} x' \\ y' \\ 1 \end{pmatrix}
+  = \begin{pmatrix} \cos\varphi & -\sin\varphi & t_x \\
+                    \sin\varphi & \cos\varphi & t_y \\
+                    0 & 0 & 1 \end{pmatrix}
+    \begin{pmatrix} x \\ y \\ 1 \end{pmatrix} .
+\end{equation}
+Mehrere Transformationen hintereinander ergeben sich als Produkt der Matrizen. Im Raum hat die
+Matrix die Größe $4 \times 4$ mit einer $3 \times 3$-Drehmatrix.
+
+Ist die Transformation zwischen zwei Koordinatensystemen nicht bekannt, lässt sie sich aus
+Punkten bestimmen, deren Koordinaten in beiden Systemen gemessen wurden. Gesucht sind
+$\mathbf{R}$ und $\mathbf{t}$, die die Summe der quadratischen Abstände
+\begin{equation}
+  E(\mathbf{R}, \mathbf{t}) = \sum_{i=1}^{n} \bigl\| \mathbf{R}\,\mathbf{p}_i + \mathbf{t} - \mathbf{q}_i \bigr\|^2
+\end{equation}
+zwischen den transformierten Punkten $\mathbf{p}_i$ und ihren Gegenstücken $\mathbf{q}_i$
+minimieren. Die Lösung lässt sich geschlossen angeben~\cite{umeyama1991}: Beide Punktmengen
+werden um ihre Schwerpunkte $\bar{\mathbf{p}}$ und $\bar{\mathbf{q}}$ zentriert, und die
+Kovarianzmatrix $\mathbf{C} = \sum_i (\mathbf{q}_i - \bar{\mathbf{q}})(\mathbf{p}_i - \bar{\mathbf{p}})^\top$
+wird per Singulärwertzerlegung $\mathbf{C} = \mathbf{U}\boldsymbol{\Sigma}\mathbf{V}^\top$
+zerlegt. Dann ist
+\begin{equation}
+  \mathbf{R} = \mathbf{U}\,\mathbf{D}\,\mathbf{V}^\top, \qquad
+  \mathbf{t} = \bar{\mathbf{q}} - \mathbf{R}\,\bar{\mathbf{p}},
+\end{equation}
+wobei die Diagonalmatrix $\mathbf{D} = \operatorname{diag}\bigl(1, \det(\mathbf{U}\mathbf{V}^\top)\bigr)$
+(in der Ebene) sicherstellt, dass eine Drehung und keine Spiegelung entsteht.
+
+% ==============================================================================
 \section{Industrierobotik und Greifen}
 \label{sec:robotik}
-% TODO: Kinematik, Koordinatensysteme (Basis, Werkzeug/TCP), Bewegungsarten PTP/LIN,
-% Greifertypen, Greifplanung~\cite{siciliano2016}. Kollaborative Roboter und Sicherheit.
 
+\subsection{Kinematik und Koordinatensysteme}
+
+Ein Industrieroboter mit sechs Drehgelenken ist eine offene kinematische Kette aus Gliedern,
+die über Gelenke verbunden sind~\cite{siciliano2016}. Die Stellung aller Gelenke, der
+Gelenkwinkelvektor, legt eindeutig fest, wo sich das Werkzeug befindet. Die Berechnung dieser
+Lage aus den Gelenkwinkeln heißt \emph{Vorwärtskinematik}. Für Aufgaben wie das Greifen ist
+meist die umgekehrte Frage wichtig: Welche Gelenkwinkel führen das Werkzeug an eine gewünschte
+Lage? Diese \emph{inverse Kinematik} hat im Allgemeinen mehrere Lösungen, und die Steuerung
+wählt eine davon, meist die nächstgelegene zur aktuellen Stellung.
+
+Für die Beschreibung von Lagen werden mehrere \ac{ks} verwendet. Das Basis-\ac{ks} ist fest
+mit dem Sockel des Roboters verbunden. Das Werkzeug-\ac{ks} liegt im \ac{tcp}, dem
+Arbeitspunkt des Werkzeugs, bei einem Greifer typischerweise zwischen den Greiferbacken.
+Eine Pose des Werkzeugs besteht aus der Position des \ac{tcp} im Basis-\ac{ks} und der
+Orientierung des Werkzeug-\ac{ks}, die häufig durch drei Drehwinkel (Roll, Nick, Gier)
+angegeben wird.
+
+\subsection{Bewegungsarten}
+
+Steuerungen bieten im Wesentlichen zwei Arten an, eine Zielpose anzufahren:
+\begin{description}
+  \item[\ac{ptp}-Bewegung] Alle Gelenke fahren von ihrer Start- zu ihrer Zielstellung. Der Weg
+    des \ac{tcp} im Raum ist dabei nicht festgelegt, dafür ist die Bewegung schnell und frei
+    von Problemen durch singuläre Stellungen. Sie eignet sich für Wege durch freien Raum.
+  \item[\ac{lin}-Bewegung] Der \ac{tcp} bewegt sich auf einer Geraden zur Zielpose. Die
+    Steuerung berechnet dafür laufend die inverse Kinematik. Die Bewegung ist vorhersehbar
+    und eignet sich zum Anfahren und Verlassen von Greif- und Ablagepositionen.
+\end{description}
+
+\subsection{Greifer und Greifstrategie}
+
+Industrielle Greifer halten Werkstücke mechanisch mit Backen, über Unterdruck mit
+Saugnäpfen oder magnetisch~\cite{siciliano2016}. Ein Parallelgreifer hat zwei Backen, die sich
+parallel zueinander schließen, und hält ein Werkstück an zwei gegenüberliegenden Flächen.
+
+Für einen Griff müssen Greifposition und Greiforientierung festgelegt werden. Bei flach
+liegenden Teilen und einem von oben greifenden Werkzeug reduziert sich das auf die Position in
+der Ebene, die Greifhöhe und die Drehung des Greifers um die senkrechte Achse. Die Anfahrt
+erfolgt üblicherweise über eine Vorposition oberhalb des Teils, von der aus der Greifer
+geradlinig abgesenkt wird, damit er das Teil nicht seitlich verschiebt.
+
+\subsection{Kollaborative Roboter}
+
+Kollaborative Roboter (\ac{cobot}s) sind dafür ausgelegt, ohne trennende Schutzeinrichtung in
+der Nähe von Menschen zu arbeiten. Sie begrenzen dazu Kräfte und Geschwindigkeiten und
+erkennen Kollisionen, etwa über Drehmomentsensoren in den Gelenken~\cite{siciliano2016}. Die
+Anforderungen an solche Anwendungen sind in Normen festgelegt; ob eine Anwendung sicher ist,
+hängt aber nicht allein vom Roboter ab, sondern auch von Werkzeug, Werkstück und
+Bewegungsablauf und muss für jede Anwendung beurteilt werden.
+
+\todo[inline]{Normen zu Industrie- und kollaborativen Robotern (ISO 10218, ISO/TS 15066)
+zitieren, falls gewünscht (keine DOI, als Norm aufnehmen).}
+
+% ==============================================================================
 \section{Optische Messtechnik und Prüfmerkmale}
 \label{sec:messtechnik}
-% TODO: Beleuchtung, Kantendetektion, Kreisdetektion mit Hough-Transformation~\cite{duda1972},
-% Kalibrierung px -> mm, Messunsicherheit.
 
+\subsection{Beleuchtung}
+
+Für die optische Prüfung ist die Beleuchtung oft wichtiger als der Algorithmus. Bei Auflicht
+befindet sich die Lichtquelle auf der Seite der Kamera und beleuchtet die sichtbare Oberfläche;
+diffuses Licht vermeidet dabei Glanzstellen und harte Schatten. Bei Durchlicht liegt das
+Objekt zwischen Lichtquelle und Kamera, und seine Umrisse und Öffnungen erscheinen mit hohem
+Kontrast. Eine gleichbleibende Beleuchtung macht die Ergebnisse reproduzierbar.
+
+\subsection{Kantendetektion}
+
+Kanten sind Stellen, an denen sich die Helligkeit stark ändert. Sie werden über den Gradienten
+des Bildes gefunden, der meist mit kleinen Differenzfiltern wie dem Sobel-Operator berechnet
+wird. Der Kantendetektor nach Canny~\cite{canny1986} verbindet mehrere Schritte zu einem
+robusten Verfahren: Glättung mit einem Gaußfilter, Berechnung von Betrag und Richtung des
+Gradienten, Ausdünnen der Kanten auf eine Breite von einem Pixel (Non-Maximum Suppression) und
+eine Schwellwertbildung mit zwei Schwellen (Hysterese). Starke Kanten werden dabei immer
+übernommen, schwache nur, wenn sie an eine starke Kante anschließen.
+
+\subsection{Detektion von Kreisen und Ellipsen}
+
+Die Hough-Transformation~\cite{duda1972} findet geometrische Formen, indem jeder Kantenpunkt
+für alle Formen \enquote{stimmt}, auf denen er liegen könnte. Für einen Kreis
+$(x - a)^2 + (y - b)^2 = r^2$ ist der Parameterraum dreidimensional; die Einträge eines
+Akkumulators über $(a, b, r)$ werden für jeden Kantenpunkt erhöht, und Maxima entsprechen den
+gesuchten Kreisen. Das Verfahren ist robust gegenüber Lücken und Störungen in den Kanten, seine
+Genauigkeit ist aber durch die Auflösung des Akkumulators begrenzt.
+
+Ist die Kontur eines Kreises oder einer Ellipse bereits bekannt, lässt sich die Form
+genauer durch Anpassung an alle Konturpunkte bestimmen. Eine allgemeine Kegelschnittgleichung
+\begin{equation}
+  a x^2 + b x y + c y^2 + d x + e y + f = 0
+\end{equation}
+wird dabei so gewählt, dass die Summe der quadrierten Abweichungen der Punkte minimal wird.
+Das Verfahren nach Fitzgibbon, Pilu und Fisher~\cite{fitzgibbon1999} verwendet dafür die
+Nebenbedingung $4ac - b^2 = 1$, die garantiert, dass das Ergebnis immer eine Ellipse ist, und
+führt die Anpassung auf ein verallgemeinertes Eigenwertproblem zurück. Da ein kreisrundes Loch
+bei leicht schräger Ansicht als Ellipse erscheint, eignet sich eine Ellipsenanpassung auch
+zur Messung von Kreisen.
+
+\subsection{Formmerkmale und Template-Matching}
+
+Um zu entscheiden, ob ein gefundener Bereich eine bestimmte Form hat, werden einfache
+Formmerkmale herangezogen. Die Rundheit setzt die Fläche eines Bereichs ins Verhältnis zur
+Fläche seines kleinsten umschließenden Kreises und ist für einen idealen Kreis gleich 1. Die
+Rechteckigkeit setzt die Fläche ins Verhältnis zur Fläche des kleinsten umschließenden
+Rechtecks und ist für ein ideales Rechteck gleich 1.
+
+Ein anderer Ansatz ist das Template-Matching~\cite{brunelli2009}. Ein Referenzbild des
+gesuchten Merkmals wird über das Bild geschoben und an jeder Position mit dem darunter
+liegenden Bildausschnitt verglichen, etwa über die normierte Kreuzkorrelation. Die Position mit
+der höchsten Übereinstimmung ist der Fundort, und die Höhe der Übereinstimmung zeigt, ob das
+Merkmal vorhanden ist. Das Verfahren ist einfach, reagiert aber auf Änderungen von Größe,
+Drehung und Beleuchtung gegenüber der Referenz.
+
+\subsection{Umrechnung in metrische Größen}
+
+Längen im Bild werden in Pixeln gemessen. Für eine Angabe in Millimetern wird ein Maßstab
+benötigt, der aus einer Kalibrierung mit einem Referenzobjekt bekannter Größe stammt, etwa
+einer Messplatte, oder aus einer bekannten Abmessung des Prüfobjekts selbst. Der Maßstab gilt
+nur für Objekte im gleichen Abstand zur Kamera, und bei schräger Ansicht unterscheidet er sich
+in verschiedenen Richtungen. Die erreichbare Genauigkeit hängt von der Auflösung, also der
+Anzahl Pixel pro Millimeter, und davon ab, wie genau die Kanten lokalisiert werden. Verfahren,
+die viele Konturpunkte gemeinsam auswerten, wie die Ellipsenanpassung, erreichen dabei
+Genauigkeiten unterhalb eines Pixels.
+
+% ==============================================================================
 \section{Texterkennung (OCR)}
 \label{sec:ocr}
-% TODO: Ablauf einer OCR-Pipeline, Tesseract~\cite{smith2007}, lernbasierte Verfahren.
 
+Die optische Zeichenerkennung (\ac{ocr}) wandelt Text in einem Bild in maschinenlesbare
+Zeichen um. Eine \ac{ocr}-Pipeline umfasst typischerweise die Vorverarbeitung des Bildes
+(Kontrastverbesserung, Binarisierung, Ausrichtung), die Lokalisierung der Textbereiche, die
+Erkennung der Zeichen und eine Nachbearbeitung, etwa den Abgleich mit einem erwarteten Format
+oder Wörterbuch.
+
+Klassische Systeme wie Tesseract~\cite{smith2007} binarisieren das Bild, suchen
+zusammenhängende Bereiche, fassen sie zu Zeilen und Wörtern zusammen und erkennen die Zeichen
+anschließend mit einem Klassifikator. Sie sind auf gut lesbaren, dunklen Text auf hellem
+Grund, wie in gescannten Dokumenten, ausgelegt.
+
+Lernbasierte Verfahren trennen Textdetektion und Texterkennung in zwei neuronale Netze. Für
+die Detektion bestimmt etwa CRAFT~\cite{baek2019} für jeden Bildpunkt, wie wahrscheinlich er
+zur Mitte eines Zeichens gehört und wie wahrscheinlich er zwischen zwei zusammengehörigen
+Zeichen liegt, und setzt daraus Wortbereiche zusammen. Für die Erkennung verarbeitet ein
+Convolutional Recurrent Neural Network (CRNN)~\cite{shi2017} den Textausschnitt zunächst mit
+einem faltenden Netz (\ac{cnn}), liest die entstehenden Merkmale anschließend mit einem
+rekurrenten Netz von links nach rechts und gibt die Zeichenfolge aus, ohne dass die einzelnen
+Zeichen vorher getrennt werden müssen. Die Bibliothek EasyOCR~\cite{easyocr} kombiniert diese
+beiden Verfahren mit vortrainierten Modellen. Solche Verfahren kommen auch mit Text in
+natürlichen Szenen, unterschiedlichen Schriftarten und ungleichmäßiger Beleuchtung zurecht.
+
+Ist der erwartete Text bekannt, etwa eine Seriennummer aus einer festen Anzahl von Ziffern,
+lässt sich die Erkennung auf die zulässigen Zeichen beschränken und das Ergebnis mit einem
+regulären Ausdruck prüfen. Das verringert Verwechslungen, zum Beispiel zwischen der Ziffer 0
+und dem Buchstaben O.
+
+% ==============================================================================
 \section{Lernbasiertes Greifen}
 \label{sec:ki-greifen-grundlagen}
-% TODO (Person 4): Überblick lernbasierter Greifansätze, z.\,B. GG-CNN~\cite{morrison2018}.
+\todo[inline]{Person 4: Überblick lernbasierter Greifansätze, z.\,B.\ GG-CNN~\cite{morrison2018}.}

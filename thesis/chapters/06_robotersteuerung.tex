@@ -2,8 +2,175 @@
 \label{ch:robotersteuerung}
 % Verantwortlich: Person 2
 
+Die Robotersteuerung setzt die Bewegungsaufträge des Orchestrators am Roboter um: Sie greift
+das Bauteil an der erkannten Pose, legt es an der Prüfposition ab, nimmt es dort nach der
+Prüfung wieder auf und legt es auf der Ablage für Gut- bzw.\ Schlechtteile ab. Nach außen
+bietet sie dafür die Schnittstelle \texttt{RobotController} aus \cref{sec:schnittstellen}
+an. Kenntnis über Kameras oder Prüfergebnisse benötigt sie nicht.
+
+% ------------------------------------------------------------------------------
 \section{Roboter und Programmierschnittstelle}
-\section{Greif- und Ablegestrategie}
+\label{sec:m2-api}
+
+Eingesetzt wird ein Neura Robotics LARA, ein kollaborativer Roboter (\ac{cobot}) mit sechs
+Achsen (\cref{sec:robotik}). Die Steuerung läuft mit der Softwareversion~5.0.8. Für die
+Ansteuerung von einem externen Rechner stellt der Hersteller die Python-Bibliothek NeuraPy
+bereit~\cite{neura2025neurapy}. Sie sendet Befehle als JSON-Nachrichten über eine
+TCP-Verbindung an die Steuerung und erhält deren Antworten auf demselben Weg.
+
+Kartesische Posen werden in NeuraPy als $[x, y, z, \text{roll}, \text{pitch}, \text{yaw}]$
+in Metern und Radiant angegeben. Innerhalb des Projekts werden dagegen durchgängig
+Millimeter und Grad verwendet (\cref{sec:schnittstellen}); die Umrechnung erfolgt
+ausschließlich in der Robotersteuerung.
+
+Bevor der Roboter Bewegungen ausführt, wird er vorbereitet: Die Antriebe werden
+eingeschaltet, die Steuerung wird bei Bedarf vom Handbetrieb in den Automatikbetrieb
+umgeschaltet, das Werkzeug des Greifers wird ausgewählt, und Geschwindigkeitsbegrenzungen
+werden gesetzt. Abschließend wird auf der Steuerung ein Bewegungsprogramm gestartet, ohne das
+keine Bewegungsbefehle angenommen werden. Diese Vorbereitung läuft beim Verbinden und nach
+jedem Stopp erneut ab.
+
+Für die Bewegungen werden zwei Bewegungsarten genutzt (\cref{sec:robotik}):
+\begin{itemize}
+  \item \textbf{\ac{ptp}-Bewegung} für die großen Wege zwischen den Stationen. Aus der
+        kartesischen Zielpose werden mit der inversen Kinematik der Steuerung die
+        Gelenkwinkel berechnet, die dann in einer Gelenkbewegung angefahren werden.
+  \item \textbf{\ac{lin}-Bewegung} für das Absenken auf das Bauteil und das Abheben. Der
+        \ac{tcp} bewegt sich dabei auf einer Geraden, sodass der Greifer senkrecht auf das
+        Bauteil zufährt.
+\end{itemize}
+
+% ------------------------------------------------------------------------------
+\section{Greifpose}
+\label{sec:m2-greifpose}
+
+Aus der \texttt{ObjectPose} der Objekterkennung wird eine Zielpose für den Greifer
+abgeleitet. Die Position übernimmt $x$ und $y$ direkt; die Höhe ergibt sich aus der
+Tischhöhe plus einer festen Greifhöhe, die von Bauteil und Greifer abhängt. Der Greifer zeigt
+immer senkrecht nach unten. Dazu wird die Orientierung der Ruheposition übernommen und nur um
+die Hochachse des Roboters gedreht, und zwar um den erkannten Bauteilwinkel $\theta$ plus
+einen festen Greifer-Offset. Der Offset von \ang{90} sorgt dafür, dass sich die Greiferbacken
+quer zur Längsachse schließen, also an den beiden langen Seiten des Bauteils anliegen. Der
+resultierende Winkel wird auf den Bereich \ang{-180} bis \ang{180} normiert.
+
+\todo[inline]{Greifer-Offset und Drehrichtung der Hochachse bei nach unten zeigendem Werkzeug
+(roll = \ang{180}) am realen Roboter prüfen.}
+
+% ------------------------------------------------------------------------------
+\section{Greif- und Ablegesequenz}
+\label{sec:m2-sequenz}
+
+Greifen und Ablegen laufen nach demselben Muster ab: Der Roboter fährt zunächst eine
+Vorposition oberhalb des Ziels an, senkt sich dann langsam und geradlinig ab, schließt bzw.\
+öffnet den Greifer und hebt wieder auf die Vorposition an (\cref{alg:m2-pick}). Die
+Vorposition liegt einen festen Sicherheitsabstand über dem Ziel, sodass der Roboter bei der
+schnelleren Gelenkbewegung nicht mit dem Bauteil oder dem Tisch kollidiert. Nach dem Schließen
+und Öffnen des Greifers wird eine kurze Zeit gewartet, bis der Greifer seine Endlage erreicht
+hat.
+
+\begin{algorithm}[htbp]
+  \caption{Greifen und Ablegen}
+  \label{alg:m2-pick}
+  \begin{algorithmic}[1]
+    \Function{pick}{Pose $P$}
+      \State $Z \gets$ Greifpose aus $P$ \Comment{\cref{sec:m2-greifpose}}
+      \State $V \gets Z$ um Sicherheitsabstand $h$ angehoben
+      \State prüfe $Z$ und $V$ gegen die Arbeitsraumgrenzen
+      \State Greifer öffnen
+      \State \ac{ptp}-Bewegung nach $V$
+      \State \ac{lin}-Bewegung nach $Z$ mit reduzierter Geschwindigkeit
+      \State Greifer schließen, Wartezeit
+      \State \ac{lin}-Bewegung nach $V$
+    \EndFunction
+    \Statex
+    \Function{place}{benannte Pose $Z$}
+      \State $V \gets Z$ um Sicherheitsabstand $h$ angehoben
+      \State prüfe $Z$ und $V$ gegen die Arbeitsraumgrenzen
+      \State \ac{ptp}-Bewegung nach $V$
+      \State \ac{lin}-Bewegung nach $Z$ mit reduzierter Geschwindigkeit
+      \State Greifer öffnen, Wartezeit
+      \State \ac{lin}-Bewegung nach $V$
+    \EndFunction
+  \end{algorithmic}
+\end{algorithm}
+
+Das Greifen an der Prüfposition nutzt dieselbe Sequenz. Statt einer erkannten Pose wird
+dabei die fest hinterlegte Pose der Prüfposition übergeben, da das Bauteil dort in bekannter
+Lage liegt.
+
+\todo[inline]{Greifer-Rückmeldung auswerten: Nach dem Schließen prüfen, ob tatsächlich ein
+Bauteil gegriffen wurde.}
+
+% ------------------------------------------------------------------------------
+\section{Feste Posen}
+\label{sec:m2-posen}
+
+Neben der erkannten Bauteilpose fährt der Roboter vier feste Posen an
+(\cref{tab:m2-posen}). Sie werden am realen Aufbau im Handbetrieb angefahren (geteacht) und
+in die Konfiguration übernommen. Die Ruheposition ist als benannter Punkt auf der Steuerung
+gespeichert und wird direkt in Gelenkkoordinaten angefahren.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Feste Posen des Roboters}
+  \label{tab:m2-posen}
+  \begin{tabularx}{\textwidth}{@{}l X@{}}
+    \toprule
+    Pose & Zweck \\
+    \midrule
+    \texttt{home} & Ruheposition außerhalb der Kamerabilder; Start- und Endpunkt \\
+    \texttt{inspection} & Ablage an der Prüfposition im Sichtfeld der Seitenkamera \\
+    \texttt{bin\_good} & Ablage für Gutteile \\
+    \texttt{bin\_bad} & Ablage für Schlechtteile \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\todo[inline]{Posen am realen Roboter teachen und eintragen. Wiederholgenauigkeit an der
+Prüfposition beurteilen, da die Sichtprüfung eine reproduzierbare Lage voraussetzt.}
+
+% ------------------------------------------------------------------------------
 \section{Kalibrierung zwischen Kamera und Roboter}
+\label{sec:m2-kalibrierung}
+\todo[inline]{Verfahren noch offen (siehe \cref{sec:koordinatensysteme}).}
+
+% ------------------------------------------------------------------------------
 \section{Sicherheitskonzept}
+\label{sec:m2-sicherheit}
+
+Die Anlage ist nicht sicherheitszertifiziert und wird nur unter Aufsicht betrieben. Die
+Robotersteuerung ergänzt die Schutzfunktionen des \ac{cobot}s um mehrere
+Softwaremaßnahmen:
+
+\begin{description}
+  \item[Reduzierte Geschwindigkeit] Im Testbetrieb sind die globale Geschwindigkeit der
+    Steuerung und die Gelenkgeschwindigkeit auf \SI{20}{\percent} begrenzt. Die geradlinige
+    Annäherung an das Bauteil erfolgt zusätzlich mit geringer Geschwindigkeit.
+  \item[Arbeitsraumgrenzen] Vor jeder Bewegung wird geprüft, ob die Zielpose und die
+    Vorposition innerhalb eines festgelegten Quaders im Roboter-\ac{ks} liegen. Liegt eine
+    Pose außerhalb, wird die Bewegung nicht ausgeführt, und die Robotersteuerung meldet einen
+    Fehler. Dadurch führt auch eine fehlerhafte Pose der Objekterkennung nicht zu einer
+    Bewegung außerhalb des vorgesehenen Bereichs.
+  \item[Stopp mit Quittierung] Ein Stopp beendet das Bewegungsprogramm auf der Steuerung.
+    Danach werden alle Bewegungsbefehle abgelehnt, bis der Bediener den Stopp quittiert und
+    der Roboter erneut vorbereitet wird (\cref{sec:m2-api}). Das Wiederanlaufen geschieht
+    bewusst nicht automatisch.
+  \item[Not-Halt] Der Hardware-Not-Halt des Roboters ist jederzeit in Reichweite.
+\end{description}
+
+% ------------------------------------------------------------------------------
+\section{Inbetriebnahme}
+\label{sec:m2-inbetriebnahme}
+
+Für die schrittweise Inbetriebnahme am realen Roboter gibt es ein Prüfprogramm, das die
+Funktionen einzeln ausführt: Verbindung und Statusabfrage, Anfahren der Ruheposition,
+Öffnen und Schließen des Greifers, Anfahren einer festen Pose und schließlich ein
+vollständiger Greif- und Ablegevorgang. Dieselben Schritte stehen in der Bedienoberfläche
+zur Verfügung (\cref{ch:integration}). Vor dem Einsatz am Roboter wurde der gesamte
+Programmpfad gegen die Nachbildung der Steuerung getestet (\cref{sec:teststrategie}).
+
+\todo[inline]{IP-Adresse, Werkzeug und Betriebsartwechsel am realen Roboter verifizieren.}
+
+% ------------------------------------------------------------------------------
 \section{Zwischenfazit}
+\todo[inline]{Nach den Versuchen ergänzen: Was hat funktioniert, welche Probleme traten auf?}
