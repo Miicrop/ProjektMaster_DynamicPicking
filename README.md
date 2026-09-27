@@ -12,6 +12,7 @@ führt es einer automatischen Sichtprüfung zu und sortiert es in Gut- und Schle
 | [code/](code/README.md) | Python-Code: Orchestrator, gemeinsame Schnittstellen, Modul-Workspaces M1–M4 |
 | [thesis/](thesis/README.md) | Ausarbeitung in LaTeX (IEEE-Zitierstil) |
 | [docs/neura/](docs/neura/README.md) | Neura-Dokumentation (NeuraPy, Offline-Simulation, Schnittstellen) |
+| [docs/greifer/](docs/greifer/) | Zimmer-Greifer LWR50L-23-00004-A, Robotermodul LWR50F-13-05-A, Kamerahalterung (Datenblätter, CAD) |
 | [resources/](resources/README.md) | Rohdaten: Neura-Steuerungssoftware, Roboter-Backup (nicht versioniert) |
 
 Schnellstart:

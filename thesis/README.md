@@ -12,12 +12,13 @@ LaTeX (KOMA `scrreprt`), Deutsch, Zitierstil IEEE über `biblatex` (`style=ieee`
 | `main.tex` | Präambel, Metadaten (Titel, Autoren), Kapitelreihenfolge |
 | `chapters/` | Ein File pro Kapitel (siehe unten) |
 | `references.bib` | Literatur – nur verifizierte Einträge (DOI prüfen) |
-| `figures/` | Abbildungen (PDF/PNG), eingebunden per `\includegraphics{name}` |
+| `figures/` | Abbildungen (PDF/PNG), eingebunden per `\includegraphics{name}`; Unterordner je Thema (z. B. `grob/`), Dateinamen ohne Leerzeichen |
 
 | Datei | Kapitel | Verantwortlich |
 |---|---|---|
 | `01_abstract.tex` | Kurzfassung | alle |
 | `02_einleitung.tex` | Einleitung | alle |
+| `02b_vorprojekt.tex` | Vorprojekt: KI-basierte Roboterbahnen (GROB) | alle (Abschnitt „Alternative Verfahren“: Kommilitone) |
 | `03_grundlagen.tex` | Grundlagen | alle (Abschnitt lernbasiertes Greifen: Person 4) |
 | `04_systemkonzept.tex` | Systemkonzept | Niklas |
 | `05_objekterkennung.tex` | Objekterkennung (M1) | Person 1 |
@@ -42,10 +43,11 @@ latexmk main.tex        # Ausgabe: build/main.pdf
 
 ## Konventionen
 
-- **Kein Quellcode** im Text – Abläufe als Diagramm (TikZ) oder Pseudocode (`algorithm` + `algpseudocode`, Schlüsselwörter deutsch).
+- **Kein Quellcode** im Text – Abläufe als Grafik (TikZ-Ablaufdiagramm), nicht als Pseudocode. Die Stile
+  `pap term`, `pap proc`, `pap dec`, `pap arr`, `pap lbl`, `pap good`, `pap bad` stehen in `main.tex`.
 - **Offene Punkte** als `\todo[inline]{…}`, fehlende Bilder als `\missingfigure{…}` – beides erscheint im PDF orange bzw. grau.
 - **Abkürzungen** in `chapters/00_abkuerzungen.tex`, im Text mit `\ac{ocr}` (in Abbildungen `\acs{…}`).
-- **Querverweise** mit `\cref{…}`; Labels: `ch:`, `sec:`, `fig:`, `tab:`, `alg:`, `eq:`.
+- **Querverweise** mit `\cref{…}`; Labels: `ch:`, `sec:`, `fig:`, `tab:`, `eq:`.
 - Beschrieben wird nur, was im Code umgesetzt ist; Probleme und Ergebnisse erst nach echten Tests.
 
 ## Zitieren

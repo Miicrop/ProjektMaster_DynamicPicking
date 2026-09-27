@@ -2,6 +2,18 @@
 
 Neueste Einträge oben. Format: `YYYY-MM-DD – Wer – Was`
 
+## 2026-09-27 – Niklas
+- **Thesis:** Neues Kapitel `02b_vorprojekt.tex` zum Vorprojekt bei GROB (KI-basierte Roboterbahnen
+  in Process Simulate): Aufgabe und Eingrenzung, Kollisionssets, Zell-/Robotersicherheit, manuelle
+  Bahnplanung, Vorgehen, Robotic Automatic Path Planner, Bezug zum Demonstrator. Bilder unter
+  `thesis/figures/grob/`. Einleitung angepasst.
+- **Thesis:** Pseudocode durch Grafiken ersetzt (Vorprojekt, M1-Pose, M2-Greifsequenz, M3-Entscheidung);
+  gemeinsame TikZ-Stile `pap …` in `main.tex`.
+- **Thesis:** Greifer korrigiert: Zimmer MATCH LWR50L-23-00004-A mit Robotermodul LWR50F-13-05-A
+  (Datenblätter und CAD in `docs/greifer/`). Absatz zum bewusst einfachen Bauteil ergänzt.
+- **Repo:** Neura-Doku (`docs/neura/`) und NeuraPy-Client (`vendor/neurapy/`) dürfen ins Git;
+  nur `resources/` bleibt ausgeschlossen. Hinweise in README, ANLEITUNG und vendor-README angepasst.
+
 ## 2026-09-26 (6) – Niklas
 - **Thesis:** Gesamtplan im geführten Dialog erstellt (`thesis/blueprint.md`).
 - Entwürfe für Kurzfassung, Einleitung, Grundlagen, Systemkonzept, M1–M3 und das neue Kapitel

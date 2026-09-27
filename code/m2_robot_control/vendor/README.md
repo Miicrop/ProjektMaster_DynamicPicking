@@ -11,9 +11,6 @@
 - Abhängigkeiten: `pywin32` und `prettytable` (stehen in `requirements.txt`).
 - Doku der Methoden: [docs/neura/neurapy_v5.0.8.pdf](../../../docs/neura/neurapy_v5.0.8.pdf), Kapitel 4.
 
-Proprietäre Software von Neura Robotics. **Das öffentliche GitHub-Repo enthält diese Datei nicht**
-(`.gitignore`: `code/m2_robot_control/vendor/neurapy/`). Für die echte Robotersteuerung und die
-zugehörigen Tests (`pytest m2_robot_control`) `robot.py` von eurem Neura-Kontakt besorgen und hier
-ablegen: `code/m2_robot_control/vendor/neurapy/robot.py`. Ohne die Datei werden diese Tests und
-die GUI-Tests mit dem Roboter-Simulator übersprungen (`pytest` zeigt sie als `skipped`), der Rest
-des Projekts (M1, M3, Ablauf mit Mock-Roboter, GUI) funktioniert unverändert.
+Software von Neura Robotics, liegt mit im Repo (seit 2026-09-27). Fehlt die Datei, werden die
+Tests mit dem Roboter-Simulator übersprungen (`pytest` zeigt sie als `skipped`). Der Rest des
+Projekts (M1, M3, Ablauf mit Mock-Roboter, GUI) funktioniert dann unverändert.

@@ -17,7 +17,7 @@ Windows-Laptop. Am Ende kannst du den Roboter aus Python heraus bewegen und Pose
 | Roboter | Neura **LARA** (6 Achsen), Steuerungssoftware **v5.0.8** |
 | IP-Adresse | **192.168.2.20** (steht auf dem Roboterfuß) **(prüfen)** – Neura-Standard wäre 192.168.2.13 |
 | Schnittstelle | Python-Bibliothek **NeuraPy**; der Laptop schickt Befehle per Netzwerk (TCP-Port **65432**) an die Steuerung |
-| Greifer | Im Roboter ist ein Werkzeug **„RobotiQ“** (Modbus-Greifer) angelegt **(prüfen, ob montiert)** |
+| Greifer | Montiert ist ein **Zimmer MATCH LWR50L-23-00004-A** (elektrisch, IO-Link) auf dem Robotermodul LWR50F-13-05-A ([docs/greifer/](../../docs/greifer/)). In der Steuerung heißt das Werkzeug **„RobotiQ“** (im Backup als Modbus-Greifer angelegt) **(prüfen: Ansteuerung, Masse, TCP)** |
 | Gespeicherte Punkte | `Home` und `Parking` |
 | Einheiten der API | Meter und Radiant, Pose = `[x, y, z, roll, pitch, yaw]` |
 | Einheiten in unserem Code | Millimeter und Grad (die Umrechnung macht `NeuraRobot`) |
