@@ -1,0 +1,296 @@
+\chapter{Vorprojekt: KI-basierte Roboterbahnen}
+\label{ch:vorprojekt}
+
+Vor dem vorliegenden Projekt hat die Projektgruppe an einer Aufgabenstellung in der Industrie
+gearbeitet. Bei der GROB-WERKE GmbH \& Co.\ KG sollte das Thema \enquote{Erstellung von
+KI-basierten Roboterpfaden für die Robotersimulation und Inbetriebnahme} bearbeitet werden. Nach
+einer Einarbeitung von acht Tagen vor Ort wurde das Projekt bearbeitet. Während der Bearbeitung
+wurde die Zusammenarbeit beendet, und die Gruppe hat sich die Aufgabe dieser Arbeit selbst
+gestellt (\cref{ch:einleitung}). Die Ergebnisse des Vorprojekts sind deshalb begrenzt.
+
+Dieses Kapitel fasst zusammen, was bis dahin erarbeitet wurde. Es beschreibt die Aufgabe, die
+Werkzeuge und das Vorgehen bei der Bahnplanung in der Robotersimulation und die ersten
+Erfahrungen mit Werkzeugen zur automatischen Bahnplanung. Am Ende wird eingeordnet, welche
+Erkenntnisse für den Demonstrator relevant sind oder eine mögliche Erweiterung wären.
+
+% ------------------------------------------------------------------------------
+\section{Aufgabenstellung und Werkzeugumgebung}
+\label{sec:vp-aufgabe}
+
+Bevor eine Roboterzelle aufgebaut wird, werden ihre Bewegungsabläufe in einer
+Robotersimulation geplant und geprüft. Dafür wird ein digitales Modell der Zelle aus den
+Konstruktionsdaten verwendet, mit Robotern, Greifern, Vorrichtungen und Schutzeinrichtungen.
+Die dort erstellten Bahnen werden später auf die realen Roboter übertragen. Je genauer die
+Bahnen in der Simulation stimmen, desto weniger muss bei der Inbetriebnahme an der Anlage
+nachgebessert werden.
+
+Bei GROB wird dafür Siemens Process Simulate eingesetzt. Die Bahnen werden dort bisher von Hand
+erstellt. Das kostet bei großen Zellen mit mehreren Robotern viel Zeit. Ziel des Vorprojekts war
+es zu untersuchen, ob sich Bahnen mit KI-basierten Werkzeugen automatisch erzeugen lassen und
+ob diese Bahnen den Anforderungen von GROB genügen. Ergebnis sollte in jedem Fall eine
+kollisionsfreie und auf die Taktzeit optimierte Roboterbahn sein.
+
+Die Aufgabe wurde auf einen Teil einer bestehenden Zelle eingegrenzt. Betrachtet wurde ein
+Handhabungsprozess, bei dem ein Roboter Teile zwischen festen Positionen umsetzt. Prozesse wie
+das Kleben wurden nicht betrachtet. Sie sind deutlich komplexer und für die Fragestellung
+nicht notwendig. Verwendet
+wurde ein KUKA-Roboter, weil sich dieser gut in Process Simulate abbilden lässt und einfacher zu
+handhaben ist.
+
+In der Einarbeitung wurden vier Themen behandelt: Kollisionserkennung, Roboter- und
+Zellsicherheit, das manuelle Erstellen von Bahnen und erste Werkzeuge zur automatischen
+Bahnplanung. Sie werden in den folgenden Abschnitten beschrieben, bevor
+\cref{sec:vp-vorgehen} das Vorgehen im Projekt zeigt.
+
+\todo[inline]{Quelle für Siemens Process Simulate (Herstellerdokumentation) ergänzen, falls
+gewünscht.}
+
+% ------------------------------------------------------------------------------
+\section{Kollisionserkennung}
+\label{sec:vp-kollision}
+
+Die Simulation prüft nicht automatisch jedes Bauteil der Zelle gegen jedes andere. Stattdessen
+legt der Anwender \emph{Kollisionssets} an. Ein Kollisionsset besteht aus zwei Listen von
+Objekten: Die Objekte der ersten Liste werden gegen die Objekte der zweiten Liste geprüft
+(\cref{fig:vp-kollisionsset-editor}). Typischerweise stehen in der ersten Liste der Roboter und
+sein Greifer. In der zweiten Liste stehen die Vorrichtungen, Werkstücke und Anlagenteile, mit
+denen er zusammenstoßen könnte. Paare, die sich ohnehin berühren, etwa der Greifer und der
+Roboterflansch, werden so von der Prüfung ausgenommen. Das spart Rechenzeit und vermeidet
+Fehlmeldungen.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.6\textwidth]{grob/collision_set_editor.png}
+  \caption{Anlegen eines Kollisionssets: Die Objekte links werden gegen die Objekte rechts
+  geprüft}
+  \label{fig:vp-kollisionsset-editor}
+\end{figure}
+
+Für jedes Kollisionsset lassen sich zwei Grenzwerte einstellen. Der \emph{Beinahe-Abstand}
+(\enquote{Near Miss}) meldet, wenn sich zwei Objekte näher als ein festgelegter Abstand kommen,
+ohne sich zu berühren. Die \emph{zulässige Durchdringung} erlaubt geringe Überschneidungen, zum
+Beispiel wenn ein Greifer ein Werkstück greift. Während der Simulation hebt die Software die
+Objekte eines Sets farbig hervor und listet die kollidierenden Paare auf
+(\cref{fig:vp-kollisionsset-anzeige}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{grob/collision_set_anzeige.png}
+  \caption{Hervorgehobene Objekte eines Kollisionssets in einer Roboterzelle}
+  \label{fig:vp-kollisionsset-anzeige}
+\end{figure}
+
+Für die automatische Bahnplanung sind die Kollisionssets die Grundlage. Ein Planungswerkzeug
+kann nur solche Kollisionen vermeiden, die es auch prüft. Fehlt ein Objekt im Set, kann eine
+Bahn in der Simulation kollisionsfrei erscheinen und an der realen Anlage trotzdem zu einem
+Zusammenstoß führen. Jedes Werkzeug zur automatischen Bahnplanung muss die Kollisionssets
+deshalb berücksichtigen.
+
+% ------------------------------------------------------------------------------
+\section{Roboter- und Zellsicherheit}
+\label{sec:vp-sicherheit}
+
+Neben der Kollisionsprüfung in der Simulation überwacht die Sicherheitssteuerung des realen
+Roboters, dass er bestimmte Bereiche nicht verlässt oder nicht betritt. Diese Bereiche werden
+ebenfalls in der Simulation festgelegt und dort sichtbar gemacht. In der Einarbeitung wurde
+dafür eine Erweiterung von Process Simulate für die Sicherheitskonfiguration der eingesetzten
+KUKA-Roboter verwendet. Drei Elemente wurden behandelt.
+
+\paragraph{Zellbereich.}
+Der Zellbereich beschreibt den Raum, den der Roboter insgesamt nicht verlassen darf. Er wird als
+Prisma angegeben: eine Grundfläche aus bis zu zehn Eckpunkten in der Ebene und eine untere und
+obere Höhengrenze (\cref{fig:vp-zellbereich}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.75\textwidth]{grob/cell_space.png}
+  \caption{Festlegen des Zellbereichs über Eckpunkte der Grundfläche und Höhengrenzen}
+  \label{fig:vp-zellbereich}
+\end{figure}
+
+\paragraph{Überwachungsräume.}
+Innerhalb des Zellbereichs lassen sich weitere Räume als Quader festlegen
+(\cref{fig:vp-ueberwachungsraum}). Ein Quader wird durch ein Bezugskoordinatensystem und die
+minimalen und maximalen Abstände in jeder Achse beschrieben. Für jeden Raum wird eingestellt, ob
+der Roboter ihn nicht verlassen darf (Arbeitsraum) oder nicht betreten darf (Schutzraum), ob er
+immer oder nur unter Bedingungen aktiv ist und ob der Roboter an der Grenze anhält. Ein
+Schutzraum wird zum Beispiel um eine Vorrichtung gelegt, in die der Roboter nicht eingreifen
+soll (\cref{fig:vp-ueberwachungsraum-anzeige}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{grob/monitoring_space.png}
+  \caption{Parameter eines Überwachungsraums vom Typ Schutzraum}
+  \label{fig:vp-ueberwachungsraum}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.5\textwidth]{grob/monitoring_space_anzeige.png}
+  \caption{Darstellung eines Schutzraums (transparenter Quader) um eine Vorrichtung}
+  \label{fig:vp-ueberwachungsraum-anzeige}
+\end{figure}
+
+\paragraph{Werkzeugkugeln.}
+Damit die Sicherheitssteuerung nicht nur den \ac{tcp}, sondern das ganze Werkzeug überwachen
+kann, wird der Greifer durch Kugeln angenähert (\cref{fig:vp-werkzeugkugeln}). Jede Kugel ist
+durch ihren Mittelpunkt relativ zum Roboterflansch und ihren Radius festgelegt. Die Kugeln
+müssen den Greifer vollständig umschließen. Zu große Kugeln schränken den nutzbaren
+Arbeitsraum dagegen unnötig ein. Die Steuerung prüft dann für jede Kugel, ob sie einen
+Überwachungsraum verletzt. Kugeln sind dafür gut geeignet, weil sich der Abstand einer Kugel zu
+einer Fläche mit wenig Rechenaufwand bestimmen lässt.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{grob/tool_spheres.png}
+  \caption{Festlegen der Werkzeugkugeln über Mittelpunkt und Radius}
+  \label{fig:vp-werkzeugkugeln}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.8\textwidth]{grob/tool_spheres_anzeige.png}
+  \caption{Greifer mit den umschließenden Werkzeugkugeln}
+  \label{fig:vp-werkzeugkugeln-anzeige}
+\end{figure}
+
+% ------------------------------------------------------------------------------
+\section{Manuelle Bahnplanung}
+\label{sec:vp-manuell}
+
+Bei GROB werden die Bahnen nach einem festen Vorgehen erstellt. Gegeben sind die Startpose und
+die Zielpose, zum Beispiel eine Entnahme- und eine Ablageposition. Zu beiden Posen wird
+zuerst eine Vorpose erzeugt. Von der Vorpose aus fährt der Roboter mit einer \ac{lin} in die
+Start- bzw.\ Zielpose, wie es auch in \cref{sec:robotik} beschrieben ist.
+
+Die Verbindung zwischen den beiden Vorposen wird schrittweise aufgebaut
+(\cref{fig:vp-manuell}). Der Roboter wird in der Simulation in Gelenkkoordinaten von der einen
+Vorpose zur anderen verfahren, bis eine Kollision auftritt. An dieser Stelle wird er aus der
+Kollision herausbewegt, möglichst durch das Verfahren nur einer Achse. Die so gefundene Stellung
+wird als Zwischenpunkt gespeichert, und die Bahn wird von dort aus erneut betrachtet. Das wird
+wiederholt, bis die gesamte Bahn kollisionsfrei ist.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[pap]
+    \node[pap term] (start) {Startpose $S$, Zielpose $Z$};
+    \node[pap proc, below=of start] (vor) {Vorposen $V_S$ und $V_Z$ erzeugen};
+    \node[pap proc, below=of vor] (lin1) {\acs{lin} von $S$ nach $V_S$};
+    \node[pap proc, below=of lin1] (jog) {In Gelenkkoordinaten\\Richtung $V_Z$ verfahren};
+    \node[pap dec, below=10mm of jog] (koll) {Kollision?};
+    \node[pap proc=56mm, right=22mm of koll] (raus) {Aus der Kollision herausfahren, möglichst mit nur einer Achse};
+    \node[pap proc=56mm] (zp) at (raus |- jog) {Stellung als Zwischenpunkt\\speichern (\acs{ptp})};
+    \node[pap proc, below=of koll] (ptp) {\acs{ptp} nach $V_Z$};
+    \node[pap proc, below=of ptp] (lin2) {\acs{lin} von $V_Z$ nach $Z$};
+    \node[pap term, below=of lin2] (ende) {kollisionsfreie Bahn};
+    \draw[pap arr] (start) -- (vor);
+    \draw[pap arr] (vor) -- (lin1);
+    \draw[pap arr] (lin1) -- (jog);
+    \draw[pap arr] (jog) -- (koll);
+    \draw[pap arr] (koll) -- node[pap lbl] {ja} (raus);
+    \draw[pap arr] (raus) -- (zp);
+    \draw[pap arr] (zp) -- (jog);
+    \draw[pap arr] (koll) -- node[pap lbl, right=1pt] {nein, $V_Z$ erreicht} (ptp);
+    \draw[pap arr] (ptp) -- (lin2);
+    \draw[pap arr] (lin2) -- (ende);
+  \end{tikzpicture}
+  \caption{Manuelle Bahnplanung zwischen zwei Vorposen}
+  \label{fig:vp-manuell}
+\end{figure}
+
+Ziel dieses Vorgehens ist, die Bewegungen der einzelnen Achsen klein zu halten. Oft wurde
+außerdem gewünscht, dass die Achsen~4 und~6 bei \SI{0}{\degree} bleiben. Das ist nicht
+zwingend, vermeidet aber unnötige Drehungen der Handachsen und damit eine starke Belastung der
+Energiezuführung zum Greifer. Außerdem bleiben die Bahnen für den Inbetriebnehmer
+nachvollziehbar.
+
+% ------------------------------------------------------------------------------
+\section{Vorgehen im Projekt}
+\label{sec:vp-vorgehen}
+
+Die betrachtete Zelle ist bereits seit einigen Jahren umgesetzt. Deshalb wurde zuerst das
+bestehende Projekt analysiert. Die Taktzeiten der dort umgesetzten Bahnen dienen als
+Vergleichsbasis für alle neu erzeugten Bahnen.
+
+Anschließend wurde ein leeres Bahnmodul angelegt. Es enthält nur die Start- und Zielposen und
+die zugehörigen Vorposen, aber keine Zwischenpunkte. Alle Werkzeuge zur automatischen
+Bahnplanung erhalten dasselbe Bahnmodul als Ausgangspunkt. Dadurch sind ihre Ergebnisse
+untereinander und mit der bestehenden Bahn vergleichbar.
+
+Zusätzlich hat die Projektgruppe selbst Bahnen nach dem manuellen Vorgehen aus
+\cref{sec:vp-manuell} erstellt. Diese Bahnen zeigen, welches Ergebnis mit wenig Erfahrung in
+der Bahnplanung erreicht wird, und dienen als weiterer Vergleich. Gleichzeitig hat die Gruppe
+dabei das Programm und die Bahnplanung selbst kennengelernt.
+
+Damit ergeben sich drei Vergleichswerte für eine automatisch erzeugte Bahn: die bestehende,
+von erfahrenen Planern erstellte Bahn, die eigene manuelle Bahn und die Bahnen der
+anderen Werkzeuge.
+
+\todo[inline]{Falls vorhanden: Taktzeiten der bestehenden Bahn, der eigenen manuellen Bahn und
+der Bahn aus dem Robotic Automatic Path Planner als Tabelle ergänzen.}
+
+% ------------------------------------------------------------------------------
+\section{Werkzeuge zur automatischen Bahnplanung}
+\label{sec:vp-werkzeuge}
+
+Für die automatische Erzeugung der Bahnen waren zwei Werkzeuge vorgesehen. Als dritte
+Möglichkeit sollten Verfahren betrachtet werden, die nicht in Process Simulate enthalten sind.
+
+\paragraph{Robotic Automatic Path Planner.}
+Der Robotic Automatic Path Planner ist in Process Simulate integriert. Er erzeugt aus einer
+vorhandenen Bahn mit Start- und Zielpose eine kollisionsfreie Bahn und berücksichtigt dabei die
+Kollisionssets. Der Anwender kann zwischen mehreren Optimierungszielen wählen, zum Beispiel
+einer möglichst kurzen Taktzeit.
+
+Das Werkzeug wurde auf das leere Bahnmodul angewendet, und Bahnen konnten erfolgreich
+automatisch erstellt werden. Bei der Optimierung auf die Taktzeit fiel jedoch auf, dass das Werkzeug auch
+die programmierten Geschwindigkeiten ändert. Betroffen war zum Beispiel die geradlinige Bewegung
+von der Vorpose in die Zielpose. Diese Bewegung wird bewusst langsam programmiert, damit das
+Werkstück sicher abgelegt oder gegriffen wird. Wird sie beschleunigt, kann das Werkstück
+verrutschen, oder Vorrichtung und Greifer werden stärker belastet. Eine automatisch erzeugte
+Bahn muss deshalb darauf geprüft werden, ob solche festen Vorgaben erhalten bleiben.
+
+\todo[inline]{Weitere Optimierungsziele des Robotic Automatic Path Planner nennen (z.\,B. Abstand
+zu Hindernissen, Achsbewegung), falls bekannt.}
+
+\paragraph{Realtime Robotics.}
+Als zweites Werkzeug war eine Lösung der Firma Realtime Robotics vorgesehen. Die Lizenz stand
+bis zum Ende der Zusammenarbeit nicht zur Verfügung, deshalb konnte das Werkzeug nicht getestet
+werden.
+
+\paragraph{Alternative Verfahren.}
+\todo[inline]{Kommilitone: Alternative Verfahren zur Bahnplanung außerhalb von Process Simulate
+beschreiben (Ansätze, betrachtete Werkzeuge, Einschätzung). Neue Quellen nur mit geprüfter DOI.}
+
+% ------------------------------------------------------------------------------
+\section{Bedeutung für das vorliegende Projekt}
+\label{sec:vp-bedeutung}
+
+Die Aufgabe des vorliegenden Projekts unterscheidet sich vom Vorprojekt. Im Mittelpunkt steht
+nicht die Planung von Bahnen in der Simulation, sondern das Erkennen, Greifen und Prüfen eines
+Bauteils am realen Roboter. Mehrere Erkenntnisse aus dem Vorprojekt sind trotzdem übertragbar:
+
+\begin{description}
+  \item[Vorpose und geradlinige Anfahrt] Die Greif- und Ablegesequenz des Demonstrators folgt
+    demselben Muster wie bei GROB: Eine Vorpose wird mit einer Gelenkbewegung angefahren, das
+    Ziel dann langsam und geradlinig (\cref{sec:m2-sequenz}). Die Erfahrung mit dem
+    Robotic Automatic Path Planner zeigt, dass diese langsame Anfahrt als feste Vorgabe gelten
+    muss, auch wenn Bahnen später automatisch erzeugt oder optimiert werden.
+  \item[Sichere Bereiche] Die Robotersteuerung des Demonstrators prüft vor jeder Bewegung,
+    ob Zielpose und Vorposition in einem festgelegten Quader liegen (\cref{sec:m2-sicherheit}).
+    Das entspricht in vereinfachter Form einem Arbeitsraum. Geprüft wird dabei nur der \ac{tcp}.
+    Eine mögliche Erweiterung wäre, Greifer und Bauteil wie bei den Werkzeugkugeln durch Kugeln
+    anzunähern und zusätzlich Schutzräume um Kameras und Prüfstation festzulegen.
+  \item[Kollisionsprüfung in der Simulation] Im Demonstrator werden die Posen geteacht, und die
+    Wege dazwischen führen durch freien Raum über dem Tisch. Eine Kollisionsprüfung ist deshalb
+    nicht nötig. Würde die Zelle erweitert, könnten die Bahnen vorab in einer Simulation mit
+    einem Zellmodell und Kollisionssets geprüft werden. Für den eingesetzten Roboter bietet der
+    Hersteller dafür eine Offline-Simulation an~\cite{neura2024offlinesim}.
+  \item[Randbedingungen für KI-Verfahren] Im Vorprojekt sollte eine KI die Bahnen erzeugen, im
+    Demonstrator bestimmt ein lernbasiertes Verfahren optional die Greifpose
+    (\cref{ch:kigreifen}). In beiden Fällen gilt: Das Ergebnis der KI muss die
+    Randbedingungen der Anlage einhalten, also kollisionsfrei sein, in den erlaubten Bereichen
+    liegen und feste Vorgaben wie Geschwindigkeiten beibehalten. Im Demonstrator prüft deshalb
+    die Robotersteuerung jede Zielpose gegen die Arbeitsraumgrenzen, unabhängig davon, welches
+    Modul sie liefert.
+\end{description}

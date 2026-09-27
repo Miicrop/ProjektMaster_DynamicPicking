@@ -10,6 +10,3 @@
 | `controller_deployment_guideline.pdf` | Installation der Steuerungssoftware auf dem Steuerungsrechner | nur für Neura/Admin |
 
 Einstieg für die Praxis: [code/m2_robot_control/ANLEITUNG_NEURA.md](../../code/m2_robot_control/ANLEITUNG_NEURA.md)
-
-Proprietäre Unterlagen von Neura Robotics. **Das öffentliche GitHub-Repo enthält diese PDFs nicht**
-(`.gitignore`: `docs/neura/*.pdf`) – bei eurem Neura-Kontakt anfragen und hier ablegen.

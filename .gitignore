@@ -8,9 +8,7 @@ code/logs/
 # Neura controller software + robot backup (1.4 GB, proprietary, contains password hashes)
 resources/neura_controller/
 
-# Neura proprietary documentation and Python client - public repo, not for redistribution.
-# Get these directly from Neura Robotics / your Neura contact instead.
-docs/neura/*.pdf
+# Neura Python client - get it directly from Neura Robotics / your Neura contact.
 code/m2_robot_control/vendor/neurapy/
 
 # LaTeX build artifacts

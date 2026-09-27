@@ -53,11 +53,10 @@ und Kameras, und jede Person kann ihr Modul allein weiterentwickeln.
 2. **VS Code** installieren (<https://code.visualstudio.com/>), dazu die Erweiterung „Python“.
 3. **Projekt klonen:** `git clone https://github.com/Miicrop/ProjektMaster_DynamicPicking.git`
 
-   Das öffentliche Repo enthält aus Lizenzgründen **nicht** die Neura-PDFs (`docs/neura/`) und den
-   Neura-Python-Client (`code/m2_robot_control/vendor/neurapy/robot.py`). Für die Arbeit an M1, M3,
-   dem Ablauf mit Mock-/Simulator-Roboter und der GUI wird beides nicht gebraucht. Für den echten
-   Roboter (M2) bei eurem Neura-Kontakt anfragen und an die genannten Stellen legen – siehe
-   `code/m2_robot_control/vendor/README.md` und `docs/neura/README.md`.
+   Das öffentliche Repo enthält **nicht** den Neura-Python-Client
+   (`code/m2_robot_control/vendor/neurapy/robot.py`). Für die Arbeit an M1, M3, dem Ablauf mit
+   Mock-/Simulator-Roboter und der GUI wird er nicht gebraucht. Für den echten Roboter (M2) bei
+   eurem Neura-Kontakt anfragen und dort ablegen – siehe `code/m2_robot_control/vendor/README.md`.
    Der Ordner `resources/` (1,4 GB Steuerungssoftware) ist ebenfalls nicht im Repo und wird zum
    Arbeiten nicht gebraucht.
 4. Eingabeaufforderung im Ordner `code` öffnen: im Explorer in den Ordner `code` gehen, in die
@@ -366,8 +365,8 @@ einen Test im `tests/`-Ordner des Moduls.
   `plan/01_architektur.md` vorschlagen und absprechen.
 - **Einstellungen** gehören in `system.yaml`, nicht als feste Zahlen in den Code.
 - **Sprache:** Planung und Thesis auf Deutsch, Code und Kommentare auf Englisch.
-- **Vertraulich:** Neura-Client (`vendor/`), `docs/neura/` und `resources/` sind proprietär bzw.
-  enthalten Passwort-Hashes → nicht öffentlich teilen. Ein künftiges Git-Repo muss **privat** sein.
+- **Vertraulich:** Neura-Client (`vendor/`) und `resources/` sind proprietär bzw. enthalten
+  Passwort-Hashes → nicht öffentlich teilen. Die Doku unter `docs/neura/` darf ins Repo.
 - **Roboter:** nie allein, Hand am Not-Halt, neue Bewegungen erst im Simulator, dann mit 20 %.
 
 ## 11. Fehlersuche

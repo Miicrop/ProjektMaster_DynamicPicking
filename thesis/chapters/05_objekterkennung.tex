@@ -122,32 +122,52 @@ berechnet. Liegt die am weitesten entfernte Ecke mehr als einen festen Anteil de
 Bauteilbreite außerhalb, gilt die Fase als gefunden, und die Längsachse wird so ausgerichtet,
 dass sie zur Fase zeigt. Der Winkel ist dann im Bereich \ang{0} bis \ang{360} eindeutig. Wird
 keine Fase gefunden, wird der Winkel auf \ang{0} bis \ang{180} begrenzt und die Konfidenz der
-Pose herabgesetzt. \Cref{alg:m1-pose} fasst das Vorgehen zusammen.
+Pose herabgesetzt. \Cref{fig:m1-pose} fasst das Vorgehen zusammen.
 
-\begin{algorithm}[htbp]
-  \caption{Posenbestimmung mit Fasenerkennung}
-  \label{alg:m1-pose}
-  \begin{algorithmic}[1]
-    \Require Kontur $K$ des Bauteils in der Draufsicht
-    \Ensure Schwerpunkt $(u, v)$, Winkel $\theta$, Konfidenz $c$
-    \State $(u, v) \gets$ Schwerpunkt von $K$ aus den Bildmomenten
-    \State $R \gets$ kleinstes umschließendes Rechteck von $K$
-    \State $\vec{a} \gets$ Einheitsvektor entlang der langen Seite von $R$
-    \ForAll{Ecken $e_i$ von $R$}
-      \State $d_i \gets$ Abstand von $e_i$ zur Kontur $K$ (positiv außerhalb)
-    \EndFor
-    \State $k \gets \arg\max_i d_i$
-    \If{$d_k > f \cdot \text{Breite}(R)$} \Comment{Fase gefunden}
-      \If{$(e_k - m_R) \cdot \vec{a} < 0$} \Comment{$m_R$: Mitte von $R$}
-        \State $\vec{a} \gets -\vec{a}$
-      \EndIf
-      \State $\theta \gets \operatorname{atan2}(a_y, a_x) \bmod \ang{360}$; \quad $c \gets 1$
-    \Else
-      \State $\theta \gets \operatorname{atan2}(a_y, a_x) \bmod \ang{180}$; \quad $c \gets 0{,}5$
-    \EndIf
-    \State \Return $(u, v), \theta, c$
-  \end{algorithmic}
-\end{algorithm}
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[font=\small, scale=1.1]
+    \draw[fill=violet!20, thick] (0,0) -- (4,0) -- (4,1.1) -- (3.5,1.6) -- (0,1.6) -- cycle;
+    \draw[dashed] (0,0) rectangle (4,1.6);
+    \node[font=\scriptsize, anchor=east, align=right] at (-0.1,0.8) {umschließendes\\Rechteck $R$};
+    \node[font=\scriptsize, anchor=north] at (2,0) {Kontur $K$};
+    \node[font=\scriptsize, anchor=south] at (3.5,1.62) {Fase};
+    \fill (4,1.6) circle (1.5pt) node[above right, inner sep=1pt] {$e_k$};
+    \draw[{Stealth[length=1.5mm]}-{Stealth[length=1.5mm]}] (3.75,1.35) -- (4,1.6);
+    \node[anchor=west, inner sep=1pt] at (4.05,1.25) {$d_k$};
+    \fill (2,0.8) circle (1.5pt) node[below, inner sep=2pt] {$(u,v)$};
+    \draw[pap arr] (2,0.8) -- (3.2,0.8) node[midway, above] {$\vec a$};
+  \end{tikzpicture}
+
+  \vspace{6mm}
+  \begin{tikzpicture}[pap]
+    \node[pap term] (start) {Kontur $K$ des Bauteils};
+    \node[pap proc, below=of start] (sp) {Schwerpunkt $(u,v)$ aus den Bildmomenten};
+    \node[pap proc, below=of sp] (rect) {Kleinstes umschließendes Rechteck $R$, Längsachse $\vec a$};
+    \node[pap proc, below=of rect] (ecken) {Abstand jeder Ecke von $R$ zur Kontur, größter Abstand $d_k$ an Ecke $e_k$};
+    \node[pap dec, below=of ecken] (fase) {$d_k > f \cdot b_R$\,?};
+    \node[pap dec, below=of fase] (richt) {$\vec a$ zeigt\\zur Fase?};
+    \node[pap proc=24mm, right=14mm of richt] (umk) {$\vec a$ umkehren};
+    \node[pap proc, below=of richt] (w360) {$\theta$ aus $\vec a$ im Bereich $[\ang{0}, \ang{360}]$, Konfidenz $c = 1$};
+    \node[pap proc=36mm, left=10mm of fase] (w180) {$\theta$ im Bereich $[\ang{0}, \ang{180}]$,\\Konfidenz $c = 0{,}5$};
+    \node[pap term, below=of w360] (ende) {Pose $(u,v)$, $\theta$, $c$};
+    \draw[pap arr] (start) -- (sp);
+    \draw[pap arr] (sp) -- (rect);
+    \draw[pap arr] (rect) -- (ecken);
+    \draw[pap arr] (ecken) -- (fase);
+    \draw[pap arr] (fase) -- node[pap lbl, right=1pt] {ja, Fase gefunden} (richt);
+    \draw[pap arr] (fase) -- node[pap lbl] {nein} (w180);
+    \draw[pap arr] (richt) -- node[pap lbl, right=1pt] {ja} (w360);
+    \draw[pap arr] (richt) -- node[pap lbl] {nein} (umk);
+    \draw[pap arr] (umk) |- (w360);
+    \draw[pap arr] (w180) |- (ende);
+    \draw[pap arr] (w360) -- (ende);
+  \end{tikzpicture}
+  \caption{Posenbestimmung mit Fasenerkennung. Oben: Kontur, umschließendes Rechteck und
+  Abstand $d_k$ der Rechteckecke an der Fase. Unten: Ablauf; $b_R$ ist die Breite von $R$,
+  $f$ ein fester Anteil.}
+  \label{fig:m1-pose}
+\end{figure}
 
 % ------------------------------------------------------------------------------
 \section{Transformation in das Roboterkoordinatensystem}

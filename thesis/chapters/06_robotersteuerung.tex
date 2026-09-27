@@ -62,37 +62,66 @@ resultierende Winkel wird auf den Bereich \ang{-180} bis \ang{180} normiert.
 
 Greifen und Ablegen laufen nach demselben Muster ab: Der Roboter fährt zunächst eine
 Vorposition oberhalb des Ziels an, senkt sich dann langsam und geradlinig ab, schließt bzw.\
-öffnet den Greifer und hebt wieder auf die Vorposition an (\cref{alg:m2-pick}). Die
+öffnet den Greifer und hebt wieder auf die Vorposition an (\cref{fig:m2-pick}). Die
 Vorposition liegt einen festen Sicherheitsabstand über dem Ziel, sodass der Roboter bei der
 schnelleren Gelenkbewegung nicht mit dem Bauteil oder dem Tisch kollidiert. Nach dem Schließen
 und Öffnen des Greifers wird eine kurze Zeit gewartet, bis der Greifer seine Endlage erreicht
 hat.
 
-\begin{algorithm}[htbp]
-  \caption{Greifen und Ablegen}
-  \label{alg:m2-pick}
-  \begin{algorithmic}[1]
-    \Function{pick}{Pose $P$}
-      \State $Z \gets$ Greifpose aus $P$ \Comment{\cref{sec:m2-greifpose}}
-      \State $V \gets Z$ um Sicherheitsabstand $h$ angehoben
-      \State prüfe $Z$ und $V$ gegen die Arbeitsraumgrenzen
-      \State Greifer öffnen
-      \State \ac{ptp}-Bewegung nach $V$
-      \State \ac{lin}-Bewegung nach $Z$ mit reduzierter Geschwindigkeit
-      \State Greifer schließen, Wartezeit
-      \State \ac{lin}-Bewegung nach $V$
-    \EndFunction
-    \Statex
-    \Function{place}{benannte Pose $Z$}
-      \State $V \gets Z$ um Sicherheitsabstand $h$ angehoben
-      \State prüfe $Z$ und $V$ gegen die Arbeitsraumgrenzen
-      \State \ac{ptp}-Bewegung nach $V$
-      \State \ac{lin}-Bewegung nach $Z$ mit reduzierter Geschwindigkeit
-      \State Greifer öffnen, Wartezeit
-      \State \ac{lin}-Bewegung nach $V$
-    \EndFunction
-  \end{algorithmic}
-\end{algorithm}
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}[c]{0.44\textwidth}
+    \centering
+    \begin{tikzpicture}[font=\small,
+        stepnr/.style={circle, draw, fill=white, inner sep=0.8pt, font=\scriptsize\bfseries}]
+      \fill[black!10] (0,-0.25) rectangle (6.4,0);
+      \draw[thick] (0,0) -- (6.4,0);
+      \node[font=\scriptsize, anchor=north west] at (0,-0.25) {Tisch};
+      \draw[fill=violet!25] (4.3,0) rectangle (5.3,0.5);
+      \draw[fill=black!45] (4.13,0.12) rectangle (4.3,0.8);
+      \draw[fill=black!45] (5.3,0.12) rectangle (5.47,0.8);
+      \draw[fill=black!25] (4.13,0.8) rectangle (5.47,1.0);
+      \coordinate (S) at (0.6,3.3);
+      \coordinate (V) at (4.8,2.7);
+      \fill (S) circle (1.6pt) node[below, inner sep=3pt] {Start};
+      \fill (V) circle (1.6pt) node[above right, inner sep=2pt] {$V$};
+      \node[font=\scriptsize, anchor=west] at (5.55,0.3) {$Z$};
+      \draw[densely dotted] (4.8,0.3) -- (5.55,0.3);
+      \draw[pap arr, dashed] (S) .. controls (1.8,4.3) and (3.6,3.9) .. (V);
+      \node[stepnr] at (2.5,3.95) {1};
+      \node[font=\scriptsize, anchor=south] at (2.5,4.1) {\acs{ptp}};
+      \draw[pap arr] (4.6,2.6) -- (4.6,1.05);
+      \draw[pap arr] (5.0,1.05) -- (5.0,2.6);
+      \node[stepnr] at (4.6,1.8) {2};
+      \node[stepnr] at (5.0,1.8) {4};
+      \node[stepnr] at (5.85,0.8) {3};
+      \draw[densely dotted] (3.6,2.7) -- (4.7,2.7);
+      \draw[densely dotted] (3.6,0.3) -- (4.13,0.3);
+      \draw[{Stealth[length=1.5mm]}-{Stealth[length=1.5mm]}] (3.7,0.3) -- node[left] {$h$} (3.7,2.7);
+    \end{tikzpicture}
+  \end{minipage}\hfill
+  \begin{minipage}[c]{0.54\textwidth}
+    \small
+    \newcommand{\stepmark}[1]{\tikz[baseline=(n.base)]\node[circle, draw, inner sep=0.8pt,
+      font=\scriptsize\bfseries](n){#1};}
+    \begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
+      \toprule
+      & \texttt{pick} & \texttt{place} \\
+      \midrule
+      vorab & $Z$ aus erkannter Pose, $V$ und $Z$ prüfen, Greifer öffnen
+            & $Z$ = benannte Pose, $V$ und $Z$ prüfen \\
+      \stepmark{1} & \multicolumn{2}{l}{\acs{ptp} nach $V$} \\
+      \stepmark{2} & \multicolumn{2}{l}{\acs{lin} nach $Z$, langsam} \\
+      \stepmark{3} & Greifer schließen, warten & Greifer öffnen, warten \\
+      \stepmark{4} & \multicolumn{2}{l}{\acs{lin} zurück nach $V$} \\
+      \bottomrule
+    \end{tabularx}
+  \end{minipage}
+  \caption{Greif- und Ablegesequenz: Bewegung in der Seitenansicht (links) und Schritte von
+  \texttt{pick} und \texttt{place} (rechts). Die Vorposition $V$ liegt um den
+  Sicherheitsabstand $h$ über der Zielpose $Z$. Geprüft wird gegen die Arbeitsraumgrenzen.}
+  \label{fig:m2-pick}
+\end{figure}
 
 Das Greifen an der Prüfposition nutzt dieselbe Sequenz. Statt einer erkannten Pose wird
 dabei die fest hinterlegte Pose der Prüfposition übergeben, da das Bauteil dort in bekannter

@@ -31,7 +31,7 @@ Dieses Dokument ist die Referenz für alle Kapitelentwürfe. Änderungen an Umfa
 
 ## 3. Konventionen für die Entwürfe
 
-- **Kein Quellcode** im Text, nur Ablaufdiagramme und **Pseudocode** zum Verständnis. Pakete: `algorithm` + `algpseudocode`.
+- **Kein Quellcode** im Text. Abläufe als **Grafik** (TikZ-Ablaufdiagramm, Stile `pap …` in `main.tex`) statt Pseudocode, weil Grafiken leichter lesbar sind (Entscheidung 2026-09-27). `algorithm`/`algpseudocode` bleiben geladen, werden aber nicht mehr genutzt.
 - **Offene Punkte** stehen als sichtbare `\todo{…}` im Text (Paket `todonotes`). Fehlende Abbildungen werden als Platzhalter per `\missingfigure{…}` eingefügt.
 - **Abkürzungen** nur über `\ac{…}` (`00_abkuerzungen.tex`), z. B. OCR, TCP, PTP, LIN, ROI, HSV, KS.
 - **Keine Irrwege und Entwicklungsprobleme** in den Entwürfen. Tatsächliche Probleme werden nach den Tests ergänzt.
@@ -45,6 +45,7 @@ Die neue Kapitelfolge enthält ein zusätzliches Kapitel „Integration und Bedi
 | Nr. | Datei (Vorschlag) | Kapitel | Umfang (Seiten) | Verantwortlich |
 |---|---|---|---|---|
 | 1 | `02_einleitung.tex` | Einleitung | 3–4 | alle / Entwurf Claude |
+| 1a | `02b_vorprojekt.tex` **(neu)** | Vorprojekt: KI-basierte Roboterbahnen (GROB) | 4–5 Text, ≈ 9 mit Abb. | alle / Entwurf Claude, Abschnitt „Alternative Verfahren“ Kommilitone |
 | 2 | `03_grundlagen.tex` | Grundlagen | 10–14 | alle / Entwurf Claude |
 | 3 | `04_systemkonzept.tex` | Systemkonzept | 6–8 | Niklas / Entwurf Claude |
 | 4 | `05_objekterkennung.tex` | Objekterkennung (M1) | 5–6 | Person 1 / Entwurf Claude |
@@ -65,6 +66,17 @@ Die neue Kapitelfolge enthält ein zusätzliches Kapitel „Integration und Bedi
 3. **Ziel:** vollautomatischer Durchlauf als Erfolgskriterium, die Messungen sind demonstrativ.
 4. **Abgrenzung (neu):** ein Bauteil, flach liegend (2D-Pose x, y, θ), keine sicherheitszertifizierte Anlage (Betrieb unter Aufsicht, reduzierte Geschwindigkeit), M4 optional und nicht Voraussetzung für den Demonstrator.
 5. **Aufbau der Arbeit:** an die neue Kapitelfolge anpassen.
+
+### Kap. 1a – Vorprojekt: KI-basierte Roboterbahnen (neu, 2026-09-27)
+**Kernaussage:** Erfahrungen aus dem Vorprojekt bei GROB (Thema „Erstellung von KI-basierten Roboterpfaden für die Robotersimulation und Inbetriebnahme“, Siemens Process Simulate) und was davon für den Demonstrator relevant ist. Ablauf: 8 Tage Einarbeitung, dann Projektbearbeitung, währenddessen Ende der Zusammenarbeit → nur begrenzte Ergebnisse.
+1. Aufgabenstellung und Werkzeugumgebung: Ziel kollisionsfreie, taktzeitoptimierte Bahn; Eingrenzung auf einen Handhabungsprozess (kein Kleben), KUKA-Roboter (gut in der Simulation)
+2. Kollisionserkennung: Kollisionssets (Check/With), Near Miss, zulässige Durchdringung. Grundlage für jedes Planungswerkzeug
+3. Roboter- und Zellsicherheit (KUKA, Add-on „BNG Define Safe Robot“): Zellbereich, Überwachungsräume (Arbeits-/Schutzraum), Werkzeugkugeln
+4. Manuelle Bahnplanung bei GROB: Vorposen, Achsverfahren bis Kollision, möglichst eine Achse heraus, wiederholen. Wunsch: A4/A6 = 0°. **Ablaufdiagramm** (`fig:vp-manuell`)
+4a. Vorgehen im Projekt: bestehendes Projekt analysiert (Taktzeiten als Vergleichsbasis), leeres Bahnmodul (nur Start-, Ziel- und Vorposen) für alle KI-Werkzeuge, eigene manuelle Bahnen als Vergleich und zum Lernen. `	odo`: Taktzeittabelle, falls vorhanden
+5. Werkzeuge: Robotic Automatic Path Planner (getestet, bei Zeitoptimierung werden Geschwindigkeiten ungewollt geändert, z. B. LIN Vorpose → Ziel), Realtime Robotics (keine Lizenz), alternative Verfahren → `	odo{Kommilitone}`
+6. Bedeutung für das Projekt: Vorpose + LIN (Kap. 06), Arbeitsraumgrenzen ≈ vereinfachter Arbeitsraum, Erweiterung Werkzeugkugeln/Schutzräume, Kollisionsprüfung per Offline-Simulation `neura2024offlinesim`, Randbedingungen für KI-Ausgaben (M4)
+- Bilder: `figures/grob/*.png` (umbenannt, ohne Leerzeichen). **Freigabe durch GROB klären** (reale Anlagendaten).
 
 ### Kap. 2 – Grundlagen
 **Kernaussage:** Breiter Überblick über die verwendeten und die alternativen Verfahren. Die Modulkapitel verweisen hierher.
@@ -92,14 +104,14 @@ Die neue Kapitelfolge enthält ein zusätzliches Kapitel „Integration und Bedi
 1. Aufgabe und Schnittstelle (`detect() → ObjectPose`)
 2. Verarbeitungskette als Ablaufdiagramm: ArUco-Detektion → Homographie → entzerrte Draufsicht; Rückfall auf den weißen Rahmen nur als kurzer Hinweis
 3. Segmentierung relativ zum Median der Platte (Helligkeit/Sättigung), dadurch unabhängig von der Bauteilfarbe. Verweis auf Kap. 2 (Otsu als Alternative)
-4. Pose: Schwerpunkt, `minAreaRect`, eindeutiges θ ∈ [0°, 360°) über die Fase. **Pseudocode: Pose- und Fasenbestimmung**
+4. Pose: Schwerpunkt, `minAreaRect`, eindeutiges θ ∈ [0°, 360°) über die Fase. **Skizze + Ablaufdiagramm: Pose- und Fasenbestimmung** (`fig:m1-pose`)
 5. Übergabe im Roboter-KS (Verweis auf Kap. 3.4)
 6. `\todo`s: intrinsische Kalibrierung, Parallaxe durch die Bauteilhöhe
 
 ### Kap. 5 – Robotersteuerung (M2)
 1. Aufgabe und Schnittstelle (`connect`, `home`, `pick`, `place`, `stop`)
 2. Roboter-API: NeuraPy (JSON über TCP), Posen in m/rad, Programmablauf (`init_program` … `stop`) `neura2025neurapy`
-3. Greif- und Ablegesequenz: Vorposition (PTP) → absenken (LIN) → greifen/lösen → anheben. **Pseudocode: `pick()` / `place()`**
+3. Greif- und Ablegesequenz: Vorposition (PTP) → absenken (LIN) → greifen/lösen → anheben. **Seitenansicht + Schritttabelle: `pick()` / `place()`** (`fig:m2-pick`)
 4. Benannte Posen: `home`, `inspection`, `bin_good`, `bin_bad`
 5. Sicherheit: reduzierte Geschwindigkeit, Software-Arbeitsraumgrenzen, Plausibilitätsprüfung, `stop()` mit Quittierung
 6. `\todo`s: Greifer-Rückmeldung, Greifer-Offset/yaw-Konvention, geteachte Posen
@@ -110,7 +122,7 @@ Die neue Kapitelfolge enthält ein zusätzliches Kapitel „Integration und Bedi
 3. Loch: Region + Ellipsen-Fit → Durchmesser (Hough nur als Alternative in Kap. 2)
 4. Kerbe: rechteckigste Region über drei Wege (Helligkeit, Sättigung, Kanten); Template-Matching nur als Alternative in Kap. 2
 5. OCR: EasyOCR mit Ziffern-Allowlist + Regex `^[0-9]{5}$` `easyocr`
-6. Gut/Schlecht-Logik: alle drei Merkmale erfüllt → Gutteil, sonst Gründe in `reasons`. **Pseudocode: Gut/Schlecht-Entscheidung**
+6. Gut/Schlecht-Logik: alle drei Merkmale erfüllt → Gutteil, sonst Gründe in `reasons`. **Ablaufdiagramm: Gut/Schlecht-Entscheidung** (`fig:m3-entscheidung`)
 7. `\todo`s: Beleuchtung, mechanischer Anschlag, Bauteilmaße aus der Zeichnung
 
 ### Kap. 7 – KI-basiertes Greifen (M4)
@@ -156,15 +168,14 @@ Aus `references.bib` sind bereits verwendbar: `garrido2014`, `zhang2000`, `hartl
 
 ## 6. Nebenbefunde in `main.tex` (vor dem Schreiben korrigieren)
 
-- `\thesiscourse`: „Automatisierungstechik“ → „Automatisierungstechnik“
-- `\thesissupervisor`: „Prof.~Dr.~Tobias.~Weiser.“ → „Prof.~Dr.~Tobias~Weiser“
-- `\thesisauthors`: „Felix Krawczyk ,“ → „Felix Krawczyk,“
 - Präambel: `todonotes`, `algorithm`, `algpseudocode` ergänzen; `09_integration` in die Kapitelfolge einfügen
 
 ## 6a. Stand der Entwürfe (2026-09-26)
 
 - Erledigt: §6 (main.tex), Kapitel 02, 03, 04, 05, 06, 07 und 09 (Integration) als Entwurf. Kapitel 10 (Evaluation) und 11 (Fazit) nur als Gerüst mit `\todo`s. Kapitel 08 (M4) unverändert.
 - In `references.bib` ergänzt, DOI jeweils über Crossref geprüft: `fitzgibbon1999`, `smith1978`, `brunelli2009`, `suzuki1985`, `hu1962`, `canny1986`, `baek2019`, `shi2017`.
+- 2026-09-27: Kapitel `02b_vorprojekt.tex` (Vorprojekt GROB) ergänzt, Einleitung (Motivation, Aufbau) angepasst. Offen: Abschnitt „Alternative Verfahren“ (Kommilitone), Freigabe der Bilder durch GROB, Begründung A4/A6.
+- 2026-09-27: Greifer korrigiert (Kap. 04, Tab. `tab:hardware`): Zimmer MATCH LWR50L-23-00004-A + Robotermodul LWR50F-13-05-A, Quellen `zimmer_lwr50l`, `zimmer_lwr50f` (Datenblätter in `docs/greifer/`). Absatz „Bauteil bewusst einfach, damit Standard-Parallelgreifer ohne eigenes Greiferdesign“ ergänzt. Werkzeug heißt in der Steuerung weiterhin „RobotiQ“ → `\todo` Masse/TCP prüfen.
 - Noch offen aus §5: Quellen für die Motivation (Kap. 1) und die Normen zu kollaborativen Robotern (Kap. 2.6).
 
 ## 7. So geht es weiter

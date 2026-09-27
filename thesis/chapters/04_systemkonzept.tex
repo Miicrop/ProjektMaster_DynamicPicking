@@ -92,8 +92,16 @@ von einem Rechner, der über \ac{lan} mit der Robotersteuerung verbunden ist.
     \midrule
     Roboter & Neura Robotics LARA, sechs Achsen, Steuerungssoftware Version~5.0.8,
               Ansteuerung über die Python-Schnittstelle NeuraPy~\cite{neura2025neurapy} \\
-    Greifer & Parallelgreifer, in der Steuerung als Werkzeug \enquote{RobotiQ} angelegt
-              \todo[inline]{Greifermodell und Montage prüfen} \\
+    Greifer & Elektrischer 2-Backen-Parallelgreifer Zimmer Group MATCH LWR50L-23-00004-A:
+              Hub \SI{16}{\milli\metre} je Backe, Greifkraft einstellbar bis \SI{500}{\newton},
+              Schließzeit \SI{0,3}{\second}, Wiederholgenauigkeit \SI{\pm 0,02}{\milli\metre},
+              Masse \SI{1,4}{\kilo\gram}, Ansteuerung über IO-Link~\cite{zimmer_lwr50l}
+              \todo[inline]{Werkzeugdaten in der Steuerung prüfen: Das Werkzeug heißt dort
+              \enquote{RobotiQ}. Masse und \acs{tcp} müssen zum Zimmer-Greifer passen.} \\
+    Adapter & Zimmer Group MATCH-Robotermodul LWR50F-13-05-A zwischen Roboterflansch und
+              Greifer: Schnellwechsler mit integrierter elektrischer Energieübertragung,
+              Anschlussflansch nach EN ISO 9409-1 (TK~50), Masse
+              \SI{0,35}{\kilo\gram}~\cite{zimmer_lwr50f} \\
     Top-down-Kamera & über dem Arbeitsbereich, Auflösung $1920 \times 1080$~Pixel
               \todo[inline]{Kameramodell und Montagehöhe} \\
     Seitenkamera & an der Prüfposition, Auflösung $3840 \times 2160$~Pixel
@@ -116,6 +124,15 @@ Die Fase des Bauteils ist für die Erkennung wichtig: Ohne sie wäre die Draufsi
 Quaders punktsymmetrisch und die Orientierung nur bis auf \ang{180} bestimmbar. Mit der
 Fase ist die Lage eindeutig, sodass das Bauteil an der Prüfposition immer mit derselben
 Seite zur Seitenkamera abgelegt werden kann.
+
+Die Form des Bauteils ist bewusst einfach gehalten. Die beiden langen Seitenflächen des
+Quaders sind parallel, sodass der Parallelgreifer das Bauteil mit seinen Greifbacken direkt
+an diesen Flächen fassen kann. Eigene Greifbacken oder ein eigener Greifer mussten deshalb
+nicht entwickelt werden. Voraussetzung ist nur, dass die Breite des Bauteils in den Hub der
+Greifbacken passt.
+
+\todo[inline]{Bauteilbreite gegen den Backenhub (\SI{16}{\milli\metre} je Backe) und die
+Öffnungsweite der verwendeten Greifbacken prüfen.}
 
 Eine dritte Kamera am Handgelenk des Roboters ist für das lernbasierte Greifen in
 \cref{ch:kigreifen} vorgesehen und für den Grundablauf nicht erforderlich.

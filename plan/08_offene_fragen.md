@@ -26,7 +26,7 @@
 ### Organisation
 - [ ] Abgabetermin und Umfang der Ausarbeitung?
 - [x] Gemeinsame Thesis oder Einzelteile pro Person? → **gemeinsame** Arbeit, Modulkapitel je Person (2026-09-26)
-- [ ] Git-Hosting (GitHub/GitLab der Hochschule)? Achtung: Neura-Client und -Doku sind proprietär → Repo **privat** halten
+- [ ] Git-Hosting (GitHub/GitLab der Hochschule)? Achtung: Neura-Client ist proprietär → nicht ins Repo (Doku unter `docs/neura/` darf rein, 2026-09-27)
 - [~] Thesis gemeinsam auf Overleaf oder lokal? → baut lokal mit MiKTeX (`latexmk`); Overleaf weiterhin möglich
 - [x] Hochschule/Studiengang/Betreuer auf dem Titelblatt eingetragen (2026-09-26)
 
@@ -38,6 +38,7 @@
 - [ ] Quellen für die Motivation (Kap. 1) und Normen zu Cobots (ISO 10218, ISO/TS 15066) aufnehmen?
 - [ ] Kalibrierung Arbeitsbereich → Roboter: Verfahren klären, dann in Kap. 3.4 / 4 / 5 beschreiben
 - [ ] GitHub-Repo mit den bisherigen Robotertests bereitstellen
+- [ ] Vorprojekt GROB (Kap. 02b): Dürfen Vorprojekt und Bildschirmfotos gezeigt werden (Freigabe GROB)? Wer schreibt den Abschnitt „Alternative Verfahren“?
 
 ## Entscheidungen
 

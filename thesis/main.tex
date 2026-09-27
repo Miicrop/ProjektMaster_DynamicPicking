@@ -37,7 +37,20 @@
 \usepackage{xcolor}
 \usepackage{acro}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,automata,fit}
+\usetikzlibrary{arrows.meta,positioning,automata,fit,shapes.geometric,calc}
+% Ablaufdiagramme (Programmablaufplan)
+\tikzset{
+  pap/.style={node distance=6mm and 10mm, font=\small},
+  pap term/.style={draw, rounded corners=3mm, fill=black!8, align=center, minimum height=7mm,
+                   inner xsep=3mm},
+  pap proc/.style={draw, fill=white, align=center, text width=#1, minimum height=8mm},
+  pap proc/.default=64mm,
+  pap dec/.style={draw, diamond, aspect=2.6, fill=black!3, align=center, inner sep=1pt},
+  pap arr/.style={-{Stealth[length=2.2mm]}, thick},
+  pap lbl/.style={font=\scriptsize, fill=white, inner sep=1pt},
+  pap good/.style={pap term, fill=green!12},
+  pap bad/.style={pap term, fill=red!10},
+}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \floatname{algorithm}{Algorithmus}
@@ -92,6 +105,7 @@
 \cleardoublepage
 \pagenumbering{arabic}
 \input{chapters/02_einleitung}
+\input{chapters/02b_vorprojekt}
 \input{chapters/03_grundlagen}
 \input{chapters/04_systemkonzept}
 \input{chapters/05_objekterkennung}

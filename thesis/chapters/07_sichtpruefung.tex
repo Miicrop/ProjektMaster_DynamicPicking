@@ -151,30 +151,49 @@ Ein Bauteil ist ein Gutteil, wenn alle drei Merkmale erfüllt sind: Die Seriennu
 lesbar und entspricht dem Format, das Loch wurde gefunden und sein Durchmesser liegt innerhalb
 der Toleranz um den Sollwert, und die Kerbe ist vorhanden. Andernfalls ist es ein Schlechtteil,
 und jeder nicht erfüllte Punkt wird als Grund im Prüfergebnis festgehalten
-(\cref{alg:m3-entscheidung}). Die Toleranz des Lochdurchmessers dient der Demonstration und
+(\cref{fig:m3-entscheidung}). Die Toleranz des Lochdurchmessers dient der Demonstration und
 entspricht keiner Fertigungsvorgabe.
 
-\begin{algorithm}[htbp]
-  \caption{Gut-/Schlecht-Entscheidung}
-  \label{alg:m3-entscheidung}
-  \begin{algorithmic}[1]
-    \Require Seriennummer $s$, Lochdurchmesser $d$, Kerbe vorhanden $k$
-    \Ensure Urteil gut/schlecht, Liste der Gründe $G$
-    \State $G \gets \emptyset$
-    \If{$s$ nicht lesbar \textbf{oder} $s$ entspricht nicht dem Format}
-      \State $G \gets G \cup \{\text{\enquote{Seriennummer ungültig}}\}$
-    \EndIf
-    \If{kein Loch gefunden}
-      \State $G \gets G \cup \{\text{\enquote{Loch nicht gefunden}}\}$
-    \ElsIf{$|d - d_\text{soll}| > \Delta d$}
-      \State $G \gets G \cup \{\text{\enquote{Durchmesser außerhalb der Toleranz}}\}$
-    \EndIf
-    \If{\textbf{nicht} $k$}
-      \State $G \gets G \cup \{\text{\enquote{Kerbe fehlt}}\}$
-    \EndIf
-    \State \Return (gut, falls $G = \emptyset$, sonst schlecht), $G$
-  \end{algorithmic}
-\end{algorithm}
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[pap]
+    \node[pap term] (start) {Seriennummer $s$, Lochdurchmesser $d$, Kerbe $k$};
+    \node[pap proc, below=of start] (init) {Liste der Gründe $G$ leeren};
+    \node[pap dec, below=of init] (d1) {Seriennummer lesbar\\und im Format?};
+    \node[pap dec, below=9mm of d1] (d2) {Loch gefunden?};
+    \node[pap dec, below=of d2] (d3) {$|d - d_\text{soll}| \le \Delta d$\,?};
+    \node[pap dec, below=9mm of d3] (d4) {Kerbe vorhanden?};
+    \node[pap dec, below=9mm of d4] (d5) {$G$ leer?};
+    \node[pap good, below=of d5] (gut) {Gutteil};
+    \node[pap bad, right=12mm of d5] (schlecht) {Schlechtteil\\mit Gründen $G$};
+    \node[pap proc=36mm, right=10mm of d1] (r1) {Grund: Seriennummer ungültig};
+    \node[pap proc=30mm, left=10mm of d2] (r2) {Grund: Loch nicht gefunden};
+    \node[pap proc=36mm, right=10mm of d3] (r3) {Grund: Durchmesser außerhalb der Toleranz};
+    \node[pap proc=36mm, right=10mm of d4] (r4) {Grund: Kerbe fehlt};
+    \coordinate (j1) at ($(d1.south)!0.5!(d2.north)$);
+    \coordinate (j3) at ($(d3.south)!0.5!(d4.north)$);
+    \coordinate (j4) at ($(d4.south)!0.5!(d5.north)$);
+    \draw[pap arr] (start) -- (init);
+    \draw[pap arr] (init) -- (d1);
+    \draw[pap arr] (d1) -- node[pap lbl, right=1pt, pos=0.3] {ja} (d2);
+    \draw[pap arr] (d2) -- node[pap lbl, right=1pt] {ja} (d3);
+    \draw[pap arr] (d3) -- node[pap lbl, right=1pt, pos=0.3] {ja} (d4);
+    \draw[pap arr] (d4) -- node[pap lbl, right=1pt, pos=0.3] {ja} (d5);
+    \draw[pap arr] (d5) -- node[pap lbl, right=1pt] {ja} (gut);
+    \draw[pap arr] (d5) -- node[pap lbl] {nein} (schlecht);
+    \draw[pap arr] (d1) -- node[pap lbl] {nein} (r1);
+    \draw[pap arr] (d2) -- node[pap lbl] {nein} (r2);
+    \draw[pap arr] (d3) -- node[pap lbl] {nein} (r3);
+    \draw[pap arr] (d4) -- node[pap lbl] {nein} (r4);
+    \draw[pap arr] (r1) |- (j1);
+    \draw[pap arr] (r2) |- (j3);
+    \draw[pap arr] (r3) |- (j3);
+    \draw[pap arr] (r4) |- (j4);
+  \end{tikzpicture}
+  \caption{Gut-/Schlecht-Entscheidung. Jedes nicht erfüllte Merkmal wird als Grund in $G$
+  festgehalten.}
+  \label{fig:m3-entscheidung}
+\end{figure}
 
 \todo[inline]{Bauteilmaße aus der Zeichnung übernehmen: Bauteilhöhe (Maßstab),
 Soll-Durchmesser und Toleranz des Lochs.}
