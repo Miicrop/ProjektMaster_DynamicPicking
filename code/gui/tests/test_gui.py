@@ -161,3 +161,21 @@ def test_same_camera_index_for_two_modules_is_refused(store, monkeypatch):
     with pytest.raises(RuntimeError, match="schon"):
         s.camera("m3", "camera")
     s._cameras.clear()
+
+
+def test_logbook_saves_trace_steps(tmp_path):
+    import numpy as np
+    from common.config import load_config
+    from common.trace import Trace
+    from orchestrator import logbook
+    from orchestrator.state_machine import CycleResult
+    cfg = load_config()
+    cfg["logging"]["cycle_dir"] = str(tmp_path)
+    trace = Trace()
+    trace.add("mask", np.zeros((4, 4), np.uint8))
+
+    class Det:                       # only a trace, no final debug image (e.g. detection failed)
+        last_result, last_trace = None, trace
+
+    out = logbook.save_images(cfg, CycleResult(7), Det(), object())
+    assert [f.name for f in (out / "steps").iterdir()] == ["m1_01_mask.png"]

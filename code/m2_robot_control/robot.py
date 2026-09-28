@@ -20,6 +20,8 @@ log = logging.getLogger(__name__)
 
 VENDOR_DIR = Path(__file__).resolve().parent / "vendor"
 STOPPED_MSG = "Robot stopped - acknowledge first (GUI: 'Fehler quittieren' / 'Freigeben')"
+JOG_MAX_MM = 100.0     # largest relative step allowed by NeuraRobot.jog()
+JOG_MAX_DEG = 45.0
 
 
 # --- helpers -------------------------------------------------------------------
@@ -217,6 +219,51 @@ class NeuraRobot(RobotController):
         self._check_ready()
         check_limits(self._cfg, b)
         self.r.move_linear(target_pose=[to_neura(a), to_neura(b)], speed=speed_mps)
+
+    def jog(self, dx_mm: float = 0.0, dy_mm: float = 0.0, dz_mm: float = 0.0,
+            drz_deg: float = 0.0) -> RobotTarget:
+        """Small relative linear move in the robot BASE frame (slow, approach speed).
+
+        drz_deg turns the tool about the base z-axis (same convention as the grasp angle).
+        Returns the commanded target so callers can compare it with the measured pose.
+        """
+        if max(abs(dx_mm), abs(dy_mm), abs(dz_mm)) > JOG_MAX_MM or abs(drz_deg) > JOG_MAX_DEG:
+            raise RobotError(f"Jog step too large (max {JOG_MAX_MM:.0f} mm / {JOG_MAX_DEG:.0f} deg)")
+        self._check_ready()
+        a = self.current_pose()
+        b = RobotTarget("jog", a.x_mm + dx_mm, a.y_mm + dy_mm, a.z_mm + dz_mm,
+                        a.rx_deg, a.ry_deg, _wrap_deg(a.rz_deg + drz_deg))
+        log.info("jog dx=%.1f dy=%.1f dz=%.1f mm drz=%.1f deg", dx_mm, dy_mm, dz_mm, drz_deg)
+        self._linear(a, b, self._rc["approach_speed_mps"])
+        return b
+
+    def _point_targets(self, pose: ObjectPose, hover_mm: float) -> tuple[RobotTarget, RobotTarget]:
+        if not 10.0 <= hover_mm < self._rc["approach_height_mm"]:
+            raise RobotError(f"Pointing hover {hover_mm:.0f} mm must be >= 10 mm and below the "
+                             f"approach height ({self._rc['approach_height_mm']:.0f} mm)")
+        t = as_target(self._cfg, pose)
+        return offset_z(t, hover_mm, "point"), offset_z(t, self._rc["approach_height_mm"])
+
+    def point_at(self, pose: ObjectPose, hover_mm: float = 30.0) -> RobotTarget:
+        """Pointing test: move the open gripper to `hover_mm` above the grasp pose and stay there.
+
+        Same approach as pick() but the gripper never closes - for checking the calibration
+        (measure the offset gripper centre <-> part centre). Returns the pointing target.
+        """
+        hover, above = self._point_targets(pose, hover_mm)
+        check_limits(self._cfg, hover)
+        check_limits(self._cfg, above)
+        log.info("point at (%.1f, %.1f, %.1f) rz=%.1f", hover.x_mm, hover.y_mm, hover.z_mm, hover.rz_deg)
+        self._check_ready()
+        self.r.release()
+        self._joint_move_to(above)
+        self._linear(above, hover, self._rc["approach_speed_mps"])
+        return hover
+
+    def retreat(self, pose: ObjectPose, hover_mm: float = 30.0) -> None:
+        """Back up from point_at() to the approach height."""
+        hover, above = self._point_targets(pose, hover_mm)
+        self._linear(hover, above, self._rc["approach_speed_mps"])
 
     # -- RobotController -----------------------------------------------------
     def home(self) -> None:

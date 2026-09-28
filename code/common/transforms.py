@@ -44,6 +44,21 @@ def rigid_2d(points: np.ndarray, theta_deg: float, t: np.ndarray) -> np.ndarray:
     return np.asarray(points, dtype=float).reshape(-1, 2) @ R.T + np.asarray(t, dtype=float)
 
 
+def fit_workspace_to_robot(ws_pts, robot_pts) -> tuple[float, np.ndarray, np.ndarray]:
+    """Calibration workspace -> robot base from >= 3 taught points (e.g. the marker centres).
+
+    Returns (rotation_deg, translation_mm, residuals_mm per point). Large residuals point to
+    a badly taught point, swapped marker IDs or wrong marker positions in the config.
+    """
+    ws_pts = np.asarray(ws_pts, dtype=float).reshape(-1, 2)
+    robot_pts = np.asarray(robot_pts, dtype=float).reshape(-1, 2)
+    if len(ws_pts) < 3:
+        raise ValueError("Need at least three points (two give no residual check)")
+    rot, t = fit_rigid_2d(ws_pts, robot_pts)
+    residuals = np.linalg.norm(rigid_2d(ws_pts, rot, t) - robot_pts, axis=1)
+    return rot, t, residuals
+
+
 def normalize_angle(theta_deg: float, period: float = 360.0) -> float:
     """Wrap an angle into [0, period). Use period=180 for symmetric parts."""
     return theta_deg % period

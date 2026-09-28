@@ -14,8 +14,9 @@ import numpy as np
 
 from common.camera import open_camera
 from common.interfaces import ObjectDetector, ObjectPose, VisionError
+from common.trace import Trace
 from common.transforms import workspace_to_robot
-from m1_vision_topdown.part import PartPose, part_pose, segment_part
+from m1_vision_topdown.part import PartPose, draw_part_pose, part_pose, segment_part
 from m1_vision_topdown.workspace import Workspace, find_workspace
 
 log = logging.getLogger(__name__)
@@ -67,12 +68,19 @@ class TopDownPipeline:
     def __init__(self, cfg: dict[str, Any]):
         self.cfg = cfg
 
-    def process(self, img: np.ndarray) -> TopDownResult:
-        ws = find_workspace(img, self.cfg)
+    def process(self, img: np.ndarray, trace: Trace | None = None) -> TopDownResult:
+        """`trace` (optional) collects the intermediate images for documentation."""
+        if trace is not None:
+            trace.add("original", img)
+        ws = find_workspace(img, self.cfg, trace)
         rect = ws.rectify(img)
+        if trace is not None:
+            trace.add("rectified", rect)
         border_px = int(self.cfg["workspace"]["border_mm"] * ws.px_per_mm)
-        contour = segment_part(rect, self.cfg, ws.px_per_mm, border_px)
+        contour = segment_part(rect, self.cfg, ws.px_per_mm, border_px, trace)
         part = part_pose(contour, self.cfg["part_topdown"]["chamfer_min_frac"])
+        if trace is not None:
+            trace.add("part_pose", draw_part_pose(rect, part))
 
         x_ws, y_ws = ws.rect_to_mm(part.u, part.v)
         period = 360.0 if part.chamfer_found else 180.0
@@ -83,7 +91,10 @@ class TopDownPipeline:
                                          np.array(w2r["translation_mm"]))
         pose = ObjectPose(x, y, w2r["table_z_mm"], theta % period,
                           confidence=1.0 if part.chamfer_found else 0.5)
-        return TopDownResult(ws, part, x_ws, y_ws, theta_ws, pose)
+        result = TopDownResult(ws, part, x_ws, y_ws, theta_ws, pose)
+        if trace is not None:
+            trace.add("result", result.debug_image(img))
+        return result
 
 
 class TopDownDetector(ObjectDetector):
@@ -95,12 +106,16 @@ class TopDownDetector(ObjectDetector):
         self._camera = camera or open_camera(cfg["topdown_camera"])
         self.last_result: TopDownResult | None = None
         self.last_image: np.ndarray | None = None
+        self.trace_steps = False                   # collect intermediate images (documentation)
+        self.last_trace: Trace | None = None
 
     def detect(self) -> ObjectPose | None:
         img = self._camera.read()
         self.last_image = img
+        self.last_result = None
+        self.last_trace = Trace() if self.trace_steps else None
         try:
-            self.last_result = self._pipeline.process(img)
+            self.last_result = self._pipeline.process(img, self.last_trace)
         except VisionError as e:
             if "No part" in str(e):
                 log.info("No part in workspace")

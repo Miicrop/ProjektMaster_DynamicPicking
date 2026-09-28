@@ -52,7 +52,8 @@
 - [x] ArUco-Detektion + Homographie implementieren
 - [x] Alternative: Arbeitsbereich über den weißen Rahmen
 - [x] Segmentierung + Pose (inkl. Fasenerkennung für 360°) implementieren
-- [ ] Kalibrierung Arbeitsbereich → Roboter (gemeinsam mit M2)
+- [~] Kalibrierung Arbeitsbereich → Roboter (gemeinsam mit M2): Werkzeug `robot_check calib` fertig, am Aufbau durchführen
+- [x] Zwischenbilder der Verarbeitung für die Doku speicherbar (`--save-steps`, GUI *+ Zwischenschritte*)
 - [ ] Parallaxe durch die Bauteilhöhe bewerten und ggf. korrigieren
 - [ ] Genauigkeitsmessung: N Ablagen an bekannten Positionen, Fehlerstatistik
 - [x] Unit-Tests mit synthetischen Bildern und Beispielfotos (`tests/data/`)
@@ -68,4 +69,4 @@
 1. Rahmen und Marker ausmessen → `workspace.size_mm`, `markers_mm` (danach Regressionswerte in `tests/test_topdown.py` anpassen)
 2. Top-down-Kamera fest montieren, im Tab M1 mit „Live“ prüfen
 3. Marker mit weißem Rand versehen, dann `workspace.method: aruco` testen
-4. Kalibrierung Arbeitsbereich → Roboter mit Person 2 (siehe `ANLEITUNG.md`, Abschnitt 7)
+4. Kalibrierung Arbeitsbereich → Roboter mit Person 2 (`robot_check calib`, danach Zeigetest `robot_check point`; Ablauf in [09_labortest.md](09_labortest.md))

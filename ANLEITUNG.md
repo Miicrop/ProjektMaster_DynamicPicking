@@ -105,8 +105,9 @@ Unten in jedem Tab läuft das **Log** mit (Fehler rot, Warnungen orange).
 | Erkennung / Roboter / Prüfung | Welche Variante jedes Modul nutzt, siehe Tabelle unten |
 | Pause | Wartezeit zwischen zwei Zyklen im Dauerbetrieb |
 | Bilder speichern | legt pro Zyklus die Ergebnisbilder in `code/logs/<datum>/` ab |
+| + Zwischenschritte | nur mit *Bilder speichern*: zusätzlich alle Zwischenbilder von M1 und M3 (Masken, ROIs, Kandidaten) in `…/steps/` – für Doku und Präsentation |
 | Zustandskette | blau = läuft gerade, grün = erledigt, rot = hier ist der Fehler passiert |
-| Draufsicht | Roboter-Koordinatensystem von oben: Posen (Quadrate), Arbeitsbereich, Bauteil (lila), Greifer-Position (orange, nur im Simulator bzw. am Roboter) |
+| Draufsicht | Roboter-Basis-KS von oben, so wie man vor dem Roboter steht (Basis oben, x nach unten, y nach rechts): Posen (Quadrate), Arbeitsbereich, Bauteil (lila), Greifer-Position (orange, nur im Simulator bzw. am Roboter) |
 | Tabelle / Zähler | ein Eintrag pro Zyklus, dieselben Daten stehen auch in der CSV-Datei (Abschnitt 8) |
 | Fehler quittieren | nach einem Fehler **oder NOT-STOPP**: Roboter wird wieder freigegeben (`init_program`) und fährt Home, danach kann es weitergehen |
 | NOT-STOPP (Software) | stoppt die Roboterbewegung sofort. Danach lehnt der Roboter jede Bewegung ab („gestoppt – quittieren“), bis quittiert wurde. **Ersetzt nicht den echten Not-Halt!** |
@@ -205,7 +206,7 @@ Planung und Aufgaben: [plan/02_modul1_objekterkennung.md](plan/02_modul1_objekte
 | Datei | Inhalt |
 |---|---|
 | `robot.py` | `NeuraRobot` (echter Roboter), `MockRobot`, Greifsequenz, Umrechnung mm/° ↔ m/rad |
-| `robot_check.py` | Inbetriebnahme-Werkzeug für die Kommandozeile |
+| `robot_check.py` | Inbetriebnahme-Werkzeug für die Kommandozeile, inkl. Kalibrierung (`calib`) und Zeigetest (`point`) |
 | `fake_neura_server.py` | Simulator der Robotersteuerung |
 | `vendor/neurapy/` | Original-Client von Neura (nicht ändern) |
 | `ANLEITUNG_NEURA.md` | Schritt für Schritt vom Laptop zum bewegten Roboter |
@@ -303,24 +304,18 @@ Reihenfolge für den ersten Termin im Labor. Immer zu zweit, eine Person hat die
    (Tab **M2**): *Info* → *Home* → *Greifer auf/zu*.
 5. **Posen teachen** (Tab M2): `inspection`, `bin_good`, `bin_bad`, danach `limits_mm` prüfen und
    speichern.
-6. **Kalibrierung Arbeitsbereich → Roboter:**
-   - Mit der Greiferspitze nacheinander die vier Innenecken des weißen Rahmens antippen und jeweils
-     mit `python -m m2_robot_control pose ecke` die Roboterkoordinate notieren.
-   - Reihenfolge wie im Kamerabild: unten links, unten rechts, oben rechts, oben links.
-     Auf den Fotos ist „unten“ die Seite mit dem T-förmigen Steg.
-   - Dann rechnen:
-
-     ```python
-     from common.transforms import fit_rigid_2d
-     W, H = 400.0, 400.0                                  # workspace.size_mm
-     ws = [[0, 0], [W, 0], [W, H], [0, H]]                # Ecken im Arbeitsbereich-KS
-     robot = [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]     # gemessene Roboterkoordinaten (mm)
-     theta, t = fit_rigid_2d(ws, robot)
-     print(theta, t)   # -> workspace_to_robot.rotation_deg und translation_mm
-     ```
-
-   - Die z-Koordinate beim Antippen ist `workspace_to_robot.table_z_mm`.
-7. **Erster Zyklus:** Tab **Ablauf**, Erkennung = Kamera, Roboter = *Simulator*, Prüfung = Kamera.
+6. **Kalibrierung Arbeitsbereich → Roboter** (Arbeitsraum-KS der Kamera → Basis-KS des Roboters):
+   - Voraussetzung: Papier-Marker aufgeklebt, Mittelpunkte ausgemessen und in `workspace.markers_mm`
+     eingetragen, TCP-Versatz des Greifers stimmt.
+   - `python -m m2_robot_control calib`: Greiferspitze nacheinander mittig auf die Marker 0–3 setzen
+     (Tisch gerade berühren), jeweils Enter. Das Werkzeug bewegt den Roboter nicht selbst.
+   - Ausgabe: `rotation_deg`, `translation_mm`, `table_z_mm` für `workspace_to_robot` plus Restfehler
+     je Marker. RMS > 3 mm → Marker-IDs vertauscht oder falsch gemessen.
+   - Details: [ANLEITUNG_NEURA.md](code/m2_robot_control/ANLEITUNG_NEURA.md) Abschnitt 7a.
+7. **Zeigetest:** `python -m m2_robot_control point` – der Roboter fährt mit offenem Greifer 30 mm über
+   das erkannte Bauteil und greift nicht. Versatz messen und eingeben (landet in `logs/point_tests.csv`).
+   An mehreren Stellen wiederholen, auch am Rand (Abschnitt 7b der Neura-Anleitung).
+8. **Erster Zyklus:** Tab **Ablauf**, Erkennung = Kamera, Roboter = *Simulator*, Prüfung = Kamera.
    Stimmt die Bauteilposition in der Draufsicht? Erst dann Roboter = **Echter Roboter**,
    Override 0,2, **▶ 1 Zyklus**.
 
@@ -331,6 +326,11 @@ Reihenfolge für den ersten Termin im Labor. Immer zu zweit, eine Person hat die
   Position x/y/θ, Seriennummer, Lochdurchmesser, Kerbe, gut, Gründe, Bildordner.
 - Mit *Bilder speichern* (GUI) bzw. `--save-images` (CLI) kommen pro Zyklus die Ergebnisbilder
   von M1 und M3 nach `code/logs/<datum>/<uhrzeit>_c<nr>/`.
+- Mit *+ Zwischenschritte* (GUI) bzw. `--save-steps` (CLI) zusätzlich die Zwischenbilder der
+  Bildverarbeitung nach `…/steps/`, nummeriert in Verarbeitungsreihenfolge (`m1_01_original.jpg`,
+  `m1_07_part_mask.png`, …). Masken als PNG, Farbbilder als JPG, ca. 8 MB pro Zyklus – nur für
+  ausgewählte Zyklen einschalten.
+- Zeigetests (`robot_check point`) landen in `code/logs/point_tests.csv`.
 - Die Einzelmodule auf der Kommandozeile schreiben ihre Bilder nach `code/logs/m1` bzw. `logs/m3`.
 
 Diese Daten sind die Grundlage für das Evaluationskapitel der Thesis, z. B. Genauigkeit,

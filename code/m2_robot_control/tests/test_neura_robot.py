@@ -105,3 +105,53 @@ def test_stop_requires_reset_then_works_again(sim):
     assert fake.program_ready
     robot.home()
     robot.pick(ObjectPose(500, 50, 0, 45))
+
+
+def test_jog_moves_relative_in_base_frame(sim):
+    robot, fake = sim
+    robot.connect()
+    robot.home()
+    start = robot.current_pose()
+    robot.jog(dz_mm=50)
+    robot.jog(dx_mm=-20, drz_deg=20)
+    p = robot.current_pose()
+    assert (p.x_mm, p.y_mm, p.z_mm) == pytest.approx((start.x_mm - 20, start.y_mm, start.z_mm + 50))
+    assert (p.rz_deg - start.rz_deg) % 360 == pytest.approx(20)
+    assert names(fake).count("move_linear") == 2
+
+
+def test_jog_refuses_large_steps_and_limits(sim):
+    robot, fake = sim
+    robot.connect()
+    robot.home()
+    with pytest.raises(RobotError, match="too large"):
+        robot.jog(dx_mm=150)
+    robot._cfg["robot"]["limits_mm"]["z"] = [-10.0, 450.0]   # Home z = 434 mm
+    with pytest.raises(RobotError, match="outside limits"):
+        robot.jog(dz_mm=50)
+    assert "move_linear" not in names(fake)
+
+
+# --- pointing test (dry run above the detected part) ----------------------------------
+
+def test_point_at_hovers_without_grasping(sim):
+    robot, fake = sim
+    robot.connect()
+    robot.home()
+    pose = ObjectPose(500, 50, 0, 45)
+    robot.point_at(pose, hover_mm=30)
+    t = as_target(CFG, pose)
+    assert [v * 1000 for v in fake.tcp[:3]] == pytest.approx([t.x_mm, t.y_mm, t.z_mm + 30])
+    assert "grasp" not in names(fake) and not fake.gripper_closed
+    robot.retreat(pose, hover_mm=30)
+    assert fake.tcp[2] * 1000 == pytest.approx(t.z_mm + CFG["robot"]["approach_height_mm"])
+
+
+def test_point_at_refuses_low_hover_and_limits(sim):
+    robot, fake = sim
+    robot.connect()
+    with pytest.raises(RobotError, match="hover"):
+        robot.point_at(ObjectPose(500, 50, 0, 0), hover_mm=5)
+    with pytest.raises(RobotError, match="outside limits"):
+        robot.point_at(ObjectPose(5000, 0, 0, 0), hover_mm=30)
+    assert "move_joint" not in names(fake) and "move_linear" not in names(fake)

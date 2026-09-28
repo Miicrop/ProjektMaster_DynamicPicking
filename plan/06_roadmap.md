@@ -2,7 +2,7 @@
 
 ## Zwischenstand (2026-09-26)
 
-**Läuft ohne Hardware** (mit Testfotos und Roboter-Simulator, 59 automatische Tests grün):
+**Läuft ohne Hardware** (mit Testfotos und Roboter-Simulator, 73 automatische Tests grün, Stand 2026-09-28):
 
 | Bereich | Stand |
 |---|---|
@@ -22,7 +22,9 @@ Alle Maße in `config/system.yaml` sind Platzhalter.
 2. Team: Gerüst vorstellen, Schnittstellen und Aufteilung abstimmen (Anleitung: [../ANLEITUNG.md](../ANLEITUNG.md))
 3. Roboter in Betrieb nehmen ([ANLEITUNG_NEURA.md](../code/m2_robot_control/ANLEITUNG_NEURA.md)), Posen teachen
 4. Kameras montieren, M1/M3 live testen, ROIs/Schwellwerte nachstellen
-5. Kalibrierung Arbeitsbereich → Roboter, dann erster echter Zyklus mit 20 % Geschwindigkeit
+5. Kalibrierung Arbeitsbereich → Roboter (`robot_check calib`), Zeigetest (`robot_check point`), dann erster echter Zyklus mit 20 % Geschwindigkeit
+
+**Ablauf für den Labortag:** [09_labortest.md](09_labortest.md)
 6. Git-Repo (privat) für die Zusammenarbeit einrichten
 
 ## Meilensteine
@@ -54,7 +56,7 @@ Alle Maße in `config/system.yaml` sind Platzhalter.
 - [x] Zustandsautomat mit Mocks
 - [x] Konfigurationsumschaltung mock/real pro Modul (`--replay`, `--sim-robot`)
 - [x] Gesamtablauf ohne Hardware: echte Bildverarbeitung auf Testfotos + Neura-Code gegen Simulator
-- [x] Zyklus-Logging: CSV je Tag + optional Debug-Bilder je Zyklus
+- [x] Zyklus-Logging: CSV je Tag + optional Debug-Bilder je Zyklus, optional alle Zwischenschritte M1/M3
 - [x] Jedes Modul einzeln startbar (`python -m <modul>`), Gesamtablauf `python -m orchestrator`
 - [x] GUI: Tabs für M1, M2, M3, automatischen Ablauf und Einstellungen (`python -m gui`)
 - [ ] Fehlerbehandlung und Reset am realen System

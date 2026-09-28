@@ -82,3 +82,28 @@ def pipeline_real_ocr():
 def test_ocr_reads_serial(pipeline_real_ocr, name):
     d = pipeline_real_ocr.process(cv2.imread(str(DATA / name)))
     assert d.result.serial_number == "69420"
+
+
+# --- intermediate steps for documentation ---------------------------------------------
+
+def test_trace_collects_steps(pipeline_fake_ocr):
+    from common.trace import Trace
+    img = cv2.imread(str(DATA / IMAGES[0]))
+    trace = Trace()
+    d = pipeline_fake_ocr.process(img, trace)
+    assert trace.names == ["original", "part_mask", "part_opened", "part_closed", "part_box",
+                           "label_roi", "hole_roi", "hole_mask", "hole_candidates",
+                           "notch_roi", "notch_region_mask", "notch_edges", "notch_candidates", "result"]
+    plain = pipeline_fake_ocr.process(img)
+    assert (d.hole_diameter_px, d.result.is_good) == (plain.hole_diameter_px, plain.result.is_good)
+
+
+def test_inspector_keeps_trace_only_when_enabled():
+    from common.camera import FileCamera
+    from m3_inspection import CameraInspector
+    insp = CameraInspector(CFG, FileCamera(str(DATA / "*.jpg")), InspectionPipeline(CFG, reader=FakeReader()))
+    insp.inspect()
+    assert insp.last_trace is None
+    insp.trace_steps = True
+    insp.inspect()
+    assert insp.last_trace.names[0] == "original" and insp.last_trace.names[-1] == "result"

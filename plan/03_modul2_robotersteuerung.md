@@ -53,7 +53,8 @@ Die Posen werden am realen Roboter geteacht und in die Config übernommen.
 
 ## Kalibrierung (gemeinsam mit M1)
 
-- Roboter-TCP auf die vier Innenecken des weißen Rahmens fahren, Roboterkoordinaten notieren → `T_ws→robot` per Least Squares (`common.transforms.fit_rigid_2d`), Vorgehen in `ANLEITUNG.md` Abschnitt 7.
+- Roboter-TCP nacheinander auf die vier Marker-Mittelpunkte setzen → `robot_check calib` berechnet `T_ws→robot` per Least Squares (`common.transforms.fit_workspace_to_robot`) samt Restfehler je Marker und gibt die Config-Zeilen aus. Vorgehen in `ANLEITUNG_NEURA.md` Abschnitt 7a.
+- Prüfung mit dem Zeigetest `robot_check point` (Abschnitt 7b): Greifer fährt über das erkannte Bauteil, greift nicht; gemessener Versatz → `logs/point_tests.csv` (Positionsgenauigkeit für die Evaluation).
 - Greifer-Offset (Winkel zwischen Greiferbacken und Bauteil-Hauptachse) bestimmen.
 
 ## Umsetzung (Stand 2026-09-26)
@@ -69,7 +70,7 @@ Die Posen werden am realen Roboter geteacht und in die Config übernommen.
 
 - `fake_neura_server.py` simuliert die Steuerung (gleiches Protokoll). Die Tests laufen über den
   **unveränderten** Neura-Client, dadurch ist der komplette Codepfad ohne Roboter prüfbar.
-- `robot_check.py` (`python -m m2_robot_control …`) für die schrittweise Inbetriebnahme (`info` → `home` → `gripper` → `pose` → `pick-test`).
+- `robot_check.py` (`python -m m2_robot_control …`) für die schrittweise Inbetriebnahme (`info` → `home` → `gripper` → `axes`/`jog` → `pose` → `calib` → `point` → `pick-test`).
 - GUI-Tab **M2 Roboter**: dieselben Schritte per Knopf, Posen teachen/anfahren, Draufsicht, STOPP.
 
 ## Aufgaben
@@ -85,5 +86,5 @@ Die Posen werden am realen Roboter geteacht und in die Config übernommen.
 - [ ] Greiforientierung prüfen (yaw-Konvention bei roll = 180°, Greifer-Offset)
 - [x] Arbeitsraumgrenzen und Stopp implementieren
 - [ ] Greifer-Rückmeldung (Teil gegriffen?) auswerten
-- [ ] Kalibrierung Arbeitsbereich → Roboter mit M1 (Skript)
+- [~] Kalibrierung Arbeitsbereich → Roboter mit M1: Skript (`calib`) und Zeigetest (`point`) fertig, am Aufbau durchführen
 - [ ] Wiederholgenauigkeit an der Prüfposition messen (wichtig für M3)

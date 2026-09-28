@@ -22,10 +22,14 @@ def log_dir(cfg: dict[str, Any]) -> Path:
 
 
 def save_images(cfg: dict[str, Any], result: CycleResult, detector, inspector) -> Path | None:
-    """M1/M3 debug images of the cycle, if the real pipelines were used."""
+    """M1/M3 debug images of the cycle, if the real pipelines were used.
+
+    If the modules collected intermediate images (`trace_steps`), they go to <cycle>/steps/.
+    """
     m1 = getattr(detector, "last_result", None)
     m3 = getattr(inspector, "last_details", None)
-    if m1 is None and m3 is None:
+    traces = {"m1": getattr(detector, "last_trace", None), "m3": getattr(inspector, "last_trace", None)}
+    if m1 is None and m3 is None and not any(traces.values()):
         return None
     out = log_dir(cfg) / time.strftime("%Y%m%d") / f"{time.strftime('%H%M%S')}_c{result.cycle_id:03d}"
     out.mkdir(parents=True, exist_ok=True)
@@ -34,6 +38,9 @@ def save_images(cfg: dict[str, Any], result: CycleResult, detector, inspector) -
         cv2.imwrite(str(out / "m1_workspace.jpg"), m1.debug_image(detector.last_image))
     if m3 is not None:
         cv2.imwrite(str(out / "m3_inspection.jpg"), m3.debug_image(inspector.last_image, cfg["inspection"]))
+    for prefix, trace in traces.items():
+        if trace and trace.steps:
+            trace.save(out / "steps", prefix)
     return out
 
 

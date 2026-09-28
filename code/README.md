@@ -34,7 +34,7 @@ EasyOCR (M3) installiert PyTorch (~1 GB) und lädt beim ersten Aufruf ein Modell
 
 | Tab | Wofür |
 |---|---|
-| **Ablauf (automatisch)** | Erkennung, Roboter und Prüfung jeweils wählbar (Mock, Testbilder, Kamera, Simulator, echter Roboter). 1 Zyklus oder Dauerbetrieb. Zeigt den aktuellen Zustand, M1-/M3-Bilder, eine Roboter-Draufsicht und eine Ergebnistabelle mit Gut/Schlecht-Zählern. Jeder Zyklus landet in `logs/cycles_<datum>.csv`. |
+| **Ablauf (automatisch)** | Erkennung, Roboter und Prüfung jeweils wählbar (Mock, Testbilder, Kamera, Simulator, echter Roboter). 1 Zyklus oder Dauerbetrieb. Zeigt den aktuellen Zustand, M1-/M3-Bilder, eine Roboter-Draufsicht (Basis oben, x nach unten, y nach rechts) und eine Ergebnistabelle mit Gut/Schlecht-Zählern. Jeder Zyklus landet in `logs/cycles_<datum>.csv`, optional mit Bildern und Zwischenschritten. |
 | **M1 Erkennung** | Bild holen (Testbilder/Kamera/Datei), Arbeitsbereich und Bauteil im Kamerabild und im entzerrten Bild, Pose in beiden Koordinatensystemen, Live-Modus |
 | **M2 Roboter** | Simulator oder echter Roboter: verbinden, Status/TCP-Pose, Home, Greifer, Pick-Test, Posen teachen und anfahren, STOPP |
 | **M3 Prüfung** | Bild holen/Datei, Ergebnis GUT/SCHLECHT, Seriennummer, Lochdurchmesser, Kerbe, Prüfbereiche (ROIs) eingezeichnet |
@@ -59,6 +59,7 @@ Alle Befehle aus dem Ordner `code/`:
 python -m orchestrator --mock --cycles 5                      # alles gemockt
 python -m orchestrator --replay --cycles 4                    # M1 + M3 auf den Testfotos, Roboter gemockt
 python -m orchestrator --replay --sim-robot --save-images     # + Neura-Code gegen Simulator, Bilder speichern
+python -m orchestrator --replay --save-steps                  # + Zwischenbilder M1/M3 (Masken, ROIs) für die Doku
 python -m orchestrator --detector camera --robot real --inspector camera --cycles 0   # echt, bis Strg+C
 python -m orchestrator                                        # Auswahl laut config/system.yaml (implementations)
 pytest                                                        # alle Tests (~25 s)

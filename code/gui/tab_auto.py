@@ -58,8 +58,13 @@ class AutoTab(QWidget):
             top.addWidget(cb)
         self.pause = QDoubleSpinBox(minimum=0, maximum=30, value=1.0, singleStep=0.5, suffix=" s Pause")
         self.save_images = QCheckBox("Bilder speichern")
+        self.save_steps = QCheckBox("+ Zwischenschritte")
+        self.save_steps.setToolTip("M1/M3-Zwischenbilder (Masken, ROIs, Kandidaten) nach logs/…/steps/ – für die Doku")
+        self.save_steps.setEnabled(False)
+        self.save_images.toggled.connect(self.save_steps.setEnabled)
         top.addWidget(self.pause)
         top.addWidget(self.save_images)
+        top.addWidget(self.save_steps)
         top.addStretch()
 
         # buttons
@@ -140,7 +145,8 @@ class AutoTab(QWidget):
         self._stop_after_cycle.clear()
         self._set_running(True)
         self.badge.show_state("startet …", ACTIVE)
-        opts = {"save_images": self.save_images.isChecked(), "pause": self.pause.value()}
+        opts = {"save_images": self.save_images.isChecked(), "pause": self.pause.value(),
+                "save_steps": self.save_images.isChecked() and self.save_steps.isChecked()}
         self.runner.submit(lambda: self._run(kinds, single, opts), lambda _: self._finished(),
                            self._run_failed, pool="robot")
 
@@ -158,6 +164,9 @@ class AutoTab(QWidget):
         orch = self.s.build_orchestrator(kinds["detector"], kinds["robot"], kinds["inspector"])
         self.orch = orch
         orch.listeners = [lambda st, res: self.state_changed.emit(st, res)]
+        for module in (orch.detector, orch.inspector):
+            if hasattr(module, "trace_steps"):
+                module.trace_steps = opts["save_steps"]
         orch.robot.home()
         while True:
             result = orch.run_cycle()

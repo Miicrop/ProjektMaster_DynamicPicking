@@ -112,3 +112,33 @@ def test_real_photo_markers_not_detectable():
     img = cv2.imread(sorted(glob.glob(str(DATA / "*.jpg")))[0])
     with pytest.raises(VisionError):
         find_workspace_aruco(img, CFG)
+
+
+# --- intermediate steps for documentation ---------------------------------------------
+
+@pytest.mark.parametrize("method, ws_steps", [
+    ("aruco", ["aruco_markers"]),
+    ("white_frame", ["white_mask", "white_closed", "white_frame"]),
+])
+def test_trace_collects_steps(method, ws_steps):
+    from common.trace import Trace
+    cfg = copy.deepcopy(CFG)
+    cfg["workspace"]["method"] = method
+    img = synth_scene(200, 200, 0)
+    trace = Trace()
+    r = TopDownPipeline(cfg).process(img, trace)
+    assert trace.names == ["original", *ws_steps, "rectified", "part_mask", "part_mask_border",
+                           "part_opened", "part_closed", "part_candidates", "part_pose", "result"]
+    plain = TopDownPipeline(cfg).process(img)
+    assert (r.x_ws_mm, r.y_ws_mm, r.theta_ws_deg) == (plain.x_ws_mm, plain.y_ws_mm, plain.theta_ws_deg)
+
+
+def test_detector_keeps_trace_only_when_enabled():
+    from common.camera import FileCamera
+    from m1_vision_topdown import TopDownDetector
+    det = TopDownDetector(CFG, FileCamera(str(DATA / "*.jpg")))
+    det.detect()
+    assert det.last_trace is None
+    det.trace_steps = True
+    det.detect()
+    assert det.last_trace.names[0] == "original" and det.last_trace.names[-1] == "result"

@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 
 from common.interfaces import VisionError
+from common.trace import Trace, draw_candidates
 
 
 @dataclass
@@ -55,7 +56,7 @@ def _aruco_detector(dict_name: str) -> cv2.aruco.ArucoDetector:
     return cv2.aruco.ArucoDetector(dictionary, params)
 
 
-def find_workspace_aruco(img: np.ndarray, cfg: dict[str, Any]) -> Workspace:
+def find_workspace_aruco(img: np.ndarray, cfg: dict[str, Any], trace: Trace | None = None) -> Workspace:
     """Homography from the 4 marker centres to their known workspace positions."""
     ws = cfg["workspace"]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
@@ -63,6 +64,10 @@ def find_workspace_aruco(img: np.ndarray, cfg: dict[str, Any]) -> Workspace:
     markers_mm = {int(k): v for k, v in ws["markers_mm"].items()}
     found = {} if ids is None else {int(i): c.reshape(4, 2).mean(axis=0)
                                     for i, c in zip(ids.ravel(), corners)}
+    if trace is not None:
+        vis = img.copy()
+        cv2.aruco.drawDetectedMarkers(vis, corners, ids)
+        trace.add("aruco_markers", vis)
     missing = sorted(set(markers_mm) - set(found))
     if missing:
         raise VisionError(f"ArUco markers not found: {missing} (found {sorted(found)})")
@@ -75,14 +80,19 @@ def find_workspace_aruco(img: np.ndarray, cfg: dict[str, Any]) -> Workspace:
     return tmp
 
 
-def find_workspace_white_frame(img: np.ndarray, cfg: dict[str, Any]) -> Workspace:
+def find_workspace_white_frame(img: np.ndarray, cfg: dict[str, Any],
+                               trace: Trace | None = None) -> Workspace:
     """Inner edge of the white frame = workspace boundary."""
     ws = cfg["workspace"]
     scale = 1000.0 / max(img.shape[:2])          # detect on a downscaled copy
     small = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
     hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
     white = ((hsv[..., 1] < 60) & (hsv[..., 2] > 170)).astype(np.uint8) * 255
+    if trace is not None:
+        trace.add("white_mask", white)
     white = cv2.morphologyEx(white, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    if trace is not None:
+        trace.add("white_closed", white)
 
     contours, hierarchy = cv2.findContours(white, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     best = None
@@ -93,6 +103,9 @@ def find_workspace_white_frame(img: np.ndarray, cfg: dict[str, Any]) -> Workspac
         area = cv2.contourArea(c)
         if len(approx) == 4 and cv2.isContourConvex(approx) and (best is None or area > best[0]):
             best = (area, approx)
+    if trace is not None:
+        holes = [c for i, c in enumerate(contours) if hierarchy[0][i][3] >= 0]
+        trace.add("white_frame", draw_candidates(small, holes, None if best is None else best[1]))
     if best is None or best[0] < 0.05 * small.shape[0] * small.shape[1]:
         raise VisionError("White workspace frame not found")
 
@@ -104,15 +117,15 @@ def find_workspace_white_frame(img: np.ndarray, cfg: dict[str, Any]) -> Workspac
     return Workspace(H, (w, h), ppm, "white_frame", corners)
 
 
-def find_workspace(img: np.ndarray, cfg: dict[str, Any]) -> Workspace:
+def find_workspace(img: np.ndarray, cfg: dict[str, Any], trace: Trace | None = None) -> Workspace:
     method = cfg["workspace"]["method"]
     if method == "aruco":
-        return find_workspace_aruco(img, cfg)
+        return find_workspace_aruco(img, cfg, trace)
     if method == "white_frame":
-        return find_workspace_white_frame(img, cfg)
+        return find_workspace_white_frame(img, cfg, trace)
     if method == "auto":
         try:
-            return find_workspace_aruco(img, cfg)
+            return find_workspace_aruco(img, cfg, trace)
         except VisionError:
-            return find_workspace_white_frame(img, cfg)
+            return find_workspace_white_frame(img, cfg, trace)
     raise ValueError(f"Unknown workspace method: {method}")

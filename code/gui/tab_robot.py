@@ -93,6 +93,21 @@ class RobotTab(QWidget):
         ml.addWidget(self.btn_release, 5, 0, 1, 2)
         self.motion_buttons.append(self.btn_release)
 
+        # axis test: small relative steps in the base frame
+        self.jog_step = QDoubleSpinBox(minimum=1.0, maximum=100.0, singleStep=10.0, decimals=0)
+        self.jog_step.setValue(20.0)
+        self.jog_step.setSuffix(" mm / °")
+        jg = QGroupBox("Achsen-Test (relativ, Basis-KS, langsam)")
+        jl = QGridLayout(jg)
+        jl.addWidget(QLabel("Schritt"), 0, 0)
+        jl.addWidget(self.jog_step, 0, 1, 1, 3)
+        for col, axis in enumerate(("x", "y", "z", "rz")):
+            for row, sign in ((1, +1), (2, -1)):
+                b = QPushButton(f"{'+' if sign > 0 else '−'}{axis.upper()}")
+                b.clicked.connect(lambda _=False, a=axis, sg=sign: self.jog(a, sg))
+                jl.addWidget(b, row, col)
+                self.motion_buttons.append(b)
+
         # poses
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(["Pose", "x", "y", "z", "rx", "ry", "rz"])
@@ -114,7 +129,7 @@ class RobotTab(QWidget):
 
         self.map = RobotMapView(cfg)
         left = QVBoxLayout()
-        for w in (con, st, mv):
+        for w in (con, st, mv, jg):
             left.addWidget(w)
         left.addStretch()
         right = QVBoxLayout()
@@ -203,6 +218,13 @@ class RobotTab(QWidget):
         robot.pick(target)
         robot.place(target)
         robot.home()
+
+    def jog(self, axis: str, sign: int) -> None:
+        step = sign * self.jog_step.value()
+        key = {"x": "dx_mm", "y": "dy_mm", "z": "dz_mm", "rz": "drz_deg"}[axis]
+        unit = "°" if axis == "rz" else " mm"
+        self.move(f"Relativ {axis.upper()} {step:+.0f}{unit} (Basis-Koordinatensystem)",
+                  lambda r: r.jog(**{key: step}))
 
     def set_override(self, v: float) -> None:
         self.s.store.set(["robot", "override"], round(v, 2))

@@ -9,6 +9,11 @@ Planung: [plan/02_modul1_objekterkennung.md](../../plan/02_modul1_objekterkennun
 | `detector.py` | `TopDownPipeline` (Bild → Pose, ohne Kamera testbar), `TopDownDetector` (mit Kamera), `MockDetector` |
 | `run.py` | Pipeline auf Bilddateien/Kamera ausführen und Debug-Bilder speichern |
 | `make_markers.py` | Druckbare ArUco-Marker **mit weißem Rand** erzeugen |
+
+Zwischenschritte für die Doku: `TopDownPipeline.process(img, trace)` sammelt mit einem
+`common.trace.Trace` alle Zwischenbilder (Originalbild, ArUco/Weiß-Maske, entzerrtes Bild,
+Bauteilmaske vor/nach Morphologie, Kandidaten, Pose). Im Ablauf über *+ Zwischenschritte*
+bzw. `--save-steps`.
 | `tests/data/` | 4 Fotos vom Aufbau (31.07.2026, Handykamera, noch nicht final) |
 
 ```powershell

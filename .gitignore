@@ -10,6 +10,7 @@ resources/neura_controller/
 
 # LaTeX build artifacts
 thesis/build/
+presentation/build/
 *.aux
 *.bbl
 *.bcf

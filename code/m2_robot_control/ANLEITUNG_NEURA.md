@@ -117,7 +117,7 @@ beschrieben), das macht unser Code automatisch aus `host`.
 
 **Mit der GUI:** `start_gui.bat` doppelklicken (oder `python -m gui --tab m2`), Tab **M2 Roboter** öffnen.
 Modus „Echter Roboter“, IP prüfen, *Verbinden*. Danach dieselbe Reihenfolge wie in der Tabelle unten
-über die Knöpfe *Home*, *Greifer auf/zu* und *Pick-Test*. Posen teachen: Roboter hinfahren, Pose
+über die Knöpfe *Home*, *Greifer auf/zu*, *Achsen-Test* (±X/±Y/±Z/±rz mit wählbarer Schrittweite) und *Pick-Test*. Posen teachen: Roboter hinfahren, Pose
 im Auswahlfeld wählen und *Aktuelle TCP-Pose übernehmen* klicken, danach mit Strg+S speichern.
 Die Draufsicht zeigt Posen, Arbeitsbereich und TCP. Der rote *STOPP* sendet einen Software-Stopp,
 das ersetzt **nicht** den Not-Halt.
@@ -129,8 +129,18 @@ das ersetzt **nicht** den Not-Halt.
 | 1. Verbindung lesen | `python -m m2_robot_control.robot_check info` | nein | Name, Version `v5.0.8`, aktuelle Pose, Punkte `Home`, `Parking`, keine Fehler |
 | 2. Home anfahren | `python -m m2_robot_control.robot_check home` | **ja** | Sicherheitsabfrage mit `j` bestätigen, Roboter fährt langsam nach Home |
 | 3. Greifer testen | `python -m m2_robot_control.robot_check gripper` | Greifer | öffnen → schließen → öffnen |
-| 4. Posen teachen | siehe Abschnitt 7 | nein | Konfigurationszeile wird ausgegeben |
-| 5. Greiftest | `python -m m2_robot_control.robot_check pick-test` | **ja** | Home → greift an der Prüfposition → legt wieder ab → Home |
+| 4. Achsentest | `python -m m2_robot_control.robot_check axes` | **ja**, je 50 mm | Home → +Z/−Z, +X/−X, +Y/−Y, +rz/−rz 20°, jeder Schritt einzeln mit Enter; beobachtete Richtung eintippen → Protokoll am Ende |
+| 5. Posen teachen | siehe Abschnitt 7 | nein | Konfigurationszeile wird ausgegeben |
+| 6. Kalibrierung | `python -m m2_robot_control.robot_check calib` | nein | siehe Abschnitt 7a, gibt `workspace_to_robot` + Restfehler aus |
+| 7. Zeigetest | `python -m m2_robot_control.robot_check point` | **ja** | siehe Abschnitt 7b: Greifer steht 30 mm über dem erkannten Bauteil, greift nicht |
+| 8. Greiftest | `python -m m2_robot_control.robot_check pick-test` | **ja** | Home → greift an der Prüfposition → legt wieder ab → Home |
+
+**Achsentest – worauf achten:** Schrittweite mit `--step 20` verkleinern, Einzelschritte mit
+`robot_check jog z 20` (Achsen `x`, `y`, `z` in mm, `rz` in °, max. 100 mm / 45°). Bewegt wird
+immer linear und langsam (`approach_speed_mps`) im **Basis-Koordinatensystem**, die
+Arbeitsraumgrenzen werden vorher geprüft. Notieren: In welche Richtung im Raum zeigen +X und +Y
+(z. B. „zum Fenster“)? Fährt +Z wirklich nach oben? Dreht +rz von oben gesehen gegen den
+Uhrzeigersinn? Das klärt auch den offenen Punkt zur yaw-Konvention beim Greifen.
 
 Wenn `info` mit einer Warnung zur Version kommt („client version is not compatible“),
 läuft auf dem Roboter eine andere Softwareversion als v5.0.8. Dann bei Neura bzw. dem
@@ -152,10 +162,49 @@ Betreuer den passenden Client besorgen und `vendor/neurapy/robot.py` ersetzen.
    Gleiches für `bin_good` und `bin_bad`.
 4. Danach die `limits_mm` so setzen, dass alle Posen plus Anfahrhöhe darin liegen.
 
-**Kalibrierung Arbeitsbereich → Roboter (mit Person 1):** Mit der Greiferspitze
-nacheinander die vier Innenecken des weißen Rahmens anfahren, jeweils `pose` auslesen und
-die vier Punkte notieren. Daraus berechnet `common.transforms.fit_rigid_2d` Rotation und
-Verschiebung für `workspace_to_robot` (Skript folgt, siehe Roadmap).
+## 7a. Kalibrierung Arbeitsbereich → Roboter (`calib`)
+
+Koordinatensysteme: Die Kamera (M1) liefert die Bauteilpose im **Arbeitsraum-KS** (Ursprung
+innere Rahmenecke unten links, x nach rechts, y nach oben aus Kamerasicht). `workspace_to_robot`
+rechnet sie ins **Basis-KS** des Roboters um. Diese Transformation wird hier eingemessen.
+
+Voraussetzungen: Marker aufgeklebt, ihre Mittelpunkte ausgemessen und in `workspace.markers_mm`
+eingetragen, TCP-Versatz des Werkzeugs stimmt (sonst ist jeder Punkt um den Fehler versetzt).
+
+```powershell
+python -m m2_robot_control.robot_check calib
+```
+
+1. Das Werkzeug fragt die Marker der Reihe nach ab (ID 0, 1, 2, 3).
+2. Greiferspitze jeweils mittig auf den Marker setzen, sodass sie den Tisch gerade berührt:
+   am Pendant, im Freedrive oder mit `robot_check jog …` in einem zweiten Terminal.
+3. Enter übernimmt die aktuelle TCP-Pose, `s` überspringt einen Marker (mindestens 3 nötig).
+   `calib` selbst bewegt den Roboter nicht.
+4. Ausgabe: Restfehler je Marker, RMS und die drei Zeilen für `workspace_to_robot`
+   (`rotation_deg`, `translation_mm`, `table_z_mm`) zum Einfügen in `config/system.yaml`.
+
+**RMS > 3 mm** heißt meist: Marker-IDs vertauscht (Zuordnung ID → Ecke muss zur Config passen),
+`markers_mm` falsch gemessen oder Spitze nicht mittig. Einzelnen Marker mit großem Restfehler
+neu anfahren. Die Ausgabe für die Doku aufheben (Kalibriergenauigkeit).
+
+## 7b. Zeigetest (`point`) – sicherer erster Test nach der Kalibrierung
+
+```powershell
+python -m m2_robot_control.robot_check point              # Top-down-Kamera
+python -m m2_robot_control.robot_check point --hover 50   # höher bleiben
+```
+
+1. Bauteil auf den Tisch legen. Das Werkzeug erkennt es mit M1 (noch ohne Bewegung) und zeigt
+   die Pose im Basis-KS. Warnung, wenn die Fase nicht gefunden wurde (Winkel nur bis 180° eindeutig).
+2. Nach der Sicherheitsabfrage: Home → Greifer offen über das Bauteil → langsam linear herunter
+   bis `--hover` mm (Standard 30) über der Greifposition. Der Greifer schließt **nicht**.
+3. Messen: Versatz Bauteilmitte minus Greifermitte in Richtung Basis +X/+Y, z. B. `1.5 -2`.
+   Prüfen, ob die Finger quer zur kurzen Seite stehen. Notiz eingeben.
+4. Die Zeile landet in `logs/point_tests.csv`, danach fährt der Roboter hoch und nach Home.
+
+An 5–10 Stellen wiederholen, auch am Rand des Arbeitsbereichs und mit verschiedenen Winkeln.
+Die CSV ist direkt die Datengrundlage für die Positionsgenauigkeit in der Evaluation.
+Ohne Hardware ausprobieren: `robot_check point --sim --detector replay`.
 
 ## 8. Ohne Roboter arbeiten
 

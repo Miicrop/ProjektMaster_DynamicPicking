@@ -3,6 +3,7 @@
     python -m orchestrator --mock --cycles 5                    # everything mocked
     python -m orchestrator --replay --cycles 4                  # M1/M3 on the test photos, robot mocked
     python -m orchestrator --replay --sim-robot --save-images   # ... NeuraRobot against the fake controller
+    python -m orchestrator --replay --save-steps                # + intermediate images (masks, ROIs) for docs
     python -m orchestrator --detector camera --robot real --inspector camera --cycles 0   # until Ctrl+C
     python -m orchestrator                                      # kinds from config/system.yaml
 
@@ -32,6 +33,8 @@ def main() -> None:
     ap.add_argument("--inspector", choices=INSPECTOR_KINDS)
     ap.add_argument("--cycles", type=int, default=1, help="0 = run until Ctrl+C")
     ap.add_argument("--save-images", action="store_true", help="save M1/M3 debug images per cycle")
+    ap.add_argument("--save-steps", action="store_true",
+                    help="additionally save the M1/M3 intermediate images (masks, ROIs, ...); implies --save-images")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -54,6 +57,11 @@ def main() -> None:
     robot = build_robot(cfg, kinds["robot"])
     detector = build_detector(cfg, kinds["detector"])
     inspector = build_inspector(cfg, kinds["inspector"])
+    if args.save_steps:
+        args.save_images = True
+        for module in (detector, inspector):
+            if hasattr(module, "trace_steps"):
+                module.trace_steps = True
     orch = Orchestrator(cfg, detector, robot, inspector)
 
     robot.connect()

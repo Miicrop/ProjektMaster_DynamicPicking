@@ -207,16 +207,16 @@ class RobotMapView(QWidget):
         pts = [(0.0, 0.0)] + self._workspace_corners() + [tuple(v[:2]) for v in self.cfg["robot"]["poses"].values()]
         xs = [x for x, _ in pts] + list(lim["x"])
         ys = [y for _, y in pts] + list(lim["y"])
-        x0, x1, y0, y1 = min(xs) - 60, max(xs) + 60, min(ys) - 160, max(ys) + 60   # room for labels
-        # robot x -> screen up, robot y -> screen left (view from above, robot base at the bottom)
+        x0, x1, y0, y1 = min(xs) - 60, max(xs) + 60, min(ys) - 60, max(ys) + 160   # room for labels
+        # robot x -> screen down, robot y -> screen right (operator's view, robot base at the top)
         sc = min(self.width() / (y1 - y0), self.height() / (x1 - x0))
 
         def m(x: float, y: float) -> QPointF:
-            return QPointF(self.width() / 2 - (y - (y0 + y1) / 2) * sc,
-                           self.height() / 2 - (x - (x0 + x1) / 2) * sc)
+            return QPointF(self.width() / 2 + (y - (y0 + y1) / 2) * sc,
+                           self.height() / 2 + (x - (x0 + x1) / 2) * sc)
 
         p.setPen(QPen(QColor("#bbb"), 1, Qt.PenStyle.DashLine))
-        p.drawRect(QRectF(m(lim["x"][1], lim["y"][1]), m(lim["x"][0], lim["y"][0])))
+        p.drawRect(QRectF(m(lim["x"][0], lim["y"][0]), m(lim["x"][1], lim["y"][1])))
         p.setPen(QPen(QColor("#888"), 2))
         ws = [m(*c) for c in self._workspace_corners()]
         for i in range(4):
@@ -250,5 +250,5 @@ class RobotMapView(QWidget):
             p.drawLine(c - QPointF(12, 0), c + QPointF(12, 0))
             p.drawLine(c - QPointF(0, 12), c + QPointF(0, 12))
         p.setPen(QColor("#666"))
-        p.drawText(8, 16, "Draufsicht Roboter-KS (x ↑, y ←) · ■ Posen · ● Bauteil · ⊕ TCP")
+        p.drawText(8, 16, "Draufsicht Roboter-KS (x ↓, y →) · ■ Posen · ● Bauteil · ⊕ TCP")
         p.end()

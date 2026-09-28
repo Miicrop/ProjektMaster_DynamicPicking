@@ -5,8 +5,8 @@ Planung: [plan/03_modul2_robotersteuerung.md](../../plan/03_modul2_robotersteuer
 
 | Datei | Inhalt |
 |---|---|
-| `robot.py` | `NeuraRobot` (echte Implementierung über NeuraPy), `MockRobot`, Umrechnung mm/° ↔ m/rad, Greifsequenz |
-| `robot_check.py` | Kommandozeilen-Werkzeug: `info`, `pose`, `home`, `gripper`, `pick-test` (jeweils auch `--sim`) |
+| `robot.py` | `NeuraRobot` (echte Implementierung über NeuraPy, inkl. `jog` für kleine Relativschritte und `point_at`/`retreat` für den Zeigetest), `MockRobot`, Umrechnung mm/° ↔ m/rad, Greifsequenz |
+| `robot_check.py` | Kommandozeilen-Werkzeug: `info`, `pose`, `home`, `gripper`, `axes`, `jog`, `pick-test`, `calib` (Kalibrierung Arbeitsbereich → Roboter), `point` (Zeigetest ohne Greifen) (jeweils auch `--sim`) |
 | `fake_neura_server.py` | Simulator der Neura-Steuerung (gleiches JSON-Protokoll, Port 65432) für Tests ohne Roboter |
 | `vendor/neurapy/robot.py` | Unveränderter NeuraPy-Windows-Client v5.0.8 aus der Neura-Lieferung |
 | `tests/` | Tests gegen den Simulator (über den echten Client) |
@@ -30,4 +30,4 @@ um θ des Bauteils + `gripper_angle_offset_deg` (90° → Finger greifen über d
 - IP, Werkzeugname und Betriebsartwechsel am echten Roboter bestätigen
 - Posen `inspection`, `bin_good`, `bin_bad` teachen, `limits_mm` anpassen
 - Greifer-Rückmeldung (Teil gegriffen?) – API bietet `io`/Tool-Eingänge, noch nicht genutzt
-- Skript für die Kalibrierung Arbeitsbereich → Roboter
+- Kalibrierung (`calib`) und Zeigetest (`point`) am echten Aufbau durchführen

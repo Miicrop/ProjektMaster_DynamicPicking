@@ -100,7 +100,7 @@ Modul-Interfaces:
 
 1. **Bild-KS** (Pixel, u/v) der Top-down-Kamera.
 2. **Arbeitsbereich-KS** (mm): Ursprung in der inneren linken unteren Ecke des weißen Rahmens (Kamerasicht), x nach rechts, y nach oben. Die Homographie `H_img→ws` wird aus den vier ArUco-Markern (bekannte Positionen in mm) oder aus den vier Innenecken des Rahmens berechnet.
-3. **Roboter-Basis-KS** (mm): Die Transformation `T_ws→robot` (2D: Rotation + Translation, ggf. Höhe) wird einmalig bestimmt, indem der Roboter-TCP die Markerpositionen anfährt ("Teachen" der 4 Ecken) → Least-Squares-Fit.
+3. **Roboter-Basis-KS** (mm): Die Transformation `T_ws→robot` (2D: Rotation + Translation, ggf. Höhe) wird einmalig bestimmt, indem der Roboter-TCP die Marker-Mittelpunkte anfährt → Least-Squares-Fit mit Restfehler je Punkt (`robot_check calib`, `common.transforms.fit_workspace_to_robot`). Prüfung danach mit dem Zeigetest (`robot_check point`).
 
 `ObjectPose` wird von M1 **bereits im Roboter-KS** geliefert; die Transformationen liegen in `common/transforms.py` und die Kalibrierwerte in `config/system.yaml`.
 
@@ -153,5 +153,5 @@ Bearbeiten am einfachsten im GUI-Tab *Einstellungen* (Kommentare bleiben beim Sp
 ## Fehlerbehandlung und Logging
 
 - Jede Modul-Methode wirft bei Fehlern eine eigene Exception (`VisionError`, `RobotError`, `InspectionError`) → Orchestrator wechselt nach `ERROR`.
-- Jeder Zyklus bekommt eine ID und landet als Zeile in `code/logs/cycles_<datum>.csv`; optional werden die Debug-Bilder unter `code/logs/<datum>/<uhrzeit>_c<id>/` gespeichert (Grundlage für die Evaluation in der Thesis).
+- Jeder Zyklus bekommt eine ID und landet als Zeile in `code/logs/cycles_<datum>.csv`; optional werden die Debug-Bilder unter `code/logs/<datum>/<uhrzeit>_c<id>/` gespeichert, auf Wunsch zusätzlich alle Zwischenbilder von M1/M3 unter `…/steps/` (`common/trace.py`) (Grundlage für Evaluation und Abbildungen in der Thesis).
 - Im Fehlerfall ruft der Orchestrator `robot.stop()` auf; weiter geht es erst nach „Fehler quittieren“ (fährt Home).

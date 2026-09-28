@@ -97,7 +97,7 @@ Die neue Kapitelfolge enthält ein zusätzliches Kapitel „Integration und Bedi
 1. **Anforderungen:** Tabelle mit funktionalen Anforderungen (Erkennen, Greifen, Prüfen, Sortieren, automatischer Durchlauf) und **qualitativen** nicht-funktionalen Anforderungen (robust bei Raumlicht, Module austauschbar, sichere Bewegung). **Keine Zahlenwerte.**
 2. **Hardwareaufbau:** LARA (6 Achsen, v5.0.8), Greifer, Top-down- und Seitenkamera, ArUco-Marker (`DICT_4X4_50`), Bauteil (lila 3D-Druck-Quader mit Fase, Etikett, Loch, Kerbe), Ablagen. `\todo`s für Kameramodelle, Greifermontage und Beleuchtung. Platzhalter für Foto bzw. Skizze.
 3. **Softwarearchitektur:** Orchestrator, Zustandsautomat (Diagramm aus `plan/01`), Datenobjekte `ObjectPose`, `InspectionResult`, `RobotTarget` (als Tabelle, nicht als Code), Modul-Interfaces, Austauschbarkeit M1 ↔ M4, Mock-Implementierungen.
-4. **Koordinatensysteme:** Bild-KS, Arbeitsbereich-KS und Roboter-KS werden nur beschrieben. **Kalibrierverfahren → `\todo{Verfahren noch offen}`**.
+4. **Koordinatensysteme:** Bild-KS, Arbeitsbereich-KS und Roboter-KS werden nur beschrieben. **Kalibrierverfahren → `\todo{Verfahren noch offen}`** (Stand 2026-09-28: Werkzeug `robot_check calib` umgesetzt – TCP auf die Marker-Mitten, Least-Squares-Fit mit Restfehler, Prüfung per Zeigetest; im Text erst nach dem Labortest beschreiben).
 5. **Test- und Inbetriebnahmestrategie (neu):** Mock → Replay (Testfotos) → Simulator (`fake_neura_server`) → Real, pro Modul umschaltbar. Dass das System ohne Roboter getestet werden kann, wird **erwähnt, aber nicht als Anforderung versprochen**.
 
 ### Kap. 4 – Objekterkennung (M1)

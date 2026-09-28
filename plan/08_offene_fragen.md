@@ -36,7 +36,7 @@
 - [ ] Ausblick: welche offenen Punkte werden genannt?
 - [ ] Englisches Abstract zusätzlich zur Kurzfassung nötig?
 - [ ] Quellen für die Motivation (Kap. 1) und Normen zu Cobots (ISO 10218, ISO/TS 15066) aufnehmen?
-- [ ] Kalibrierung Arbeitsbereich → Roboter: Verfahren klären, dann in Kap. 3.4 / 4 / 5 beschreiben
+- [~] Kalibrierung Arbeitsbereich → Roboter: Verfahren steht (TCP auf die 4 Marker-Mitten, `robot_check calib` → `fit_rigid_2d` + Restfehler; Prüfung mit Zeigetest `robot_check point`). Nach dem Labortest in Kap. 3.4 / 4 / 5 beschreiben
 - [ ] GitHub-Repo mit den bisherigen Robotertests bereitstellen
 - [ ] Greifer: Steuerung kennt nur das Werkzeug „RobotiQ“ (laut Backup Modbus-Greifer). Wird der Zimmer-Greifer (IO-Link) damit korrekt geöffnet/geschlossen? Masse und TCP-Versatz (Backup: 210 mm) an den Zimmer-Greifer anpassen?
 - [ ] Vorprojekt GROB (Kap. 02b): Dürfen Vorprojekt und Bildschirmfotos gezeigt werden (Freigabe GROB)? Wer schreibt den Abschnitt „Alternative Verfahren“?

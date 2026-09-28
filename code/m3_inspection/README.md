@@ -10,6 +10,11 @@ Planung: [plan/04_modul3_sichtpruefung.md](../../plan/04_modul3_sichtpruefung.md
 | `run.py` | Prüfung auf Bilddateien/Kamera ausführen, Debug-Bilder speichern |
 | `tests/data/` | 3 Seitenansichten des Testteils (Seriennummer 69420), noch nicht final |
 
+Zwischenschritte für die Doku: `InspectionPipeline.process(img, trace)` sammelt mit einem
+`common.trace.Trace` alle Zwischenbilder (Bauteilmaske, Bounding-Box, Label-ROI, Loch- und
+Kerben-Masken, Canny-Kanten, Kandidaten mit Formwert). Im Ablauf über *+ Zwischenschritte*
+bzw. `--save-steps`.
+
 ```powershell
 python -m m3_inspection.run "m3_inspection/tests/data/*.jpg"      # Debug-Bilder in logs/m3
 pytest m3_inspection

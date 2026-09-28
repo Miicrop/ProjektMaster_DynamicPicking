@@ -36,3 +36,21 @@ def test_normalize_angle():
 def test_workspace_to_robot():
     x, y, th = workspace_to_robot(100, 0, 10, 90.0, np.array([0.0, 0.0]))
     assert (x, y, th) == pytest.approx((0.0, 100.0, 100.0), abs=1e-9)
+
+
+def test_fit_workspace_to_robot_residuals():
+    from common.transforms import fit_workspace_to_robot
+    ws = np.array([[-25, -25], [425, -25], [425, 425], [-25, 425]], dtype=float)
+    robot = rigid_2d(ws, 90.0, [350.0, -180.0])
+    rot, t, res = fit_workspace_to_robot(ws, robot)
+    assert rot == pytest.approx(90.0) and t == pytest.approx([350.0, -180.0])
+    assert res == pytest.approx(np.zeros(4), abs=1e-9)
+    robot[2] += [3.0, 4.0]                 # one badly taught point -> visible residual
+    _, _, res = fit_workspace_to_robot(ws, robot)
+    assert res.argmax() == 2 and res.max() > 2.0
+
+
+def test_fit_workspace_to_robot_needs_three_points():
+    from common.transforms import fit_workspace_to_robot
+    with pytest.raises(ValueError):
+        fit_workspace_to_robot([[0, 0], [1, 0]], [[0, 0], [1, 0]])

@@ -13,18 +13,23 @@ import cv2
 import numpy as np
 
 from common.interfaces import InspectionError
+from common.trace import Trace, draw_candidates
 
 Box = tuple[int, int, int, int]   # x, y, w, h
 
 
-def locate_part(img: np.ndarray, ic: dict[str, Any]) -> Box:
+def locate_part(img: np.ndarray, ic: dict[str, Any], trace: Trace | None = None) -> Box:
     """Bounding box of the part (coloured body incl. label and holes)."""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv)
     lo, hi = ic["part_hue"]
     mask = ((h >= lo) & (h <= hi) & (s >= ic["part_saturation_min"])
             & (v >= ic["part_value_min"])).astype(np.uint8) * 255
+    if trace is not None:
+        trace.add("part_mask", mask)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((7, 7), np.uint8))
+    if trace is not None:
+        trace.add("part_opened", mask)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         raise InspectionError("Part not found in inspection image")
@@ -35,6 +40,11 @@ def locate_part(img: np.ndarray, ic: dict[str, Any]) -> Box:
     closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
     contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     box = cv2.boundingRect(max(contours, key=cv2.contourArea))
+    if trace is not None:
+        trace.add("part_closed", closed)
+        vis = img.copy()
+        cv2.rectangle(vis, box[:2], (box[0] + box[2], box[1] + box[3]), (0, 255, 0), 3)
+        trace.add("part_box", vis)
     if box[3] < 20:
         raise InspectionError("Part too small in inspection image")
     return box
@@ -70,7 +80,7 @@ def _enclosed(contours, roi_shape, offset, min_area) -> list[tuple[np.ndarray, f
 
 
 def _non_face_features(roi: np.ndarray, offset: tuple[int, int], part_h: int,
-                       ic: dict[str, Any]) -> list[tuple[np.ndarray, float]]:
+                       ic: dict[str, Any], trace: Trace | None = None) -> list[tuple[np.ndarray, float]]:
     """Regions that are NOT bright part-coloured face (used for the through-hole).
 
     Covers dark bore walls as well as bright background visible through the hole.
@@ -84,6 +94,8 @@ def _non_face_features(roi: np.ndarray, offset: tuple[int, int], part_h: int,
         return []
     face = coloured & (v > ic["face_brightness_frac"] * np.percentile(v[coloured], 70))
     mask = cv2.morphologyEx((~face).astype(np.uint8) * 255, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    if trace is not None:
+        trace.add("hole_mask", mask)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     # the hole ROI spans the full part height: only top/bottom contact disqualifies
     rh = roi.shape[0]
@@ -93,7 +105,7 @@ def _non_face_features(roi: np.ndarray, offset: tuple[int, int], part_h: int,
 
 
 def _region_features(roi: np.ndarray, offset: tuple[int, int], part_h: int,
-                     ic: dict[str, Any]) -> list[tuple[np.ndarray, float]]:
+                     ic: dict[str, Any], trace: Trace | None = None) -> list[tuple[np.ndarray, float]]:
     """Regions that differ from the surrounding part face (used for the notch).
 
     The face reference is the ROI border (mostly flat face). A pixel belongs to a
@@ -107,41 +119,56 @@ def _region_features(roi: np.ndarray, offset: tuple[int, int], part_h: int,
     face_s, face_v = np.median(s[ring]), np.median(v[ring])
     differs = (v < ic["face_brightness_frac"] * face_v) | (np.abs(s - face_s) > ic["face_saturation_delta"])
     mask = cv2.morphologyEx(differs.astype(np.uint8) * 255, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    if trace is not None:
+        trace.add("notch_region_mask", mask)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     return _enclosed(contours, roi.shape, offset, 0.01 * part_h * part_h)
 
 
-def _edge_features(roi: np.ndarray, offset: tuple[int, int], part_h: int) -> list[tuple[np.ndarray, float]]:
+def _edge_features(roi: np.ndarray, offset: tuple[int, int], part_h: int,
+                   trace: Trace | None = None) -> list[tuple[np.ndarray, float]]:
     """Closed edge outlines (convex hulls) - for openings with the same colour as the face."""
     k = max(3, (part_h // 40) | 1)
     gray = cv2.GaussianBlur(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY), (k, k), 0)
     edges = cv2.morphologyEx(cv2.Canny(gray, 30, 90), cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    if trace is not None:
+        trace.add("notch_edges", edges)
     contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     return _enclosed([cv2.convexHull(c) for c in contours], roi.shape, offset, 0.01 * part_h * part_h)
 
 
-def find_hole(img: np.ndarray, box: Box, ic: dict[str, Any]) -> tuple[Feature, float] | None:
+def find_hole(img: np.ndarray, box: Box, ic: dict[str, Any],
+              trace: Trace | None = None) -> tuple[Feature, float] | None:
     """Most circular enclosed feature in the hole ROI. Returns (feature, diameter_px)."""
     roi, off = sub_roi(img, box, ic["hole_roi"])
-    best = None
-    for c, area in _non_face_features(roi, off, box[3], ic):
+    if trace is not None:
+        trace.add("hole_roi", roi)
+    best, scored = None, []
+    for c, area in _non_face_features(roi, off, box[3], ic, trace):
         if area < 0.05 * box[3] ** 2 or len(c) < 5:
             continue
         (_, _), r = cv2.minEnclosingCircle(c)
         circularity = area / (np.pi * r * r)
+        scored.append((c, circularity))
         if best is None or circularity > best.shape_score:
             best = Feature(c, area, circularity)
-    if best is None or best.shape_score < 0.75:
+    if best is not None and best.shape_score < 0.75:
+        best = None
+    if trace is not None:
+        _trace_candidates(trace, "hole_candidates", roi, off, scored, best)
+    if best is None:
         return None
     (_, _), (a, b), _ = cv2.fitEllipse(best.contour)
     return best, (a + b) / 2.0
 
 
-def find_notch(img: np.ndarray, box: Box, ic: dict[str, Any]) -> Feature | None:
+def find_notch(img: np.ndarray, box: Box, ic: dict[str, Any], trace: Trace | None = None) -> Feature | None:
     """Most rectangular enclosed feature in the notch ROI (region- or edge-based)."""
     roi, off = sub_roi(img, box, ic["notch_roi"])
-    best = None
-    candidates = _region_features(roi, off, box[3], ic) + _edge_features(roi, off, box[3])
+    if trace is not None:
+        trace.add("notch_roi", roi)
+    best, scored = None, []
+    candidates = _region_features(roi, off, box[3], ic, trace) + _edge_features(roi, off, box[3], trace)
     for c, area in candidates:
         if not 0.02 * box[3] ** 2 < area < 0.3 * box[3] ** 2:
             continue
@@ -149,8 +176,20 @@ def find_notch(img: np.ndarray, box: Box, ic: dict[str, Any]) -> Feature | None:
         if w == 0 or h == 0 or not 0.5 < w / h < 2.0:
             continue
         rectangularity = area / (w * h)
+        scored.append((c, rectangularity))
         if best is None or rectangularity > best.shape_score:
             best = Feature(c, area, rectangularity)
-    if best is None or best.shape_score < 0.7:
-        return None
+    if best is not None and best.shape_score < 0.7:
+        best = None
+    if trace is not None:
+        _trace_candidates(trace, "notch_candidates", roi, off, scored, best)
     return best
+
+
+def _trace_candidates(trace: Trace, name: str, roi: np.ndarray, off: tuple[int, int],
+                      scored: list[tuple[np.ndarray, float]], best: Feature | None) -> None:
+    """ROI with the plausible candidates and their shape score; the accepted one red."""
+    shift = np.array(off)
+    trace.add(name, draw_candidates(roi, [c - shift for c, _ in scored],
+                                    None if best is None else best.contour - shift,
+                                    [f"{s:.2f}" for _, s in scored]))

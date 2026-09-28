@@ -15,6 +15,7 @@ import numpy as np
 
 from common.camera import open_camera
 from common.interfaces import InspectionError, InspectionResult, Inspector
+from common.trace import Trace
 from m3_inspection.features import Box, Feature, find_hole, find_notch, locate_part, sub_roi
 from m3_inspection.ocr import SerialReader
 
@@ -87,24 +88,32 @@ class InspectionPipeline:
         self.cfg = cfg
         self.reader = reader or SerialReader()
 
-    def process(self, img: np.ndarray) -> InspectionDetails:
+    def process(self, img: np.ndarray, trace: Trace | None = None) -> InspectionDetails:
+        """`trace` (optional) collects the intermediate images for documentation."""
         ic = self.cfg["inspection"]
-        box = locate_part(img, ic)
+        if trace is not None:
+            trace.add("original", img)
+        box = locate_part(img, ic, trace)
         mm_per_px = ic["part_height_mm"] / box[3]
 
         label, _ = sub_roi(img, box, ic["label_roi"])
+        if trace is not None:
+            trace.add("label_roi", label)
         serial, conf = self.reader.read(label, ic["serial_pattern"])
         if conf < ic["ocr_min_confidence"]:
             log.info("OCR confidence %.2f too low for %r", conf, serial)
             serial = None
 
-        hole = find_hole(img, box, ic)
+        hole = find_hole(img, box, ic, trace)
         hole_feature, hole_px = hole if hole else (None, None)
         hole_mm = hole_px * mm_per_px if hole_px else None
 
-        notch = find_notch(img, box, ic)
+        notch = find_notch(img, box, ic, trace)
         result = evaluate(self.cfg, serial, hole_mm, notch is not None)
-        return InspectionDetails(result, box, conf, hole_feature, hole_px, notch)
+        details = InspectionDetails(result, box, conf, hole_feature, hole_px, notch)
+        if trace is not None:
+            trace.add("result", details.debug_image(img, ic))
+        return details
 
 
 class CameraInspector(Inspector):
@@ -116,11 +125,15 @@ class CameraInspector(Inspector):
         self._camera = camera or open_camera(cfg["inspection_camera"])
         self.last_details: InspectionDetails | None = None
         self.last_image: np.ndarray | None = None
+        self.trace_steps = False                   # collect intermediate images (documentation)
+        self.last_trace: Trace | None = None
 
     def inspect(self) -> InspectionResult:
         img = self._camera.read()
         self.last_image = img
-        self.last_details = self._pipeline.process(img)
+        self.last_details = None
+        self.last_trace = Trace() if self.trace_steps else None
+        self.last_details = self._pipeline.process(img, self.last_trace)
         log.info("Inspection: %s", self.last_details.result)
         return self.last_details.result
 

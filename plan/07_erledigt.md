@@ -2,6 +2,17 @@
 
 Neueste Einträge oben. Format: `YYYY-MM-DD – Wer – Was`
 
+## 2026-09-28 – Niklas
+- **GUI:** Roboter-Draufsicht gedreht – Basis oben, x nach unten, y nach rechts (Blick des Bedieners).
+- **M1/M3:** Zwischenschritte der Bildverarbeitung speicherbar (`common/trace.py`): GUI-Ablauf
+  *+ Zwischenschritte*, CLI `--save-steps` → `logs/<datum>/…/steps/`, 13 Bilder M1, 14 Bilder M3.
+  Nebenbei: `last_result`/`last_details` werden je Durchlauf zurückgesetzt (vorher blieben nach
+  einem Fehlschlag die Bilder des vorigen Zyklus stehen).
+- **M2:** `robot_check calib` (Kalibrierung Arbeitsbereich → Roboter über die Marker-Mitten, mit
+  Restfehler) und `robot_check point` (Zeigetest ohne Greifen, Protokoll `logs/point_tests.csv`);
+  `NeuraRobot.point_at` / `retreat`.
+- **Plan:** Checkliste für den Labortest [09_labortest.md](09_labortest.md). 73 Tests grün.
+
 ## 2026-09-27 – Niklas
 - **Thesis:** Neues Kapitel `02b_vorprojekt.tex` zum Vorprojekt bei GROB (KI-basierte Roboterbahnen
   in Process Simulate): Aufgabe und Eingrenzung, Kollisionssets, Zell-/Robotersicherheit, manuelle

@@ -19,6 +19,7 @@ Die Dateien sind die gemeinsame Grundlage für Code (`../code`) und Ausarbeitung
 | [06_roadmap.md](06_roadmap.md) | Meilensteine und Aufgabenlisten mit Status |
 | [07_erledigt.md](07_erledigt.md) | Log erledigter Arbeiten (datiert) |
 | [08_offene_fragen.md](08_offene_fragen.md) | Offene Fragen und Entscheidungen |
+| [09_labortest.md](09_labortest.md) | Checkliste für den Labortest mit echter Hardware |
 
 ## Konventionen
 
