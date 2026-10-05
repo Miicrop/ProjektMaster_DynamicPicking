@@ -1,7 +1,7 @@
 # System configuration. All values marked "tbd" must be measured / taught on the real setup.
 # Units: mm and degrees everywhere in this file (M2 converts to m / rad for the Neura API).
 
-# Default for `python -m orchestrator` (GUI: selectable). detector: mock|replay|camera|ai, robot: mock|sim|real, inspector: mock|replay|camera
+# Default for `python -m orchestrator` (GUI: selectable). detector: mock|replay|camera|ai, robot: mock|sim|vm|real, inspector: mock|replay|camera
 implementations:
   detector: mock
   robot: mock
@@ -56,8 +56,14 @@ workspace_to_robot:
 
 # --- M2: robot (Neura LARA, neurapy v5.0.8) ------------------------------------
 robot:
-  host: 192.168.2.20            # IP printed on the robot base (tbd: verify, Neura default is 192.168.2.13)
+  host: 192.168.2.13            # IP printed on the robot base (tbd: verify, Neura default is 192.168.2.13)
+  vm_host: 192.168.2.13         # official Neura simulation (VirtualBox VM, host-only network), robot kind "vm"
+  # ALL poses and limits below are TCP poses of this tool in the robot BASE frame (not the flange).
   tool_name: RobotiQ            # tool as created in the Neura GUI (found in robot backup)
+  # Expected TCP offset of tool_name from the flange [mm]. connect() refuses to move if the controller
+  # tool differs by more than 1 mm. 197.5 = LWR50L with jaws 169.5 + LWR50F 28 (data sheets, tbd: measure
+  # in the lab). The robot backup still has 210 mm -> set offsetZ of the tool on the pendant to this value.
+  tool_tcp_mm: [0.0, 0.0, 197.5]
   home_point: Home              # named point stored on the robot
   override: 0.2                 # global speed override 0..1 (keep low while testing)
   joint_speed_percent: 20
@@ -67,17 +73,21 @@ robot:
   grasp_height_mm: 10           # TCP height above table when grasping (depends on part / gripper)
   gripper_angle_offset_deg: 90.0  # close gripper across the short side of the part
   grip_wait_s: 1.0
+  gripper_enabled: true         # false = move only, skip grasp/release (first tests); always off for the Neura VM
   # Software workspace limits in robot base frame [mm]
   limits_mm:
     x: [100.0, 900.0]
     y: [-500.0, 500.0]
     z: [-10.0, 600.0]
-  # Named poses: [x, y, z, rx, ry, rz] in mm / deg (tbd, teach on real robot)
-  # "home" is the Home point from the robot backup (0.42 m, 0, 0.434 m, rpy = pi, 0, pi).
+  # Named poses: TCP of tool_name, [x, y, z, rx, ry, rz] in mm / deg (tbd, teach on real robot)
+  # "home" = Home point: flange at z 434.5 mm (robot backup) -> TCP at 434.5 - 197.5 = 237.0 mm.
+  # Home is driven as joint point; this entry gives orientation and map position.
+  # Reach (Neura VM, tool pointing down): radius ~740 mm at z 130, ~700 mm at z 180 -> keep the
+  # approach points (pose z + approach_height_mm) inside.
   poses:
-    home: [420.0, 0.0, 434.0, 180.0, 0.0, 180.0]
-    inspection: [700.0, 300.0, 50.0, 180.0, 0.0, 180.0]
-    bin_good: [700.0, -300.0, 100.0, 180.0, 0.0, 180.0]
+    home: [420.0, 0.0, 237.0, 180.0, 0.0, 180.0]
+    inspection: [600.0, 250.0, 50.0, 180.0, 0.0, 180.0]
+    bin_good: [600.0, -250.0, 100.0, 180.0, 0.0, 180.0]
     bin_bad: [500.0, -400.0, 100.0, 180.0, 0.0, 180.0]
 
 # --- Wrist camera on the robot (planned, for M4 / AI grasping) -----------------

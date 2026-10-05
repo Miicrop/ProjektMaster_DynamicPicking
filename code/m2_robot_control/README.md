@@ -9,7 +9,7 @@ Planung: [plan/03_modul2_robotersteuerung.md](../../plan/03_modul2_robotersteuer
 | `robot_check.py` | Kommandozeilen-Werkzeug: `info`, `pose`, `home`, `gripper`, `axes`, `jog`, `pick-test`, `calib` (Kalibrierung Arbeitsbereich → Roboter), `point` (Zeigetest ohne Greifen) (jeweils auch `--sim`) |
 | `fake_neura_server.py` | Simulator der Neura-Steuerung (gleiches JSON-Protokoll, Port 65432) für Tests ohne Roboter |
 | `vendor/neurapy/robot.py` | Unveränderter NeuraPy-Windows-Client v5.0.8 aus der Neura-Lieferung |
-| `tests/` | Tests gegen den Simulator (über den echten Client) |
+| `tests/` | Tests gegen den Simulator (über den echten Client); `test_neura_vm.py` gegen die offizielle Neura-VM (nur mit `NEURA_VM=1`, siehe ANLEITUNG §8b) |
 
 Neura-Dokumentation: [docs/neura/](../../docs/neura/)
 

@@ -10,7 +10,8 @@
     python -m m2_robot_control.robot_check calib         # read-only: teach marker centres -> workspace_to_robot
     python -m m2_robot_control.robot_check point         # MOVES: detect part (M1), hover above it, no grasp
 
-Add --sim to run against the built-in fake controller instead of the real robot.
+Add --sim to run against the built-in fake controller, or --vm to run against the official Neura
+simulation (VirtualBox VM at robot.vm_host) instead of the real robot.
 """
 from __future__ import annotations
 
@@ -142,6 +143,7 @@ def main() -> None:
     ap.add_argument("--hover", type=float, default=30.0, help="height above the grasp pose for 'point' in mm")
     ap.add_argument("--host", help="override robot.host from config")
     ap.add_argument("--sim", action="store_true", help="use the fake controller")
+    ap.add_argument("--vm", action="store_true", help="use the Neura VM (robot.vm_host)")
     ap.add_argument("--yes", action="store_true", help="skip the safety confirmation")
     args = ap.parse_args()
     if args.command == "jog" and (args.name not in JOG_AXES or args.value is None):
@@ -154,6 +156,9 @@ def main() -> None:
         server = FakeNeuraServer("127.0.0.1", 0).start_background()
         factory = lambda host: load_neurapy_client("127.0.0.1", server.port)  # noqa: E731
         print(f"[sim] fake controller on port {server.port}")
+    if args.vm:
+        cfg["robot"]["host"] = cfg["robot"]["vm_host"]
+        print(f"[vm] Neura simulation at {cfg['robot']['host']}")
     if args.host:
         cfg["robot"]["host"] = args.host
 
@@ -163,6 +168,9 @@ def main() -> None:
     if args.command == "info":
         print(f"robot      : {r.robot_name}  dof={r.dof}  server version={r.version}")
         print(f"teach mode : {r.is_robot_in_teach_mode()}")
+        name, off = robot.tool()
+        print(f"tool       : {name}  TCP offset from flange = {[round(v, 1) for v in off]} mm"
+              f"  (config: {cfg['robot'].get('tool_name')} {cfg['robot'].get('tool_tcp_mm')} mm)")
         print(f"tcp pose   : {_fmt(robot.current_pose())}")
         print(f"joints/rad : {[round(j, 4) for j in r.get_current_joint_angles()]}")
         print(f"points     : {r.get_point_names()}")
@@ -197,7 +205,7 @@ def main() -> None:
             print("WARNUNG: Fase nicht gefunden - Winkel nur bis auf 180 deg eindeutig")
         point = (pose, ws)
 
-    if not args.sim and not args.yes and not _confirm(f"Roboter {cfg['robot']['host']} bewegt sich!"):
+    if not (args.sim or args.vm) and not args.yes and not _confirm(f"Roboter {cfg['robot']['host']} bewegt sich!"):
         print("abgebrochen")
         return
 
@@ -206,9 +214,9 @@ def main() -> None:
         if args.command == "home":
             robot.home()
         elif args.command == "gripper":
-            for action in ("release", "grasp", "release"):
-                print(action)
-                getattr(r, action)()
+            for close in (False, True, False):
+                print("grasp" if close else "release")
+                robot.gripper(close=close)
                 time.sleep(1.5)
         elif args.command == "pick-test":
             # grasp at the inspection pose and put it back: tests the full sequence

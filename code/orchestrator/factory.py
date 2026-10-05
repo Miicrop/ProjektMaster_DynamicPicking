@@ -2,11 +2,12 @@
 
 Kinds
     detector : mock | replay | camera | ai
-    robot    : mock | sim | real
+    robot    : mock | sim | vm | real
     inspector: mock | replay | camera
 
 replay = real image processing on the stored test photos, sim = NeuraRobot code
-against the built-in fake controller. "real" is accepted as alias for "camera".
+against the built-in fake controller, vm = NeuraRobot against the official Neura
+simulation (VirtualBox VM at robot.vm_host). "real" is accepted as alias for "camera".
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from common.interfaces import Inspector, ObjectDetector, RobotController
 log = logging.getLogger(__name__)
 
 DETECTOR_KINDS = ("mock", "replay", "camera", "ai")
-ROBOT_KINDS = ("mock", "sim", "real")
+ROBOT_KINDS = ("mock", "sim", "vm", "real")
 INSPECTOR_KINDS = ("mock", "replay", "camera")
 
 REPLAY_SOURCES = {
@@ -61,6 +62,11 @@ def build_robot(cfg: dict[str, Any], kind: str) -> RobotController:
         return MockRobot(cfg)
     if kind == "real":
         return NeuraRobot(cfg)
+    if kind == "vm":
+        # same code path as "real", only the address differs; read at connect time so GUI edits apply
+        from m2_robot_control.robot import load_neurapy_client
+        return NeuraRobot(cfg, client_factory=lambda host: load_neurapy_client(cfg["robot"]["vm_host"]),
+                          gripper=False)   # no gripper defined in the VM
     if kind == "sim":
         from m2_robot_control.fake_neura_server import shared_server
         from m2_robot_control.robot import load_neurapy_client

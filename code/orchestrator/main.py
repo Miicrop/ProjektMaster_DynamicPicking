@@ -3,6 +3,7 @@
     python -m orchestrator --mock --cycles 5                    # everything mocked
     python -m orchestrator --replay --cycles 4                  # M1/M3 on the test photos, robot mocked
     python -m orchestrator --replay --sim-robot --save-images   # ... NeuraRobot against the fake controller
+    python -m orchestrator --replay --vm-robot                  # ... NeuraRobot against the Neura VM
     python -m orchestrator --replay --save-steps                # + intermediate images (masks, ROIs) for docs
     python -m orchestrator --detector camera --robot real --inspector camera --cycles 0   # until Ctrl+C
     python -m orchestrator                                      # kinds from config/system.yaml
@@ -28,6 +29,7 @@ def main() -> None:
     ap.add_argument("--mock", action="store_true", help="use mocks for all modules")
     ap.add_argument("--replay", action="store_true", help="M1/M3 on the test photos, robot mocked")
     ap.add_argument("--sim-robot", action="store_true", help="NeuraRobot against the fake controller")
+    ap.add_argument("--vm-robot", action="store_true", help="NeuraRobot against the Neura VM (robot.vm_host)")
     ap.add_argument("--detector", choices=DETECTOR_KINDS)
     ap.add_argument("--robot", choices=ROBOT_KINDS)
     ap.add_argument("--inspector", choices=INSPECTOR_KINDS)
@@ -49,6 +51,8 @@ def main() -> None:
         kinds.update(detector="replay", inspector="replay", robot="mock")
     if args.sim_robot:
         kinds["robot"] = "sim"
+    if args.vm_robot:
+        kinds["robot"] = "vm"
     for k in kinds:
         if getattr(args, k):
             kinds[k] = getattr(args, k)

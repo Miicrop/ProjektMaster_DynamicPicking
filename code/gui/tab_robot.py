@@ -1,4 +1,4 @@
-"""Tab M2: connect to the robot (simulator or real), move, operate the gripper, teach poses."""
+"""Tab M2: connect to the robot (simulator, Neura VM or real), move, operate the gripper, teach poses."""
 from __future__ import annotations
 
 from PySide6.QtCore import QTimer
@@ -10,7 +10,8 @@ from common.config import robot_target
 from gui.session import Session
 from gui.widgets import BAD, GOOD, NEUTRAL, Badge, RobotMapView, TaskRunner, confirm_motion
 
-MODES = [("Simulator", "sim"), ("Echter Roboter", "real")]
+MODES = [("Simulator", "sim"), ("Neura-VM", "vm"), ("Echter Roboter", "real")]
+HOST_KEY = {"vm": "vm_host", "real": "host"}   # config key of the address per mode (sim: local fake)
 
 
 class StopButton(QPushButton):
@@ -32,8 +33,9 @@ class RobotTab(QWidget):
         self.mode = QComboBox()
         for text, kind in MODES:
             self.mode.addItem(text, kind)
-        self.host = QLineEdit(str(cfg["robot"]["host"]))
-        self.host.editingFinished.connect(lambda: self.s.store.set(["robot", "host"], self.host.text().strip()))
+        self.host = QLineEdit()
+        self.host.editingFinished.connect(self._store_host)
+        self.mode.currentIndexChanged.connect(self._show_host)
         self.btn_connect = QPushButton("Verbinden")
         self.btn_disconnect = QPushButton("Trennen")
         self.status = Badge("getrennt")
@@ -69,8 +71,8 @@ class RobotTab(QWidget):
         self.override.valueChanged.connect(self.set_override)
         self.buttons = {
             "Home": lambda: self.move("Home anfahren", lambda r: r.home()),
-            "Greifer auf": lambda: self.robot_call(lambda r: r.r.release(), "Greifer geöffnet"),
-            "Greifer zu": lambda: self.robot_call(lambda r: r.r.grasp(), "Greifer geschlossen"),
+            "Greifer auf": lambda: self.robot_call(lambda r: r.gripper(close=False), "Greifer geöffnet"),
+            "Greifer zu": lambda: self.robot_call(lambda r: r.gripper(close=True), "Greifer geschlossen"),
             "Pick-Test Prüfposition": lambda: self.move(
                 "Greifen und Ablegen an der Prüfposition", self._pick_test),
         }
@@ -145,6 +147,7 @@ class RobotTab(QWidget):
         self.poll = QTimer(self, interval=1000)
         self.poll.timeout.connect(self.refresh_status)
         self.refresh()
+        self._show_host()
         self._set_connected(False)
 
     # -- helpers ----------------------------------------------------------------------
@@ -152,13 +155,23 @@ class RobotTab(QWidget):
     def is_real(self) -> bool:
         return self.mode.currentData() == "real"
 
+    def _show_host(self) -> None:
+        key = HOST_KEY.get(self.mode.currentData())
+        self.host.setText(str(self.s.cfg["robot"][key]) if key else "127.0.0.1 (lokal)")
+        self.host.setEnabled(key is not None and self.mode.isEnabled())
+
+    def _store_host(self) -> None:
+        key = HOST_KEY.get(self.mode.currentData())
+        if key:
+            self.s.store.set(["robot", key], self.host.text().strip())
+
     def _set_connected(self, on: bool) -> None:
         for b in self.motion_buttons:
             b.setEnabled(on)
         self.btn_disconnect.setEnabled(on)
         self.btn_connect.setEnabled(not on)
         self.mode.setEnabled(not on)
-        self.host.setEnabled(not on)
+        self.host.setEnabled(not on and self.mode.currentData() in HOST_KEY)
         if on:
             self.status.show_state(f"verbunden ({self.mode.currentText()})", GOOD)
             self.poll.start()

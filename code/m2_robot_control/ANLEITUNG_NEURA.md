@@ -93,6 +93,15 @@ keine spezielle Software, nur Python und eine Netzwerkverbindung.
 4. **Werkzeug prüfen:** Unter den Werkzeugen muss der montierte Greifer ausgewählt sein
    (im Backup heißt er `RobotiQ`, TCP-Versatz 210 mm in z). Der Name muss mit
    `robot.tool_name` in `config/system.yaml` übereinstimmen.
+   **Alle Posen in `system.yaml` und alle Fahrziele im Code sind TCP-Posen dieses Werkzeugs
+   im Basis-KS**, nicht der Flansch. Ein falscher TCP-Versatz verschiebt also jede Greifhöhe.
+   ⚠️ **Die 210 mm aus dem Backup passen nicht zum montierten Zimmer-Greifer.** Laut Datenblatt:
+   LWR50L mit Backen 169,5 mm + Robotermodul LWR50F 28 mm = **197,5 mm** (im Labor nachmessen:
+   Flansch → Fingerspitzen, geschlossen). Diesen Wert als `offsetZ` des Werkzeugs am Pendant
+   eintragen; er steht auch in `robot.tool_tcp_mm`. **Unser Code fährt nicht, solange beide um
+   mehr als 1 mm abweichen** (Fehlermeldung nennt beide Werte). Gemessen anders? Pendant **und**
+   `tool_tcp_mm` anpassen, dann `poses.home` z = 434,5 − Versatz.
+   Kontrolle: `robot_check info` zeigt Werkzeug und TCP-Versatz an.
 5. **Punkt `Home` prüfen:** Der Punkt existiert und ist frei anfahrbar.
 6. Betriebsart: Unser Code schaltet vom Teach- in den Automatikmodus
    (`switch_to_automatic_mode()`). **(prüfen:** Muss das am Pendant zusätzlich bestätigt
@@ -229,8 +238,39 @@ Kurzfassung:
 3. *Datei → Tools → Network Manager*: Host-only-Adapter anlegen, IPv4 `192.168.2.11` /
    `255.255.255.0`; DHCP-Server an: Server `192.168.2.12`, Bereich `192.168.2.13`–`192.168.2.13`.
 4. VM-Einstellungen → Netzwerk: Adapter 1 aus, Adapter 2 = Host-only-Adapter.
+   Unter Windows **„VirtualBox Host-Only Ethernet Adapter“** auswählen. Die `.ova` bringt den
+   Linux-Namen `vboxnet0` mit, sonst startet die VM mit „Netzinterface vboxnet0 nicht vorhanden“.
 5. VM starten, nach ca. 30 s im Browser `http://192.168.2.13:8080` öffnen (Login-Seite).
-6. In `config/system.yaml` `host: 192.168.2.13` eintragen, dann wie am echten Roboter arbeiten.
+   Bricht der Start mit `VERR_INTNET_FLT_IF_NOT_FOUND` ab: **PC neu starten** (der
+   VirtualBox-Netzwerktreiber ist dann sauber an den Adapter gebunden).
+6. Prüfen: `Test-NetConnection 192.168.2.13 -Port 65432` → `TcpTestSucceeded : True`.
+   Lesen (`info`) klappt schon jetzt. **Für Bewegungen** muss man sich in der Bedienoberfläche
+   einloggen (Zugangsdaten stehen nicht in der Neura-Doku → Betreuer bzw. Neura fragen) und den
+   Roboter dort in den Automatikmodus bringen. Sonst lehnt die VM jede Bewegung ab mit
+   *„Unable to switch to play mode. Check if robot in automatic mode“*.
+7. Die Adresse der VM steht getrennt vom echten Roboter in `config/system.yaml` unter
+   `robot.vm_host`. Robotermodus **`vm`** benutzen:
+
+```powershell
+python -m m2_robot_control.robot_check info --vm          # ohne Sicherheitsabfrage, es ist ja die VM
+python -m m2_robot_control.robot_check home --vm
+python -m orchestrator --replay --vm-robot --cycles 1     # Gesamtablauf gegen die VM
+$env:NEURA_VM = "1"; python -m pytest m2_robot_control/tests/test_neura_vm.py -v
+```
+
+In der GUI heißt der Modus **„Neura-VM“** (Tab Roboter und Tab Ablauf); das IP-Feld zeigt dann `vm_host`.
+Die Bewegung sieht man live in der Neura-Bedienoberfläche im Browser.
+
+> ⚠️ VM und Laborroboter haben ab Werk **dieselbe IP** `192.168.2.13`. Ist im Labor der echte
+> Roboter angeschlossen, fährt auch der Modus `vm` den **echten** Roboter, und zwar ohne
+> Sicherheitsabfrage. Deshalb ist der VM-Test nur mit `NEURA_VM=1` aktiv. Im Labor `vm` nicht benutzen.
+
+In der VM ist das Werkzeug `RobotiQ` bereits auf 197,5 mm gesetzt (per
+`update_tool_parameters`). Bei einer neu importierten VM einmal wiederholen, sonst verweigert
+unser Code die Bewegung wegen des TCP-Versatzes.
+
+Hinweise: Die VM meldet Server-Version `v5.0.0-alpha.102`, unser Client ist v5.0.8. Die Warnung
+dazu beim Verbinden ist bekannt. Die VM ist eine LARA 5 wie im Labor.
 
 ## 9. Fehlersuche
 

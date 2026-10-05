@@ -23,7 +23,7 @@ LABELS = {State.DETECT: "Erkennen\n(M1)", State.PICK: "Greifen\n(M2)", State.PLA
           State.INSPECT: "Prüfen\n(M3)", State.PICK_INSPECT: "Aufnehmen\nPrüfplatz", State.SORT: "Sortieren\n(M2)"}
 KINDS = {
     "detector": [("Mock", "mock"), ("Testbilder", "replay"), ("Kamera", "camera"), ("KI (M4)", "ai")],
-    "robot": [("Mock", "mock"), ("Simulator", "sim"), ("Echter Roboter", "real")],
+    "robot": [("Mock", "mock"), ("Simulator", "sim"), ("Neura-VM", "vm"), ("Echter Roboter", "real")],
     "inspector": [("Mock", "mock"), ("Testbilder", "replay"), ("Kamera", "camera")],
 }
 COLUMNS = ["#", "Zeit", "Dauer s", "x mm", "y mm", "θ °", "Seriennr.", "Loch mm", "Kerbe", "Ergebnis", "Grund / Fehler"]

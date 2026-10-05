@@ -162,6 +162,32 @@ def test_main_window_smoke(store, tmp_path):
     w.close()
 
 
+def test_robot_tab_host_field_follows_mode(store):
+    """Neura-VM and real robot keep separate addresses; editing one must not change the other."""
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+    from gui.app import MainWindow
+    from gui.session import Session
+
+    app = QApplication.instance() or QApplication([])  # noqa: F841
+    store.data["robot"]["host"] = "10.0.0.1"
+    store.data["robot"]["vm_host"] = "10.0.0.2"
+    w = MainWindow(Session(store))
+    tab = w.tab_m2
+    tab.mode.setCurrentIndex(tab.mode.findData("vm"))
+    assert tab.host.text() == "10.0.0.2" and tab.host.isEnabled()
+    tab.host.setText("10.0.0.3")
+    tab.host.editingFinished.emit()
+    assert store.data["robot"]["vm_host"] == "10.0.0.3" and store.data["robot"]["host"] == "10.0.0.1"
+    tab.mode.setCurrentIndex(tab.mode.findData("real"))
+    assert tab.host.text() == "10.0.0.1"
+    tab.mode.setCurrentIndex(tab.mode.findData("sim"))
+    assert not tab.host.isEnabled()
+
+    store.dirty = False
+    w.close()
+
+
 def test_same_camera_index_for_two_modules_is_refused(store, monkeypatch):
     import gui.session as session_mod
     monkeypatch.setattr(session_mod, "open_source", lambda cfg, section, kind: object())

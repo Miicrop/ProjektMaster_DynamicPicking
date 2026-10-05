@@ -22,6 +22,10 @@ VENDOR_DIR = Path(__file__).resolve().parent / "vendor"
 STOPPED_MSG = "Robot stopped - acknowledge first (GUI: 'Fehler quittieren' / 'Freigeben')"
 JOG_MAX_MM = 100.0     # largest relative step allowed by NeuraRobot.jog()
 JOG_MAX_DEG = 45.0
+TOOL_TOLERANCE_MM = 1.0  # allowed difference controller tool TCP vs. robot.tool_tcp_mm
+INIT_RETRIES = 3        # init_program attempts while the controller refuses play mode (seen on the Neura VM)
+INIT_RETRY_WAIT_S = 1.0
+SAME_JOINTS_RAD = 1e-3  # joint targets closer than this are not sent (controller would skip them anyway)
 
 
 # --- helpers -------------------------------------------------------------------
@@ -151,9 +155,11 @@ class NeuraRobot(RobotController):
     """Neura LARA via the neurapy socket client."""
 
     def __init__(self, cfg: dict[str, Any],
-                 client_factory: Callable[[str], Any] | None = None):
+                 client_factory: Callable[[str], Any] | None = None, gripper: bool | None = None):
+        """gripper=None follows robot.gripper_enabled (live), False/True overrides it (e.g. Neura VM)."""
         self._cfg = cfg
         self._rc = cfg["robot"]
+        self._gripper = gripper
         self._factory = client_factory or load_neurapy_client
         self.r = None   # neurapy Robot client
         self.stopped = True   # no motion before connect()/reset() has run init_program()
@@ -181,10 +187,26 @@ class NeuraRobot(RobotController):
             r.switch_to_automatic_mode()
         if self._rc.get("tool_name"):
             r.set_tool(tool_name=self._rc["tool_name"])
+        self._check_tool()
         r.set_override(self._rc["override"])
         r.set_joint_speed(self._rc["joint_speed_percent"])
-        r.init_program()   # required before any motion command
+        self._init_program(r)   # required before any motion command
         self.stopped = False
+
+    def _init_program(self, r) -> None:
+        """init_program, retried while the controller transiently refuses to switch to play mode."""
+        for attempt in range(1, INIT_RETRIES + 1):
+            try:
+                r.init_program()
+                return
+            except Exception as e:
+                if "play mode" not in str(e):
+                    raise
+                log.warning("init_program refused (attempt %d/%d): %s", attempt, INIT_RETRIES, e)
+                if attempt < INIT_RETRIES:
+                    time.sleep(INIT_RETRY_WAIT_S)
+        raise RobotError(f"Controller refuses to switch to play mode after {INIT_RETRIES} attempts - "
+                         "check the operating mode (automatic) and messages on the pendant / Neura GUI")
 
     def disconnect(self) -> None:
         self.stop()  # ends the motion program on the controller
@@ -205,6 +227,34 @@ class NeuraRobot(RobotController):
             raise RobotError(STOPPED_MSG)
 
     # -- motion primitives ---------------------------------------------------
+    def tool(self) -> tuple[str, list[float]]:
+        """Active tool on the controller and its TCP translation offset from the flange [mm].
+        All poses in the config and all motion targets refer to this TCP."""
+        r = self.open_client()
+        return r.get_selected_tool_name(), [v * 1000.0 for v in r.get_current_tool_translation_offsets()]
+
+    @property
+    def gripper_enabled(self) -> bool:
+        return self._rc.get("gripper_enabled", True) if self._gripper is None else self._gripper
+
+    def gripper(self, close: bool) -> None:
+        """Close / open the gripper - skipped (only logged) while the gripper is disabled."""
+        if not self.gripper_enabled:
+            log.info("Gripper disabled - skipping %s", "close" if close else "open")
+            return
+        self.open_client().grasp() if close else self.open_client().release()
+
+    def _check_tool(self) -> None:
+        """Refuse motion if the controller tool's TCP differs from robot.tool_tcp_mm - every
+        pose in the config refers to this TCP, so a wrong offset shifts every grasp height."""
+        name, off = self.tool()
+        log.info("Tool '%s': TCP offset from flange x=%.1f y=%.1f z=%.1f mm", name, *off)
+        expected = self._rc.get("tool_tcp_mm")
+        if expected is not None and max(abs(a - b) for a, b in zip(off, expected)) > TOOL_TOLERANCE_MM:
+            raise RobotError(
+                f"Tool '{name}' TCP offset on the controller {[round(v, 1) for v in off]} mm differs from "
+                f"robot.tool_tcp_mm {list(expected)} mm - correct the tool on the pendant (or the config)")
+
     def current_pose(self) -> RobotTarget:
         return from_neura("current", self.open_client().get_tcp_pose())
 
@@ -213,7 +263,15 @@ class NeuraRobot(RobotController):
         self._check_ready()
         check_limits(self._cfg, t)
         joints = self.r.compute_inverse_kinematics(to_neura(t), self.r.get_current_joint_angles())
-        self.r.move_joint(joints)
+        self._move_joint(joints, joints)
+
+    def _move_joint(self, target, joints: list[float]) -> None:
+        """move_joint(target) unless the robot already stands at `joints`."""
+        current = self.r.get_current_joint_angles()
+        if max(abs(a - b) for a, b in zip(current, joints)) < SAME_JOINTS_RAD:
+            log.info("Already at %s - joint motion not sent", target if isinstance(target, str) else "target")
+            return
+        self.r.move_joint(target)
 
     def _linear(self, a: RobotTarget, b: RobotTarget, speed_mps: float) -> None:
         self._check_ready()
@@ -255,7 +313,7 @@ class NeuraRobot(RobotController):
         check_limits(self._cfg, above)
         log.info("point at (%.1f, %.1f, %.1f) rz=%.1f", hover.x_mm, hover.y_mm, hover.z_mm, hover.rz_deg)
         self._check_ready()
-        self.r.release()
+        self.gripper(close=False)
         self._joint_move_to(above)
         self._linear(above, hover, self._rc["approach_speed_mps"])
         return hover
@@ -268,7 +326,8 @@ class NeuraRobot(RobotController):
     # -- RobotController -----------------------------------------------------
     def home(self) -> None:
         self._check_ready()
-        self.r.move_joint(self._rc["home_point"])
+        point = self._rc["home_point"]
+        self._move_joint(point, self.r.get_point(point, representation="Joint"))
 
     def pick(self, pose: ObjectPose | RobotTarget) -> None:
         t = as_target(self._cfg, pose)
@@ -276,10 +335,10 @@ class NeuraRobot(RobotController):
         check_limits(self._cfg, t)
         log.info("pick %s at (%.1f, %.1f, %.1f) rz=%.1f", t.name, t.x_mm, t.y_mm, t.z_mm, t.rz_deg)
         self._check_ready()
-        self.r.release()                                   # open gripper
+        self.gripper(close=False)
         self._joint_move_to(above)
         self._linear(above, t, self._rc["approach_speed_mps"])
-        self.r.grasp()
+        self.gripper(close=True)
         time.sleep(self._rc["grip_wait_s"])
         self._linear(t, above, self._rc["approach_speed_mps"])
 
@@ -289,6 +348,6 @@ class NeuraRobot(RobotController):
         log.info("place at %s", target.name)
         self._joint_move_to(above)
         self._linear(above, target, self._rc["approach_speed_mps"])
-        self.r.release()
+        self.gripper(close=False)
         time.sleep(self._rc["grip_wait_s"])
         self._linear(target, above, self._rc["approach_speed_mps"])

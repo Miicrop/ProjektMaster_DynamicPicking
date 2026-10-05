@@ -18,13 +18,18 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-# Named points taken from the robot backup (m, rad)
+# Named points taken from the robot backup (m, rad). "cartesian" is the TCP pose with the RobotiQ
+# tool as configured (flange z 0.4345 m - 0.1975 m).
 POINTS = {
     "Home": {"joint": [0.0, 0.0, 1.5708, 0.0, 1.5708, 0.0],
-             "cartesian": [0.42, 0.0, 0.4345, 3.14159265, 0.0, 3.14159265]},
+             "cartesian": [0.42, 0.0, 0.237, 3.14159265, 0.0, 3.14159265]},
     "Parking": {"joint": [1.5708, 0.0, -2.4958, 0.0, 0.0, 0.0],
                 "cartesian": [0.0, -0.3524, 0.1324, 3.14159265, -0.6458, -1.5708]},
 }
+
+# Tools on the controller: TCP translation offset from the flange (m). RobotiQ as it must be set
+# (config robot.tool_tcp_mm); the robot backup still has 0.21 m.
+TOOLS = {"NoTool": [0.0, 0.0, 0.0], "RobotiQ": [0.0, 0.0, 0.1975]}
 
 
 class FakeNeura:
@@ -38,9 +43,11 @@ class FakeNeura:
         self.powered = False
         self.teach_mode = True
         self.program_ready = False
+        self.init_failures = 0   # > 0: refuse that many init_program calls (transient state seen on the VM)
         self.gripper_closed = False
         self.override = 1.0
         self.tool = "NoTool"
+        self.tools = {k: list(v) for k, v in TOOLS.items()}
         self._ik: dict[tuple, list[float]] = {}
 
     # -- bookkeeping -------------------------------------------------------------
@@ -92,6 +99,9 @@ class FakeNeura:
         return True
 
     def init_program(self) -> bool:
+        if self.init_failures > 0:
+            self.init_failures -= 1
+            raise RuntimeError("Unable to switch to play mode. Check if robot in automatic mode")
         self.program_ready = True
         return True
 
@@ -105,6 +115,12 @@ class FakeNeura:
 
     def get_current_joint_angles(self) -> list[float]:
         return list(self.joints)
+
+    def get_selected_tool_name(self) -> str:
+        return self.tool
+
+    def get_current_tool_translation_offsets(self) -> list[float]:
+        return list(self.tools.get(self.tool, [0.0, 0.0, 0.0]))
 
     def get_point(self, name: str, representation: str = "Joint") -> list[float]:
         return list(POINTS[name]["joint" if representation == "Joint" else "cartesian"])

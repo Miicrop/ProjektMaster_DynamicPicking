@@ -12,6 +12,7 @@ import pytest
 
 from common.config import load_config, robot_target
 from common.interfaces import ObjectPose, RobotError
+import m2_robot_control.robot as robot_mod
 from m2_robot_control.fake_neura_server import FakeNeuraServer
 from m2_robot_control.robot import VENDOR_DIR, NeuraRobot, as_target, from_neura, load_neurapy_client, to_neura
 
@@ -60,6 +61,64 @@ def test_connect_prepares_robot(sim):
     assert fake.override == CFG["robot"]["override"]
 
 
+def test_tool_reports_name_and_tcp_offset(sim):
+    robot, fake = sim
+    robot.connect()
+    name, offset_mm = robot.tool()
+    assert name == CFG["robot"]["tool_name"] == "RobotiQ"
+    assert offset_mm == pytest.approx(CFG["robot"]["tool_tcp_mm"])
+
+
+def test_connect_refuses_wrong_tool_offset(sim):
+    """Controller tool still at the 210 mm from the backup -> no motion until it is corrected."""
+    robot, fake = sim
+    fake.tools["RobotiQ"] = [0.0, 0.0, 0.21]
+    with pytest.raises(RobotError, match="TCP offset"):
+        robot.connect()
+    assert robot.stopped and not fake.program_ready
+    with pytest.raises(RobotError):
+        robot.home()
+
+
+def test_connect_accepts_tool_offset_within_1mm(sim):
+    robot, fake = sim
+    fake.tools["RobotiQ"] = [0.0, 0.0, CFG["robot"]["tool_tcp_mm"][2] / 1000 + 0.0008]
+    robot.connect()
+    assert fake.program_ready
+
+
+def test_init_program_retried_while_controller_refuses_play_mode(sim, monkeypatch):
+    monkeypatch.setattr(robot_mod, "INIT_RETRY_WAIT_S", 0.0)
+    robot, fake = sim
+    fake.init_failures = 2
+    robot.connect()
+    assert fake.program_ready and names(fake).count("init_program") == 3
+
+
+def test_init_program_gives_up_after_retries(sim, monkeypatch):
+    monkeypatch.setattr(robot_mod, "INIT_RETRY_WAIT_S", 0.0)
+    robot, fake = sim
+    fake.init_failures = 10
+    with pytest.raises(RobotError, match="play mode"):
+        robot.connect()
+    assert names(fake).count("init_program") == robot_mod.INIT_RETRIES
+    assert robot.stopped
+
+
+def test_joint_move_skipped_when_already_at_target(sim):
+    """The controller logs 'Given target joints are similar. Skipping joint motion' otherwise."""
+    robot, fake = sim
+    robot.connect()
+    robot.home()                                     # fake starts at Home -> nothing sent
+    assert names(fake).count("move_joint") == 0
+    fake.joints = [1.5708, 0.0, -2.4958, 0.0, 0.0, 0.0]   # Parking
+    robot.home()
+    robot.home()
+    assert names(fake).count("move_joint") == 1
+    robot.pick(ObjectPose(500, 50, 0, 45))
+    assert names(fake).count("move_joint") == 2      # real targets are still moved to
+
+
 def test_pick_and_place_sequence(sim):
     robot, fake = sim
     robot.connect()
@@ -69,12 +128,33 @@ def test_pick_and_place_sequence(sim):
     robot.place(robot_target(CFG, "inspection"))
     assert not fake.gripper_closed
     seq = [n for n in names(fake) if n in ("move_joint", "move_linear", "grasp", "release")]
-    assert seq == ["move_joint",                                   # home
+    assert seq == [                                                 # home: already there, not sent
                    "release", "move_joint", "move_linear", "grasp", "move_linear",  # pick
                    "move_joint", "move_linear", "release", "move_linear"]           # place
     # ends above the inspection pose
     assert fake.tcp[2] * 1000 == pytest.approx(
         CFG["robot"]["poses"]["inspection"][2] + CFG["robot"]["approach_height_mm"])
+
+
+def test_gripper_disabled_moves_without_gripper_commands(sim):
+    robot, fake = sim
+    robot._rc["gripper_enabled"] = False
+    robot.connect()
+    robot.pick(ObjectPose(500, 50, 0, 45))
+    robot.place(robot_target(CFG, "inspection"))
+    robot.gripper(close=True)
+    seq = [n for n in names(fake) if n in ("move_joint", "move_linear", "grasp", "release")]
+    assert seq == ["move_joint", "move_linear", "move_linear",     # pick, no gripper
+                   "move_joint", "move_linear", "move_linear"]     # place, no gripper
+
+
+def test_gripper_method_uses_controller_when_enabled(sim):
+    robot, fake = sim
+    robot.connect()
+    robot.gripper(close=True)
+    assert fake.gripper_closed
+    robot.gripper(close=False)
+    assert not fake.gripper_closed
 
 
 def test_motion_without_connect_fails(sim):
@@ -126,7 +206,7 @@ def test_jog_refuses_large_steps_and_limits(sim):
     robot.home()
     with pytest.raises(RobotError, match="too large"):
         robot.jog(dx_mm=150)
-    robot._cfg["robot"]["limits_mm"]["z"] = [-10.0, 450.0]   # Home z = 434 mm
+    robot._cfg["robot"]["limits_mm"]["z"] = [-10.0, 250.0]   # Home TCP z = 237 mm
     with pytest.raises(RobotError, match="outside limits"):
         robot.jog(dz_mm=50)
     assert "move_linear" not in names(fake)
