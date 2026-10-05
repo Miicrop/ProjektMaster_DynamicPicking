@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 
 from common.config import DEFAULT_CONFIG
 from gui.config_store import ConfigStore, parse_value
@@ -17,11 +18,19 @@ needs_neurapy = pytest.mark.skipif(
            "- get it from your Neura contact for tests using the 'sim' robot")
 
 
+PHOTO_WORKSPACE = Path(__file__).parents[2] / "m1_vision_topdown" / "tests" / "data" / "workspace.yaml"
+
+
 @pytest.fixture
 def store(tmp_path):
     f = tmp_path / "system.yaml"
     shutil.copy(DEFAULT_CONFIG, f)
     return ConfigStore(f)
+
+
+def use_photo_workspace(store):
+    """Replay images show the old board -> use its workspace section."""
+    store.data["workspace"].update(yaml.safe_load(PHOTO_WORKSPACE.read_text(encoding="utf-8")))
 
 
 # --- config store (no Qt) ----------------------------------------------------------
@@ -66,6 +75,7 @@ def test_parse_value():
 def test_session_modules_and_cycle(store, tmp_path):
     from gui.session import Session
     store.data["logging"]["cycle_dir"] = str(tmp_path / "logs")
+    use_photo_workspace(store)
     s = Session(store)
     try:
         r1 = s.analyze_m1(s.grab("m1", "replay"))
@@ -105,6 +115,7 @@ def test_main_window_smoke(store, tmp_path):
     from gui.session import Session
 
     store.data["logging"]["cycle_dir"] = str(tmp_path / "logs")
+    use_photo_workspace(store)
     app = QApplication.instance() or QApplication([])
     s = Session(store)
     s.m3.reader.read = lambda roi, pattern: ("69420", 0.99)

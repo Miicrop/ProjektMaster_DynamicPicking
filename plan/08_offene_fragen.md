@@ -12,7 +12,7 @@
 - [ ] Beleuchtung an der Prüfstation vorhanden?
 - [ ] Handgelenkkamera (für M4): Modell, Anschluss, Montage; Hand-Auge-Kalibrierung nötig?
 - [ ] USB-Bandbreite bei drei Kameras (zwei davon ggf. 4K) am Laptop prüfen
-- [ ] **ArUco-Marker:** Die 3D-gedruckten Marker haben keinen hellen Rand und sind deshalb nicht detektierbar → weißen Rand ergänzen oder Papiermarker (`make_markers.py`). Markergröße und IDs (Dictionary `DICT_4X4_50`) festhalten.
+- [x] **ArUco-Marker:** Die 3D-gedruckten Marker haben keinen hellen Rand und sind deshalb nicht detektierbar → weißen Rand ergänzen oder Papiermarker (`make_markers.py`). Markergröße und IDs (Dictionary `DICT_4X4_50`) festhalten.
 - [~] Innenmaß des weißen Rahmens und Markerpositionen ausmessen (`workspace.size_mm`, `markers_mm`) – Niklas misst vor Ort
 
 ### Bauteil

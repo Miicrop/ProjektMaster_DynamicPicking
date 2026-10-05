@@ -22,19 +22,22 @@ topdown_camera:
 
 workspace:
   # aruco: 4 markers | white_frame: inner edge of the white frame | auto: aruco, fallback white_frame
-  method: auto
-  # Inner size of the white frame [mm] = extent of the workspace frame (tbd, measure)
-  size_mm: [400.0, 400.0]
+  # (no white frame on the board any more -> aruco only)
+  method: aruco
+  # Extent of the workspace frame [mm]. Marker centres are 400 mm apart; the workspace is the
+  # square between them, inset by 35 mm so the white marker paper (50 mm marker + quiet zone,
+  # ~67 mm) stays outside and is not detected as a part.
+  size_mm: [330.0, 330.0]
   px_per_mm: 2.0                # resolution of the rectified workspace image
-  border_mm: 5.0                # ignored margin along the frame edge
+  border_mm: 5.0                # ignored margin along the workspace edge
   aruco_dictionary: DICT_4X4_50
-  # Marker centre positions in the workspace frame [mm]. Origin = inner bottom-left corner
-  # of the white frame, x to the right, y up (as seen by the camera). (tbd, measure + check IDs)
+  # Marker centre positions in the workspace frame [mm]. Origin = bottom-left corner of the
+  # workspace (35 mm inside marker 0), x to the right, y up (as seen by the camera).
   markers_mm:
-    0: [-25.0, -25.0]
-    1: [425.0, -25.0]
-    2: [425.0, 425.0]
-    3: [-25.0, 425.0]
+    0: [-35.0, -35.0]
+    1: [365.0, -35.0]
+    2: [365.0, 365.0]
+    3: [-35.0, 365.0]
 
 part_topdown:
   # Part = pixels clearly brighter OR more saturated than the (dark grey) board median
@@ -107,5 +110,5 @@ inspection:
   serial_pattern: "^[0-9]{5}$"
   ocr_min_confidence: 0.4
   # Placeholder: test photos give D/H = 0.655 -> 9.8 mm for a 15 mm part (tbd, from drawing)
-  hole_nominal_mm: 9.8
+  hole_nominal_mm: 10.0
   hole_tolerance_mm: 0.4

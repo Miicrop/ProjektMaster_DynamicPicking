@@ -6,6 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
+import yaml
 
 from common.config import load_config
 from common.interfaces import VisionError
@@ -15,6 +16,9 @@ from m1_vision_topdown.workspace import find_workspace_aruco
 
 CFG = load_config()
 DATA = Path(__file__).parent / "data"
+# real photos show the old board -> its own workspace section (see data/workspace.yaml)
+PHOTO_CFG = copy.deepcopy(CFG)
+PHOTO_CFG["workspace"] = yaml.safe_load((DATA / "workspace.yaml").read_text(encoding="utf-8"))
 MARGIN = 70.0   # mm around the workspace in the synthetic scene
 S = 2.0         # px per mm in the synthetic scene
 
@@ -64,7 +68,7 @@ def _angle_err(a, b, period=360.0):
 
 
 @pytest.mark.parametrize("method", ["aruco", "white_frame"])
-@pytest.mark.parametrize("x, y, theta", [(200, 200, 0), (120, 300, 35), (310, 90, 200), (250, 150, 300)])
+@pytest.mark.parametrize("x, y, theta", [(200, 200, 0), (120, 300, 35), (280, 90, 200), (250, 150, 300)])
 def test_synthetic_pose(method, x, y, theta):
     cfg = copy.deepcopy(CFG)
     cfg["workspace"]["method"] = method
@@ -98,7 +102,7 @@ REAL = {
 @pytest.mark.parametrize("name", sorted(REAL))
 def test_real_photo_regression(name):
     img = cv2.imread(str(DATA / name))
-    r = TopDownPipeline(CFG).process(img)
+    r = TopDownPipeline(PHOTO_CFG).process(img)
     x, y, theta = REAL[name]
     assert r.part.chamfer_found
     assert 1.3 < r.part.length_px / r.part.width_px < 1.7
@@ -111,7 +115,7 @@ def test_real_photo_markers_not_detectable():
     """Known issue: the 3D-printed markers have no white quiet zone (see plan/08)."""
     img = cv2.imread(sorted(glob.glob(str(DATA / "*.jpg")))[0])
     with pytest.raises(VisionError):
-        find_workspace_aruco(img, CFG)
+        find_workspace_aruco(img, PHOTO_CFG)
 
 
 # --- intermediate steps for documentation ---------------------------------------------
@@ -136,7 +140,7 @@ def test_trace_collects_steps(method, ws_steps):
 def test_detector_keeps_trace_only_when_enabled():
     from common.camera import FileCamera
     from m1_vision_topdown import TopDownDetector
-    det = TopDownDetector(CFG, FileCamera(str(DATA / "*.jpg")))
+    det = TopDownDetector(PHOTO_CFG, FileCamera(str(DATA / "*.jpg")))
     det.detect()
     assert det.last_trace is None
     det.trace_steps = True
