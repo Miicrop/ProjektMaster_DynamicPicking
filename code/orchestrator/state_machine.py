@@ -86,8 +86,9 @@ class Orchestrator:
 
             self._enter(State.PLACE_INSPECT, result)
             inspection_pose = robot_target(self.cfg, "inspection")
+            # place() ends at approach height above the fixture - outside the inspection camera's
+            # view (lab 2026-10-06), so no detour via home; pick() below starts right there
             self.robot.place(inspection_pose)
-            self.robot.home()  # clear the inspection camera's view
 
             self._enter(State.INSPECT, result)
             result.inspection = self.inspector.inspect()

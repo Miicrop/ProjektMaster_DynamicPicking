@@ -2,6 +2,18 @@
 
 Neueste Einträge oben. Format: `YYYY-MM-DD – Wer – Was`
 
+## 2026-10-06 (2) – Niklas
+- **Labor:** Punkte vermessen, Roboter im M2-Tab und im Automatikbetrieb genutzt, erster vollständiger
+  Ablauf (noch ohne Greiferansteuerung und ohne Arbeitsraum-Kamera, M1/M3 mit Testbildern).
+- **GUI M2:** Haken *Ohne Rückfrage joggen* (nur Jog, Standard aus, Reset beim Trennen).
+- **M2:** Greifwinkel korrigiert: `gripper_angle_offset_deg` 90 → 113 (Greifer 23° verdreht montiert);
+  Test, dass Greif- und Ablage-rz zusammenpassen. Pick/Place zweistufig: schnell (`linear_speed_mps`)
+  bis `approach_slow_mm` = 20 mm über dem Ziel, Rest langsam.
+- **Ablauf:** kein Home-Umweg mehr beim Prüfen (wartet über der Prüfvorrichtung). GUI-Ablauf zeigt
+  M1-/M3-Bild und Kurzinfo direkt nach jedem Schritt, bei Fehler das Rohbild.
+- **Simulator:** Werkzeug `ZimmerLWR50` (197,5 mm); Robotertests unabhängig von `gripper_enabled`.
+  105 Tests grün.
+
 ## 2026-09-28 – Niklas
 - **GUI:** Roboter-Draufsicht gedreht – Basis oben, x nach unten, y nach rechts (Blick des Bedieners).
 - **M1/M3:** Zwischenschritte der Bildverarbeitung speicherbar (`common/trace.py`): GUI-Ablauf

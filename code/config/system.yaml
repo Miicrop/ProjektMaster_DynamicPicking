@@ -70,8 +70,14 @@ robot:
   linear_speed_mps: 0.10
   approach_speed_mps: 0.03      # final linear approach / retreat
   approach_height_mm: 80
+  # pick/place: down with linear_speed_mps to this height above the target, the rest with
+  # approach_speed_mps (same way back up). >= approach_height_mm: whole way slow
+  approach_slow_mm: 20
   grasp_height_mm: 5           # TCP height above table when grasping (depends on part / gripper)
-  gripper_angle_offset_deg: 90.0  # close gripper across the short side of the part
+  # rz relative to home so that the jaws close across the short side of a part with theta = 0 (long
+  # axis along base x): 90 deg + 23 deg gripper mounting angle (lab 2026-10-06: home +23 deg -> jaws close
+  # along base x, i.e. grip a part lying along base y / marker edge 0-3 as at the stations)
+  gripper_angle_offset_deg: 113.0
   grip_wait_s: 1.0
   gripper_enabled: false         # false = move only, skip grasp/release (first tests); always off for the Neura VM
   # Software workspace limits in robot base frame [mm]

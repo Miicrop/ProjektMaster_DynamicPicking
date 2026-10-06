@@ -138,6 +138,10 @@ def test_main_window_smoke(store, tmp_path):
     w.tab_auto.btn_one.click()
     assert wait(lambda: w.tab_auto.table.rowCount() == 1 and not w.tab_auto.running)
     assert w.tab_auto.counts["good"] == 1
+    # per-step feedback: image + text of M1 and M3 (shown as soon as the step is done)
+    assert "θ" in w.tab_auto.info_m1.text() and "GUT" in w.tab_auto.info_m3.text()
+    assert w.tab_auto.view_m1.pixmap() is not None and not w.tab_auto.view_m1.pixmap().isNull()
+    assert w.tab_auto.view_m3.pixmap() is not None and not w.tab_auto.view_m3.pixmap().isNull()
 
     # regression: NOT-STOPP -> Fehler quittieren -> new cycle must work
     w.tab_auto.btn_stop.click()
@@ -184,6 +188,37 @@ def test_robot_tab_host_field_follows_mode(store):
     tab.mode.setCurrentIndex(tab.mode.findData("sim"))
     assert not tab.host.isEnabled()
 
+    store.dirty = False
+    w.close()
+
+
+def test_jog_confirmation_can_be_disabled_for_jog_only(store, monkeypatch):
+    """Real robot: the checkbox skips the safety question for jog steps, not for other moves."""
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+    from gui.app import MainWindow
+    from gui.session import Session
+
+    app = QApplication.instance() or QApplication([])  # noqa: F841
+    w = MainWindow(Session(store))
+    tab = w.tab_m2
+    asked, submitted = [], []
+    monkeypatch.setattr("gui.tab_robot.confirm_motion", lambda _p, what: asked.append(what) or False)
+    monkeypatch.setattr(tab.runner, "submit", lambda *a, **k: submitted.append(a))
+    tab.s.robot = object()                            # never touched: submit is stubbed
+    tab.mode.setCurrentIndex(tab.mode.findData("real"))
+
+    tab.jog("z", +1)
+    assert len(asked) == 1 and not submitted          # default: asks, refused -> nothing sent
+    tab.jog_no_confirm.setChecked(True)
+    tab.jog("z", +1)
+    assert len(asked) == 1 and len(submitted) == 1    # no question, jog sent
+    tab.run("Home anfahren", lambda r: None)
+    assert len(asked) == 2 and len(submitted) == 1    # other moves still ask
+    tab._set_connected(False)
+    assert not tab.jog_no_confirm.isChecked()         # reset on disconnect
+
+    tab.s.robot = None
     store.dirty = False
     w.close()
 

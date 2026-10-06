@@ -34,7 +34,7 @@ EasyOCR (M3) installiert PyTorch (~1 GB) und lädt beim ersten Aufruf ein Modell
 
 | Tab | Wofür |
 |---|---|
-| **Ablauf (automatisch)** | Erkennung, Roboter und Prüfung jeweils wählbar (Mock, Testbilder, Kamera, Simulator, echter Roboter). 1 Zyklus oder Dauerbetrieb. Zeigt den aktuellen Zustand, M1-/M3-Bilder, eine Roboter-Draufsicht (Basis oben, x nach unten, y nach rechts) und eine Ergebnistabelle mit Gut/Schlecht-Zählern. Jeder Zyklus landet in `logs/cycles_<datum>.csv`, optional mit Bildern und Zwischenschritten. |
+| **Ablauf (automatisch)** | Erkennung, Roboter und Prüfung jeweils wählbar (Mock, Testbilder, Kamera, Simulator, echter Roboter). 1 Zyklus oder Dauerbetrieb. Zeigt den aktuellen Zustand, M1-/M3-Bilder mit Kurzinfo direkt nach dem jeweiligen Schritt (bei Fehler das Rohbild), eine Roboter-Draufsicht (Basis oben, x nach unten, y nach rechts) und eine Ergebnistabelle mit Gut/Schlecht-Zählern. Jeder Zyklus landet in `logs/cycles_<datum>.csv`, optional mit Bildern und Zwischenschritten. |
 | **M1 Erkennung** | Bild holen (Testbilder/Kamera/Datei), Arbeitsbereich und Bauteil im Kamerabild und im entzerrten Bild, Pose in beiden Koordinatensystemen, Live-Modus |
 | **M2 Roboter** | Simulator oder echter Roboter: verbinden, Status/TCP-Pose, Home, Greifer, Pick-Test, Posen teachen und anfahren, STOPP |
 | **M3 Prüfung** | Bild holen/Datei, Ergebnis GUT/SCHLECHT, Seriennummer, Lochdurchmesser, Kerbe, Prüfbereiche (ROIs) eingezeichnet |

@@ -278,6 +278,28 @@ class NeuraRobot(RobotController):
         check_limits(self._cfg, b)
         self.r.move_linear(target_pose=[to_neura(a), to_neura(b)], speed=speed_mps)
 
+    def _slow_point(self, t: RobotTarget) -> RobotTarget | None:
+        """Point approach_slow_mm above t where fast and slow motion meet (None: whole way slow)."""
+        slow_mm = self._rc.get("approach_slow_mm")
+        if slow_mm is None or slow_mm >= self._rc["approach_height_mm"]:
+            return None
+        return offset_z(t, slow_mm, f"{t.name}_slow")
+
+    def _approach(self, above: RobotTarget, t: RobotTarget) -> None:
+        """above -> t: fast down to approach_slow_mm above t, the last mm with approach speed."""
+        mid = self._slow_point(t)
+        if mid is not None:
+            self._linear(above, mid, self._rc["linear_speed_mps"])
+            above = mid
+        self._linear(above, t, self._rc["approach_speed_mps"])
+
+    def _retreat(self, t: RobotTarget, above: RobotTarget) -> None:
+        """t -> above: reverse of _approach (slow off the part, then fast)."""
+        mid = self._slow_point(t)
+        self._linear(t, mid or above, self._rc["approach_speed_mps"])
+        if mid is not None:
+            self._linear(mid, above, self._rc["linear_speed_mps"])
+
     def jog(self, dx_mm: float = 0.0, dy_mm: float = 0.0, dz_mm: float = 0.0,
             drz_deg: float = 0.0) -> RobotTarget:
         """Small relative linear move in the robot BASE frame (slow, approach speed).
@@ -338,17 +360,17 @@ class NeuraRobot(RobotController):
         self._check_ready()
         self.gripper(close=False)
         self._joint_move_to(above)
-        self._linear(above, t, self._rc["approach_speed_mps"])
+        self._approach(above, t)
         self.gripper(close=True)
         time.sleep(self._rc["grip_wait_s"])
-        self._linear(t, above, self._rc["approach_speed_mps"])
+        self._retreat(t, above)
 
     def place(self, target: RobotTarget) -> None:
         above = offset_z(target, self._rc["approach_height_mm"])
         check_limits(self._cfg, target)
         log.info("place at %s", target.name)
         self._joint_move_to(above)
-        self._linear(above, target, self._rc["approach_speed_mps"])
+        self._approach(above, target)
         self.gripper(close=False)
         time.sleep(self._rc["grip_wait_s"])
-        self._linear(target, above, self._rc["approach_speed_mps"])
+        self._retreat(target, above)

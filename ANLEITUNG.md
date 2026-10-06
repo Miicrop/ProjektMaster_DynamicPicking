@@ -107,6 +107,7 @@ Unten in jedem Tab läuft das **Log** mit (Fehler rot, Warnungen orange).
 | Bilder speichern | legt pro Zyklus die Ergebnisbilder in `code/logs/<datum>/` ab |
 | + Zwischenschritte | nur mit *Bilder speichern*: zusätzlich alle Zwischenbilder von M1 und M3 (Masken, ROIs, Kandidaten) in `…/steps/` – für Doku und Präsentation |
 | Zustandskette | blau = läuft gerade, grün = erledigt, rot = hier ist der Fehler passiert |
+| Bilder M1 / M3 | erscheinen **direkt nach dem jeweiligen Schritt**, nicht erst am Zyklusende. Darunter eine Textzeile: M1 Pose (Basis- und Arbeitsraum-KS) und ob die Fase erkannt wurde; M3 GUT/SCHLECHT mit Seriennummer, Loch, Kerbe und Gründen. Kein Bauteil oder Fehler → das **Rohbild** der Kamera mit Hinweis (zum Debuggen) |
 | Draufsicht | Roboter-Basis-KS von oben, so wie man vor dem Roboter steht (Basis oben, x nach unten, y nach rechts): Posen (Quadrate), Arbeitsbereich, Bauteil (lila), Greifer-Position (orange, nur im Simulator bzw. am Roboter) |
 | Tabelle / Zähler | ein Eintrag pro Zyklus, dieselben Daten stehen auch in der CSV-Datei (Abschnitt 8) |
 | Fehler quittieren | nach einem Fehler **oder NOT-STOPP**: Roboter wird wieder freigegeben (`init_program`) und fährt Home, danach kann es weitergehen |

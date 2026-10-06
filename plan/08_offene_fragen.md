@@ -5,7 +5,7 @@
 ### Hardware
 - [x] Welches Neura-Modell? → **LARA**, 6 Achsen, Software/API **v5.0.8** (aus Neura-Lieferung und Backup)
 - [~] IP-Adresse der Steuerung: **192.168.2.20** (steht auf dem Roboterfuß) – Niklas prüft vor Ort
-- [ ] Greifer: Im Backup ist das Werkzeug **„RobotiQ“** (Modbus, TCP-Versatz 210 mm) angelegt. Ist er montiert und über `grasp()`/`release()` ansteuerbar?
+- [~] Greifer: Werkzeug **„ZimmerLWR50“** (TCP 197,5 mm) im Labor angelegt (2026-10-06). **Offen:** Ansteuerung über `grasp()`/`release()` – bisher `gripper_enabled: false`
 - [ ] Muss der Wechsel in den Automatikmodus am Pendant bestätigt werden (Schlüsselschalter)?
 - [-] Offline-Simulation (Neura-VM): vorerst nicht benötigt, eigener Simulator reicht (2026-09-26)
 - [ ] Welche Kameras (Modell, Auflösung, USB/GigE)? Die Testfotos stammen von einer Handykamera (Top-down) bzw. einer 4K-Kamera (seitlich)
@@ -19,7 +19,7 @@
 - [~] Geometrie und Abmessungen des Bauteils? Benötigt: Höhe in der Seitenansicht (`part_height_mm`), Loch-Solldurchmesser und Toleranz – Niklas misst vor Ort
 - [x] Ist das Teil in der Draufsicht symmetrisch? → Nein, die **abgeschrägte Ecke** macht die Lage eindeutig (360°)
 - [x] Was ist die „Kerbe“? → die **kleine eckige Öffnung** rechts in der Seitenansicht (bestätigt 2026-09-26)
-- [ ] Wie muss das Teil an der Prüfposition liegen (Etikettseite zur Kamera)? → Der Roboter muss es mit der passenden Orientierung ablegen (θ aus M1)
+- [~] Wie muss das Teil an der Prüfposition liegen (Etikettseite zur Kamera)? → Ablagen geteacht (rz −157°, Teil mit der langen Seite entlang Marker-Kante 0–3). Greifwinkel = Home + θ + 113° → **im Labor mit dem Zeigetest prüfen**; ohne erkannte Fase kann das Teil um 180° verdreht liegen
 - [x] Format der Seriennummer → 5 Ziffern (Testteil „69420“), Regex `^[0-9]{5}$` (bestätigen)
 - [ ] Wie viele Gut-/Schlechtteile stehen für Tests zur Verfügung? Welche Fehlerarten (fehlende Kerbe, falscher Durchmesser, fehlendes/unlesbares Etikett)?
 
@@ -38,7 +38,7 @@
 - [ ] Quellen für die Motivation (Kap. 1) und Normen zu Cobots (ISO 10218, ISO/TS 15066) aufnehmen?
 - [~] Kalibrierung Arbeitsbereich → Roboter: Verfahren steht (TCP auf die 4 Marker-Mitten, `robot_check calib` → `fit_rigid_2d` + Restfehler; Prüfung mit Zeigetest `robot_check point`). Nach dem Labortest in Kap. 3.4 / 4 / 5 beschreiben
 - [ ] GitHub-Repo mit den bisherigen Robotertests bereitstellen
-- [ ] Greifer: Steuerung kennt nur das Werkzeug „RobotiQ“ (laut Backup Modbus-Greifer). Wird der Zimmer-Greifer (IO-Link) damit korrekt geöffnet/geschlossen? Masse und TCP-Versatz (Backup: 210 mm) an den Zimmer-Greifer anpassen?
+- [~] Greifer: Werkzeug „ZimmerLWR50“ mit 197,5 mm angelegt (2026-10-06). Offen: Öffnen/Schließen des Zimmer-Greifers (IO-Link) aus dem Code
 - [ ] Vorprojekt GROB (Kap. 02b): Dürfen Vorprojekt und Bildschirmfotos gezeigt werden (Freigabe GROB)? Wer schreibt den Abschnitt „Alternative Verfahren“?
 
 ## Entscheidungen
@@ -60,3 +60,7 @@
 | 2026-09-26 | Thesis als begleitender Projektbericht ohne Forschungsfrage; Erfolg = vollautomatischer Durchlauf, Messwerte nur demonstrativ | Selbst gewähltes Interessensprojekt; Details in `thesis/blueprint.md` |
 | 2026-09-26 | Thesis: kein Quellcode im Text, nur Diagramme und Pseudocode; offene Punkte als `\todo` | Lesbarkeit; offene Stellen bleiben im PDF sichtbar |
 | 2026-09-26 | `opencv-python-headless` statt `opencv-contrib-python` | EasyOCR bringt headless mit, zwei cv2-Pakete kollidieren; ArUco ist seit 4.7 im Hauptpaket |
+| 2026-10-06 | Jog-Rückfrage am echten Roboter per Haken abschaltbar, nur fürs Joggen, nicht gespeichert | Viele kleine Schritte beim Teachen; Sicherheitsabfrage bleibt Standard |
+| 2026-10-06 | `gripper_angle_offset_deg` = 113° (90° + 23° Einbauwinkel) | Greifer im Labor um 23° verdreht montiert; an den Ablagen rz = Home + 23° |
+| 2026-10-06 | Pick/Place: schnell bis 20 mm über dem Ziel (`approach_slow_mm`), Rest langsam | Zykluszeit; langsame Endanfahrt bleibt |
+| 2026-10-06 | Kein Home-Umweg beim Prüfen: Roboter wartet auf Anfahrhöhe über der Prüfvorrichtung | Greifer dort nicht im Bild der Prüfkamera (Labor); spart zwei Gelenkbewegungen |

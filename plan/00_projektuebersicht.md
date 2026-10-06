@@ -44,7 +44,7 @@ sequenceDiagram
 | Komponente | Beschreibung |
 |---|---|
 | Roboter | Neura Robotics **LARA** (6 Achsen), Software v5.0.8, Python-API NeuraPy, IP 192.168.2.20 (prüfen) |
-| Greifer | **Zimmer MATCH LWR50L-23-00004-A** (elektrischer 2-Backen-Parallelgreifer, IO-Link) auf Robotermodul LWR50F-13-05-A, Unterlagen in `docs/greifer/`. Werkzeug in der Steuerung heißt „RobotiQ“ (Ansteuerung, Masse, TCP prüfen) |
+| Greifer | **Zimmer MATCH LWR50L-23-00004-A** (elektrischer 2-Backen-Parallelgreifer, IO-Link) auf Robotermodul LWR50F-13-05-A, Unterlagen in `docs/greifer/`. Werkzeug in der Steuerung: „ZimmerLWR50“ (TCP 197,5 mm), Greifer ca. 23° um z verdreht montiert; Ansteuerung noch offen |
 | Kamera 1 | Top-down über dem Arbeitsbereich (Modell tbd; Testfotos mit Handykamera) |
 | Kamera 2 | Seitlich an der Prüfposition (Testbilder 3840×2160), ggf. mit eigener Beleuchtung |
 | Kamera 3 (geplant) | Am Roboterhandgelenk, für das KI-Greifen (M4); Konfiguration `wrist_camera` vorbereitet |

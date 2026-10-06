@@ -28,6 +28,7 @@ def sim():
     server = FakeNeuraServer("127.0.0.1", 0).start_background()
     cfg = copy.deepcopy(CFG)
     cfg["robot"]["grip_wait_s"] = 0.0
+    cfg["robot"]["gripper_enabled"] = True       # independent of the lab switch in system.yaml
     robot = NeuraRobot(cfg, client_factory=lambda host: load_neurapy_client("127.0.0.1", server.port))
     yield robot, server.fake
     server.shutdown()
@@ -53,6 +54,15 @@ def test_grasp_orientation_follows_part_angle():
     assert -180 < b.rz_deg <= 180
 
 
+def test_grasp_orientation_matches_place_poses():
+    """A part lying along base y (theta 90, as placed at the stations) is gripped with the station rz
+    (mod 180: parallel gripper) - otherwise it would be put down rotated."""
+    grasp = as_target(CFG, ObjectPose(500, 0, 0, 90)).rz_deg
+    for name in ("inspection", "bin_good", "bin_bad"):
+        diff = (grasp - robot_target(CFG, name).rz_deg) % 180
+        assert min(diff, 180 - diff) < 1.0, name
+
+
 def test_connect_prepares_robot(sim):
     robot, fake = sim
     robot.connect()
@@ -65,14 +75,14 @@ def test_tool_reports_name_and_tcp_offset(sim):
     robot, fake = sim
     robot.connect()
     name, offset_mm = robot.tool()
-    assert name == CFG["robot"]["tool_name"] == "RobotiQ"
+    assert name == CFG["robot"]["tool_name"] == "ZimmerLWR50"
     assert offset_mm == pytest.approx(CFG["robot"]["tool_tcp_mm"])
 
 
 def test_connect_refuses_wrong_tool_offset(sim):
     """Controller tool still at the 210 mm from the backup -> no motion until it is corrected."""
     robot, fake = sim
-    fake.tools["RobotiQ"] = [0.0, 0.0, 0.21]
+    fake.tools[CFG["robot"]["tool_name"]] = [0.0, 0.0, 0.21]
     with pytest.raises(RobotError, match="TCP offset"):
         robot.connect()
     assert robot.stopped and not fake.program_ready
@@ -82,7 +92,7 @@ def test_connect_refuses_wrong_tool_offset(sim):
 
 def test_connect_accepts_tool_offset_within_1mm(sim):
     robot, fake = sim
-    fake.tools["RobotiQ"] = [0.0, 0.0, CFG["robot"]["tool_tcp_mm"][2] / 1000 + 0.0008]
+    fake.tools[CFG["robot"]["tool_name"]] = [0.0, 0.0, CFG["robot"]["tool_tcp_mm"][2] / 1000 + 0.0008]
     robot.connect()
     assert fake.program_ready
 
@@ -128,9 +138,10 @@ def test_pick_and_place_sequence(sim):
     robot.place(robot_target(CFG, "inspection"))
     assert not fake.gripper_closed
     seq = [n for n in names(fake) if n in ("move_joint", "move_linear", "grasp", "release")]
+    down, up = ["move_linear"] * 2, ["move_linear"] * 2             # fast + slow part each way
     assert seq == [                                                 # home: already there, not sent
-                   "release", "move_joint", "move_linear", "grasp", "move_linear",  # pick
-                   "move_joint", "move_linear", "release", "move_linear"]           # place
+                   "release", "move_joint", *down, "grasp", *up,    # pick
+                   "move_joint", *down, "release", *up]             # place
     # ends above the inspection pose
     assert fake.tcp[2] * 1000 == pytest.approx(
         CFG["robot"]["poses"]["inspection"][2] + CFG["robot"]["approach_height_mm"])
@@ -144,8 +155,38 @@ def test_gripper_disabled_moves_without_gripper_commands(sim):
     robot.place(robot_target(CFG, "inspection"))
     robot.gripper(close=True)
     seq = [n for n in names(fake) if n in ("move_joint", "move_linear", "grasp", "release")]
-    assert seq == ["move_joint", "move_linear", "move_linear",     # pick, no gripper
-                   "move_joint", "move_linear", "move_linear"]     # place, no gripper
+    assert seq == ["move_joint"] + ["move_linear"] * 4 + ["move_joint"] + ["move_linear"] * 4  # no gripper
+
+
+def _linear_moves(fake):
+    """(start z, end z, speed) of every move_linear, z in mm."""
+    out = []
+    for name, args, kwargs in fake.calls:
+        if name == "move_linear":
+            a, b = kwargs["target_pose"]
+            out.append((round(a[2] * 1000, 1), round(b[2] * 1000, 1), kwargs["speed"]))
+    return out
+
+
+def test_pick_approach_fast_then_slow_last_mm(sim):
+    robot, fake = sim
+    rc = robot._rc
+    robot.connect()
+    robot.pick(ObjectPose(500, 50, 0, 45))
+    z = rc["grasp_height_mm"]
+    top, mid = z + rc["approach_height_mm"], z + rc["approach_slow_mm"]
+    fast, slow = rc["linear_speed_mps"], rc["approach_speed_mps"]
+    assert _linear_moves(fake) == [(top, mid, fast), (mid, z, slow),      # down
+                                   (z, mid, slow), (mid, top, fast)]      # up
+
+
+def test_approach_slow_whole_way_if_slow_zone_not_below_approach_height(sim):
+    robot, fake = sim
+    rc = robot._rc
+    rc["approach_slow_mm"] = rc["approach_height_mm"]
+    robot.connect()
+    robot.place(robot_target(CFG, "inspection"))
+    assert [m[2] for m in _linear_moves(fake)] == [rc["approach_speed_mps"]] * 2
 
 
 def test_gripper_method_uses_controller_when_enabled(sim):

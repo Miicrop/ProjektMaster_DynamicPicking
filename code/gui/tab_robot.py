@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFormLayout, QGridLayout, QGroupBox, QHBoxLayout,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QGridLayout, QGroupBox, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QTabWidget, QVBoxLayout, QWidget)
 
 from common.config import robot_target
@@ -115,6 +115,11 @@ class RobotTab(QWidget):
             b.clicked.connect(lambda _=False, x=v: self.jog_step.setValue(x))
             presets.addWidget(b)
         jl.addLayout(presets, 1, 0, 1, 4)
+        # deliberately not stored in the config: every session starts with the safety question
+        self.jog_no_confirm = QCheckBox("Ohne Rückfrage joggen (Hand am Not-Halt!)")
+        self.jog_no_confirm.setToolTip("Nur für Jog-Schritte am echten Roboter. Home, Posen und Tests fragen "
+                                       "weiterhin nach. Wird beim Trennen zurückgesetzt.")
+        jl.addWidget(self.jog_no_confirm, 4, 0, 1, 4)
         for col, axis in enumerate(("x", "y", "z", "rz")):
             for row_i, sign in ((2, +1), (3, -1)):
                 b = QPushButton(f"{'+' if sign > 0 else '−'}{axis.upper()}")
@@ -195,6 +200,7 @@ class RobotTab(QWidget):
         else:
             self.status.show_state("getrennt", NEUTRAL)
             self.poll.stop()
+            self.jog_no_confirm.setChecked(False)
 
     def refresh(self) -> None:
         """Pose table, marker table and map from the config (also after edits in the settings tab)."""
@@ -218,12 +224,13 @@ class RobotTab(QWidget):
         self.message(str(e), error=True)
         show_error(e)
 
-    def run(self, what: str, fn, on_done=None, moves: bool = True, on_error=None) -> None:
-        """Run fn(robot) in the robot pool (one task at a time); moves=True asks first on the real robot."""
+    def run(self, what: str, fn, on_done=None, moves: bool = True, on_error=None, confirm: bool = True) -> None:
+        """Run fn(robot) in the robot pool (one task at a time); moves=True asks first on the real robot
+        (unless confirm=False)."""
         robot = self.s.robot
         if robot is None:
             return
-        if moves and self.is_real and not confirm_motion(self, what):
+        if moves and confirm and self.is_real and not confirm_motion(self, what):
             return
         self.message(f"läuft: {what} …")
 
@@ -251,7 +258,7 @@ class RobotTab(QWidget):
         key = {"x": "dx_mm", "y": "dy_mm", "z": "dz_mm", "rz": "drz_deg"}[axis]
         unit = "°" if axis == "rz" else " mm"
         self.run(f"Relativ {axis.upper()} {step:+.1f}{unit} (Basis-Koordinatensystem)",
-                 lambda r: r.jog(**{key: step}))
+                 lambda r: r.jog(**{key: step}), confirm=not self.jog_no_confirm.isChecked())
 
     def set_override(self, v: float) -> None:
         self.s.store.set(["robot", "override"], round(v, 2))

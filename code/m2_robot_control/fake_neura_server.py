@@ -18,7 +18,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-# Named points taken from the robot backup (m, rad). "cartesian" is the TCP pose with the RobotiQ
+# Named points taken from the robot backup (m, rad). "cartesian" is the TCP pose with the ZimmerLWR50
 # tool as configured (flange z 0.4345 m - 0.1975 m).
 POINTS = {
     "Home": {"joint": [0.0, 0.0, 1.5708, 0.0, 1.5708, 0.0],
@@ -27,9 +27,9 @@ POINTS = {
                 "cartesian": [0.0, -0.3524, 0.1324, 3.14159265, -0.6458, -1.5708]},
 }
 
-# Tools on the controller: TCP translation offset from the flange (m). RobotiQ as it must be set
+# Tools on the controller: TCP translation offset from the flange (m). ZimmerLWR50 as in the lab
 # (config robot.tool_tcp_mm); the robot backup still has 0.21 m.
-TOOLS = {"NoTool": [0.0, 0.0, 0.0], "RobotiQ": [0.0, 0.0, 0.1975]}
+TOOLS = {"NoTool": [0.0, 0.0, 0.0], "ZimmerLWR50": [0.0, 0.0, 0.1975]}
 
 
 class FakeNeura:

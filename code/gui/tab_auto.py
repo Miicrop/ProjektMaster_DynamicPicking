@@ -31,7 +31,8 @@ COLUMNS = ["#", "Zeit", "Dauer s", "x mm", "y mm", "θ °", "Seriennr.", "Loch m
 
 class AutoTab(QWidget):
     state_changed = Signal(object, object)       # emitted from the worker thread
-    cycle_finished = Signal(object, object, object)
+    stage_feedback = Signal(str, object, str)    # "m1"/"m3", image or None, text - right after each step
+    cycle_finished = Signal(object)
 
     def __init__(self, session: Session, runner: TaskRunner, parent: QWidget | None = None):
         super().__init__(parent)
@@ -102,12 +103,19 @@ class AutoTab(QWidget):
 
         # views
         self.view_m1, self.view_m3 = ImageView("Erkennung (M1)"), ImageView("Prüfung (M3)")
+        self.info_m1, self.info_m3 = QLabel("–"), QLabel("–")
         self.map = RobotMapView(session.cfg)
+        self.views = {"m1": (self.view_m1, self.info_m1), "m3": (self.view_m3, self.info_m3)}
         grid = QGridLayout()
-        for col, (title, w) in enumerate((("Erkennung (M1)", self.view_m1), ("Prüfung (M3)", self.view_m3),
-                                          ("Roboter", self.map))):
+        for col, (title, w, info) in enumerate((("Erkennung (M1)", self.view_m1, self.info_m1),
+                                                ("Prüfung (M3)", self.view_m3, self.info_m3),
+                                                ("Roboter", self.map, None))):
             box = QGroupBox(title)
-            QVBoxLayout(box).addWidget(w)
+            bl = QVBoxLayout(box)
+            bl.addWidget(w)
+            if info is not None:
+                info.setWordWrap(True)
+                bl.addWidget(info)
             grid.addWidget(box, 0, col)
 
         # results
@@ -127,6 +135,7 @@ class AutoTab(QWidget):
         layout.addWidget(self.table, 2)
 
         self.state_changed.connect(self._on_state)
+        self.stage_feedback.connect(self._on_stage)
         self.cycle_finished.connect(self._on_cycle)
         self._set_running(False)
 
@@ -163,7 +172,8 @@ class AutoTab(QWidget):
         """Worker thread (no widget access!): build the system and run cycles until stopped."""
         orch = self.s.build_orchestrator(kinds["detector"], kinds["robot"], kinds["inspector"])
         self.orch = orch
-        orch.listeners = [lambda st, res: self.state_changed.emit(st, res)]
+        orch.listeners = [lambda st, res: self.state_changed.emit(st, res),
+                          lambda st, res: self._stage_feedback(orch, st, res)]
         for module in (orch.detector, orch.inspector):
             if hasattr(module, "trace_steps"):
                 module.trace_steps = opts["save_steps"]
@@ -174,14 +184,39 @@ class AutoTab(QWidget):
             if opts["save_images"]:
                 images = logbook.save_images(self.s.cfg, result, orch.detector, orch.inspector)
             logbook.append_csv(self.s.cfg, result, images)
-            m1 = getattr(orch.detector, "last_result", None)
-            m3 = getattr(orch.inspector, "last_details", None)
-            img1 = m1.overlay_image(orch.detector.last_image) if m1 and result.pose else None
-            img3 = m3.part_crop(orch.inspector.last_image, self.s.cfg["inspection"]) if m3 and result.inspection else None
-            self.cycle_finished.emit(result, img1, img3)
+            self.cycle_finished.emit(result)
             if single or self._stop_after_cycle.is_set() or result.error:
                 break
             time.sleep(opts["pause"])
+
+    def _stage_feedback(self, orch, state: State, res: CycleResult) -> None:
+        """Worker thread: image + short text of M1 / M3 as soon as that step is done (not only at cycle end)."""
+        det, insp = orch.detector, orch.inspector
+        before = res.states[-2] if len(res.states) > 1 else None
+        if state is State.DETECT:
+            self.stage_feedback.emit("m1", None, f"Zyklus {res.cycle_id}: erkenne …")
+        elif state is State.PICK:
+            m1, img = getattr(det, "last_result", None), getattr(det, "last_image", None)
+            p = res.pose
+            text = f"x {p.x_mm:.1f}  y {p.y_mm:.1f} mm  θ {p.theta_deg:.1f}° (Basis-KS)"
+            if m1 is not None:
+                text += f"\nArbeitsraum: x {m1.x_ws_mm:.1f}  y {m1.y_ws_mm:.1f} mm  θ {m1.theta_ws_deg:.1f}°, " \
+                        f"Fase {'erkannt' if m1.part.chamfer_found else 'nicht erkannt (θ nur mod 180°)'}"
+            self.stage_feedback.emit("m1", m1.overlay_image(img) if m1 is not None and img is not None else img, text)
+        elif state is State.IDLE and res.pose is None and before is State.DETECT:
+            self.stage_feedback.emit("m1", getattr(det, "last_image", None), "kein Bauteil gefunden (Rohbild)")
+        elif state is State.INSPECT:
+            self.stage_feedback.emit("m3", None, f"Zyklus {res.cycle_id}: prüfe …")
+        elif state is State.PICK_INSPECT:
+            m3, img, r = getattr(insp, "last_details", None), getattr(insp, "last_image", None), res.inspection
+            crop = m3.part_crop(img, self.s.cfg["inspection"]) if m3 is not None and img is not None else img
+            hole = f"{r.hole_diameter_mm:.2f} mm" if r.hole_diameter_mm else "–"
+            text = (f"{'GUT' if r.is_good else 'SCHLECHT'}: Seriennr. {r.serial_number or '–'}, Loch {hole}, "
+                    f"Kerbe {({True: 'ja', False: 'nein'}).get(r.notch_present, '–')}" + (f"\n{'; '.join(r.reasons)}" if r.reasons else ""))
+            self.stage_feedback.emit("m3", crop, text)
+        elif state is State.ERROR and before in (State.DETECT, State.INSPECT):
+            key, module = ("m1", det) if before is State.DETECT else ("m3", insp)
+            self.stage_feedback.emit(key, getattr(module, "last_image", None), f"FEHLER: {res.error} (Rohbild)")
 
     def _finished(self) -> None:
         self._set_running(False)
@@ -227,11 +262,13 @@ class AutoTab(QWidget):
         if state_obj is not None:
             self.map.set_tcp(state_obj.tcp[0] * 1000, state_obj.tcp[1] * 1000)
 
-    def _on_cycle(self, r: CycleResult, img1, img3) -> None:
-        if img1 is not None:
-            self.view_m1.set_image(img1)
-        if img3 is not None:
-            self.view_m3.set_image(img3)
+    def _on_stage(self, key: str, img, text: str) -> None:
+        view, info = self.views[key]
+        if img is not None:                       # None: keep the previous image (step still running)
+            view.set_image(img)
+        info.setText(text)
+
+    def _on_cycle(self, r: CycleResult) -> None:
         insp = r.inspection
         if r.error:
             self.counts["error"] += 1

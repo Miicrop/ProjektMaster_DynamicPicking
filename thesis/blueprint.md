@@ -176,6 +176,7 @@ Aus `references.bib` sind bereits verwendbar: `garrido2014`, `zhang2000`, `hartl
 - In `references.bib` ergänzt, DOI jeweils über Crossref geprüft: `fitzgibbon1999`, `smith1978`, `brunelli2009`, `suzuki1985`, `hu1962`, `canny1986`, `baek2019`, `shi2017`.
 - 2026-09-27: Kapitel `02b_vorprojekt.tex` (Vorprojekt GROB) ergänzt, Einleitung (Motivation, Aufbau) angepasst. Offen: Abschnitt „Alternative Verfahren“ (Kommilitone), Freigabe der Bilder durch GROB, Begründung A4/A6.
 - 2026-09-27: Greifer korrigiert (Kap. 04, Tab. `tab:hardware`): Zimmer MATCH LWR50L-23-00004-A + Robotermodul LWR50F-13-05-A, Quellen `zimmer_lwr50l`, `zimmer_lwr50f` (Datenblätter in `docs/greifer/`). Absatz „Bauteil bewusst einfach, damit Standard-Parallelgreifer ohne eigenes Greiferdesign“ ergänzt. Werkzeug heißt in der Steuerung weiterhin „RobotiQ“ → `\todo` Masse/TCP prüfen.
+- 2026-10-06 (Code, bei Fall D/E nachziehen): Werkzeug heißt im Labor „ZimmerLWR50“ (197,5 mm) → Kap. 04 `\todo` zu RobotiQ anpassen. Greifer 23° verdreht montiert → Greifwinkel Home + θ + 113° (Kap. 06). Pick/Place zweistufig (schnell bis 20 mm über dem Ziel, dann langsam) und kein Home-Umweg an der Prüfstation (Zustandsautomat in Kap. 03/06/09 prüfen). GUI-Ablauf zeigt M1/M3 je Schritt (Kap. 09). Erster vollständiger Ablauf im Labor.
 - Noch offen aus §5: Quellen für die Motivation (Kap. 1) und die Normen zu kollaborativen Robotern (Kap. 2.6).
 
 ## 7. So geht es weiter

@@ -53,7 +53,7 @@ stateDiagram-v2
 | `IDLE` | Warten auf Start / nächsten Zyklus | – |
 | `DETECT` | Bild aufnehmen, Objektpose bestimmen | M1 / M4 |
 | `PICK` | Objekt an erkannter Pose greifen | M2 |
-| `PLACE_INSPECT` | An Prüfposition ablegen, Roboter aus dem Bild fahren | M2 |
+| `PLACE_INSPECT` | An Prüfposition ablegen, auf Anfahrhöhe darüber warten (außerhalb des Kamerabilds) | M2 |
 | `INSPECT` | Seriennummer, Loch, Kerbe prüfen | M3 |
 | `PICK_INSPECT` | Bauteil von Prüfposition greifen | M2 |
 | `SORT` | Auf Ablage GUT oder SCHLECHT legen | M2 |

@@ -17,12 +17,14 @@ Neura-Dokumentation: [docs/neura/](../../docs/neura/)
 
 1. Greifer öffnen (`release`)
 2. Gelenkbewegung (IK) auf Vorposition = Ziel + `approach_height_mm`
-3. Linear absenken mit `approach_speed_mps`
+3. Linear absenken: schnell (`linear_speed_mps`) bis `approach_slow_mm` über dem Ziel, Rest mit `approach_speed_mps`
 4. `grasp`, `grip_wait_s` warten
-5. Linear anheben
+5. Linear anheben (umgekehrt: erst langsam, dann schnell)
 
 Greiforientierung = Orientierung von `Home` (Werkzeug nach unten), um die Basis-z-Achse gedreht
-um θ des Bauteils + `gripper_angle_offset_deg` (90° → Finger greifen über die schmale Seite).
+um θ des Bauteils + `gripper_angle_offset_deg` (113° = 90° quer zur Längsachse + 23° schräger
+Greifereinbau; im Labor 2026-10-06: Home + 23° → Backen schließen entlang Basis-x, Teil liegt entlang
+Basis-y wie an den Ablagen).
 Vorzeichen von yaw bei roll = 180°: in der Neura-VM bestätigt (+rz = gegen den Uhrzeigersinn von oben,
 2026-10-06); **am echten Roboter noch prüfen.**
 

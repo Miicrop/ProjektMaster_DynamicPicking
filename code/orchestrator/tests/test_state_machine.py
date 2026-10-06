@@ -24,6 +24,14 @@ def test_full_cycle_good_part_goes_to_good_bin():
     assert "place at bin_good" in robot.history
 
 
+def test_no_home_detour_at_inspection():
+    """The robot waits above the inspection fixture (outside the camera view); home only after SORT."""
+    orch, robot = make()
+    orch.run_cycle()
+    moves = [h.split(" (")[0] for h in robot.history if h.startswith(("home", "pick", "place"))]
+    assert moves == ["pick at object", "place at inspection", "pick at inspection", "place at bin_good", "home"]
+
+
 def test_bad_part_goes_to_bad_bin():
     orch, robot = make(good_ratio=0.0)
     result = orch.run_cycle()

@@ -17,7 +17,7 @@ Windows-Laptop. Am Ende kannst du den Roboter aus Python heraus bewegen und Pose
 | Roboter | Neura **LARA** (6 Achsen), Steuerungssoftware **v5.0.8** |
 | IP-Adresse | **192.168.2.20** (steht auf dem Roboterfuß) **(prüfen)** – Neura-Standard wäre 192.168.2.13 |
 | Schnittstelle | Python-Bibliothek **NeuraPy**; der Laptop schickt Befehle per Netzwerk (TCP-Port **65432**) an die Steuerung |
-| Greifer | Montiert ist ein **Zimmer MATCH LWR50L-23-00004-A** (elektrisch, IO-Link) auf dem Robotermodul LWR50F-13-05-A ([docs/greifer/](../../docs/greifer/)). In der Steuerung heißt das Werkzeug **„RobotiQ“** (im Backup als Modbus-Greifer angelegt) **(prüfen: Ansteuerung, Masse, TCP)** |
+| Greifer | Montiert ist ein **Zimmer MATCH LWR50L-23-00004-A** (elektrisch, IO-Link) auf dem Robotermodul LWR50F-13-05-A ([docs/greifer/](../../docs/greifer/)). Im Labor ist dafür das Werkzeug **„ZimmerLWR50“** angelegt (TCP 197,5 mm, Stand 2026-10-06; im alten Backup hieß es „RobotiQ“). Der Greifer ist **um ca. 23° um z verdreht** montiert → `gripper_angle_offset_deg: 113` (90° + 23°). **Offen: Ansteuerung Greifen/Lösen** |
 | Gespeicherte Punkte | `Home` und `Parking` |
 | Einheiten der API | Meter und Radiant, Pose = `[x, y, z, roll, pitch, yaw]` |
 | Einheiten in unserem Code | Millimeter und Grad (die Umrechnung macht `NeuraRobot`) |
@@ -91,7 +91,7 @@ keine spezielle Software, nur Python und eine Netzwerkverbindung.
 2. Not-Halt entriegeln (Pilz-Taster drehen) und Fehler quittieren bzw. zurücksetzen.
 3. Anmelden. Zugangsdaten gibt es beim Laborbetreuer, sie gehören **nicht** ins Repository.
 4. **Werkzeug prüfen:** Unter den Werkzeugen muss der montierte Greifer ausgewählt sein
-   (im Backup heißt er `RobotiQ`, TCP-Versatz 210 mm in z). Der Name muss mit
+   (im Labor `ZimmerLWR50`; im alten Backup hieß er `RobotiQ` mit TCP-Versatz 210 mm in z). Der Name muss mit
    `robot.tool_name` in `config/system.yaml` übereinstimmen.
    **Alle Posen in `system.yaml` und alle Fahrziele im Code sind TCP-Posen dieses Werkzeugs
    im Basis-KS**, nicht der Flansch. Ein falscher TCP-Versatz verschiebt also jede Greifhöhe.
@@ -114,7 +114,7 @@ In `code/config/system.yaml`, Abschnitt `robot`:
 ```yaml
 robot:
   host: 192.168.2.20      # IP der Steuerung
-  tool_name: RobotiQ      # Werkzeugname wie im Pendant
+  tool_name: ZimmerLWR50  # Werkzeugname wie im Pendant
   home_point: Home
   override: 0.2           # 20 % Geschwindigkeit zum Testen
 ```
@@ -131,6 +131,9 @@ ist gleichwertig (gleiche Logik, `m2_robot_control/steps.py`).
 - **Links, immer sichtbar:** Verbindung, Status (TCP-Pose live), *Home*, *Greifer auf/zu*, roter
   *STOPP* (Software-Stopp, ersetzt **nicht** den Not-Halt), *Freigeben* nach STOPP/Fehler und
   **Joggen** ±X/±Y/±Z/±rz im Basis-KS mit Schrittweite (Schnellwahl 1/5/10/20/50 mm bzw. °).
+  Am echten Roboter fragt jeder Schritt „Hand am Not-Halt?“. Der Haken *Ohne Rückfrage joggen*
+  schaltet das **nur fürs Joggen** ab (Home, Posen, Tests fragen weiter). Er ist bei jedem
+  Programmstart aus und wird beim Trennen zurückgesetzt.
 - **Rechts:** Draufsicht (Posen, Arbeitsbereich, TCP, erkanntes Bauteil) und die Unterseiten:
   - **Erste Schritte:** die Tabelle unten als Checkliste – jeder Schritt ein Knopf, Ergebnis ✓/✗.
   - **Achsentest:** je Achse „+ und zurück“, gemessene Änderung, Beobachtung eintragen,
@@ -321,9 +324,10 @@ Die Bewegung sieht man live in der Neura-Bedienoberfläche im Browser.
 > Roboter angeschlossen, fährt auch der Modus `vm` den **echten** Roboter, und zwar ohne
 > Sicherheitsabfrage. Deshalb ist der VM-Test nur mit `NEURA_VM=1` aktiv. Im Labor `vm` nicht benutzen.
 
-In der VM ist das Werkzeug `RobotiQ` bereits auf 197,5 mm gesetzt (per
-`update_tool_parameters`). Bei einer neu importierten VM einmal wiederholen, sonst verweigert
-unser Code die Bewegung wegen des TCP-Versatzes.
+In der VM ist das Werkzeug `RobotiQ` auf 197,5 mm gesetzt (per `update_tool_parameters`).
+Die Config nennt inzwischen das Labor-Werkzeug `ZimmerLWR50` → für VM-Tests in der VM ein
+Werkzeug `ZimmerLWR50` mit 197,5 mm anlegen (oder `tool_name` kurz umstellen), sonst verweigert
+unser Code die Bewegung wegen des TCP-Versatzes. Der eigene Simulator kennt `ZimmerLWR50`.
 
 Hinweise: Die VM meldet Server-Version `v5.0.0-alpha.102`, unser Client ist v5.0.8. Die Warnung
 dazu beim Verbinden ist bekannt. Die VM ist eine LARA 5 wie im Labor.

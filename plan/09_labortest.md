@@ -23,7 +23,7 @@ Schritt 8 eingemessen – vorher greift der Roboter mit Platzhalterwerten danebe
 | 1 | Netzwerk, Verbindung lesen | `robot_check info` | IP, Version, Fehler |
 | 2 | Not-Halt testen, Override 20 % | Pendant, `robot.override` | – |
 | 3 | Home, Greifer, Achsentest | `robot_check home`, `gripper`, `axes` | Richtungen +X/+Y/+rz im Raum |
-| 4 | Werkzeug/TCP prüfen | Pendant | Angelegt ist „RobotiQ“ mit 210 mm – passt das zum montierten Zimmer-Greifer? Sonst Offset anpassen, **vor** Schritt 8 |
+| 4 | Werkzeug/TCP prüfen | Pendant | ✓ 2026-10-06: Werkzeug „ZimmerLWR50“ mit 197,5 mm angelegt |
 | 5 | Kameras | `python -m common.camera`, Kameras fest montieren, Licht | Indizes → `source` in der Config |
 | 6 | Maße | Maßband | Rahmen-Innenmaß → `workspace.size_mm`, Marker-Mitten → `markers_mm`, Bauteilhöhe, Lochdurchmesser |
 | 7 | M1 live | GUI Tab M1, Methode `aruco` | Alle 4 Marker erkannt? Bauteilpose plausibel? |
@@ -50,7 +50,11 @@ Nach jedem Schritt mit Config-Änderung: in der GUI speichern (Strg+S).
   an der Prüfstation evtl. verdreht und das Etikett zeigt von der Kamera weg.
 - **Kamera oder Marker bewegt:** Eine bewegte Kamera ist für M1 unkritisch, weil die Marker in jedem
   Bild neu gefunden werden. Verschobene Marker → neu ausmessen und neu kalibrieren.
-- **Greifer:** Wird der Zimmer-Greifer über das Werkzeug „RobotiQ“ korrekt geöffnet/geschlossen?
+- **Greifer:** Ansteuerung (Öffnen/Schließen) des Zimmer-Greifers noch offen (`gripper_enabled: false`).
+- **Greifwinkel:** Offset 113° (Einbau 23°) noch nicht am Roboter geprüft → Zeigetest mit schräg liegendem
+  Teil: Backen müssen quer über der schmalen Seite stehen; Teil parallel zu Kante 0–3 → wie an den Ablagen.
+- **Neue Anfahrt / Prüfplatz:** Umschalten schnell → langsam ca. 20 mm über jedem Ziel beobachten;
+  Greifer darf im M3-Bild nicht zu sehen sein (Roboter wartet jetzt über der Prüfvorrichtung).
 
 ## Für die Doku festhalten
 
