@@ -193,10 +193,12 @@ def test_jog_moves_relative_in_base_frame(sim):
     robot.home()
     start = robot.current_pose()
     robot.jog(dz_mm=50)
-    robot.jog(dx_mm=-20, drz_deg=20)
+    b = robot.jog(dx_mm=-20, drz_deg=10)
     p = robot.current_pose()
     assert (p.x_mm, p.y_mm, p.z_mm) == pytest.approx((start.x_mm - 20, start.y_mm, start.z_mm + 50))
-    assert (p.rz_deg - start.rz_deg) % 360 == pytest.approx(20)
+    assert (p.rz_deg - start.rz_deg) % 360 == pytest.approx(10)
+    # home rz = 180: target must be 190, not wrapped to -170 (controller would turn -350 deg)
+    assert start.rz_deg == pytest.approx(180) and b.rz_deg == pytest.approx(190)
     assert names(fake).count("move_linear") == 2
 
 
@@ -235,3 +237,27 @@ def test_point_at_refuses_low_hover_and_limits(sim):
     with pytest.raises(RobotError, match="outside limits"):
         robot.point_at(ObjectPose(5000, 0, 0, 0), hover_mm=30)
     assert "move_joint" not in names(fake) and "move_linear" not in names(fake)
+
+
+def test_teach_stations_drives_jogs_and_takes_place_pose(sim):
+    from m2_robot_control.robot_check import _teach_stations
+    robot, fake = sim
+    robot.connect()
+    rc = robot._rc
+    stored = CFG["robot"]["poses"]["inspection"]
+    above_z = stored[2] + rc["approach_height_mm"]
+    # drive above the stored pose, jog down to the place height of the fixture, take it unchanged
+    steps = iter(["g", f"z {-above_z / 2}", f"z {-(above_z / 2 - 38)}", "x 3", "t"])
+    taught = _teach_stations(robot, robot._cfg, ["inspection"], ask=lambda _: next(steps))
+    x, y, z, rx, ry, rz = taught["inspection"]
+    assert (x, y, z) == pytest.approx((stored[0] + 3, stored[1], 38.0), abs=0.1)
+    # lifted off again after taking the pose
+    assert fake.tcp[2] * 1000 == pytest.approx(38.0 + rc["approach_height_mm"], abs=0.1)
+
+
+def test_teach_stations_skip_and_quit(sim):
+    from m2_robot_control.robot_check import _teach_stations
+    robot, _ = sim
+    robot.connect()
+    steps = iter(["unknown", "s", "q"])
+    assert _teach_stations(robot, robot._cfg, ["bin_good", "bin_bad"], ask=lambda _: next(steps)) == {}

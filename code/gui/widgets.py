@@ -161,10 +161,12 @@ class LogView(QPlainTextEdit):
         self.setReadOnly(True)
         self.setMaximumBlockCount(2000)
         self.setFont(QFont("Consolas", 9))
+        # fixed dark console look - readable in light and dark Windows mode
+        self.setStyleSheet("QPlainTextEdit{background:#1e1e1e; color:#ffffff;}")
 
     @Slot(str, int)
     def append_record(self, text: str, level: int) -> None:
-        colour = "#c62828" if level >= logging.ERROR else "#e65100" if level >= logging.WARNING else "#333"
+        colour = "#ff6b6b" if level >= logging.ERROR else "#ffb74d" if level >= logging.WARNING else "#ffffff"
         self.appendHtml(f'<span style="color:{colour}">{text.replace("<", "&lt;")}</span>')
 
 

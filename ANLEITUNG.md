@@ -270,7 +270,7 @@ Die wichtigsten Werte (mit **tbd** = noch zu messen):
 | `workspace` | `size_mm` **tbd** | Innenmaß des weißen Rahmens [Breite, Höhe] in mm – bestimmt alle mm-Werte von M1 |
 | `workspace` | `markers_mm` **tbd** | Markermitten in mm (Ursprung: innere linke untere Rahmenecke) |
 | `workspace` | `method` | `auto`, `aruco` oder `white_frame` |
-| `part_topdown` | `brightness_delta`, `saturation_delta` | wenn das Bauteil nicht vollständig erkannt wird |
+| `part_topdown` | `brightness_delta`, `chroma_delta` | wenn das Bauteil nicht vollständig erkannt wird |
 | `workspace_to_robot` | `rotation_deg`, `translation_mm` **tbd** | Kalibrierung Arbeitsbereich → Roboter (Abschnitt 7) |
 | `robot` | `host` | IP der Robotersteuerung |
 | `robot` | `override` | Geschwindigkeit 0–1, zum Testen 0,2 |

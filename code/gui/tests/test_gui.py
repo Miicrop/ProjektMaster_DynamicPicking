@@ -216,3 +216,123 @@ def test_logbook_saves_trace_steps(tmp_path):
 
     out = logbook.save_images(cfg, CycleResult(7), Det(), object())
     assert [f.name for f in (out / "steps").iterdir()] == ["m1_01_mask.png"]
+
+
+@needs_neurapy
+def test_robot_tab_commissioning_pages(store, tmp_path, monkeypatch):
+    """Erste Schritte 1-8 clickable against the simulated robot: info, home, gripper, axis test,
+    teach, calibration, pointing test, pick test."""
+    pytest.importorskip("PySide6")
+    import gui.widgets as widgets
+    from PySide6.QtWidgets import QApplication
+    from gui.app import MainWindow
+    from gui.session import Session
+
+    errors = []
+    monkeypatch.setattr(widgets, "show_error", errors.append)
+    store.data["logging"]["cycle_dir"] = str(tmp_path / "logs")
+    store.data["robot"]["grip_wait_s"] = 0.0
+    use_photo_workspace(store)
+    app = QApplication.instance() or QApplication([])
+    s = Session(store)
+    w = MainWindow(s, start_tab="m2")
+    tab = w.tab_m2
+
+    def idle(timeout=60):
+        end = time.time() + timeout
+        while time.time() < end and (w.runner.busy("robot") or w.runner.busy("vision")):
+            app.processEvents()
+            time.sleep(0.02)
+        app.processEvents()
+        assert not errors, errors
+
+    def ok(key):
+        return "✓" in tab.steps.status[key].text()
+
+    tab.mode.setCurrentIndex(tab.mode.findData("sim"))
+    tab.btn_connect.click()
+    idle()
+    assert s.robot is not None and tab.btn_release.isEnabled()
+
+    monkeypatch.setattr("time.sleep", lambda _: None)      # gripper test pauses
+    for key in ("info", "home", "gripper"):
+        getattr(tab.steps, key)()
+        idle()
+        assert ok(key), (key, tab.steps.status[key].text())
+
+    # axis test: +Z and back, observation, protocol
+    tab.page_axes.test("z")
+    idle()
+    assert "dz=+50.0" in tab.page_axes.measured["z"].text()
+    for axis, _ in steps_axes():
+        tab.page_axes.notes[axis].setText("ok")
+    tab.page_axes.save()
+    assert (tmp_path / "logs" / "axes_tests.csv").exists()
+
+    # jog panel
+    z0 = s.robot.current_pose().z_mm
+    tab.jog_step.setValue(5)
+    tab.jog("z", +1)
+    idle()
+    assert s.robot.current_pose().z_mm == pytest.approx(z0 + 5, abs=0.1)
+
+    # teach: above the station, jog down 80 mm, take -> exact pose incl. z
+    page = tab.page_teach
+    page.pose_name.setCurrentText("bin_good")
+    old = list(store.data["robot"]["poses"]["bin_good"])
+    page.goto_above()
+    idle()
+    tab.jog_step.setValue(store.data["robot"]["approach_height_mm"])
+    tab.jog("z", -1)
+    tab.jog_step.setValue(4)
+    tab.jog("x", +1)
+    idle()
+    page.teach()
+    idle()
+    new = store.data["robot"]["poses"]["bin_good"]
+    assert new[:3] == pytest.approx([old[0] + 4, old[1], old[2]], abs=0.1) and store.dirty
+    page.lift()
+    idle()
+
+    # calibration: drive above each marker with the current calibration, touch, take -> RMS ~ 0
+    calib = tab.page_calib
+    for row in range(3):
+        calib.table.selectRow(row)
+        calib.goto_above()
+        idle()
+        tab.jog_step.setValue(calib.height.value())
+        tab.jog("z", -1)
+        idle()
+        calib.take()
+        idle()
+    calib.calc()
+    assert calib.result is not None and calib.result.rms_mm < 0.5
+    calib.apply()
+    assert ok("calib")
+
+    # pointing test with the test photos
+    point = tab.page_point
+    point.source.setCurrentIndex(point.source.findData("replay"))
+    point.detect()
+    idle()
+    assert point.found is not None
+    point.point()
+    idle()
+    assert point.target is not None
+    point.dx.setValue(1.5)
+    point.log()
+    assert ok("point") and (tmp_path / "logs" / "point_tests.csv").exists()
+    point.back()
+    idle()
+
+    tab.steps.pick()
+    idle()
+    assert ok("pick")
+
+    store.dirty = False
+    w.close()
+
+
+def steps_axes():
+    from m2_robot_control.steps import AXES_SEQUENCE
+    return AXES_SEQUENCE

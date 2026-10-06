@@ -14,7 +14,7 @@ Zwischenschritte für die Doku: `TopDownPipeline.process(img, trace)` sammelt mi
 `common.trace.Trace` alle Zwischenbilder (Originalbild, ArUco/Weiß-Maske, entzerrtes Bild,
 Bauteilmaske vor/nach Morphologie, Kandidaten, Pose). Im Ablauf über *+ Zwischenschritte*
 bzw. `--save-steps`.
-| `tests/data/` | 4 Fotos vom Aufbau (31.07.2026, Handykamera, noch nicht final) |
+| `tests/data/` | 5 Fotos vom Aufbau mit aufgeklebten ArUco-Markern (05.10.2026, Handykamera, mehrere Höhen; Bilder 1–3 = gleiche Szene) |
 
 ```powershell
 python -m m1_vision_topdown.run "m1_vision_topdown/tests/data/*.jpg"   # Debug-Bilder in logs/m1
@@ -30,13 +30,13 @@ gegen den Uhrzeigersinn ab der x-Achse. Ohne erkannte Fase: θ nur in [0°, 180�
 
 ## Stand / bekannte Probleme
 
-- **ArUco-Marker werden auf den Fotos nicht erkannt.** Die 3D-gedruckten Marker (schwarzer Block,
-  weiße Bits) haben keinen hellen Rand. Der schwarze Markerrand ist fast so hell wie die
-  dunkelgraue Platte (Grauwert ~71 zu ~72–85), deshalb findet OpenCV die Markerkontur nicht.
-  Erkannt wurde lediglich vereinzelt ID 2 aus `DICT_4X4_50`.
-  → Lösung: Marker mit weißem Rand (≥ 1 Bit breit) versehen, z. B. mit `make_markers.py` drucken.
-  Bis dahin nutzt `workspace.method: auto` automatisch den weißen Rahmen.
-- Maße (`workspace.size_mm`, `markers_mm`) sind Platzhalter → Rahmen ausmessen.
+- **Farbsegmentierung über Lab-Chroma statt HSV-Sättigung.** Auf der dunklen Platte gibt es
+  bläuliche Spiegelungen (Fotos 05.10.: unten links). HSV-S = (max−min)/max bläht so einen
+  schwachen Farbstich bei dunklen Pixeln auf S ≈ 55 auf – fast wie das Bauteil (S ≈ 85). Der
+  Reflex wurde dann als Bauteil gewählt oder verschmolz mit ihm. Lab-Chroma: Platte ≈ 2,
+  Reflex ≈ 10, Bauteil 40–50 → `part_topdown.chroma_delta: 20`.
 - Perspektive: Die Homographie gilt für die Tischebene. Die Oberseite des Bauteils liegt höher und
-  erscheint leicht verschoben (Parallaxe). Die Kamera sollte deshalb möglichst senkrecht und hoch
-  hängen.
+  erscheint leicht verschoben (Parallaxe), außerdem sind je nach Lage Seitenflächen sichtbar und
+  werden mitsegmentiert. Auf den Fotos vom 05.10. schwankt die gemessene Größe dadurch zwischen
+  64–69 × 43–46 mm, die Position derselben Szene aus drei Höhen nur um < 1 mm. Die Kamera sollte
+  möglichst senkrecht über der Mitte und hoch hängen.

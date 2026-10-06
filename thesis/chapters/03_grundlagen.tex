@@ -129,6 +129,25 @@ Für die Bildverarbeitung ergeben sich daraus zwei Vorteile. Ein farbiges Objekt
 Und unbunte Flächen wie eine graue Platte oder ein weißes Etikett unterscheiden sich von
 farbigen Objekten durch ihre geringe Sättigung, auch wenn sie ähnlich hell sind.
 
+Bei dunklen Pixeln ist die Sättigung allerdings wenig aussagekräftig. Da sie den Abstand
+zwischen größtem und kleinstem Kanal auf den Hellwert bezieht, wiegt ein kleiner Farbstich
+umso schwerer, je dunkler das Pixel ist: Bei $M = 20$ und $m = 10$ ergibt sich bereits
+$S = 0{,}5$, obwohl die Farbe kaum wahrnehmbar ist. Sensorrauschen wirkt bei geringer
+Helligkeit auf die gleiche Weise.
+
+Der CIELAB-Farbraum~\cite{fairchild2013} hat diese Schwäche nicht. Er ist so aufgebaut, dass
+gleiche Abstände näherungsweise gleich wahrgenommenen Farbunterschieden entsprechen, und
+beschreibt eine Farbe durch die Helligkeit $L^*$ und die beiden Gegenfarbachsen $a^*$
+(Grün--Rot) und $b^*$ (Blau--Gelb). Die Buntheit (Chroma) ist der Abstand von der unbunten
+Achse,
+\begin{equation}
+  C^*_{ab} = \sqrt{a^{*2} + b^{*2}} ,
+  \label{eq:chroma}
+\end{equation}
+und wird anders als die Sättigung nicht auf die Helligkeit bezogen. Ein schwacher Farbstich
+auf einer dunklen Fläche ergibt deshalb auch nur eine geringe Buntheit. OpenCV speichert
+$a^*$ und $b^*$ bei 8-Bit-Bildern um 128 verschoben und skaliert $L^*$ auf 0 bis 255.
+
 % ==============================================================================
 \section{Kameramodell und Kalibrierung}
 \label{sec:kalibrierung}

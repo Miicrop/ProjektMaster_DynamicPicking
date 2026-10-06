@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 VENDOR_DIR = Path(__file__).resolve().parent / "vendor"
 STOPPED_MSG = "Robot stopped - acknowledge first (GUI: 'Fehler quittieren' / 'Freigeben')"
 JOG_MAX_MM = 100.0     # largest relative step allowed by NeuraRobot.jog()
-JOG_MAX_DEG = 45.0
+JOG_MAX_DEG = 15.0     # rz: only small turns (direction check, fine alignment)
 TOOL_TOLERANCE_MM = 1.0  # allowed difference controller tool TCP vs. robot.tool_tcp_mm
 INIT_RETRIES = 3        # init_program attempts while the controller refuses play mode (seen on the Neura VM)
 INIT_RETRY_WAIT_S = 1.0
@@ -290,7 +290,8 @@ class NeuraRobot(RobotController):
         self._check_ready()
         a = self.current_pose()
         b = RobotTarget("jog", a.x_mm + dx_mm, a.y_mm + dy_mm, a.z_mm + dz_mm,
-                        a.rx_deg, a.ry_deg, _wrap_deg(a.rz_deg + drz_deg))
+                        a.rx_deg, a.ry_deg, a.rz_deg + drz_deg)   # NOT wrapped: 180 + 5 -> -175 would
+        # make the controller interpolate the angle the long way round (-355 deg) -> joint limit
         log.info("jog dx=%.1f dy=%.1f dz=%.1f mm drz=%.1f deg", dx_mm, dy_mm, dz_mm, drz_deg)
         self._linear(a, b, self._rc["approach_speed_mps"])
         return b

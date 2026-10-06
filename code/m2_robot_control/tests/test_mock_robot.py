@@ -23,3 +23,4 @@ def test_place_without_part_fails():
     cfg = load_config()
     with pytest.raises(RobotError):
         MockRobot(cfg).place(robot_target(cfg, "bin_good"))
+

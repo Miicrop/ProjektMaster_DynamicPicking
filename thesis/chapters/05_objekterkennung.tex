@@ -84,19 +84,48 @@ werden die ArUco-Marker verwendet.
 
 In der entzerrten Draufsicht muss das Bauteil vom Hintergrund getrennt werden. Die Platte
 des Arbeitsbereichs ist dunkelgrau, das Bauteil dagegen heller oder farbiger. Die
-Segmentierung nutzt dazu den \ac{hsv}-Farbraum (\cref{sec:farbraeume}), in dem Helligkeit
-(V) und Sättigung (S) getrennt vorliegen.
+Segmentierung prüft deshalb zwei Merkmale (\cref{sec:farbraeume}): die Helligkeit als
+Hellwert $V$ des \ac{hsv}-Farbraums und die Buntheit als Chroma $C^*_{ab}$ des
+CIELAB-Farbraums (\cref{eq:chroma}).
 
 Anstelle fester Schwellwerte werden die Grenzen relativ zur Platte bestimmt. Da das Bauteil
-nur einen kleinen Teil des Arbeitsbereichs bedeckt, beschreibt der Median von Helligkeit und
-Sättigung über die gesamte Draufsicht die Platte. Ein Pixel gilt als Bauteil, wenn er
-deutlich heller als die Platte ist oder deutlich stärker gesättigt und dabei nicht zu dunkel.
+nur einen kleinen Teil des Arbeitsbereichs bedeckt, beschreibt der Median von Hellwert und
+Buntheit über die gesamte Draufsicht die Platte. Ein Pixel gilt als Bauteil, wenn sein
+Hellwert um mehr als 50 oder seine Buntheit um mehr als 20 über dem Wert der Platte liegt.
 Ändert sich das Raumlicht, verschieben sich Platte und Bauteil gemeinsam, und die Schwelle
 wandert mit. Außerdem funktioniert die Segmentierung unabhängig von der Farbe des Bauteils,
-solange es sich in Helligkeit oder Sättigung von der Platte abhebt. Ein globales
+solange es sich in Helligkeit oder Buntheit von der Platte abhebt. Ein globales
 Schwellwertverfahren wie das nach Otsu (\cref{sec:bildverarbeitung}) wäre eine Alternative,
 setzt aber ein deutlich zweigipfliges Histogramm voraus, das bei einem kleinen Bauteil auf
 großer Fläche nicht gegeben ist.
+
+In einer ersten Fassung wurde statt der Buntheit die Sättigung $S$ des \ac{hsv}-Farbraums
+verwendet. Auf Testfotos des Aufbaus führte das zu Fehldetektionen. Auf der dunklen Platte
+spiegelte sich in einer Ecke ein bläulicher Schimmer, und weil die Sättigung bei dunklen
+Pixeln schon kleine Farbstiche stark gewichtet (\cref{sec:farbraeume}), erreichte dieser
+Bereich Werte von 45 bis 58. Die Schwelle lag bei etwa 52 (Median der Platte plus 40), der
+Reflex also teilweise darüber. In einem Bild war die so segmentierte Fläche größer als das
+Bauteil und wurde an seiner Stelle ausgewählt; in einem anderen verschmolz sie mit dem
+Bauteil und verfälschte Kontur und Orientierung. In der Buntheit sind die drei Flächen
+dagegen klar getrennt (\cref{tab:m1-buntheit}): Die Schwelle (Platte plus 20, also 22 bis
+23) liegt deutlich über dem Reflex und deutlich unter dem Bauteil. Mit ihr wird das Bauteil auf allen fünf
+Testfotos korrekt segmentiert.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Sättigung und Buntheit auf den Testfotos (Median je Fläche, 8-Bit-Werte, fünf
+  Fotos)}
+  \label{tab:m1-buntheit}
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    Fläche & Sättigung $S$ & Buntheit $C^*_{ab}$ \\
+    \midrule
+    Platte              & 12--13 & 2--3 \\
+    bläulicher Reflex   & 45--58 & 8--9 \\
+    Bauteil (violett)   & 76--99 & 40--52 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 Die entstehende Binärmaske wird am Rand des Arbeitsbereichs beschnitten, damit der Rahmen
 nicht als Bauteil erkannt wird, und anschließend morphologisch bereinigt: Ein Öffnen

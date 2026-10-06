@@ -9,6 +9,7 @@
     python -m m2_robot_control.robot_check jog z 20      # MOVES: one relative step (x|y|z mm, rz deg)
     python -m m2_robot_control.robot_check calib         # read-only: teach marker centres -> workspace_to_robot
     python -m m2_robot_control.robot_check point         # MOVES: detect part (M1), hover above it, no grasp
+    python -m m2_robot_control.robot_check teach [NAME]  # MOVES: drive/jog to the place stations, teach, save
 
 Add --sim to run against the built-in fake controller, or --vm to run against the official Neura
 simulation (VirtualBox VM at robot.vm_host) instead of the real robot.
@@ -16,23 +17,17 @@ simulation (VirtualBox VM at robot.vm_host) instead of the real robot.
 from __future__ import annotations
 
 import argparse
-import csv
 import logging
 import time
 
-import numpy as np
-
 from common.config import load_config, robot_target
-from common.transforms import fit_workspace_to_robot
+from common.interfaces import RobotError
 from m2_robot_control.fake_neura_server import FakeNeuraServer
-from m2_robot_control.robot import NeuraRobot, _wrap_deg, load_neurapy_client
+from m2_robot_control.robot import NeuraRobot, load_neurapy_client, offset_z
+from m2_robot_control.steps import (AXES_SEQUENCE, CALIB_RMS_WARN_MM, JOG_AXES, STATIONS, calib_config, calibrate,
+                                    fmt_delta, fmt_pose, jog_measured, log_point, point_row, pose_list, robot_info)
 
-JOG_AXES = {"x": "dx_mm", "y": "dy_mm", "z": "dz_mm", "rz": "drz_deg"}
-
-
-def _fmt(p) -> str:
-    return (f"x={p.x_mm:.1f} y={p.y_mm:.1f} z={p.z_mm:.1f} mm  "
-            f"rx={p.rx_deg:.1f} ry={p.ry_deg:.1f} rz={p.rz_deg:.1f} deg")
+_fmt = fmt_pose
 
 
 def _confirm(msg: str) -> bool:
@@ -41,19 +36,12 @@ def _confirm(msg: str) -> bool:
 
 def _jog(robot: NeuraRobot, axis: str, value: float) -> str:
     """One relative step; returns the measured change as text."""
-    before = robot.current_pose()
-    robot.jog(**{JOG_AXES[axis]: value})
-    after = robot.current_pose()
-    return (f"gemessen: dx={after.x_mm - before.x_mm:+.1f} dy={after.y_mm - before.y_mm:+.1f} "
-            f"dz={after.z_mm - before.z_mm:+.1f} mm  drz={_wrap_deg(after.rz_deg - before.rz_deg):+.1f} deg")
+    return "gemessen: " + fmt_delta(jog_measured(robot, axis, value))
 
 
 def _axes_test(robot: NeuraRobot, step_mm: float, step_deg: float, ask: bool) -> None:
     """From Home: each axis a small step in + direction and back. The user notes the observed direction."""
-    seq = [("z", step_mm, "nach OBEN (weg vom Tisch)"),
-           ("x", step_mm, "Richtung +X der Basis"),
-           ("y", step_mm, "Richtung +Y der Basis"),
-           ("rz", step_deg, "Greifer dreht um die senkrechte Achse (+rz)")]
+    seq = [(axis, step_deg if axis == "rz" else step_mm, expect) for axis, expect in AXES_SEQUENCE]
     notes: list[tuple[str, str]] = []
     robot.home()
     print(f"Home erreicht: {_fmt(robot.current_pose())}\n")
@@ -79,8 +67,8 @@ def _axes_test(robot: NeuraRobot, step_mm: float, step_deg: float, ask: bool) ->
 def _calibrate(robot: NeuraRobot, cfg: dict) -> None:
     """Read the TCP pose at each marker centre and fit workspace -> robot base (no motion)."""
     markers = cfg["workspace"]["markers_mm"]
-    ws, rb, zs, ids = [], [], [], []
-    print("Greiferspitze (TCP) nacheinander mittig auf die Marker setzen (Pendant oder 'robot_check jog'"
+    taught: dict[int, tuple[float, float, float]] = {}
+    print("Greiferspitze (TCP) nacheinander mittig auf die Marker setzen (Pendant, GUI oder 'robot_check jog'"
           " in einem zweiten Terminal). Die Spitze soll den Tisch gerade beruehren.\n")
     for mid in sorted(markers, key=int):
         k = input(f"Marker {mid} (Arbeitsraum {markers[mid][0]:.1f}, {markers[mid][1]:.1f} mm): "
@@ -90,55 +78,88 @@ def _calibrate(robot: NeuraRobot, cfg: dict) -> None:
         if k == "s":
             continue
         p = robot.current_pose()
-        ws.append(markers[mid][:2])
-        rb.append((p.x_mm, p.y_mm))
-        zs.append(p.z_mm)
-        ids.append(mid)
+        taught[int(mid)] = (p.x_mm, p.y_mm, p.z_mm)
         print(f"  -> Basis x={p.x_mm:.1f} y={p.y_mm:.1f} z={p.z_mm:.1f} mm")
-    if len(ws) < 3:
-        print("Mindestens 3 Marker noetig - nichts berechnet.")
+    try:
+        c = calibrate(cfg, taught)
+    except ValueError as e:
+        print(f"{e} - nichts berechnet.")
         return
-    rot, t, res = fit_workspace_to_robot(ws, rb)
-    rms = float(np.sqrt(np.mean(res ** 2)))
     print("\n=== Restfehler (Abstand gemessen <-> Modell) ===")
-    for mid, r in zip(ids, res):
+    for mid, r in c.residuals_mm.items():
         print(f"  Marker {mid}: {r:.1f} mm")
-    print(f"  RMS: {rms:.1f} mm")
-    if rms > 3.0:
-        print("  WARNUNG: RMS > 3 mm - Marker-IDs vertauscht, markers_mm falsch gemessen oder TCP nicht mittig?")
+    print(f"  RMS: {c.rms_mm:.1f} mm")
+    if not c.ok:
+        print(f"  WARNUNG: RMS > {CALIB_RMS_WARN_MM:.0f} mm - Marker-IDs vertauscht, markers_mm falsch gemessen "
+              "oder TCP nicht mittig?")
     print("\n=== In config/system.yaml uebernehmen ===")
     print("workspace_to_robot:")
-    print(f"  rotation_deg: {rot:.2f}")
-    print(f"  translation_mm: [{t[0]:.1f}, {t[1]:.1f}]")
-    print(f"  table_z_mm: {float(np.mean(zs)):.1f}")
+    for k, v in calib_config(c).items():
+        print(f"  {k}: {v}")
     print("\nHinweis: gilt nur, wenn der TCP-Versatz des Tools (robot.tool_name) stimmt.")
 
 
-POINT_FIELDS = ["time", "detector", "x_ws_mm", "y_ws_mm", "theta_ws_deg", "x_mm", "y_mm", "theta_deg",
-                "confidence", "target_x_mm", "target_y_mm", "target_z_mm", "target_rz_deg", "hover_mm",
-                "dx_mm", "dy_mm", "note"]
+STATION_HELP = ("  g = ueber gespeicherte Pose fahren   x|y|z|rz WERT = relativ (z. B. 'z -20')   h = Home\n"
+                "  t = aktuelle Pose als Ablagepose uebernehmen   s = naechste Station   q = beenden")
 
 
-def _log_point(cfg: dict, row: dict) -> None:
-    from orchestrator.logbook import log_dir
-    f = log_dir(cfg) / "point_tests.csv"
-    new = not f.exists()
-    with open(f, "a", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=POINT_FIELDS, delimiter=";")
-        if new:
-            w.writeheader()
-        w.writerow(row)
-    print(f"protokolliert in {f}")
+def _teach_stations(robot: NeuraRobot, cfg: dict, names: list[str], ask=input) -> dict[str, list[float]]:
+    """Drive to each station, jog onto the exact place pose (incl. its z) and take it unchanged."""
+    rc = cfg["robot"]
+    taught: dict[str, list[float]] = {}
+    for name in names:
+        print(f"\n=== {name}: TCP genau auf die Ablagepose fahren (Hoehe, an der der Greifer oeffnet) ===\n"
+              f"{STATION_HELP}")
+        while True:
+            cmd = ask(f"{name}> ").strip().lower().replace(",", ".").split()
+            if not cmd:
+                continue
+            try:
+                if cmd[0] == "q":
+                    return taught
+                if cmd[0] == "s":
+                    break
+                if cmd[0] == "h":
+                    robot.home()
+                elif cmd[0] == "g":
+                    above = offset_z(robot_target(cfg, name), rc["approach_height_mm"])
+                    robot._joint_move_to(above)
+                    print(f"  ueber {name}: {_fmt(robot.current_pose())}")
+                elif cmd[0] in JOG_AXES and len(cmd) == 2:
+                    print("  " + _jog(robot, cmd[0], float(cmd[1])))
+                elif cmd[0] == "t":
+                    t = robot.current_pose()
+                    taught[name] = pose_list(t)
+                    print(f"  Ablagepose {name}: {taught[name]}")
+                    up = offset_z(t, rc["approach_height_mm"], "teach_up")
+                    robot._linear(t, up, rc["approach_speed_mps"])   # lift off before the next move
+                    break
+                else:
+                    print(STATION_HELP)
+                    continue
+            except (RobotError, ValueError) as e:
+                print(f"  FEHLER: {e}")
+    return taught
+
+
+def _save_poses(taught: dict[str, list[float]]) -> None:
+    from gui.config_store import ConfigStore   # keeps the comments in system.yaml
+    store = ConfigStore()
+    for name, pose in taught.items():
+        store.set(["robot", "poses", name], pose)
+    store.save()
+    print(f"gespeichert in {store.path}")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["info", "pose", "home", "gripper", "pick-test", "axes", "jog",
-                                        "calib", "point"])
-    ap.add_argument("name", nargs="?", default="new_pose", help="pose name for 'pose', axis for 'jog'")
+                                        "calib", "point", "teach"])
+    ap.add_argument("name", nargs="?", default="new_pose",
+                    help="pose name for 'pose', axis for 'jog', optional station for 'teach'")
     ap.add_argument("value", nargs="?", type=float, help="step for 'jog' (mm, rz in deg)")
     ap.add_argument("--step", type=float, default=50.0, help="step for 'axes' in mm (default 50)")
-    ap.add_argument("--step-deg", type=float, default=20.0, help="rz step for 'axes' in deg (default 20)")
+    ap.add_argument("--step-deg", type=float, default=5.0, help="rz step for 'axes' in deg (default 5)")
     ap.add_argument("--detector", default="camera", help="M1 source for 'point': camera | replay (test photos)")
     ap.add_argument("--hover", type=float, default=30.0, help="height above the grasp pose for 'point' in mm")
     ap.add_argument("--host", help="override robot.host from config")
@@ -163,24 +184,19 @@ def main() -> None:
         cfg["robot"]["host"] = args.host
 
     robot = NeuraRobot(cfg, client_factory=factory)
-    r = robot.open_client()
+    robot.open_client()
 
     if args.command == "info":
-        print(f"robot      : {r.robot_name}  dof={r.dof}  server version={r.version}")
-        print(f"teach mode : {r.is_robot_in_teach_mode()}")
-        name, off = robot.tool()
-        print(f"tool       : {name}  TCP offset from flange = {[round(v, 1) for v in off]} mm"
-              f"  (config: {cfg['robot'].get('tool_name')} {cfg['robot'].get('tool_tcp_mm')} mm)")
-        print(f"tcp pose   : {_fmt(robot.current_pose())}")
-        print(f"joints/rad : {[round(j, 4) for j in r.get_current_joint_angles()]}")
-        print(f"points     : {r.get_point_names()}")
-        print(f"errors     : {r.get_errors()}")
+        rows, problems = robot_info(robot, cfg)
+        for k, v in rows:
+            print(f"{k:14s}: {v}")
+        for p in problems:
+            print(f"PROBLEM: {p}")
         return
 
     if args.command == "pose":
         p = robot.current_pose()
-        print(f"    {args.name}: [{p.x_mm:.1f}, {p.y_mm:.1f}, {p.z_mm:.1f}, "
-              f"{p.rx_deg:.1f}, {p.ry_deg:.1f}, {p.rz_deg:.1f}]")
+        print(f"    {args.name}: {pose_list(p)}")
         return
 
     if args.command == "calib":
@@ -229,28 +245,32 @@ def main() -> None:
             _axes_test(robot, args.step, args.step_deg, ask=not args.yes)
         elif args.command == "jog":
             print(_jog(robot, args.name, args.value))
+        elif args.command == "teach":
+            names = [args.name] if args.name in STATIONS else STATIONS
+            taught = _teach_stations(robot, cfg, names)
+            print("\n=== Geteachte Ablageposen (robot.poses) ===")
+            for name, pose in taught.items():
+                print(f"    {name}: {pose}")
+            if taught and input("In config/system.yaml speichern? [j/N] ").strip().lower() in ("j", "y", "ja"):
+                _save_poses(taught)
+            robot.home()
         elif args.command == "point":
             pose, ws = point
             robot.home()
             t = robot.point_at(pose, args.hover)
             print(f"Greifer steht {args.hover:.0f} mm ueber der Greifposition: {_fmt(t)}")
-            row = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "detector": args.detector,
-                   "x_ws_mm": f"{ws.x_ws_mm:.1f}" if ws else "", "y_ws_mm": f"{ws.y_ws_mm:.1f}" if ws else "",
-                   "theta_ws_deg": f"{ws.theta_ws_deg:.1f}" if ws else "",
-                   "x_mm": f"{pose.x_mm:.1f}", "y_mm": f"{pose.y_mm:.1f}", "theta_deg": f"{pose.theta_deg:.1f}",
-                   "confidence": pose.confidence, "target_x_mm": f"{t.x_mm:.1f}", "target_y_mm": f"{t.y_mm:.1f}",
-                   "target_z_mm": f"{t.z_mm:.1f}", "target_rz_deg": f"{t.rz_deg:.1f}",
-                   "hover_mm": args.hover, "dx_mm": "", "dy_mm": "", "note": ""}
+            dx = dy = None
+            note = ""
             if not args.yes:
                 m = input("Versatz Bauteilmitte minus Greifermitte in Richtung Basis +X/+Y, 'dx dy' in mm "
                           "(Enter = ueberspringen): ").split()
                 try:
                     dx, dy = (float(v.replace(",", ".")) for v in m)
-                    row["dx_mm"], row["dy_mm"] = f"{dx:.1f}", f"{dy:.1f}"
                 except ValueError:
                     print("  kein Versatz gespeichert")
-                row["note"] = input("Notiz (z. B. 'Finger quer zur kurzen Seite ok'): ").strip()
-            _log_point(cfg, row)
+                note = input("Notiz (z. B. 'Finger quer zur kurzen Seite ok'): ").strip()
+            f = log_point(cfg, point_row(args.detector, pose, ws, t, args.hover, dx, dy, note))
+            print(f"protokolliert in {f}")
             robot.retreat(pose, args.hover)
             robot.home()
         print(f"done, tcp pose: {_fmt(robot.current_pose())}")

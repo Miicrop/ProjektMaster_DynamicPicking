@@ -23,7 +23,8 @@ Neura-Dokumentation: [docs/neura/](../../docs/neura/)
 
 Greiforientierung = Orientierung von `Home` (Werkzeug nach unten), um die Basis-z-Achse gedreht
 um θ des Bauteils + `gripper_angle_offset_deg` (90° → Finger greifen über die schmale Seite).
-**(Am Roboter prüfen:** Vorzeichen/Konvention von yaw bei roll = 180°.)
+Vorzeichen von yaw bei roll = 180°: in der Neura-VM bestätigt (+rz = gegen den Uhrzeigersinn von oben,
+2026-10-06); **am echten Roboter noch prüfen.**
 
 ## Noch offen
 

@@ -16,7 +16,7 @@ from m1_vision_topdown.workspace import find_workspace_aruco
 
 CFG = load_config()
 DATA = Path(__file__).parent / "data"
-# real photos show the old board -> its own workspace section (see data/workspace.yaml)
+# real photos have their own workspace section (see data/workspace.yaml)
 PHOTO_CFG = copy.deepcopy(CFG)
 PHOTO_CFG["workspace"] = yaml.safe_load((DATA / "workspace.yaml").read_text(encoding="utf-8"))
 MARGIN = 70.0   # mm around the workspace in the synthetic scene
@@ -88,34 +88,42 @@ def test_empty_workspace_raises():
         TopDownPipeline(cfg).process(img)
 
 
-# --- real photos (new_input from 2026-07-31) ------------------------------------------
+# --- real photos (printed markers glued on, 2026-10-05) ----------------------------------
 
-# Regression values from the first run (workspace size is still a placeholder!)
-REAL = {
-    "PXL_20260731_081831552.jpg": (103.9, 287.5, 209.7),
-    "PXL_20260731_081836652.jpg": (291.5, 106.2, 95.6),
-    "PXL_20260731_081841718.jpg": (188.9, 62.5, 234.0),
-    "PXL_20260731_081847384.jpg": (113.2, 352.6, 99.5),
-}
+PHOTOS = sorted(p.name for p in DATA.glob("*.jpg"))
 
 
-@pytest.mark.parametrize("name", sorted(REAL))
-def test_real_photo_regression(name):
+@pytest.mark.parametrize("name", PHOTOS)
+def test_real_photo_markers_found(name):
+    find_workspace_aruco(cv2.imread(str(DATA / name)), PHOTO_CFG)
+
+
+@pytest.mark.parametrize("name", PHOTOS)
+def test_real_photo_part_found(name):
+    """The purple part is selected, not a bluish reflection on the dark board.
+
+    Without ground truth: the centroid must lie on part-coloured pixels and the blob must have
+    the part's size (64-69 x 43-46 mm, varies with the visible side faces, see README
+    "Perspektive"). Before the Lab-chroma fix the reflection blob was 109 x 82 mm.
+    """
     img = cv2.imread(str(DATA / name))
     r = TopDownPipeline(PHOTO_CFG).process(img)
-    x, y, theta = REAL[name]
+    lab = cv2.cvtColor(r.workspace.rectify(img), cv2.COLOR_BGR2LAB).astype(float)
+    a, b = lab[int(r.part.v), int(r.part.u), 1:] - 128
+    assert math.hypot(a, b) > 25
+    ppm = r.workspace.px_per_mm
+    assert 60 < r.part.length_px / ppm < 75
+    assert 40 < r.part.width_px / ppm < 50
     assert r.part.chamfer_found
-    assert 1.3 < r.part.length_px / r.part.width_px < 1.7
-    assert r.x_ws_mm == pytest.approx(x, abs=3.0)
-    assert r.y_ws_mm == pytest.approx(y, abs=3.0)
-    assert _angle_err(r.theta_ws_deg, theta) < 3.0
 
 
-def test_real_photo_markers_not_detectable():
-    """Known issue: the 3D-printed markers have no white quiet zone (see plan/08)."""
-    img = cv2.imread(sorted(glob.glob(str(DATA / "*.jpg")))[0])
-    with pytest.raises(VisionError):
-        find_workspace_aruco(img, PHOTO_CFG)
+def test_real_photo_same_scene_three_heights():
+    """Three photos of the same scene from different camera heights give the same pose."""
+    names = ("PXL_20261005_130218511.jpg", "PXL_20261005_130221409.jpg", "PXL_20261005_130225649.jpg")
+    rs = [TopDownPipeline(PHOTO_CFG).process(cv2.imread(str(DATA / n))) for n in names]
+    for r in rs[1:]:
+        assert math.hypot(r.x_ws_mm - rs[0].x_ws_mm, r.y_ws_mm - rs[0].y_ws_mm) < 2.0
+        assert _angle_err(r.theta_ws_deg, rs[0].theta_ws_deg) < 2.0
 
 
 # --- intermediate steps for documentation ---------------------------------------------

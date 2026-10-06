@@ -30,14 +30,16 @@ def segment_part(rect_img: np.ndarray, cfg: dict[str, Any], px_per_mm: float,
     """Largest blob that is clearly brighter or more colourful than the board.
 
     Thresholds are relative to the board (median of the workspace image, the part only
-    covers a small area), so they adapt to lighting changes.
+    covers a small area), so they adapt to lighting changes. Colourfulness = Lab chroma, not
+    HSV saturation: S = (max-min)/max blows up a faint colour cast on the dark board (bluish
+    reflection: S ~55, chroma ~10; part: chroma 40-50).
     """
     pc = cfg["part_topdown"]
-    hsv = cv2.cvtColor(rect_img, cv2.COLOR_BGR2HSV)
-    s, v = hsv[..., 1].astype(np.int16), hsv[..., 2].astype(np.int16)
-    board_s, board_v = np.median(s), np.median(v)
-    mask = ((v > board_v + pc["brightness_delta"])
-            | ((s > board_s + pc["saturation_delta"]) & (v > pc["value_min"])))
+    v = cv2.cvtColor(rect_img, cv2.COLOR_BGR2HSV)[..., 2].astype(np.int16)
+    lab = cv2.cvtColor(rect_img, cv2.COLOR_BGR2LAB).astype(np.float32)
+    chroma = np.hypot(lab[..., 1] - 128, lab[..., 2] - 128)
+    board_v, board_c = np.median(v), np.median(chroma)
+    mask = (v > board_v + pc["brightness_delta"]) | (chroma > board_c + pc["chroma_delta"])
     mask = mask.astype(np.uint8) * 255
     if trace is not None:
         trace.add("part_mask", mask)

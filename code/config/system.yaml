@@ -40,10 +40,10 @@ workspace:
     3: [-35.0, 365.0]
 
 part_topdown:
-  # Part = pixels clearly brighter OR more saturated than the (dark grey) board median
+  # Part = pixels clearly brighter OR more colourful (Lab chroma) than the (dark grey) board median.
+  # Photos 2026-10-05: board chroma ~2, bluish reflection ~10, purple part 40-50.
   brightness_delta: 50
-  saturation_delta: 40
-  value_min: 60
+  chroma_delta: 20
   min_area_mm2: 300
   max_area_mm2: 20000
   chamfer_min_frac: 0.08        # chamfer depth relative to short side to count as found
@@ -70,10 +70,10 @@ robot:
   linear_speed_mps: 0.10
   approach_speed_mps: 0.03      # final linear approach / retreat
   approach_height_mm: 80
-  grasp_height_mm: 10           # TCP height above table when grasping (depends on part / gripper)
+  grasp_height_mm: 5           # TCP height above table when grasping (depends on part / gripper)
   gripper_angle_offset_deg: 90.0  # close gripper across the short side of the part
   grip_wait_s: 1.0
-  gripper_enabled: true         # false = move only, skip grasp/release (first tests); always off for the Neura VM
+  gripper_enabled: false         # false = move only, skip grasp/release (first tests); always off for the Neura VM
   # Software workspace limits in robot base frame [mm]
   limits_mm:
     x: [100.0, 900.0]
@@ -84,11 +84,16 @@ robot:
   # Home is driven as joint point; this entry gives orientation and map position.
   # Reach (Neura VM, tool pointing down): radius ~740 mm at z 130, ~700 mm at z 180 -> keep the
   # approach points (pose z + approach_height_mm) inside.
+  # Stations = centre points of the zones beyond the far marker edge (camera view, workspace frame
+  # approx.: bin_bad (50, 580), bin_good (50, 480), inspection (255, 455) mm). Each pose is the
+  # exact place pose incl. its own z (inspection: printed fixture, surface 38 mm above the board).
+  # Values below: estimate from a sketch via the placeholder workspace_to_robot -> teach with
+  # 'robot_check teach' (place() opens the gripper exactly at the pose).
   poses:
     home: [420.0, 0.0, 237.0, 180.0, 0.0, 180.0]
-    inspection: [600.0, 250.0, 50.0, 180.0, 0.0, 180.0]
-    bin_good: [600.0, -250.0, 100.0, 180.0, 0.0, 180.0]
-    bin_bad: [500.0, -400.0, 100.0, 180.0, 0.0, 180.0]
+    inspection: [555.0, 255.0, 48.0, 180.0, 0.0, 180.0]
+    bin_good: [350.0, 280.0, 10.0, 180.0, 0.0, 180.0]
+    bin_bad: [350.0, 380.0, 10.0, 180.0, 0.0, 180.0]
 
 # --- Wrist camera on the robot (planned, for M4 / AI grasping) -----------------
 wrist_camera:

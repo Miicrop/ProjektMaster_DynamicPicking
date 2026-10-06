@@ -1,13 +1,13 @@
-# Workspace config matching the photos in this folder (old board with white frame and
-# 3D-printed markers, 2026-07-31). Overrides the `workspace` section of config/system.yaml
-# in tests, so the real config can follow the current board.
-method: auto
-size_mm: [400.0, 400.0]
+# Workspace config matching the photos in this folder (board with printed ArUco markers glued
+# on, 2026-10-05, phone camera at several heights). Overrides the `workspace` section of
+# config/system.yaml in tests, so the real config can follow the current board.
+method: aruco
+size_mm: [330.0, 330.0]
 px_per_mm: 2.0
 border_mm: 5.0
 aruco_dictionary: DICT_4X4_50
 markers_mm:
-  0: [-25.0, -25.0]
-  1: [425.0, -25.0]
-  2: [425.0, 425.0]
-  3: [-25.0, 425.0]
+  0: [-35.0, -35.0]
+  1: [365.0, -35.0]
+  2: [365.0, 365.0]
+  3: [-35.0, 365.0]
