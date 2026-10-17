@@ -51,6 +51,8 @@ Nach jedem Schritt mit Config-Änderung: in der GUI speichern (Strg+S).
 - **Kamera oder Marker bewegt:** Eine bewegte Kamera ist für M1 unkritisch, weil die Marker in jedem
   Bild neu gefunden werden. Verschobene Marker → neu ausmessen und neu kalibrieren.
 - **Greifer:** Ansteuerung (Öffnen/Schließen) des Zimmer-Greifers noch offen (`gripper_enabled: false`).
+- **Werkzeuglast:** Masse/Schwerpunkt/Trägheit von `ZimmerLWR50` am Pendant ablesen und mit der Soll-Tabelle in
+  `code/m2_robot_control/ANLEITUNG_NEURA.md` (Abschnitt 4) vergleichen (Soll 1,75 kg, Schwerpunkt z ≈ 81 mm).
 - **Greifwinkel:** Offset 113° (Einbau 23°) noch nicht am Roboter geprüft → Zeigetest mit schräg liegendem
   Teil: Backen müssen quer über der schmalen Seite stehen; Teil parallel zu Kante 0–3 → wie an den Ablagen.
 - **Neue Anfahrt / Prüfplatz:** Umschalten schnell → langsam ca. 20 mm über jedem Ziel beobachten;

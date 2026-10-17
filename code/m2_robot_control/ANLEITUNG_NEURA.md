@@ -102,6 +102,28 @@ keine spezielle Software, nur Python und eine Netzwerkverbindung.
    mehr als 1 mm abweichen** (Fehlermeldung nennt beide Werte). Gemessen anders? Pendant **und**
    `tool_tcp_mm` anpassen, dann `poses.home` z = 434,5 − Versatz.
    Kontrolle: `robot_check info` zeigt Werkzeug und TCP-Versatz an.
+   **Masse, Schwerpunkt, Trägheit des Werkzeugs prüfen** (Werkzeugdaten am Pendant; stehen nur
+   in der Steuerung, nicht im Repo). Masse und Schwerpunkt sind für Schwerkraftkompensation und
+   Kollisionserkennung wichtig, die Trägheit spielt bei ~1,75 kg kaum eine Rolle. Das alte
+   Backup-Werkzeug `RobotiQ` hatte nur 0,2 kg, Schwerpunkt 0, Trägheit 0 → zu klein.
+
+   | Feld (Neura) | Bedeutung | Sollwert | Quelle | Ist am Pendant |
+   |---|---|---|---|---|
+   | `autoM` | Masse [kg] | **1,75** | Datenblatt: Greifer 1,4 + Robotermodul 0,35 | |
+   | `autoMeasureX` / `Y` | Schwerpunkt ab Flansch [m] | 0 / 0 | Symmetrie | |
+   | `autoMeasureZ` | Schwerpunkt ab Flansch [m] | **≈ 0,081** | Schätzung (Ersatzkörper) | |
+   | `inertiaXX` | [kg·m²] | ≈ 0,0056 | Schätzung, um Schwerpunkt | |
+   | `inertiaYY` | [kg·m²] | ≈ 0,0059 | Schätzung, um Schwerpunkt | |
+   | `inertiaZZ` | [kg·m²] | ≈ 0,0012 | Schätzung, um Schwerpunkt | |
+   | `inertiaXY` / `XZ` / `YZ` | [kg·m²] | ≈ 0 (Ixy ≈ 0,00015 durch 23° Verdrehung) | Schätzung | |
+
+   Hinweise: Nur die Masse ist gesichert (Zimmer-Datenblätter in [docs/greifer/](../../docs/greifer/)),
+   Schwerpunkt und Trägheit gibt Zimmer nicht an. Sie sind aus einem Ersatzmodell (Zylinder/Quader
+   mit Datenblattmaßen, Backen geschlossen) geschätzt. Nicht enthalten: Kabel, gegriffenes Bauteil.
+   Die Neura-Doku sagt nicht, ob sich die Trägheit auf den Schwerpunkt oder den Flansch bezieht;
+   bezogen auf den Flansch wäre Ixx/Iyy ≈ 0,017 kg·m². Falls die Steuerung eine automatische
+   Lastmessung hat (`autoM`/`autoMeasure*` deuten darauf hin, das `CalibrationTool` im Backup hat
+   gemessene Werte), damit Masse und Schwerpunkt bestimmen und gegen die Tabelle prüfen.
 5. **Punkt `Home` prüfen:** Der Punkt existiert und ist frei anfahrbar.
 6. Betriebsart: Unser Code schaltet vom Teach- in den Automatikmodus
    (`switch_to_automatic_mode()`). **(prüfen:** Muss das am Pendant zusätzlich bestätigt
