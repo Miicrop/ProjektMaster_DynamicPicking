@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M2 Robotersteuerung</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/common.js"></script>
+</head>
+<body class="m2">
+<div class="layout">
+<nav class="toc">
+  <a class="home" href="index.html">← Übersicht aller Module</a>
+  <div class="mod">M2 · Robotersteuerung</div>
+  <ol>
+    <li><a href="#blick">Auf einen Blick</a></li>
+    <li><a href="#system">Einordnung im System</a></li>
+    <li><a href="#code">Aufbau des Codes</a></li>
+    <li><a href="#verbindung">Verbindung &amp; Vorbereitung</a></li>
+    <li><a href="#greifpose">Greifpose &amp; Greiferwinkel</a></li>
+    <li><a href="#sequenz">Greif- &amp; Ablegesequenz</a></li>
+    <li><a href="#posen">Feste Posen</a></li>
+    <li><a href="#kalibrierung">Kalibrierung &amp; Zeigetest</a></li>
+    <li><a href="#sicherheit">Sicherheitskonzept</a></li>
+    <li><a href="#config">Konfiguration</a></li>
+    <li><a href="#bedienung">Inbetriebnahme &amp; Tests</a></li>
+    <li><a href="#grenzen">Grenzen &amp; offene Punkte</a></li>
+    <li><a href="#praesentation">Präsentation &amp; Fragen</a></li>
+    <li><a href="#glossar">Glossar</a></li>
+  </ol>
+  <div class="other">
+    <a href="m1_objekterkennung.html">← M1 Objekterkennung</a>
+    <a href="m3_sichtpruefung.html">M3 Sichtprüfung →</a>
+  </div>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="kicker">Modul 2 · code/m2_robot_control/</div>
+  <h1>Robotersteuerung mit dem Neura LARA</h1>
+  <p class="lead">M2 setzt die Aufträge des Orchestrators am Roboter um. Es greift das Bauteil an der
+    von M1 erkannten Pose, legt es an der Prüfposition ab, holt es nach der Prüfung wieder ab und
+    sortiert es auf die Gut- oder Schlecht-Ablage. Die Ansteuerung läuft über die Herstellerbibliothek
+    NeuraPy, abgesichert durch mehrere Software-Schutzfunktionen.</p>
+  <div class="facts">
+    <div class="fact"><div class="v">6 Achsen</div><div class="l">Neura LARA, Software v5.0.8</div></div>
+    <div class="fact"><div class="v">4 Varianten</div><div class="l">mock · sim · vm · real</div></div>
+    <div class="fact"><div class="v">20 %</div><div class="l">Geschwindigkeit im Testbetrieb</div></div>
+    <div class="fact"><div class="v">06.10.</div><div class="l">erster vollständiger Laborlauf</div></div>
+  </div>
+</header>
+
+<!-- ============================================================== -->
+<section id="blick">
+  <h2><span class="num">01</span>Auf einen Blick</h2>
+  <div class="grid2">
+    <div class="card"><h3>Eingabe</h3>
+      <p>Eine <code>ObjectPose</code> von M1 (x, y, z, θ im Roboter-Basis-KS) oder ein <code>RobotTarget</code>,
+        also eine benannte, feste Pose aus der Konfiguration (<code>inspection</code>, <code>bin_good</code>,
+        <code>bin_bad</code>, <code>home</code>).</p></div>
+    <div class="card"><h3>Ausgabe</h3>
+      <p>Bewegungen des Roboters und des Greifers. Bei Problemen (Ziel außerhalb der Grenzen, falsches
+        Werkzeug, Roboter gestoppt, Steuerung nicht erreichbar) wird ein <code>RobotError</code> geworfen,
+        und der Orchestrator stoppt den Ablauf.</p></div>
+  </div>
+<pre><code><span class="k">class</span> RobotController(ABC):            <span class="c"># common/interfaces.py</span>
+    <span class="k">def</span> connect(self) / disconnect(self)
+    <span class="k">def</span> home(self)
+    <span class="k">def</span> pick(self, pose: ObjectPose | RobotTarget)   <span class="c"># greifen</span>
+    <span class="k">def</span> place(self, target: RobotTarget)           <span class="c"># ablegen</span>
+    <span class="k">def</span> stop(self)                                 <span class="c"># sofort stoppen, danach gesperrt</span>
+    <span class="k">def</span> reset(self)                                <span class="c"># Stopp quittieren, neu vorbereiten</span></code></pre>
+  <div class="say"><p>„M2 kapselt den Roboter hinter fünf Methoden. Intern rechnen wir die Pose aus der
+    Bildverarbeitung in eine Greiferpose um, fahren mit einer Gelenkbewegung über das Ziel und senken
+    dann geradlinig ab, die letzten 20 mm langsam. Jedes Ziel wird vorher gegen einen Arbeitsraum-Quader
+    geprüft, und nach einem Stopp bleibt der Roboter gesperrt, bis jemand quittiert.“</p></div>
+</section>
+
+<!-- ============================================================== -->
+<section id="system">
+  <h2><span class="num">02</span>Einordnung im System</h2>
+  <p>M2 ist an vier der sechs Zustände eines Zyklus beteiligt. Kameras und Prüfergebnisse kennt M2 nicht.
+    Es bekommt nur Posen und entscheidet nicht selbst, wohin sortiert wird: Das macht der Orchestrator
+    anhand von <code>InspectionResult.is_good</code>.</p>
+  <div class="svgwrap" id="cycle"></div>
+  <script>drawCycle(document.getElementById("cycle"), "M2");</script>
+<pre><code><span class="c"># orchestrator/state_machine.py, run_cycle() (gekürzt)</span>
+pose = detector.detect()                       <span class="c"># M1</span>
+robot.pick(pose)                               <span class="c"># PICK</span>
+robot.place(target("inspection"))              <span class="c"># PLACE_INSPECT: wartet danach über der Vorrichtung</span>
+result = inspector.inspect()                   <span class="c"># M3</span>
+robot.pick(target("inspection"))               <span class="c"># PICK_INSPECT</span>
+robot.place(target("bin_good" <span class="k">if</span> result.is_good <span class="k">else</span> "bin_bad"))   <span class="c"># SORT</span>
+robot.home()</code></pre>
+  <p>Seit dem Labortag am 06.10. fährt der Roboter zwischen Ablegen und Prüfen nicht mehr nach Home. Er
+    wartet auf Anfahrhöhe über der Prüfvorrichtung, außerhalb des Bildes der Seitenkamera. Das spart
+    pro Zyklus zwei lange Fahrten.</p>
+</section>
+
+<!-- ============================================================== -->
+<section id="code">
+  <h2><span class="num">03</span>Aufbau des Codes</h2>
+  <div class="files">
+    <div class="file"><div class="name">robot.py</div><div class="desc"><code>NeuraRobot</code> (echte Implementierung über NeuraPy), <code>MockRobot</code> (protokolliert nur, prüft aber Grenzen),
+      Hilfsfunktionen <code>to_neura</code>/<code>from_neura</code> (mm/° ↔ m/rad), <code>as_target</code> (ObjectPose → Greiferpose), <code>check_limits</code>, <code>offset_z</code>.</div></div>
+    <div class="file"><div class="name">steps.py</div><div class="desc">Inbetriebnahme-Schritte ohne Qt, gemeinsam für CLI und GUI: Info, Achsentest, Kalibrierung (<code>calibrate</code>), Zeigetest-Protokoll.</div></div>
+    <div class="file"><div class="name">robot_check.py</div><div class="desc">Kommandozeilenwerkzeug: <code>info · pose · home · gripper · axes · jog · calib · point · teach · pick-test</code>, jeweils mit <code>--sim</code> oder <code>--vm</code>.</div></div>
+    <div class="file"><div class="name">fake_neura_server.py</div><div class="desc">Nachbildung der Neura-Steuerung: spricht dasselbe JSON-Protokoll auf Port 65432 und speichert die Aufrufe. Damit lässt sich der <b>unveränderte</b> Herstellerclient testen.</div></div>
+    <div class="file"><div class="name">vendor/neurapy/</div><div class="desc">Original-NeuraPy-Windows-Client v5.0.8 aus der Neura-Lieferung, nicht verändert.</div></div>
+    <div class="file"><div class="name">ANLEITUNG_NEURA.md</div><div class="desc">Schritt-für-Schritt-Anleitung: Laptop einrichten, verbinden, erste Bewegung, Posen teachen, Kalibrierung, Zeigetest, Fehlersuche.</div></div>
+    <div class="file"><div class="name">tests/</div><div class="desc">Tests gegen den Simulator über den echten Client; <code>test_neura_vm.py</code> gegen die offizielle Neura-VM (nur mit <code>NEURA_VM=1</code>).</div></div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<section id="verbindung">
+  <h2><span class="num">04</span>Verbindung &amp; Vorbereitung</h2>
+  <p>NeuraPy ist ein schlanker Client. Er schickt jeden Befehl als JSON-Nachricht über TCP an die
+    Steuerung (Port 65432). Weil das Protokoll immer gleich ist, kann der <i>gleiche</i> Code mit vier
+    verschiedenen Gegenstellen arbeiten:</p>
+  <div class="svgwrap">
+    <svg viewBox="0 0 900 270" role="img" aria-label="Verbindungsvarianten">
+      <defs><marker id="b1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="f-muted"/></marker></defs>
+      <g font-size="12">
+        <rect x="10" y="100" width="150" height="60" rx="9" class="f-surface2"/><text x="85" y="124" text-anchor="middle" font-weight="700" class="f-text">Orchestrator</text><text x="85" y="142" text-anchor="middle" class="f-muted" font-size="11">/ GUI / robot_check</text>
+        <rect x="200" y="40" width="170" height="60" rx="9" class="f-surface2"/><text x="285" y="64" text-anchor="middle" font-weight="700" class="f-text">MockRobot</text><text x="285" y="82" text-anchor="middle" class="f-muted" font-size="11">kein Netz · „mock“</text>
+        <rect x="200" y="160" width="170" height="60" rx="9" class="f-accsoft" stroke="var(--accent)"/><text x="285" y="184" text-anchor="middle" font-weight="700" class="f-text">NeuraRobot</text><text x="285" y="202" text-anchor="middle" class="f-muted" font-size="11">mm/° → m/rad, Sicherheit</text>
+        <rect x="410" y="160" width="160" height="60" rx="9" class="f-surface2"/><text x="490" y="184" text-anchor="middle" font-weight="700" class="f-text">neurapy.Robot</text><text x="490" y="202" text-anchor="middle" class="f-muted" font-size="11">Herstellerclient (vendor)</text>
+        <text x="620" y="152" text-anchor="middle" class="f-acc" font-size="11" font-family="var(--mono)">JSON / TCP :65432</text>
+        <rect x="680" y="70" width="210" height="50" rx="9" class="f-surface2"/><text x="785" y="92" text-anchor="middle" font-weight="700" class="f-text">FakeNeuraServer</text><text x="785" y="108" text-anchor="middle" class="f-muted" font-size="11">127.0.0.1 · „sim“</text>
+        <rect x="680" y="135" width="210" height="50" rx="9" class="f-surface2"/><text x="785" y="157" text-anchor="middle" font-weight="700" class="f-text">Neura-VM (VirtualBox)</text><text x="785" y="173" text-anchor="middle" class="f-muted" font-size="11">offizielle Simulation · „vm“</text>
+        <rect x="680" y="200" width="210" height="50" rx="9" class="f-accsoft" stroke="var(--accent)"/><text x="785" y="222" text-anchor="middle" font-weight="700" class="f-text">LARA-Steuerung</text><text x="785" y="238" text-anchor="middle" class="f-muted" font-size="11">echter Roboter · „real“</text>
+      </g>
+      <g stroke="currentColor" stroke-opacity=".45" fill="none" marker-end="url(#b1)">
+        <path d="M160,120 L198,72"/><path d="M160,140 L198,188"/><path d="M370,190 H408"/>
+        <path d="M570,190 C620,190 630,95 678,95"/><path d="M570,190 C620,190 630,160 678,160"/><path d="M570,190 C620,190 630,225 678,225"/>
+      </g>
+    </svg>
+  </div>
+  <p>Der Simulator ist besonders wichtig: Die Tests laufen über den <b>echten</b> Herstellerclient. Damit ist
+    der komplette Codepfad bis zur Netzwerknachricht ohne Roboter geprüft. Die Neura-VM ist die
+    offizielle Simulation des Herstellers mit echter Kinematik, darin wurden Vorzeichen und Erreichbarkeit
+    getestet.</p>
+
+  <h3>Vorbereitung vor jeder Bewegung: <code>_prepare()</code></h3>
+  <ol>
+    <li><code>power_on()</code>: Antriebe einschalten (scheitert z. B. bei gedrücktem Not-Halt)</li>
+    <li>Falls im Handbetrieb: <code>switch_to_automatic_mode()</code></li>
+    <li><code>set_tool("ZimmerLWR50")</code> und <b>Werkzeugprüfung</b>: Der TCP-Versatz auf der Steuerung muss
+      bis auf 1 mm mit <code>tool_tcp_mm</code> = 197,5 mm übereinstimmen, sonst gibt es keine Bewegung.</li>
+    <li><code>set_override(0.2)</code>, <code>set_joint_speed(20)</code>: reduzierte Geschwindigkeit</li>
+    <li><code>init_program()</code>: startet das Bewegungsprogramm auf der Steuerung. Ohne diesen Schritt nimmt
+      die Steuerung keine Bewegungsbefehle an. Bis zu 3 Versuche, weil die VM den Wechsel in den
+      Play-Modus manchmal kurz verweigert.</li>
+  </ol>
+  <div class="grid2">
+    <div class="card"><h3>Stopp → gesperrt → Quittieren</h3>
+      <svg viewBox="0 0 400 150" role="img" aria-label="Stopp-Zustände">
+        <defs><marker id="b2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="f-muted"/></marker></defs>
+        <g font-size="12">
+          <rect x="10" y="50" width="110" height="46" rx="23" class="f-surface2"/><text x="65" y="78" text-anchor="middle" class="f-text" font-weight="700">gesperrt</text>
+          <rect x="280" y="50" width="110" height="46" rx="23" class="f-accsoft" stroke="var(--accent)"/><text x="335" y="78" text-anchor="middle" class="f-text" font-weight="700">bereit</text>
+          <text x="200" y="30" text-anchor="middle" class="f-muted" font-size="11">connect() / reset() → _prepare()</text>
+          <text x="200" y="136" text-anchor="middle" class="f-muted" font-size="11">stop(): beendet das Programm</text>
+        </g>
+        <g stroke="currentColor" stroke-opacity=".5" fill="none" marker-end="url(#b2)"><path d="M100,50 C150,20 250,20 300,50"/><path d="M300,96 C250,126 150,126 100,96"/></g>
+      </svg>
+      <p style="font-size:.9rem">NeuraPys <code>stop()</code> beendet das Programm auf der Steuerung. Danach lehnt
+        <code>NeuraRobot</code> jede Bewegung ab, bis <code>reset()</code> alles neu vorbereitet hat. Den Reset
+        löst der Bediener aus („Fehler quittieren“ bzw. „Freigeben“), nie das System selbst.</p></div>
+    <div class="card"><h3>Einheiten</h3>
+      <p style="font-size:.9rem">Im ganzen Projekt gelten <b>mm und Grad</b>. NeuraPy erwartet
+        <code>[x, y, z, roll, pitch, yaw]</code> in <b>m und rad</b>. Umgerechnet wird ausschließlich an einer
+        Stelle, in <code>to_neura()</code> / <code>from_neura()</code>. Diese Grenze ist bewusst gezogen,
+        damit kein Einheitenfehler „durchrutscht“.</p>
+<pre><code><span class="k">def</span> to_neura(t):
+    <span class="k">return</span> [t.x_mm/1000, t.y_mm/1000, t.z_mm/1000,
+            rad(t.rx_deg), rad(t.ry_deg), rad(t.rz_deg)]</code></pre></div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<section id="greifpose">
+  <h2><span class="num">05</span>Greifpose &amp; Greiferwinkel</h2>
+  <p><code>as_target()</code> macht aus der erkannten <code>ObjectPose</code> eine Zielpose für den TCP (Tool Center
+    Point, Mitte zwischen den Greiferbacken):</p>
+<pre><code><span class="c"># robot.py, as_target()</span>
+x, y = pose.x_mm, pose.y_mm
+z    = pose.z_mm + grasp_height_mm                   <span class="c"># Tischhöhe + 5 mm</span>
+rx, ry = home.rx, home.ry                            <span class="c"># Werkzeug zeigt senkrecht nach unten (roll = 180°)</span>
+rz   = wrap(home.rz + pose.theta_deg + gripper_angle_offset_deg)   <span class="c"># 180 + θ + 113 → (−180, 180]</span></code></pre>
+  <p>Der Greifer dreht sich also nur um die senkrechte Achse. Der Offset von <b>113°</b> setzt sich aus zwei Teilen zusammen:</p>
+  <ul>
+    <li><b>90°</b>: Die Backen sollen <i>quer</i> zur Längsachse schließen, also an den langen Seiten anliegen.</li>
+    <li><b>23°</b>: Der Zimmer-Greifer ist mechanisch um 23° verdreht auf dem Flansch montiert. Das wurde
+      im Labor am 06.10. festgestellt (bei Home + 23° schließen die Backen entlang Basis-x).</li>
+  </ul>
+  <div class="demo">
+    <div class="dh"><h4>Greiferwinkel: Draufsicht im Roboter-Basis-KS</h4></div>
+    <div class="controls">
+      <label>Bauteilwinkel θ <input type="range" id="gTh" min="0" max="359" value="37"> <span id="gThV"></span></label>
+      <label><input type="checkbox" id="gOld"> alter Offset 90° (ohne Einbauwinkel)</label>
+    </div>
+    <div class="grid2" style="align-items:center">
+      <div class="svgwrap" style="padding:6px"><svg id="gSvg" viewBox="-70 -70 140 140"></svg></div>
+      <div><div class="readout" id="gOut"></div>
+        <p style="font-size:.86rem;margin-top:10px">Violett ist das Bauteil, grau sind die zwei Greiferbacken mit
+          ihrer Schließrichtung (gestrichelt). Mit dem richtigen Offset schließen die Backen immer senkrecht
+          zur Längsachse. Mit dem alten Offset von 90° stehen sie um 23° schief und würden auf die Ecken
+          treffen.</p></div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    const HOME_RZ = 180, MOUNT = 23, L = 66, W = 44;
+    const th = document.getElementById("gTh"), old = document.getElementById("gOld");
+    function draw() {
+      const t = +th.value, off = old.checked ? 90 : 113;
+      const rz = wrapDeg(HOME_RZ + t + off);
+      const phi = rz - HOME_RZ - MOUNT;                    // Schließrichtung der Backen im Basis-KS
+      const R = a => { const r = a * Math.PI / 180; return ([x, y]) => [x * Math.cos(r) - y * Math.sin(r), -(x * Math.sin(r) + y * Math.cos(r))]; };
+      const rp = R(t), rj = R(phi), hl = L / 2, hw = W / 2, c = 10;
+      const part = [[-hl, -hw], [hl, -hw], [hl, hw - c], [hl - c, hw], [-hl, hw]].map(rp);
+      const jaw = s => [[s * (hw + 3), -12], [s * (hw + 11), -12], [s * (hw + 11), 12], [s * (hw + 3), 12]].map(rj);
+      const P = a => a.map(p => p.map(v => v.toFixed(2)).join(",")).join(" ");
+      const e1 = rj([-(hw + 20), 0]), e2 = rj([hw + 20, 0]), ax = rp([0.55 * L, 0]);
+      const misalign = Math.abs(((phi - t - 90) % 180 + 270) % 180 - 90);
+      document.getElementById("gSvg").innerHTML = `
+        <line x1="-66" y1="62" x2="-46" y2="62" stroke="currentColor" stroke-width=".8"/><text x="-44" y="64" font-size="5" class="f-muted">+x</text>
+        <line x1="-66" y1="62" x2="-66" y2="42" stroke="currentColor" stroke-width=".8"/><text x="-68" y="39" font-size="5" class="f-muted">+y</text>
+        <polygon points="${P(part)}" fill="#a78bfa" fill-opacity=".8" stroke="#6d28d9" stroke-width=".6"/>
+        <line x1="0" y1="0" x2="${ax[0]}" y2="${ax[1]}" stroke="#6d28d9" stroke-width=".8" stroke-dasharray="2 1"/>
+        <line x1="${e1[0]}" y1="${e1[1]}" x2="${e2[0]}" y2="${e2[1]}" stroke="${misalign > 1 ? "var(--bad)" : "var(--accent)"}" stroke-width=".8" stroke-dasharray="3 2"/>
+        <polygon points="${P(jaw(1))}" fill="currentColor" fill-opacity=".55"/><polygon points="${P(jaw(-1))}" fill="currentColor" fill-opacity=".55"/>`;
+      document.getElementById("gThV").textContent = t + "°";
+      document.getElementById("gOut").innerHTML =
+        `rz = wrap(180° + ${t}° + ${off}°) = <b>${fmt(rz)}°</b><br>` +
+        `Schließrichtung der Backen = rz − 180° − 23° = ${fmt(wrapDeg(phi))}°<br>` +
+        `Abweichung von „quer zur Längsachse“: <b style="color:${misalign > 1 ? "var(--bad)" : "var(--good)"}">${fmt(misalign)}°</b>`;
+    }
+    th.oninput = old.onchange = draw; draw();
+  })();
+  </script>
+  <div class="note"><p><b>Warum wird rz auf (−180°, 180°] normiert?</b> Damit dieselbe Orientierung immer
+    gleich dargestellt wird. Beim Joggen (<code>jog</code>) wird bewusst <i>nicht</i> normiert: Aus 180° + 5°
+    würde sonst −175°, und die Steuerung würde den Winkel „den langen Weg“ über −355° interpolieren und
+    dabei in eine Gelenkgrenze laufen.</p></div>
+  <p>Die Drehrichtung (+rz = gegen den Uhrzeigersinn von oben bei roll = 180°) wurde in der Neura-VM
+    bestätigt. Am echten Roboter ist sie laut M2-README noch zu prüfen (Achsentest: +rz einzeln fahren und
+    beobachten).</p>
+</section>
+
+<!-- ============================================================== -->
+<section id="sequenz">
+  <h2><span class="num">06</span>Greif- &amp; Ablegesequenz</h2>
+  <p>Greifen und Ablegen laufen nach demselben Muster ab. Zwei Bewegungsarten werden kombiniert:</p>
+  <div class="grid2">
+    <div class="card"><h3>PTP / Gelenkbewegung</h3><p style="font-size:.92rem">Für große Wege zwischen den Stationen.
+      Die Steuerung berechnet per inverser Kinematik (<code>compute_inverse_kinematics</code>) die Gelenkwinkel der
+      Zielpose, und alle Gelenke fahren gleichzeitig dorthin (<code>move_joint</code>). Das ist schnell, aber die
+      Bahn des Greifers ist keine Gerade, deshalb wird nur in sicherer Höhe so gefahren.</p></div>
+    <div class="card"><h3>LIN / Linearbewegung</h3><p style="font-size:.92rem">Für das Absenken und Anheben. Der TCP
+      bewegt sich auf einer Geraden (<code>move_linear</code>), der Greifer fährt also exakt senkrecht auf das
+      Bauteil zu. Zweistufig: erst schnell (0,10 m/s), die letzten 20 mm langsam (0,03 m/s).</p></div>
+  </div>
+  <div class="demo">
+    <div class="dh"><h4>Ablauf von pick() / place() in der Seitenansicht</h4></div>
+    <div class="controls">
+      <button class="primary" id="sqPlay">▶ Abspielen</button>
+      <button id="sqStep">Nächster Schritt</button>
+      <label><input type="radio" name="sqMode" value="pick" checked> pick()</label>
+      <label><input type="radio" name="sqMode" value="place"> place()</label>
+    </div>
+    <div class="grid2" style="align-items:start">
+      <div class="svgwrap" style="padding:6px"><svg id="sqSvg" viewBox="0 -40 420 340"></svg></div>
+      <div><ol id="sqList" style="font-size:.88rem;padding-left:20px;margin:0"></ol>
+        <div class="readout" id="sqOut" style="margin-top:10px"></div></div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    // Werte aus system.yaml: approach_height_mm 80, approach_slow_mm 20, linear 0.10 m/s, approach 0.03 m/s, grip_wait_s 1.0
+    const H = 80, SLOW = 20, VF = 100, VS = 30, WAIT = 1.0, ZT = 7.1, ZSTART = 237;
+    const X0 = 50, XT = 250, sz = z => 262 - z * 0.92, sx = x => x;
+    const svg = document.getElementById("sqSvg"), list = document.getElementById("sqList"), out = document.getElementById("sqOut");
+    let mode = "pick", phases = [], cur = -1, anim = null;
+    function build() {
+      const g0 = mode === "pick" ? "Greifer öffnen (release)" : null;
+      const act = mode === "pick" ? ["Greifer schließen (grasp), 1 s warten", true] : ["Greifer öffnen (release), 1 s warten", false];
+      const start = mode === "pick" ? false : true;          // place: Teil ist im Greifer
+      phases = [];
+      if (g0) phases.push({t: g0, z0: ZSTART, z1: ZSTART, x0: X0, x1: X0, dur: 0.3, closed: false, hold: false, kind: "Greifer"});
+      phases.push({t: "PTP nach Vorposition V = Ziel + 80 mm (IK + move_joint)", z0: ZSTART, z1: ZT + H, x0: X0, x1: XT, dur: 2.0, closed: start, hold: start, kind: "PTP", ptp: true});
+      phases.push({t: "LIN schnell bis 20 mm über Ziel (0,10 m/s)", z0: ZT + H, z1: ZT + SLOW, x0: XT, x1: XT, dur: (H - SLOW) / VF, closed: start, hold: start, kind: "LIN"});
+      phases.push({t: "LIN langsam auf Ziel Z (0,03 m/s)", z0: ZT + SLOW, z1: ZT, x0: XT, x1: XT, dur: SLOW / VS, closed: start, hold: start, kind: "LIN"});
+      phases.push({t: act[0], z0: ZT, z1: ZT, x0: XT, x1: XT, dur: WAIT, closed: act[1], hold: act[1], kind: "Greifer", toggle: true});
+      phases.push({t: "LIN langsam 20 mm hoch (0,03 m/s)", z0: ZT, z1: ZT + SLOW, x0: XT, x1: XT, dur: SLOW / VS, closed: act[1], hold: act[1], kind: "LIN"});
+      phases.push({t: "LIN schnell zurück auf V (0,10 m/s)", z0: ZT + SLOW, z1: ZT + H, x0: XT, x1: XT, dur: (H - SLOW) / VF, closed: act[1], hold: act[1], kind: "LIN"});
+      list.innerHTML = phases.map((p, k) => `<li id="sq${k}" style="padding:2px 4px;border-radius:4px">${p.t}</li>`).join("");
+      cur = -1; render(ZSTART, X0, !!(mode === "place"), mode === "place");
+      const lin = phases.filter(p => p.kind !== "PTP").reduce((a, p) => a + p.dur, 0);
+      out.innerHTML = `Zeit ohne PTP und ohne Beschleunigung: <b>${fmt(lin, 2)} s</b><br>davon langsam: ${fmt(2 * SLOW / VS, 2)} s · Greiferwartezeit: ${fmt(WAIT, 1)} s`;
+    }
+    function render(z, x, closed, hold, ptpPath) {
+      const gy = sz(z), open = closed ? 27 : 34;
+      const partX = hold ? x : XT, partY = hold ? gy - 7 : sz(0) - 14;   // Teil 15 mm hoch, TCP in Teilmitte
+      svg.innerHTML = `
+        <defs><marker id="sqa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="f-muted"/></marker></defs>
+        <rect x="0" y="${sz(0)}" width="420" height="30" class="f-surface2"/>
+        <line x1="0" y1="${sz(0)}" x2="420" y2="${sz(0)}" stroke="currentColor" stroke-opacity=".5"/>
+        <text x="6" y="${sz(0) + 18}" font-size="11" class="f-muted">Tisch</text>
+        <line x1="${XT - 70}" y1="${sz(ZT + H)}" x2="${XT + 70}" y2="${sz(ZT + H)}" stroke="var(--accent)" stroke-dasharray="4 3" stroke-opacity=".7"/>
+        <text x="${XT + 74}" y="${sz(ZT + H) + 4}" font-size="11" class="f-acc">V (+80)</text>
+        <line x1="${XT - 70}" y1="${sz(ZT + SLOW)}" x2="${XT + 70}" y2="${sz(ZT + SLOW)}" stroke="var(--warn)" stroke-dasharray="2 3"/>
+        <text x="${XT + 74}" y="${sz(ZT + SLOW) + 4}" font-size="11" fill="var(--warn)">langsam ab +20</text>
+        <text x="${XT + 74}" y="${sz(ZT) + 4}" font-size="11" class="f-muted">Z</text>
+        <path d="M${X0},${sz(ZSTART)} C${X0 + 60},${sz(ZSTART + 25)} ${XT - 80},${sz(ZT + H + 60)} ${XT},${sz(ZT + H)}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-dasharray="5 4" marker-end="url(#sqa)"/>
+        <text x="${(X0 + XT) / 2 - 20}" y="${sz(ZSTART + 10)}" font-size="11" class="f-muted">PTP</text>
+        <text x="${X0 + 40}" y="${sz(ZSTART) + 4}" font-size="11" class="f-muted">Start (Home, z 237)</text>
+        <rect x="${partX - 20}" y="${partY}" width="40" height="14" rx="1" fill="#a78bfa" stroke="#6d28d9"/>
+        <g transform="translate(${x},${gy})">
+          <rect x="-6" y="-70" width="12" height="44" class="f-surface2" stroke="currentColor" stroke-opacity=".4"/>
+          <rect x="-34" y="-28" width="68" height="12" rx="2" fill="currentColor" fill-opacity=".55"/>
+          <rect x="${-open}" y="-16" width="7" height="24" fill="currentColor" fill-opacity=".75"/>
+          <rect x="${open - 7}" y="-16" width="7" height="24" fill="currentColor" fill-opacity=".75"/>
+          <circle r="2.5" fill="var(--accent)"/>
+        </g>
+        <text x="${x - 44}" y="${gy + 4}" font-size="10" text-anchor="end" class="f-acc">TCP</text>`;
+    }
+    // Spielt ab Phase `from`; one = nur diese eine Phase
+    function play(from, one) {
+      cancelAnimationFrame(anim);
+      let k = from, t0 = null;
+      const step = ts => {
+        if (k >= phases.length) { cur = -1; return; }
+        const p = phases[k];
+        if (t0 === null) { t0 = ts; highlight(k); }
+        const f = Math.min(1, (ts - t0) / (p.dur * 1000));
+        const e = p.ptp ? (1 - Math.cos(f * Math.PI)) / 2 : f;
+        let x = p.x0 + (p.x1 - p.x0) * e, z = p.z0 + (p.z1 - p.z0) * e;
+        if (p.ptp) z += Math.sin(f * Math.PI) * 40;     // gekrümmte Gelenkbahn andeuten
+        const closed = p.toggle ? (f > .3 ? p.closed : !p.closed) : p.closed;
+        const hold = p.toggle ? (f > .3 ? p.hold : !p.hold) : p.hold;
+        render(z, x, closed, hold);
+        if (f >= 1) {
+          k++; t0 = null; cur = k < phases.length ? k : -1;
+          if (one) return;
+        }
+        anim = requestAnimationFrame(step);
+      };
+      anim = requestAnimationFrame(step);
+    }
+    function highlight(k) { phases.forEach((_, i) => { const li = document.getElementById("sq" + i); li.style.background = i === k ? "var(--accent-soft)" : ""; li.style.fontWeight = i === k ? 700 : 400; }); }
+    document.getElementById("sqPlay").onclick = () => { build(); play(0, false); };
+    document.getElementById("sqStep").onclick = () => { if (cur < 0) build(); play(Math.max(cur, 0), true); };
+    document.querySelectorAll("input[name=sqMode]").forEach(r => r.onchange = () => { mode = r.value; cancelAnimationFrame(anim); build(); });
+    build();
+  })();
+  </script>
+  <p>Vor jeder Bewegung wird <b>Ziel und Vorposition</b> gegen die Arbeitsraumgrenzen geprüft (<code>check_limits</code>).
+    <code>place()</code> nutzt dasselbe Schema, nur öffnet der Greifer unten, statt zu schließen. Das Greifen an der
+    Prüfposition ist dasselbe <code>pick()</code>, nur mit der festen Pose <code>inspection</code> statt einer erkannten
+    Pose. Optimierung: Steht der Roboter schon an den Zielgelenkwinkeln (&lt; 0,001 rad), wird
+    <code>move_joint</code> gar nicht erst gesendet.</p>
+</section>
+
+<!-- ============================================================== -->
+<section id="posen">
+  <h2><span class="num">07</span>Feste Posen</h2>
+  <p>Vier Posen sind im Labor geteacht und in <code>robot.poses</code> eingetragen, jeweils als TCP-Pose
+    <code>[x, y, z, rx, ry, rz]</code> in mm/° im Basis-KS. Jede Ablagepose ist die exakte Pose, an der der
+    Greifer öffnet, inklusive eigener Höhe.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Pose</th><th class="n">x</th><th class="n">y</th><th class="n">z</th><th class="n">rz</th><th>Zweck</th></tr></thead>
+    <tbody>
+      <tr><td><code>home</code></td><td class="n">420,0</td><td class="n">0,0</td><td class="n">237,0</td><td class="n">180°</td><td>Ruheposition außerhalb der Kamerabilder; wird als benannter Punkt „Home“ in Gelenkkoordinaten angefahren</td></tr>
+      <tr><td><code>inspection</code></td><td class="n">520,8</td><td class="n">199,6</td><td class="n">42,0</td><td class="n">−157°</td><td>Prüfvorrichtung vor der Seitenkamera (gedruckt, Oberfläche 38 mm über der Platte)</td></tr>
+      <tr><td><code>bin_good</code></td><td class="n">299,7</td><td class="n">185,4</td><td class="n">4,0</td><td class="n">−157°</td><td>Ablage für Gutteile</td></tr>
+      <tr><td><code>bin_bad</code></td><td class="n">297,7</td><td class="n">319,4</td><td class="n">3,0</td><td class="n">−157°</td><td>Ablage für Schlechtteile</td></tr>
+    </tbody>
+  </table></div>
+  <p>rz = −157° entspricht 180° + 23°: An den Stationen liegt das Teil entlang Basis-y, die Backen schließen entlang
+    Basis-x. Teachen geht über die GUI (<i>Posen teachen</i>) oder <code>robot_check teach</code>: hinfahren,
+    feinjoggen, übernehmen, speichern.</p>
+</section>
+
+<!-- ============================================================== -->
+<section id="kalibrierung">
+  <h2><span class="num">08</span>Kalibrierung Arbeitsbereich → Roboter &amp; Zeigetest</h2>
+  <p>Damit die Pose von M1 im Roboter-KS stimmt, wird die Transformation <code>workspace_to_robot</code> (Drehung φ,
+    Verschiebung t) eingemessen. Das ist die gemeinsame Schnittstelle von M1 und M2.</p>
+  <ol>
+    <li>Greiferspitze nacheinander mittig auf die Markermitten setzen (Joggen, Pendant oder Freedrive), sodass sie den Tisch gerade berührt.</li>
+    <li>Je Marker die aktuelle TCP-Pose übernehmen. Mindestens 3 Marker sind nötig, 4 sind besser.</li>
+    <li><code>calibrate()</code> → <code>fit_workspace_to_robot()</code>: Least-Squares-Fit nach Kabsch/Umeyama (SVD), Restfehler je Marker, RMS.</li>
+    <li>RMS ≤ 3 mm → in die Konfiguration übernehmen. <code>table_z_mm</code> = Mittelwert der angetasteten Höhen.</li>
+  </ol>
+  <div class="demo">
+    <div class="dh"><h4>Least-Squares-Fit und Restfehler</h4></div>
+    <p style="font-size:.9rem">Die vier „angetasteten“ Punkte sind hier exakt. Füge einem Marker einen Antastfehler
+      hinzu oder vertausche zwei Marker-IDs und beobachte, wie sich φ, t und die Restfehler ändern. Gerechnet wird
+      wie in <code>common/transforms.py</code>.</p>
+    <div class="controls">
+      <label>Marker <select id="cM"><option>0</option><option>1</option><option selected>2</option><option>3</option></select></label>
+      <label>Fehler dx <input type="range" id="cDx" min="-10" max="10" step="0.5" value="0"> <span id="cDxV"></span></label>
+      <label>dy <input type="range" id="cDy" min="-10" max="10" step="0.5" value="0"> <span id="cDyV"></span></label>
+      <label><input type="checkbox" id="cSwap"> IDs 1 ↔ 2 vertauscht</label>
+    </div>
+    <div class="grid2" style="align-items:start">
+      <div class="svgwrap" style="padding:6px"><svg id="cSvg" viewBox="-80 -80 560 560"></svg></div>
+      <div><div class="readout" id="cOut"></div>
+        <p style="font-size:.85rem;margin-top:10px">Kreise: Markermitten mit der gefitteten Transformation abgebildet.
+          Kreuze: angetastete Roboterpositionen. Die Linien dazwischen sind die Restfehler, 10-fach vergrößert.
+          Ein einzelner Fehler verteilt sich auf alle Marker. Daher braucht es mindestens 3 Punkte, sonst gäbe es
+          keinen Restfehler, an dem man den Fehler bemerken könnte. Probiere 6 mm an Marker 2: Der RMS
+          (2,4 mm) wäre noch „ok“, der Einzelfehler von Marker 2 (3,8 mm) fällt aber auf. Deshalb immer auch die
+          Restfehler je Marker ansehen.</p></div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    const WS = {0: [-35, -35], 1: [365, -35], 2: [365, 365], 3: [-35, 365]};
+    const PHI = 0.35, T = [205.1, -319.7];
+    const rig = ([x, y], a, t) => { const r = a * Math.PI / 180; return [Math.cos(r) * x - Math.sin(r) * y + t[0], Math.sin(r) * x + Math.cos(r) * y + t[1]]; };
+    function fit(src, dst) {           // 2D-Kabsch: beste Drehung + Verschiebung
+      const n = src.length, ms = [0, 0], md = [0, 0];
+      src.forEach((p, i) => { ms[0] += p[0] / n; ms[1] += p[1] / n; md[0] += dst[i][0] / n; md[1] += dst[i][1] / n; });
+      let a = 0, b = 0;
+      src.forEach((p, i) => { const sx = p[0] - ms[0], sy = p[1] - ms[1], dx = dst[i][0] - md[0], dy = dst[i][1] - md[1]; a += sx * dx + sy * dy; b += sx * dy - sy * dx; });
+      const phi = Math.atan2(b, a) * 180 / Math.PI, m = rig(ms, phi, [0, 0]);
+      return [phi, [md[0] - m[0], md[1] - m[1]]];
+    }
+    const els = ["cM", "cDx", "cDy", "cSwap"].map(id => document.getElementById(id));
+    function run() {
+      const sel = +els[0].value, dx = +els[1].value, dy = +els[2].value, swap = els[3].checked;
+      document.getElementById("cDxV").textContent = fmt(dx) + " mm";
+      document.getElementById("cDyV").textContent = fmt(dy) + " mm";
+      const ids = [0, 1, 2, 3];
+      const taught = ids.map(i => { const p = rig(WS[swap && i === 1 ? 2 : swap && i === 2 ? 1 : i], PHI, T); return i === sel ? [p[0] + dx, p[1] + dy] : p; });
+      const src = ids.map(i => WS[i]);
+      const [phi, t] = fit(src, taught);
+      const res = ids.map((i, k) => { const p = rig(src[k], phi, t); return [p, Math.hypot(p[0] - taught[k][0], p[1] - taught[k][1])]; });
+      const rms = Math.sqrt(res.reduce((a, r) => a + r[1] * r[1], 0) / res.length);
+      const ok = rms <= 3;
+      // Zeichnen im Arbeitsbereich-Maßstab (Roboterkoordinaten minus t0 → Bild)
+      const view = p => { const q = rig([p[0] - T[0], p[1] - T[1]], -PHI, [0, 0]); return [q[0], 400 - q[1] - 35]; };
+      let s = `<rect x="-35" y="0" width="400" height="400" fill="none" stroke="currentColor" stroke-opacity=".2"/>`;
+      res.forEach(([p, r], k) => {
+        const a = view(p), b = view(taught[k]);
+        const bb = [a[0] + (b[0] - a[0]) * 10, a[1] + (b[1] - a[1]) * 10];
+        s += `<line x1="${a[0]}" y1="${a[1]}" x2="${bb[0]}" y2="${bb[1]}" stroke="var(--bad)" stroke-width="3"/>
+              <circle cx="${a[0]}" cy="${a[1]}" r="12" fill="none" stroke="var(--accent)" stroke-width="3"/>
+              <path d="M${bb[0] - 9},${bb[1] - 9} l18,18 m0,-18 l-18,18" stroke="currentColor" stroke-width="3"/>
+              <text x="${a[0] + (k === 1 || k === 2 ? -36 : 20)}" y="${a[1] + (k < 2 ? 32 : -18)}" font-size="22" class="f-text" font-weight="700">${k}</text>`;
+      });
+      document.getElementById("cSvg").innerHTML = s;
+      document.getElementById("cOut").innerHTML =
+        `φ = <b>${fmt(phi, 2)}°</b> (richtig: 0,35°)<br>t = (<b>${fmt(t[0])}</b> | <b>${fmt(t[1])}</b>) mm<br>` +
+        res.map((r, k) => `Restfehler Marker ${k}: ${fmt(r[1], 2)} mm`).join("<br>") +
+        `<br>RMS = <b style="color:${ok ? "var(--good)" : "var(--bad)"}">${fmt(rms, 2)} mm</b> ${ok ? "✓ übernehmen" : "✗ > 3 mm: Marker neu antasten / IDs prüfen"}`;
+    }
+    els.forEach(e => e.oninput = e.onchange = run); run();
+  })();
+  </script>
+  <h3>Zeigetest: die Kalibrierung praktisch prüfen</h3>
+  <p><code>point_at()</code> fährt mit offenem Greifer genau wie bei <code>pick()</code> über das von M1 erkannte Bauteil,
+    bleibt aber 30 mm darüber stehen und greift <b>nicht</b>. Der Bediener misst den Versatz zwischen Bauteilmitte und
+    Greifermitte und trägt ihn ein. Jede Messung landet in <code>logs/point_tests.csv</code>. Das ist die
+    Datengrundlage für die Positionsgenauigkeit des Gesamtsystems (M1 + Kalibrierung + Roboter) in der Evaluation.</p>
+</section>
+
+<!-- ============================================================== -->
+<section id="sicherheit">
+  <h2><span class="num">09</span>Sicherheitskonzept</h2>
+  <p>Die Anlage ist nicht sicherheitszertifiziert und läuft nur unter Aufsicht. Der LARA ist ein Cobot mit eigener
+    Kollisionserkennung. M2 ergänzt <b>mehrere Software-Schichten</b>:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Maßnahme</th><th>Umsetzung</th></tr></thead>
+    <tbody>
+      <tr><td>Reduzierte Geschwindigkeit</td><td><code>override 0.2</code>, <code>joint_speed_percent 20</code>, letzte 20 mm mit 0,03 m/s</td></tr>
+      <tr><td>Arbeitsraumgrenzen</td><td>Jedes Ziel <i>und</i> jede Vorposition muss im Quader x 100…900, y −500…500, z −10…600 mm liegen, sonst <code>RobotError</code> ohne Bewegung. Auch eine fehlerhafte Pose von M1 kann den Roboter so nicht aus dem Bereich führen.</td></tr>
+      <tr><td>Werkzeugprüfung</td><td>Weicht der TCP-Versatz auf der Steuerung um mehr als 1 mm von 197,5 mm ab, wird nicht gefahren. Ein falscher Versatz würde jede Greifhöhe verschieben, der Greifer könnte in den Tisch fahren.</td></tr>
+      <tr><td>Stopp mit Quittierung</td><td>Nach <code>stop()</code> wird jede Bewegung abgelehnt, bis der Bediener quittiert. Es gibt bewusst keinen automatischen Wiederanlauf.</td></tr>
+      <tr><td>STOPP-Knopf in der GUI</td><td>Läuft in einem <b>eigenen Thread</b> und wird deshalb nie von einer laufenden Bewegung blockiert. Roboterbefehle laufen strikt nacheinander in einem separaten Thread.</td></tr>
+      <tr><td>Joggen begrenzt</td><td>Max. 100 mm bzw. 15° je Schritt, langsam. Standardmäßig mit Rückfrage („Hand am Not-Halt?“); <i>Ohne Rückfrage joggen</i> muss bewusst eingeschaltet werden und wird beim Trennen zurückgesetzt.</td></tr>
+      <tr><td>Greifer abschaltbar</td><td><code>gripper_enabled: false</code> für erste Tests: Es wird nur gefahren, nicht gegriffen (in der VM immer aus).</td></tr>
+      <tr><td>Hardware-Not-Halt</td><td>Immer in Reichweite. Die Software-Stopps ersetzen ihn nicht.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================== -->
+<section id="config">
+  <h2><span class="num">10</span>Konfiguration (<code>robot:</code> in <code>system.yaml</code>)</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Schlüssel</th><th>Wert</th><th>Bedeutung</th></tr></thead>
+    <tbody>
+      <tr><td><code>host</code> / <code>vm_host</code></td><td>192.168.2.13</td><td>IP der Steuerung bzw. der Neura-VM</td></tr>
+      <tr><td><code>tool_name</code>, <code>tool_tcp_mm</code></td><td>ZimmerLWR50, [0, 0, 197.5]</td><td>Werkzeug auf der Steuerung: 169,5 mm Greifer + 28 mm Robotermodul</td></tr>
+      <tr><td><code>override</code>, <code>joint_speed_percent</code></td><td>0.2, 20</td><td>Geschwindigkeitsbegrenzung</td></tr>
+      <tr><td><code>linear_speed_mps</code>, <code>approach_speed_mps</code></td><td>0.10, 0.03</td><td>LIN schnell / langsam</td></tr>
+      <tr><td><code>approach_height_mm</code>, <code>approach_slow_mm</code></td><td>80, 20</td><td>Vorposition über dem Ziel, Umschaltpunkt schnell → langsam</td></tr>
+      <tr><td><code>grasp_height_mm</code></td><td>5</td><td>TCP-Höhe über dem Tisch beim Greifen</td></tr>
+      <tr><td><code>gripper_angle_offset_deg</code></td><td>113</td><td>90° quer + 23° Einbauwinkel</td></tr>
+      <tr><td><code>grip_wait_s</code>, <code>gripper_enabled</code></td><td>1.0, false</td><td>Wartezeit nach Greifen/Öffnen; Greifer an/aus</td></tr>
+      <tr><td><code>limits_mm</code></td><td>x/y/z-Quader</td><td>Software-Arbeitsraumgrenzen</td></tr>
+      <tr><td><code>poses</code></td><td>home, inspection, bin_good, bin_bad</td><td>Feste Posen (siehe oben)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================== -->
+<section id="bedienung">
+  <h2><span class="num">11</span>Inbetriebnahme &amp; Tests</h2>
+  <p>Die Inbetriebnahme folgt einer festen Reihenfolge, vom harmlosen Lesen bis zum vollständigen Greifen. Jeder Schritt
+    steht sowohl in der Kommandozeile als auch in der GUI (Tab <b>M2 Roboter</b> → <i>Erste Schritte</i>) zur Verfügung:</p>
+  <div class="svgwrap">
+    <svg viewBox="0 0 900 96" role="img" aria-label="Inbetriebnahme-Reihenfolge">
+      <defs><marker id="b3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="f-acc"/></marker></defs>
+      <g font-size="11.5"></g>
+    </svg>
+  </div>
+  <script>
+  (function () {
+    const steps = [["info", "nur lesen"], ["home", "1. Bewegung"], ["gripper", "auf/zu"], ["axes", "Richtungen"], ["teach", "Posen"], ["calib", "Marker"], ["point", "zeigen"], ["pick-test", "greifen"]];
+    const w = 98, g = 12;
+    let s = "";
+    steps.forEach(([n, d], k) => {
+      const x = 4 + k * (w + g);
+      s += `<rect x="${x}" y="18" width="${w}" height="52" rx="8" class="${k === 7 ? "f-accsoft" : "f-surface2"}"/>
+            <text x="${x + w / 2}" y="41" text-anchor="middle" font-family="var(--mono)" font-weight="700" class="f-text">${n}</text>
+            <text x="${x + w / 2}" y="58" text-anchor="middle" font-size="10.5" class="f-muted">${d}</text>`;
+      if (k) s += `<line x1="${x - g + 1}" y1="44" x2="${x - 2}" y2="44" stroke="var(--accent)" stroke-width="2" marker-end="url(#b3)"/>`;
+    });
+    s += `<text x="4" y="90" font-size="10.5" class="f-muted">harmlos  ────────────────────────────────────────────────────────────────►  bewegt sich und greift</text>`;
+    document.querySelector("#bedienung svg g").innerHTML = s;
+  })();
+  </script>
+  <div class="grid2">
+    <div class="card"><h3>Kommandozeile (aus <code>code/</code>)</h3>
+<pre><code>python -m m2_robot_control.robot_check info --sim
+python -m m2_robot_control.robot_check home
+python -m m2_robot_control.robot_check jog z 20
+python -m m2_robot_control.robot_check calib
+python -m m2_robot_control.robot_check point
+python -m m2_robot_control.robot_check pick-test
+
+<span class="c"># Simulator separat starten</span>
+python -m m2_robot_control.fake_neura_server
+pytest m2_robot_control</code></pre></div>
+    <div class="card"><h3>GUI, Tab M2 Roboter</h3>
+      <p style="font-size:.92rem"><b>Verbindung:</b> Modus Simulator / Neura-VM / Echter Roboter, IP, Verbinden/Trennen,
+        <i>Freigeben</i> nach einem STOPP.<br>
+        <b>Bewegen:</b> Home, Greifer auf/zu, benannte Pose anfahren.<br>
+        <b>Joggen:</b> ±x/y/z/rz in kleinen Schritten im Basis-KS.<br>
+        <b>Seiten:</b> Erste Schritte · Achsentest · Posen teachen · Kalibrierung · Zeigetest.<br>
+        Daneben die <b>Roboter-Draufsicht</b> mit Arbeitsbereich, Stationen und aktueller TCP-Position.</p></div>
+  </div>
+  <h3>Teststrategie</h3>
+  <ul>
+    <li><b>MockRobot</b>: Orchestrator und GUI laufen ohne Netzwerk. Grenzen und Zustände (hält Teil, gestoppt) prüft er trotzdem.</li>
+    <li><b>FakeNeuraServer</b>: Tests über den <i>echten</i> NeuraPy-Client. Geprüft werden z. B. die Reihenfolge der Aufrufe, die Einheitenumrechnung, Stopp/Reset und die Ablehnung falscher Werkzeuge.</li>
+    <li><b>Neura-VM</b>: Kinematik und Erreichbarkeit mit der Originalsoftware des Herstellers (Reichweite mit Werkzeug nach unten ca. 740 mm bei z = 130).</li>
+    <li><b>Labor</b> (06.10.2026): Punkte vermessen, vollständiger Ablauf im Automatikbetrieb, vorerst noch ohne Greiferansteuerung.</li>
+  </ul>
+</section>
+
+<!-- ============================================================== -->
+<section id="grenzen">
+  <h2><span class="num">12</span>Grenzen &amp; offene Punkte</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Thema</th><th>Stand</th></tr></thead>
+    <tbody>
+      <tr><td>Greiferansteuerung</td><td>Der Zimmer-Greifer (IO-Link) ist noch nicht angebunden, <code>gripper_enabled: false</code>. <code>grasp()</code>/<code>release()</code> sind im Code vorgesehen.</td></tr>
+      <tr><td>Greifer-Rückmeldung</td><td>Ob wirklich ein Teil gegriffen wurde, wird noch nicht ausgewertet (möglich über Tool-Eingänge).</td></tr>
+      <tr><td>Kalibrierung &amp; Genauigkeit</td><td>Das Werkzeug ist fertig. Eine Zeigetest-Serie mit 5–10 Lagen für die Evaluation steht noch aus.</td></tr>
+      <tr><td>Wiederholgenauigkeit Prüfposition</td><td>Wichtig für M3, weil die ROIs eine reproduzierbare Lage voraussetzen. Noch zu messen.</td></tr>
+      <tr><td>Werkzeuglast</td><td>Masse, Schwerpunkt und Trägheit des Werkzeugs am Pendant mit den Datenblättern abgleichen (Kollisionserkennung).</td></tr>
+      <tr><td>Kollisionsvermeidung</td><td>Es gibt keine Bahnplanung um Hindernisse. Die Sicherheit kommt aus hohen Vorpositionen, PTP nur in der Höhe und dem Grenzen-Quader.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================== -->
+<section id="praesentation">
+  <h2><span class="num">13</span>Präsentation: Kernaussagen &amp; mögliche Fragen</h2>
+  <div class="card">
+    <h3>Die fünf Sätze, die sitzen sollten</h3>
+    <ol>
+      <li>Der Roboter wird über NeuraPy angesteuert. Unsere Klasse <code>NeuraRobot</code> kapselt Vorbereitung, Einheiten und Sicherheit hinter der Schnittstelle <code>RobotController</code>.</li>
+      <li>Greifen: PTP zur Vorposition 80 mm über dem Ziel, dann LIN absenken (die letzten 20 mm langsam), greifen und auf demselben Weg zurück.</li>
+      <li>Die Greiferdrehung ist rz = Home + θ + 113°: 90° quer zur Längsachse plus 23° schräger Greifereinbau, im Labor festgestellt.</li>
+      <li>Kamera und Roboter werden über die vier Marker kalibriert: Spitze antasten, Least-Squares-Fit, RMS-Kontrolle. Der Zeigetest prüft das Ergebnis.</li>
+      <li>Sicherheit in Schichten: reduzierte Geschwindigkeit, Arbeitsraum-Quader, Werkzeugprüfung, Stopp mit Quittierung, STOPP in eigenem Thread und der Hardware-Not-Halt.</li>
+    </ol>
+  </div>
+  <h3>Mögliche Fragen</h3>
+  <details class="qa"><summary>Warum nicht durchgehend linear fahren?</summary><div class="a">
+    <p>Linearbewegungen über große Strecken können durch Singularitäten oder Gelenkgrenzen laufen und sind langsamer.
+      PTP ist für die großen Wege robuster und schneller. Deshalb fahren wir PTP nur auf Vorpositionen in sicherer Höhe
+      und LIN dort, wo es auf einen geraden, senkrechten Weg ankommt: beim Absenken auf das Teil.</p></div></details>
+  <details class="qa"><summary>Wie wird verhindert, dass der Roboter wegen eines Erkennungsfehlers irgendwohin fährt?</summary><div class="a">
+    <p>Jedes Ziel und jede Vorposition wird vor der Bewegung gegen einen Quader im Basis-KS geprüft. Liegt eine Pose
+      außerhalb, gibt es einen <code>RobotError</code>, und es wird nichts bewegt. Außerdem liefert M1 bei fehlender Fase
+      eine reduzierte Konfidenz, und alle Tests laufen mit 20 % Geschwindigkeit unter Aufsicht.</p></div></details>
+  <details class="qa"><summary>Woher kommt der Greifer-Offset von 113°?</summary><div class="a">
+    <p>90° ergeben sich aus der Geometrie: θ beschreibt die Längsachse, die Backen sollen aber quer dazu schließen. Die
+      zusätzlichen 23° kommen vom Aufbau: Der Greifer ist auf dem Flansch verdreht montiert. Das haben wir im Labor
+      gemessen. Bei Home + 23° schließen die Backen genau entlang Basis-x. Ein Test stellt sicher, dass Greif- und
+      Ablage-rz zusammenpassen.</p></div></details>
+  <details class="qa"><summary>Wie habt ihr ohne Roboter entwickelt?</summary><div class="a">
+    <p>Auf drei Stufen. MockRobot für Orchestrator und GUI. Ein eigener Simulator der Steuerung, der dasselbe JSON-Protokoll
+      spricht, sodass der unveränderte Herstellerclient getestet wird. Und die offizielle Neura-VM mit echter Kinematik.
+      Am Labortag lief der Ablauf dadurch schnell durch.</p></div></details>
+  <details class="qa"><summary>Was passiert bei einem Not-Stopp mitten im Ablauf?</summary><div class="a">
+    <p>Der Orchestrator ruft <code>robot.stop()</code> auf, NeuraPy beendet das Programm auf der Steuerung. Danach lehnt
+      <code>NeuraRobot</code> jede Bewegung ab. Weiter geht es erst nach „Fehler quittieren“: <code>reset()</code> bereitet
+      den Roboter neu vor (power_on, Werkzeug, Geschwindigkeit, init_program), dann fährt er nach Home. Einen automatischen
+      Wiederanlauf gibt es bewusst nicht.</p></div></details>
+  <details class="qa"><summary>Wie genau ist die Kalibrierung, und wie prüft ihr sie?</summary><div class="a">
+    <p>Der Fit liefert den Restfehler je Marker und einen RMS, die Schwelle liegt bei 3 mm. Ein großer Einzelfehler deutet
+      auf einen schlecht angetasteten Punkt oder vertauschte Marker-IDs hin. Praktisch geprüft wird mit dem Zeigetest: Der
+      Roboter zeigt auf das erkannte Teil, der Versatz wird gemessen und protokolliert. Die Serie geht in die Evaluation ein.</p></div></details>
+  <details class="qa"><summary>Warum eine 2D-Transformation und keine volle Hand-Auge-Kalibrierung?</summary><div class="a">
+    <p>Das Bauteil liegt immer flach auf dem Tisch, die Pose hat also nur x, y und θ. Die Kamera liefert über die Homographie
+      schon metrische Tischkoordinaten. Übrig bleibt eine Drehung und Verschiebung in der Ebene plus die Tischhöhe. Das ist
+      mit 3–4 Punkten robust bestimmbar und leicht zu überprüfen.</p></div></details>
+  <details class="qa"><summary>Warum prüft ihr das Werkzeug beim Verbinden?</summary><div class="a">
+    <p>Alle Posen in der Konfiguration beziehen sich auf den TCP des Werkzeugs „ZimmerLWR50“ (197,5 mm vor dem Flansch). Ist
+      auf der Steuerung ein anderer Versatz eingestellt (im Backup standen z. B. 210 mm), verschiebt sich jede Greifhöhe um
+      die Differenz. Deshalb wird bei mehr als 1 mm Abweichung gar nicht erst gefahren.</p></div></details>
+</section>
+
+<!-- ============================================================== -->
+<section id="glossar">
+  <h2><span class="num">14</span>Glossar</h2>
+  <dl class="gloss">
+    <dt>TCP</dt><dd>Tool Center Point: der Bezugspunkt des Werkzeugs, hier die Mitte zwischen den Greiferbacken. Alle Posen beziehen sich darauf.</dd>
+    <dt>Basis-KS</dt><dd>Koordinatensystem im Roboterfuß, z nach oben. Darin sind alle Posen angegeben.</dd>
+    <dt>PTP / Gelenkbewegung</dt><dd>Alle Gelenke fahren gleichzeitig auf Zielwinkel; die Bahn des TCP ist keine Gerade.</dd>
+    <dt>LIN</dt><dd>Linearbewegung: Der TCP fährt auf einer Geraden.</dd>
+    <dt>Inverse Kinematik (IK)</dt><dd>Berechnung der Gelenkwinkel zu einer gewünschten TCP-Pose.</dd>
+    <dt>roll/pitch/yaw · rx/ry/rz</dt><dd>Drehwinkel um x, y, z. Mit roll = 180° zeigt das Werkzeug nach unten, rz dreht den Greifer um die Senkrechte.</dd>
+    <dt>Override</dt><dd>Globaler Geschwindigkeitsfaktor der Steuerung (0,2 = 20 %).</dd>
+    <dt>init_program</dt><dd>NeuraPy-Befehl, der das Bewegungsprogramm auf der Steuerung startet; ohne ihn keine Bewegung.</dd>
+    <dt>Teachen</dt><dd>Pose im Handbetrieb anfahren und speichern.</dd>
+    <dt>Kabsch / Least Squares</dt><dd>Verfahren, das die Drehung und Verschiebung findet, die Punktpaare mit minimaler Fehlerquadratsumme aufeinander abbildet.</dd>
+    <dt>Cobot</dt><dd>Kollaborativer Roboter, für die Arbeit in der Nähe von Menschen ausgelegt (Kraft-/Kollisionsüberwachung).</dd>
+  </dl>
+</section>
+
+<footer>Erstellt aus dem Code-Stand vom 20.10.2026 (<code>code/m2_robot_control/</code>, <code>config/system.yaml</code>, <code>ANLEITUNG_NEURA.md</code>) und der Thesis, Kapitel 6.</footer>
+</main>
+</div>
+</body>
+</html>

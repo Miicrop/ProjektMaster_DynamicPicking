@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modul-Übersichten</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/common.js"></script>
+<style>
+  main.index { max-width: 1040px; margin: 0 auto; padding: 48px 24px 80px; }
+  .mods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 28px 0 40px; }
+  .mods a { text-decoration: none; color: inherit; display: block; background: var(--surface); border: 1px solid var(--line);
+            border-radius: 14px; padding: 20px; border-top: 5px solid var(--c); box-shadow: var(--shadow); transition: transform .12s; }
+  .mods a:hover { transform: translateY(-2px); border-color: var(--c); }
+  .mods .k { font-family: var(--mono); font-size: .8rem; color: var(--c); font-weight: 700; }
+  .mods h3 { margin: 4px 0 8px; font-size: 1.2rem; }
+  .mods p { font-size: .9rem; color: var(--muted); margin: 0 0 10px; }
+  .mods ul { font-size: .86rem; padding-left: 18px; margin: 0; }
+  @media (max-width: 800px) { .mods { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main class="index">
+  <div class="kicker" style="color:#0f766e">Dynamisches Greifen mit Sichtprüfung</div>
+  <h1>Modul-Übersichten für die Abschlusspräsentation</h1>
+  <p class="lead">Je Modul eine Seite, die erklärt, wie es aufgebaut ist, wie die einzelnen Teile funktionieren,
+    warum sie so gebaut sind und welche Fragen in der Präsentation kommen können. Alle Bilder stammen aus der echten
+    Pipeline, die interaktiven Beispiele rechnen mit den Werten aus <code>config/system.yaml</code>.</p>
+
+  <div class="mods">
+    <a href="m1_objekterkennung.html" style="--c:#0f766e">
+      <div class="k">M1 · Person 1</div><h3>Objekterkennung</h3>
+      <p>Top-down-Kamera → Bauteilpose (x, y, θ) im Roboter-KS</p>
+      <ul><li>ArUco-Marker &amp; Homographie</li><li>Segmentierung mit Lab-Chroma</li><li>Fase → eindeutiger Winkel</li><li>Klick-Demo: Pixel → Roboter-mm</li></ul>
+    </a>
+    <a href="m2_robotersteuerung.html" style="--c:#c2410c">
+      <div class="k">M2 · Person 2</div><h3>Robotersteuerung</h3>
+      <p>Neura LARA greift, legt ab und sortiert</p>
+      <ul><li>NeuraPy, Simulator &amp; VM</li><li>Greifsequenz PTP + LIN (Animation)</li><li>Greiferwinkel 113°</li><li>Kalibrierung &amp; Sicherheitskonzept</li></ul>
+    </a>
+    <a href="m3_sichtpruefung.html" style="--c:#7c3aed">
+      <div class="k">M3 · Person 3</div><h3>Sichtprüfung</h3>
+      <p>Seitenkamera → Seriennummer, Loch, Kerbe → gut/schlecht</p>
+      <ul><li>ROIs relativ zur Bauteil-Box</li><li>Maßstab aus der Bauteilhöhe</li><li>OCR, Rundheit, Rechteckigkeit</li><li>Entscheidungs-Spielwiese</li></ul>
+    </a>
+  </div>
+
+  <h2>Der Gesamtablauf in einem Bild</h2>
+  <p>Ein Orchestrator arbeitet jeden Zyklus als Zustandsautomat ab. Die Module kennen sich gegenseitig nicht und
+    tauschen nur die Datenklassen aus <code>common/interfaces.py</code> aus: <code>ObjectPose</code> (M1 → M2) und
+    <code>InspectionResult</code> (M3 → Orchestrator → Ablage).</p>
+  <div class="svgwrap" id="cycle"></div>
+  <script>drawCycle(document.getElementById("cycle"), "");</script>
+
+  <h2 style="margin-top:36px">Gemeinsame Prinzipien, die alle kennen sollten</h2>
+  <div class="grid2">
+    <div class="card"><h3>Interface + Mock je Modul</h3><p style="font-size:.92rem">Jedes Modul hat eine abstrakte
+      Schnittstelle und eine Mock-Implementierung. Dadurch lief der Gesamtablauf vom ersten Tag an, und jede Person
+      konnte ihr Modul isoliert entwickeln. M4 (KI-Greifen) nutzt dieselbe Schnittstelle wie M1 und ist per
+      Konfiguration austauschbar.</p></div>
+    <div class="card"><h3>Pipeline ohne Kamera</h3><p style="font-size:.92rem">M1 und M3 trennen die Bildverarbeitung
+      (Bild rein, Ergebnis raus) vom Kamerazugriff. Dieselbe Pipeline läuft live, mit gespeicherten Fotos
+      (<code>replay</code>) und in automatischen Tests.</p></div>
+    <div class="card"><h3>Eine Konfiguration</h3><p style="font-size:.92rem">Alle Maße, Posen, Schwellen und
+      Kalibrierwerte stehen in <code>config/system.yaml</code>, bearbeitbar im GUI-Tab <i>Einstellungen</i>. Im Code
+      gibt es keine „magischen Zahlen“ für den Aufbau.</p></div>
+    <div class="card"><h3>Nachvollziehbarkeit</h3><p style="font-size:.92rem">Jeder Zyklus wird als Zeile in
+      <code>logs/cycles_&lt;datum&gt;.csv</code> protokolliert, optional mit Debug- und Zwischenbildern. Das ist die
+      Datengrundlage für die Evaluation. Insgesamt laufen 105 automatische Tests.</p></div>
+  </div>
+
+  <footer style="margin-top:40px">Stand: 20.10.2026. Öffnen per Doppelklick, funktioniert offline in jedem aktuellen Browser.
+    Weiterführend: <code>ANLEITUNG.md</code>, <code>plan/</code>, Thesis Kapitel 5–7.</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M1 Objekterkennung</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/common.js"></script>
+</head>
+<body class="m1">
+<div class="layout">
+<nav class="toc">
+  <a class="home" href="index.html">← Übersicht aller Module</a>
+  <div class="mod">M1 · Objekterkennung</div>
+  <ol>
+    <li><a href="#blick">Auf einen Blick</a></li>
+    <li><a href="#system">Einordnung im System</a></li>
+    <li><a href="#code">Aufbau des Codes</a></li>
+    <li><a href="#kette">Verarbeitung Schritt für Schritt</a></li>
+    <li><a href="#arbeitsbereich">Arbeitsbereich &amp; Homographie</a></li>
+    <li><a href="#segmentierung">Segmentierung</a></li>
+    <li><a href="#pose">Pose &amp; Fase</a></li>
+    <li><a href="#transformation">Ins Roboter-KS</a></li>
+    <li><a href="#ergebnisse">Ergebnisse</a></li>
+    <li><a href="#config">Konfiguration</a></li>
+    <li><a href="#bedienung">Testen &amp; Bedienen</a></li>
+    <li><a href="#grenzen">Grenzen &amp; Entscheidungen</a></li>
+    <li><a href="#praesentation">Präsentation &amp; Fragen</a></li>
+    <li><a href="#glossar">Glossar</a></li>
+  </ol>
+  <div class="other">
+    <a href="m2_robotersteuerung.html">M2 Robotersteuerung →</a>
+    <a href="m3_sichtpruefung.html">M3 Sichtprüfung →</a>
+  </div>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="kicker">Modul 1 · code/m1_vision_topdown/</div>
+  <h1>Objekterkennung mit der Top-down-Kamera</h1>
+  <p class="lead">M1 findet in einem Kamerabild von oben den Arbeitsbereich über vier ArUco-Marker,
+    rechnet das Bild in eine verzerrungsfreie Draufsicht um, segmentiert das Bauteil und bestimmt
+    seine Lage <b>(x, y)</b> und Drehung <b>θ</b>. Der Roboter bekommt diese Pose direkt in seinem
+    eigenen Koordinatensystem.</p>
+  <div class="facts">
+    <div class="fact"><div class="v">5 / 5</div><div class="l">Testfotos korrekt erkannt</div></div>
+    <div class="fact"><div class="v">&lt; 1 mm</div><div class="l">Streuung derselben Szene aus 3 Höhen</div></div>
+    <div class="fact"><div class="v">0–360°</div><div class="l">eindeutiger Winkel dank Fase</div></div>
+    <div class="fact"><div class="v">0,5 mm</div><div class="l">pro Pixel in der Draufsicht</div></div>
+  </div>
+</header>
+
+<!-- ============================================================== -->
+<section id="blick">
+  <h2><span class="num">01</span>Auf einen Blick</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Eingabe</h3>
+      <p>Ein Farbbild der Top-down-Kamera (geplant 1920 × 1080 px). Auf dem Tisch liegen die vier
+        ArUco-Marker (IDs 0–3, <code>DICT_4X4_50</code>) und genau ein Bauteil, ein violetter
+        3D-Druck-Quader mit einer abgeschrägten Ecke (Fase).</p>
+    </div>
+    <div class="card">
+      <h3>Ausgabe</h3>
+      <p>Eine <code>ObjectPose</code> im <b>Roboter-Basis-KS</b>: <code>x_mm</code>, <code>y_mm</code>,
+        <code>z_mm</code> (Tischhöhe), <code>theta_deg</code> und <code>confidence</code>
+        (1,0 mit Fase, 0,5 ohne). Liegt kein Bauteil im Bild, kommt <code>None</code> zurück. Der
+        Orchestrator wertet das nicht als Fehler, sondern geht wieder in <code>IDLE</code>.</p>
+    </div>
+  </div>
+  <p>Die Verarbeitung besteht aus sechs Stufen. Jede ist eine eigene, kleine Funktion:</p>
+  <div class="svgwrap">
+    <svg viewBox="0 0 900 120" role="img" aria-label="Verarbeitungskette M1">
+      <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="f-acc"/></marker></defs>
+      <g font-size="12.5">
+        <g><rect x="2" y="20" width="130" height="62" rx="9" class="f-surface2"/><text x="67" y="46" text-anchor="middle" class="f-text" font-weight="700">Kamerabild</text><text x="67" y="66" text-anchor="middle" class="f-muted" font-size="11">camera.read()</text></g>
+        <g><rect x="152" y="20" width="130" height="62" rx="9" class="f-accsoft"/><text x="217" y="46" text-anchor="middle" class="f-text" font-weight="700">Marker finden</text><text x="217" y="66" text-anchor="middle" class="f-muted" font-size="11">find_workspace</text></g>
+        <g><rect x="302" y="20" width="130" height="62" rx="9" class="f-accsoft"/><text x="367" y="46" text-anchor="middle" class="f-text" font-weight="700">Draufsicht</text><text x="367" y="66" text-anchor="middle" class="f-muted" font-size="11">Homographie</text></g>
+        <g><rect x="452" y="20" width="130" height="62" rx="9" class="f-accsoft"/><text x="517" y="46" text-anchor="middle" class="f-text" font-weight="700">Segmentieren</text><text x="517" y="66" text-anchor="middle" class="f-muted" font-size="11">segment_part</text></g>
+        <g><rect x="602" y="20" width="130" height="62" rx="9" class="f-accsoft"/><text x="667" y="46" text-anchor="middle" class="f-text" font-weight="700">Pose + Fase</text><text x="667" y="66" text-anchor="middle" class="f-muted" font-size="11">part_pose</text></g>
+        <g><rect x="752" y="20" width="144" height="62" rx="9" class="f-surface2"/><text x="824" y="46" text-anchor="middle" class="f-text" font-weight="700">Roboter-KS</text><text x="824" y="66" text-anchor="middle" class="f-muted" font-size="11">workspace_to_robot</text></g>
+      </g>
+      <g stroke="var(--accent)" stroke-width="2" marker-end="url(#a1)">
+        <line x1="133" y1="51" x2="150" y2="51"/><line x1="283" y1="51" x2="300" y2="51"/>
+        <line x1="433" y1="51" x2="450" y2="51"/><line x1="583" y1="51" x2="600" y2="51"/><line x1="733" y1="51" x2="750" y2="51"/>
+      </g>
+      <text x="450" y="110" text-anchor="middle" class="f-muted" font-size="11.5">Pixel (u, v)  →  Arbeitsbereich-mm (x, y)  →  Roboter-mm (x, y, θ)</text>
+    </svg>
+  </div>
+  <div class="say"><p>„Wir verwenden klassische Bildverarbeitung ohne trainiertes Modell. Die Marker legen
+    den Arbeitsbereich fest, daraus rechnen wir eine maßstabsgetreue Draufsicht. Darin trennen wir das
+    Bauteil über Helligkeit und Buntheit vom Tisch. Die abgeschrägte Ecke macht die Orientierung
+    eindeutig, und eine einmal eingemessene Transformation liefert die Pose im Roboterkoordinatensystem.“</p></div>
+</section>
+
+<!-- ============================================================== -->
+<section id="system">
+  <h2><span class="num">02</span>Einordnung im System</h2>
+  <p>Ein zentraler Orchestrator (<code>orchestrator/state_machine.py</code>) arbeitet jeden Zyklus als
+    Zustandsautomat ab. M1 ist nur im ersten Zustand <code>DETECT</code> beteiligt. Danach
+    entscheidet ausschließlich die gelieferte <code>ObjectPose</code>, wohin der Roboter fährt.</p>
+  <div class="svgwrap" id="cycle"></div>
+  <script>drawCycle(document.getElementById("cycle"), "M1");</script>
+  <p>Die Module kennen sich gegenseitig nicht. Sie tauschen nur die Datenklassen aus
+    <code>common/interfaces.py</code> aus. M1 implementiert das Interface <code>ObjectDetector</code>
+    mit einer einzigen Methode:</p>
+<pre><code><span class="k">class</span> ObjectDetector(ABC):          <span class="c"># common/interfaces.py</span>
+    <span class="k">def</span> detect(self) -&gt; ObjectPose | None: ...
+
+@dataclass
+<span class="k">class</span> ObjectPose:                  <span class="c"># Pose im Roboter-Basis-KS</span>
+    x_mm: float; y_mm: float; z_mm: float
+    theta_deg: float
+    confidence: float = 1.0</code></pre>
+  <p>Dasselbe Interface implementiert auch M4 (KI-Greifen). Deshalb lässt sich M1 per Konfiguration
+    (<code>implementations.detector: ai</code>) gegen M4 austauschen, ohne dass der Orchestrator oder M2
+    etwas davon merken.</p>
+</section>
+
+<!-- ============================================================== -->
+<section id="code">
+  <h2><span class="num">03</span>Aufbau des Codes</h2>
+  <p>Das wichtigste Gestaltungsprinzip ist die Trennung zwischen <b>Bildverarbeitung</b> und
+    <b>Kamerazugriff</b>. Die <code>TopDownPipeline</code> bekommt ein Bild und liefert eine Pose,
+    eine Kamera braucht sie dafür nicht. Dadurch läuft derselbe Code mit Live-Kamera, mit gespeicherten
+    Fotos und in automatischen Tests.</p>
+  <div class="svgwrap">
+    <svg viewBox="0 0 900 300" role="img" aria-label="Klassenstruktur M1">
+      <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="f-muted"/></marker></defs>
+      <g font-size="12">
+        <rect x="320" y="8" width="260" height="44" rx="8" class="f-surface2"/>
+        <text x="450" y="28" text-anchor="middle" font-weight="700" class="f-text">ObjectDetector (Interface)</text>
+        <text x="450" y="44" text-anchor="middle" class="f-muted" font-size="11">detect() → ObjectPose | None</text>
+
+        <rect x="70" y="92" width="240" height="56" rx="8" class="f-accsoft" stroke="var(--accent)"/>
+        <text x="190" y="114" text-anchor="middle" font-weight="700" class="f-text">TopDownDetector</text>
+        <text x="190" y="132" text-anchor="middle" class="f-muted" font-size="11">echte Kamera + Pipeline</text>
+        <rect x="590" y="92" width="240" height="56" rx="8" class="f-surface2"/>
+        <text x="710" y="114" text-anchor="middle" font-weight="700" class="f-text">MockDetector</text>
+        <text x="710" y="132" text-anchor="middle" class="f-muted" font-size="11">Zufallspose im Arbeitsbereich</text>
+
+        <rect x="20" y="196" width="150" height="50" rx="8" class="f-surface2"/>
+        <text x="95" y="217" text-anchor="middle" font-weight="700" class="f-text">open_camera()</text>
+        <text x="95" y="234" text-anchor="middle" class="f-muted" font-size="10.5">Live (int) oder Bild-Glob</text>
+        <rect x="200" y="196" width="190" height="50" rx="8" class="f-accsoft" stroke="var(--accent)"/>
+        <text x="295" y="217" text-anchor="middle" font-weight="700" class="f-text">TopDownPipeline</text>
+        <text x="295" y="234" text-anchor="middle" class="f-muted" font-size="10.5">process(img, trace) → Ergebnis</text>
+
+        <g font-size="11">
+          <rect x="430" y="180" width="150" height="34" rx="7" class="f-surface"/><text x="505" y="201" text-anchor="middle" class="f-text">workspace.py</text>
+          <rect x="430" y="222" width="150" height="34" rx="7" class="f-surface"/><text x="505" y="243" text-anchor="middle" class="f-text">part.py</text>
+          <rect x="430" y="264" width="150" height="34" rx="7" class="f-surface"/><text x="505" y="285" text-anchor="middle" class="f-text">common/transforms.py</text>
+          <text x="600" y="201" class="f-muted">find_workspace(): Marker → Homographie</text>
+          <text x="600" y="243" class="f-muted">segment_part(), part_pose(): Maske → Pose</text>
+          <text x="600" y="285" class="f-muted">workspace_to_robot(): mm → Roboter-mm</text>
+        </g>
+      </g>
+      <g stroke="currentColor" stroke-opacity=".4" fill="none">
+        <path d="M190,92 V70 H450 V54" marker-end="url(#a2)"/><path d="M710,92 V70 H450"/>
+        <path d="M150,148 L100,194" marker-end="url(#a2)"/><path d="M230,148 L285,194" marker-end="url(#a2)"/>
+        <path d="M390,221 L428,197" marker-end="url(#a2)"/><path d="M390,221 L428,239" marker-end="url(#a2)"/><path d="M390,221 L428,281" marker-end="url(#a2)"/>
+      </g>
+    </svg>
+  </div>
+  <h3>Dateien</h3>
+  <div class="files">
+    <div class="file"><div class="name">detector.py</div><div class="desc"><code>TopDownPipeline</code> (Ablauf der Verarbeitung), <code>TopDownDetector</code> (Kamera + Pipeline, implementiert <code>ObjectDetector</code>), <code>MockDetector</code>, <code>TopDownResult</code> mit Debug-Bildern.</div></div>
+    <div class="file"><div class="name">workspace.py</div><div class="desc">Klasse <code>Workspace</code> (Homographie, Maßstab, Umrechnung px ↔ mm). <code>find_workspace_aruco()</code> und die Rückfallebene <code>find_workspace_white_frame()</code>.</div></div>
+    <div class="file"><div class="name">part.py</div><div class="desc"><code>segment_part()</code> (Maske, Morphologie, Kandidatenwahl), <code>part_pose()</code> (Schwerpunkt, Längsachse, Fase), <code>draw_part_pose()</code>.</div></div>
+    <div class="file"><div class="name">run.py</div><div class="desc">Kommandozeile: Pipeline auf Bilddateien oder ein Kamerabild anwenden, Debug-Bilder nach <code>logs/m1</code>.</div></div>
+    <div class="file"><div class="name">make_markers.py</div><div class="desc">Erzeugt druckbare ArUco-Marker <b>mit weißem Rand</b> auf A4. Ohne diese „Quiet Zone“ wurden die ersten Marker nicht erkannt.</div></div>
+    <div class="file"><div class="name">check_markers.py</div><div class="desc">Diagnose: Welche Marker-IDs findet der Detektor in einem Bild?</div></div>
+    <div class="file"><div class="name">tests/</div><div class="desc">Synthetische Szenen mit bekannter Pose (Fehler &lt; 2 mm / 2°) und die 5 echten Fotos vom 05.10. als Regressionstest.</div></div>
+  </div>
+  <p style="margin-top:14px">Im Gesamtsystem baut <code>orchestrator/factory.py</code> den Detektor je nach Variante:
+    <span class="pill">mock</span> <span class="pill">replay</span> (Testfotos als Kamera)
+    <span class="pill">camera</span> <span class="pill">ai</span> (M4).</p>
+</section>
+
+<!-- ============================================================== -->
+<section id="kette">
+  <h2><span class="num">04</span>Verarbeitung Schritt für Schritt</h2>
+  <p>Die Bilder unten hat die echte Pipeline erzeugt (<code>TopDownPipeline.process(img, trace)</code>).
+    Es sind die Testfotos vom 05.10.2026 aus dem Labor. Oben lässt sich das Foto wechseln.</p>
+  <div class="stepper" id="steps"></div>
+  <script>
+  makeStepper(document.getElementById("steps"),
+    [1,2,3,4,5].map(k => ({label: "Foto " + k, dir: "img/m1/bild" + k})),
+    [
+      {file: "m1_01_original.jpg", title: "Originalbild", fn: "trace.add('original')",
+       text: "Das Kamerabild von schräg oben. Die Perspektive verzerrt den Tisch zu einem Trapez, deshalb lassen sich Abstände im Bild noch nicht direkt in Millimeter umrechnen."},
+      {file: "m1_02_aruco_markers.jpg", title: "ArUco-Marker gefunden", fn: "find_workspace_aruco()",
+       text: "<code>cv2.aruco.ArucoDetector</code> sucht im Graustufenbild die vier Marker. Ihre Ecken werden subpixelgenau verfeinert, der Mittelpunkt jedes Markers ist der Mittelwert seiner vier Ecken. Fehlt einer der vier, bricht M1 mit <code>VisionError</code> ab."},
+      {file: "m1_03_rectified.jpg", title: "Entzerrte Draufsicht", fn: "Workspace.rectify() · cv2.warpPerspective",
+       text: "Eine Homographie bildet die vier Markermitten auf ihre bekannten Positionen in mm ab. Das Ergebnis ist eine Draufsicht des Arbeitsbereichs (330 × 330 mm) mit festem Maßstab 2 px/mm, wie von senkrecht oben fotografiert."},
+      {file: "m1_04_part_mask.png", title: "Bauteilmaske", pix: true, fn: "segment_part()",
+       text: "Ein Pixel gilt als Bauteil, wenn es <b>deutlich heller</b> (V &gt; Median + 50) <b>oder deutlich bunter</b> (Lab-Chroma &gt; Median + 20) ist als der Tisch. Die Schwellen beziehen sich auf den Median des Bildes, also auf den Tisch, und wandern deshalb mit dem Raumlicht mit."},
+      {file: "m1_05_part_mask_border.png", title: "Rand ausgeblendet", pix: true, fn: "border_mm = 5",
+       text: "Ein 5 mm breiter Streifen am Rand wird auf 0 gesetzt. So wird nichts, was über den Rand des Arbeitsbereichs ragt (Markerpapier, Rahmen), als Bauteil erkannt."},
+      {file: "m1_06_part_opened.png", title: "Morphologisches Öffnen", pix: true, fn: "cv2.MORPH_OPEN, 3×3",
+       text: "Öffnen (erst Erosion, dann Dilatation) entfernt einzelne Störpixel und dünne Ausläufer, z. B. Lichtreflexe auf dem Tisch."},
+      {file: "m1_07_part_closed.png", title: "Morphologisches Schließen", pix: true, fn: "cv2.MORPH_CLOSE, 7×7",
+       text: "Schließen (erst Dilatation, dann Erosion) füllt kleine Lücken im Bauteil, damit eine geschlossene Kontur entsteht."},
+      {file: "m1_08_part_candidates.jpg", title: "Kandidaten", fn: "cv2.findContours + Flächenfilter",
+       text: "Alle zusammenhängenden Flächen werden zu Konturen. Von den Konturen mit plausibler Fläche (300 bis 20 000 mm²) gewinnt die größte (rot). Die anderen sind grau mit ihrer Fläche beschriftet."},
+      {file: "m1_09_part_pose.jpg", title: "Pose und Fase", fn: "part_pose()",
+       text: "Grün ist das kleinste umschließende Rechteck (<code>minAreaRect</code>), das Kreuz der Flächenschwerpunkt. Gelb markiert ist die Rechteckecke mit dem größten Abstand zur Kontur, also die Fase. Der Pfeil zeigt die Längsachse in Richtung Fase und legt damit θ fest."},
+      {file: "m1_10_result.jpg", title: "Ergebnis", fn: "TopDownResult.debug_image()",
+       text: "Position und Winkel im Arbeitsbereich-KS. Danach rechnet <code>workspace_to_robot()</code> beides ins Roboter-KS um (Abschnitt „Ins Roboter-KS“)."},
+    ]);
+  </script>
+</section>
+
+<!-- ============================================================== -->
+<section id="arbeitsbereich">
+  <h2><span class="num">05</span>Arbeitsbereich &amp; Homographie</h2>
+  <p>M1 arbeitet mit drei Koordinatensystemen. Wer sie sicher erklären kann, versteht das ganze Modul:</p>
+  <div class="svgwrap">
+    <svg viewBox="0 0 900 290" role="img" aria-label="Drei Koordinatensysteme">
+      <defs>
+        <marker id="ax" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="f-text"/></marker>
+        <marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="f-acc"/></marker>
+      </defs>
+      <!-- Bild-KS -->
+      <g transform="translate(20,40)">
+        <text x="0" y="-14" font-weight="700" font-size="13" class="f-text">① Bild-KS (Pixel)</text>
+        <rect x="0" y="0" width="230" height="170" rx="4" class="f-surface2"/>
+        <polygon points="40,30 200,22 215,150 25,158" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="5 3"/>
+        <g class="f-text"><rect x="34" y="24" width="12" height="12"/><rect x="194" y="16" width="12" height="12"/><rect x="209" y="144" width="12" height="12"/><rect x="19" y="152" width="12" height="12"/></g>
+        <g stroke="currentColor" stroke-width="1.6" marker-end="url(#ax)"><line x1="0" y1="0" x2="60" y2="0"/><line x1="0" y1="0" x2="0" y2="60"/></g>
+        <text x="64" y="12" font-size="12" class="f-text">u</text><text x="6" y="72" font-size="12" class="f-text">v ↓</text>
+        <text x="0" y="192" font-size="11" class="f-muted">Ursprung oben links, v nach unten,</text>
+        <text x="0" y="207" font-size="11" class="f-muted">perspektivisch verzerrt</text>
+      </g>
+      <!-- Pfeil H -->
+      <g><line x1="262" y1="125" x2="318" y2="125" stroke="var(--accent)" stroke-width="2.5" marker-end="url(#ac)"/>
+        <text x="290" y="112" text-anchor="middle" font-weight="700" class="f-acc" font-size="14">H</text>
+        <text x="290" y="146" text-anchor="middle" class="f-muted" font-size="10.5">Homographie</text>
+        <text x="290" y="160" text-anchor="middle" class="f-muted" font-size="10.5">aus 4 Markern</text></g>
+      <!-- Arbeitsbereich-KS -->
+      <g transform="translate(335,40)">
+        <text x="0" y="-14" font-weight="700" font-size="13" class="f-text">② Arbeitsbereich-KS (mm)</text>
+        <rect x="18" y="8" width="180" height="180" class="f-surface2"/>
+        <rect x="30" y="20" width="156" height="156" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        <g class="f-text"><rect x="12" y="170" width="12" height="12"/><rect x="192" y="170" width="12" height="12"/><rect x="192" y="2" width="12" height="12"/><rect x="12" y="2" width="12" height="12"/></g>
+        <g font-size="10" class="f-muted"><text x="0" y="200">0 (−35|−35)</text><text x="165" y="200">1 (365|−35)</text><text x="160" y="-1">2</text><text x="0" y="-1">3</text></g>
+        <g stroke="currentColor" stroke-width="1.6" marker-end="url(#ax)"><line x1="30" y1="176" x2="90" y2="176"/><line x1="30" y1="176" x2="30" y2="116"/></g>
+        <text x="94" y="172" font-size="12" class="f-text">x</text><text x="35" y="118" font-size="12" class="f-text">y ↑</text>
+        <text x="108" y="100" text-anchor="middle" class="f-acc" font-size="11">330 × 330 mm</text>
+        <text x="0" y="222" font-size="11" class="f-muted">Ursprung = innere Ecke unten links</text>
+        <text x="0" y="237" font-size="11" class="f-muted">(35 mm innerhalb von Marker 0)</text>
+      </g>
+      <!-- Pfeil T -->
+      <g><line x1="560" y1="125" x2="616" y2="125" stroke="var(--accent)" stroke-width="2.5" marker-end="url(#ac)"/>
+        <text x="588" y="112" text-anchor="middle" font-weight="700" class="f-acc" font-size="14">T</text>
+        <text x="588" y="146" text-anchor="middle" class="f-muted" font-size="10.5">Drehung +</text>
+        <text x="588" y="160" text-anchor="middle" class="f-muted" font-size="10.5">Verschiebung</text></g>
+      <!-- Roboter-KS -->
+      <g transform="translate(635,40)">
+        <text x="0" y="-14" font-weight="700" font-size="13" class="f-text">③ Roboter-Basis-KS (mm)</text>
+        <circle cx="40" cy="40" r="24" class="f-surface2" stroke="currentColor" stroke-opacity=".3"/>
+        <text x="40" y="78" text-anchor="middle" font-size="10" class="f-muted">Basis</text>
+        <g stroke="currentColor" stroke-width="1.6" marker-end="url(#ax)"><line x1="40" y1="40" x2="110" y2="40"/><line x1="40" y1="40" x2="40" y2="-10" transform="rotate(0)"/></g>
+        <text x="114" y="44" font-size="12" class="f-text">x</text><text x="46" y="-2" font-size="12" class="f-text">y</text>
+        <rect x="120" y="70" width="110" height="110" fill="none" stroke="var(--accent)" stroke-width="1.5" transform="rotate(-1,120,180)"/>
+        <text x="175" y="130" text-anchor="middle" class="f-acc" font-size="10.5">Arbeitsbereich</text>
+        <text x="0" y="222" font-size="11" class="f-muted">Hier fährt der Roboter. M1 liefert</text>
+        <text x="0" y="237" font-size="11" class="f-muted">die Pose bereits in diesem KS.</text>
+      </g>
+    </svg>
+  </div>
+  <h3>Warum eine Homographie?</h3>
+  <p>Der Tisch ist eine Ebene. Zwei Bilder derselben Ebene hängen über eine projektive Abbildung zusammen,
+    eine 3 × 3-Matrix <b>H</b> mit 8 Freiheitsgraden. Jede Punktkorrespondenz (Markermitte im Bild ↔ bekannte
+    Position in mm) liefert 2 Gleichungen, die vier Marker also genau die 8 Gleichungen, die nötig sind.
+    <code>cv2.findHomography</code> berechnet H, <code>cv2.warpPerspective</code> rechnet damit das
+    Bild in die Draufsicht um.</p>
+<pre><code><span class="c"># workspace.py, find_workspace_aruco()</span>
+src = [Markermitte_im_Bild[i] <span class="k">for</span> i <span class="k">in</span> (0, 1, 2, 3)]          <span class="c"># Pixel</span>
+dst = [mm_to_rect(*markers_mm[i]) <span class="k">for</span> i <span class="k">in</span> (0, 1, 2, 3)]   <span class="c"># Ziel-Pixel der Draufsicht</span>
+H, _ = cv2.findHomography(src, dst)</code></pre>
+  <div class="note"><p><b>Vorteil:</b> Die Kamera muss weder exakt senkrecht noch mittig hängen, und sie
+    darf sich sogar verschieben. Da die Marker in <i>jedem</i> Bild neu gesucht werden, gleicht die
+    Homographie eine bewegte Kamera automatisch aus.</p></div>
+  <div class="warn"><p><b>Gilt nur für die Tischebene.</b> Die Oberseite des Bauteils liegt einige
+    Millimeter höher und erscheint dadurch leicht verschoben (Parallaxe). Siehe „Grenzen“.</p></div>
+  <h3>Rückfallebene: weißer Rahmen</h3>
+  <p><code>find_workspace_white_frame()</code> sucht alternativ die Innenkante eines hellen, ungesättigten
+    Rahmens (größte viereckige, innen liegende Kontur) und nimmt ihre vier Ecken als Korrespondenzen. Mit
+    <code>workspace.method: auto</code> wird zuerst ArUco versucht und bei einem Fehlschlag der Rahmen.
+    Am aktuellen Aufbau gibt es keinen weißen Rahmen mehr, deshalb steht die Methode auf <code>aruco</code>.</p>
+</section>
+
+<!-- ============================================================== -->
+<section id="segmentierung">
+  <h2><span class="num">06</span>Segmentierung: Bauteil vom Tisch trennen</h2>
+  <p>Die Regel lautet: <b>Bauteil = deutlich heller ODER deutlich bunter als der Tisch.</b> Als
+    Referenz für den Tisch dient der Median über die ganze Draufsicht. Das Bauteil bedeckt nur einen
+    kleinen Teil davon und verschiebt den Median deshalb kaum.</p>
+<pre><code><span class="c"># part.py, segment_part()</span>
+v      = HSV-Hellwert V
+chroma = sqrt((a - 128)² + (b - 128)²)          <span class="c"># Buntheit im Lab-Farbraum</span>
+mask   = (v &gt; median(v) + 50) | (chroma &gt; median(chroma) + 20)</code></pre>
+  <h3>Designentscheidung: Lab-Chroma statt HSV-Sättigung</h3>
+  <p>In einer ersten Fassung stand hier die HSV-Sättigung S. Auf den Laborfotos spiegelte sich unten links
+    ein bläulicher Schimmer auf der dunklen Platte. S = (max − min) / max teilt durch die Helligkeit. Bei
+    dunklen Pixeln wird deshalb schon ein schwacher Farbstich stark aufgebläht. Der Reflex lag dann
+    teilweise über der Schwelle, wurde als Bauteil gewählt oder verschmolz mit ihm. Die Chroma im
+    Lab-Farbraum misst die Buntheit dagegen unabhängig von der Helligkeit.</p>
+  <div class="grid2">
+    <figure><img class="photo" src="img/m1/bild1/sat.jpg" alt="HSV-Sättigung der Draufsicht"><figcaption><b>HSV-Sättigung S</b>: Der Reflex unten links leuchtet fast so hell wie das Bauteil.</figcaption></figure>
+    <figure><img class="photo" src="img/m1/bild1/chroma.jpg" alt="Lab-Chroma der Draufsicht"><figcaption><b>Lab-Chroma C*</b>: Der Reflex bleibt dunkel, nur das Bauteil sticht heraus. Beide Bilder haben dieselbe Farbskala (0–100).</figcaption></figure>
+  </div>
+  <div class="svgwrap" id="chromabars"></div>
+  <script>
+  (function () {
+    // Medianwerte je Fläche aus der Thesis (Tab. Sättigung/Buntheit, 5 Fotos)
+    const rows = [["Tisch", [12, 13], [2, 3]], ["bläulicher Reflex", [45, 58], [8, 9]], ["Bauteil (violett)", [76, 99], [40, 52]]];
+    const W = 900, x0 = 150, sw = 330, gapX = 60;
+    const sx = (v, k) => x0 + k * (sw + gapX) + v / 100 * sw;
+    let s = `<svg viewBox="0 0 ${W} 190" role="img" aria-label="Sättigung vs. Chroma">`;
+    ["HSV-Sättigung S (alte Regel)", "Lab-Chroma C* (aktuelle Regel)"].forEach((t, k) => {
+      s += `<text x="${sx(0, k)}" y="18" font-size="12.5" font-weight="700" class="f-text">${t}</text>`;
+      s += `<line x1="${sx(0, k)}" y1="140" x2="${sx(100, k)}" y2="140" stroke="currentColor" stroke-opacity=".3"/>`;
+      [0, 25, 50, 75, 100].forEach(v => s += `<text x="${sx(v, k)}" y="156" font-size="10" text-anchor="middle" class="f-muted">${v}</text>`);
+      const thr = k === 0 ? 52 : 22.5;
+      s += `<line x1="${sx(thr, k)}" y1="30" x2="${sx(thr, k)}" y2="140" stroke="var(--bad)" stroke-width="2" stroke-dasharray="4 3"/>
+            <text x="${sx(thr, k)}" y="174" font-size="10.5" text-anchor="middle" fill="var(--bad)">Schwelle ≈ ${k === 0 ? "52 (Median + 40)" : "22 (Median + 20)"}</text>`;
+    });
+    rows.forEach(([name, S, C], r) => {
+      const y = 42 + r * 32;
+      s += `<text x="${x0 - 10}" y="${y + 12}" font-size="12" text-anchor="end" class="f-text">${name}</text>`;
+      [S, C].forEach((rg, k) => {
+        const bad = k === 0 && r === 1;
+        s += `<rect x="${sx(rg[0], k)}" y="${y}" width="${Math.max(4, sx(rg[1], k) - sx(rg[0], k))}" height="16" rx="3"
+               fill="${r === 2 ? "var(--accent)" : bad ? "var(--bad)" : "currentColor"}" fill-opacity="${r === 2 || bad ? .85 : .35}"/>
+              <text x="${sx(rg[1], k) + 6}" y="${y + 12}" font-size="10.5" class="f-muted">${rg[0]}–${rg[1]}</text>`;
+      });
+    });
+    document.getElementById("chromabars").innerHTML = s + "</svg>";
+  })();
+  </script>
+  <p style="margin-top:12px">Bei S liegt der Reflex (rot) über der Schwelle. Bei C* liegt die Schwelle
+    deutlich zwischen Reflex und Bauteil, mit viel Abstand nach beiden Seiten. Mit dieser Regel wird das
+    Bauteil auf allen fünf Fotos korrekt segmentiert.</p>
+  <div class="tip"><p><b>Warum relative statt fester Schwellen?</b> Wird das Raumlicht heller, steigen
+    Tisch und Bauteil gemeinsam an, und der Median zieht die Schwelle mit. Otsu wäre eine Alternative,
+    setzt aber ein deutlich zweigipfliges Histogramm voraus. Das fehlt, wenn ein kleines Bauteil auf einer
+    großen Fläche liegt.</p></div>
+  <p>Danach folgen das Ausblenden des Randes, Öffnen (3 × 3), Schließen (7 × 7) und die Konturen.
+    Kandidaten mit plausibler Fläche zwischen <code>min_area_mm2</code> und <code>max_area_mm2</code>
+    bleiben übrig, und die größte davon ist das Bauteil. Gibt es keinen Kandidaten, meldet M1 „kein
+    Bauteil“.</p>
+</section>
+
+<!-- ============================================================== -->
+<section id="pose">
+  <h2><span class="num">07</span>Pose &amp; Fase: warum θ eindeutig ist</h2>
+  <ul>
+    <li><b>Position:</b> Der Flächenschwerpunkt der Kontur aus den Bildmomenten (u = m10/m00, v = m01/m00).</li>
+    <li><b>Längsachse:</b> Die lange Seite des kleinsten umschließenden Rechtecks (<code>cv2.minAreaRect</code>).</li>
+    <li><b>Richtung:</b> Ein Quader sieht nach einer Drehung um 180° von oben gleich aus. Erst die Fase
+      (abgeschrägte Ecke) unterscheidet die beiden Enden. An der Fase liegt genau eine Rechteckecke
+      deutlich <i>außerhalb</i> der Kontur. Ist ihr Abstand größer als 8 % der Bauteilbreite
+      (<code>chamfer_min_frac</code>), zeigt die Achse zu dieser Ecke, und θ ist im Bereich 0–360°
+      eindeutig.</li>
+    <li><b>Ohne Fase:</b> θ wird auf 0–180° begrenzt und <code>confidence = 0,5</code> gesetzt.</li>
+  </ul>
+  <div class="demo">
+    <div class="dh"><h4>Fasenerkennung ausprobieren</h4></div>
+    <div class="controls">
+      <label>Drehung θ <input type="range" id="pTh" min="0" max="359" value="36"> <span id="pThV"></span></label>
+      <label>Fasengröße <input type="range" id="pCh" min="0" max="14" value="10" step="0.5"> <span id="pChV"></span></label>
+    </div>
+    <div class="grid2" style="align-items:center">
+      <div class="svgwrap" style="padding:6px"><svg id="poseSvg" viewBox="-60 -60 120 120"></svg></div>
+      <div>
+        <div class="readout" id="poseOut"></div>
+        <p style="font-size:.88rem;margin-top:10px">Grün gestrichelt ist das <code>minAreaRect</code>, der gelbe Kreis die Ecke
+          mit dem größten Abstand d zur Kontur. Wird die Fase kleiner als die Schwelle, kann der Pfeil um 180°
+          falsch herum stehen. Das Bauteil läge dann an der Prüfstation mit dem Etikett von der Kamera weg.</p>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    const L = 66, W = 44, frac = 0.08;            // mm, wie gemessen; chamfer_min_frac aus system.yaml
+    const th = document.getElementById("pTh"), ch = document.getElementById("pCh");
+    function draw() {
+      const t = +th.value, c = +ch.value, r = t * Math.PI / 180;
+      const rot = ([x, y]) => [x * Math.cos(r) - y * Math.sin(r), -(x * Math.sin(r) + y * Math.cos(r))]; // y nach oben
+      const hl = L / 2, hw = W / 2;
+      const poly = c > 0 ? [[-hl, -hw], [hl, -hw], [hl, hw - c], [hl - c, hw], [-hl, hw]] : [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]];
+      const box = [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]];
+      const d = c / Math.SQRT2, found = d > frac * W;
+      const thetaOut = found ? t % 360 : t % 180;
+      const dir = found ? 1 : (t % 360 < 180 ? 1 : -1);   // ohne Fase: Achse kann zum falschen Ende zeigen
+      const pts = a => a.map(p => rot(p).map(v => v.toFixed(2)).join(",")).join(" ");
+      const tip = rot([dir * 0.6 * L, 0]), corner = rot([hl, hw]);
+      const g = document.getElementById("poseSvg");
+      g.innerHTML = `
+        <defs><marker id="pa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0aa7c2"/></marker></defs>
+        <line x1="-58" y1="0" x2="58" y2="0" stroke="currentColor" stroke-opacity=".15"/><line x1="0" y1="-58" x2="0" y2="58" stroke="currentColor" stroke-opacity=".15"/>
+        <text x="55" y="-2" font-size="5" text-anchor="end" class="f-muted">x</text><text x="2" y="-54" font-size="5" class="f-muted">y</text>
+        <polygon points="${pts(poly)}" fill="#a78bfa" fill-opacity=".75" stroke="#b91c1c" stroke-width=".8"/>
+        <polygon points="${pts(box)}" fill="none" stroke="#16a34a" stroke-width=".6" stroke-dasharray="2 1.5"/>
+        ${c > 0 ? `<circle cx="${corner[0]}" cy="${corner[1]}" r="3" fill="none" stroke="#eab308" stroke-width="1"/>` : ""}
+        <line x1="0" y1="0" x2="${tip[0]}" y2="${tip[1]}" stroke="#0aa7c2" stroke-width="1.4" marker-end="url(#pa)"/>
+        <path d="M0,0 m-2,0 h4 m-2,-2 v4" stroke="#0aa7c2" stroke-width=".8"/>`;
+      document.getElementById("pThV").textContent = t + "°";
+      document.getElementById("pChV").textContent = fmt(c) + " mm";
+      document.getElementById("poseOut").innerHTML =
+        `Abstand Ecke ↔ Kontur  d = <b>${fmt(d)} mm</b><br>` +
+        `Schwelle 0,08 × Breite = ${fmt(frac * W)} mm<br>` +
+        `Fase gefunden: <b>${found ? "ja" : "nein"}</b><br>` +
+        `θ = <b>${fmt(thetaOut)}°</b>  (Bereich ${found ? "0–360°" : "0–180°"})<br>` +
+        `confidence = <b>${found ? "1,0" : "0,5"}</b>` +
+        (!found && dir < 0 ? `<br><span style="color:var(--bad)">⚠ Pfeil zeigt vom tatsächlichen Fasen-Ende weg</span>` : "");
+    }
+    th.oninput = ch.oninput = draw; draw();
+  })();
+  </script>
+  <p>Ein Detail aus <code>detector.py</code>: Im Bild zeigt v nach unten, im Arbeitsbereich y nach oben.
+    Deshalb wird beim Umrechnen die y-Koordinate gespiegelt und das Vorzeichen des Winkels umgekehrt:
+    <code>theta_ws = (−theta_img) mod 360</code>.</p>
+</section>
+
+<!-- ============================================================== -->
+<section id="transformation">
+  <h2><span class="num">08</span>Vom Arbeitsbereich ins Roboter-KS</h2>
+  <p>Die Draufsicht hat einen festen Maßstab. Pixel → mm ist deshalb eine einfache Division:
+    <code>x = u / 2</code>, <code>y = 330 − v / 2</code>. Danach überführt eine <b>ebene
+    Starrkörpertransformation</b> (Drehung + Verschiebung, ohne Skalierung) die Pose in das
+    Roboter-Basis-KS:</p>
+<pre><code>x_r = cos(φ)·x − sin(φ)·y + t_x         <span class="c"># common/transforms.py, rigid_2d()</span>
+y_r = sin(φ)·x + cos(φ)·y + t_y
+θ_r = θ + φ
+z_r = table_z_mm                       <span class="c"># Bauteil liegt flach auf dem Tisch</span></code></pre>
+  <p>Die Parameter φ, t<sub>x</sub>, t<sub>y</sub> werden <b>einmalig eingemessen</b> (gemeinsam mit M2): Der
+    Roboter fährt mit der Greiferspitze die vier Markermitten an. <code>fit_workspace_to_robot()</code>
+    berechnet daraus per Least Squares (Kabsch-Verfahren über SVD) die beste Drehung und Verschiebung
+    und gibt den Restfehler je Marker aus. Mehr dazu auf der <a href="m2_robotersteuerung.html#kalibrierung">M2-Seite</a>.</p>
+  <div class="demo">
+    <div class="dh"><h4>Klick in die Draufsicht → Koordinaten</h4></div>
+    <p style="font-size:.9rem">Klicke auf einen Punkt der entzerrten Draufsicht (Foto 1). Die Umrechnung
+      verwendet dieselben Formeln und Kalibrierwerte wie der Code (<code>workspace_to_robot</code>:
+      φ = 0,35°, t = (205,1 | −319,7) mm, z = 2,1 mm).</p>
+    <div class="grid2" style="align-items:start">
+      <div style="position:relative">
+        <img src="img/m1/bild1/m1_03_rectified.jpg" alt="Draufsicht" style="width:100%;border-radius:8px;display:block">
+        <svg id="clickSvg" viewBox="0 0 660 660" style="position:absolute;inset:0;width:100%;height:100%;cursor:crosshair"></svg>
+      </div>
+      <div><div class="readout" id="clickOut">Noch kein Punkt gewählt.</div>
+        <p style="font-size:.86rem;margin-top:10px">Das Gitter hat 50 mm Abstand. Das Kreuz markiert den
+          Schwerpunkt, den M1 auf diesem Foto erkannt hat: (137,2 | 214,8) mm im Arbeitsbereich =
+          (340,9 | −104,1) mm im Roboter-KS.</p></div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    const PPM = 2, SIZE = 330, PHI = 0.35, T = [205.1, -319.7], Z = 2.1;
+    const svg = document.getElementById("clickSvg");
+    let grid = "";
+    for (let mm = 0; mm <= SIZE; mm += 50) {
+      grid += `<line x1="${mm * PPM}" y1="0" x2="${mm * PPM}" y2="660" stroke="#fff" stroke-opacity=".18"/>
+               <line x1="0" y1="${660 - mm * PPM}" x2="660" y2="${660 - mm * PPM}" stroke="#fff" stroke-opacity=".18"/>`;
+      if (mm > 0 && mm < SIZE) grid += `<text x="${mm * PPM + 3}" y="654" font-size="13" fill="#fff" fill-opacity=".6">${mm}</text><text x="4" y="${660 - mm * PPM - 4}" font-size="13" fill="#fff" fill-opacity=".6">${mm}</text>`;
+    }
+    const cu = 137.157 * PPM, cv = (SIZE - 214.811) * PPM;
+    grid += `<path d="M${cu - 10},${cv} h20 M${cu},${cv - 10} v20" stroke="#22d3ee" stroke-width="3"/>`;
+    grid += `<text x="8" y="22" font-size="15" fill="#fff" fill-opacity=".8">y ↑</text><text x="630" y="640" font-size="15" fill="#fff" fill-opacity=".8">x →</text>`;
+    svg.innerHTML = grid + `<g id="clickMark"></g>`;
+    svg.addEventListener("click", e => {
+      const r = svg.getBoundingClientRect();
+      const u = (e.clientX - r.left) / r.width * 660, v = (e.clientY - r.top) / r.height * 660;
+      const x = u / PPM, y = SIZE - v / PPM;
+      const p = PHI * Math.PI / 180;
+      const xr = Math.cos(p) * x - Math.sin(p) * y + T[0], yr = Math.sin(p) * x + Math.cos(p) * y + T[1];
+      document.getElementById("clickMark").innerHTML = `<circle cx="${u}" cy="${v}" r="9" fill="none" stroke="#facc15" stroke-width="3"/>`;
+      document.getElementById("clickOut").innerHTML =
+        `Draufsicht-Pixel  u = ${fmt(u, 0)}, v = ${fmt(v, 0)}<br>` +
+        `Arbeitsbereich    x = <b>${fmt(x)}</b>, y = <b>${fmt(y)}</b> mm<br>` +
+        `Roboter-Basis     x = <b>${fmt(xr)}</b>, y = <b>${fmt(yr)}</b>, z = ${fmt(Z)} mm<br>` +
+        `<span style="color:var(--muted)">(θ im Roboter-KS = θ im Arbeitsbereich + 0,35°)</span>`;
+    });
+  })();
+  </script>
+</section>
+
+<!-- ============================================================== -->
+<section id="ergebnisse">
+  <h2><span class="num">09</span>Ergebnisse auf den Laborfotos</h2>
+  <p>Fünf Handyfotos vom Aufbau (05.10.2026). Foto 1–3 zeigen dieselbe Szene aus drei verschiedenen Höhen,
+    Foto 4 und 5 andere Lagen. Die Werte stammen direkt aus der Pipeline.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Foto</th><th class="n">x_ws</th><th class="n">y_ws</th><th class="n">θ_ws</th><th class="n">x_robot</th><th class="n">y_robot</th><th class="n">θ_robot</th><th class="n">Größe [mm]</th><th>Fase</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td class="n">137,2</td><td class="n">214,8</td><td class="n">36,4°</td><td class="n">340,9</td><td class="n">−104,1</td><td class="n">36,8°</td><td class="n">64,5 × 43,3</td><td><span class="pill good">ja</span></td></tr>
+      <tr><td>2</td><td class="n">136,9</td><td class="n">215,2</td><td class="n">36,4°</td><td class="n">340,7</td><td class="n">−103,7</td><td class="n">36,7°</td><td class="n">67,5 × 45,5</td><td><span class="pill good">ja</span></td></tr>
+      <tr><td>3</td><td class="n">136,8</td><td class="n">215,6</td><td class="n">36,4°</td><td class="n">340,6</td><td class="n">−103,2</td><td class="n">36,7°</td><td class="n">69,1 × 46,4</td><td><span class="pill good">ja</span></td></tr>
+      <tr><td>4</td><td class="n">62,9</td><td class="n">114,3</td><td class="n">83,8°</td><td class="n">267,3</td><td class="n">−205,0</td><td class="n">84,2°</td><td class="n">66,5 × 43,3</td><td><span class="pill good">ja</span></td></tr>
+      <tr><td>5</td><td class="n">237,3</td><td class="n">97,2</td><td class="n">192,5°</td><td class="n">441,8</td><td class="n">−221,0</td><td class="n">192,9°</td><td class="n">68,4 × 43,5</td><td><span class="pill good">ja</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="grid2">
+    <div class="tip"><p><b>Wiederholbarkeit:</b> Bei Foto 1–3 (gleiche Szene, andere Kamerahöhe)
+      schwankt die Position um weniger als 1 mm und der Winkel um 0,1°. Das zeigt, dass die Homographie
+      die Perspektive zuverlässig herausrechnet.</p></div>
+    <div class="warn"><p><b>Gemessene Größe schwankt</b> zwischen 64–69 × 43–46 mm. Die Ursache ist die
+      Parallaxe: Je nach Blickwinkel sind Seitenflächen sichtbar und werden mitsegmentiert. Auf den
+      Schwerpunkt wirkt sich das weniger aus als auf die Kantenlängen.</p></div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<section id="config">
+  <h2><span class="num">10</span>Konfiguration (<code>config/system.yaml</code>)</h2>
+  <p>Alle Zahlenwerte stehen in der Konfiguration, nicht im Code. Bearbeiten lassen sie sich auch in der GUI
+    unter <i>Einstellungen</i>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Schlüssel</th><th>Wert</th><th>Bedeutung</th></tr></thead>
+    <tbody>
+      <tr><td><code>topdown_camera.source</code></td><td>0</td><td>Kameranummer oder Bild-Glob (Replay der Testfotos)</td></tr>
+      <tr><td><code>workspace.method</code></td><td>aruco</td><td><code>aruco</code> | <code>white_frame</code> | <code>auto</code></td></tr>
+      <tr><td><code>workspace.size_mm</code></td><td>[330, 330]</td><td>Größe des Arbeitsbereichs: Markermitten 400 mm auseinander, je 35 mm nach innen versetzt, damit das Markerpapier draußen bleibt</td></tr>
+      <tr><td><code>workspace.markers_mm</code></td><td>0: (−35, −35) …</td><td>Markermitten im Arbeitsbereich-KS. Die Zuordnung ID → Ecke muss stimmen.</td></tr>
+      <tr><td><code>workspace.px_per_mm</code></td><td>2.0</td><td>Auflösung der Draufsicht</td></tr>
+      <tr><td><code>workspace.border_mm</code></td><td>5.0</td><td>ausgeblendeter Randstreifen</td></tr>
+      <tr><td><code>part_topdown.brightness_delta</code></td><td>50</td><td>V über dem Tisch-Median</td></tr>
+      <tr><td><code>part_topdown.chroma_delta</code></td><td>20</td><td>Lab-Chroma über dem Tisch-Median</td></tr>
+      <tr><td><code>part_topdown.min/max_area_mm2</code></td><td>300 / 20 000</td><td>plausible Bauteilfläche</td></tr>
+      <tr><td><code>part_topdown.chamfer_min_frac</code></td><td>0.08</td><td>Mindestabstand der Fasen-Ecke relativ zur Breite</td></tr>
+      <tr><td><code>workspace_to_robot</code></td><td>0,35° · (205,1 | −319,7) · z 2,1</td><td>Kalibrierung Arbeitsbereich → Roboter</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================== -->
+<section id="bedienung">
+  <h2><span class="num">11</span>Testen &amp; Bedienen</h2>
+  <div class="grid2">
+    <div class="card"><h3>Kommandozeile (aus <code>code/</code>)</h3>
+<pre><code><span class="c"># Pipeline auf die Testfotos, Debug-Bilder in logs/m1</span>
+python -m m1_vision_topdown.run "m1_vision_topdown/tests/data/*.jpg"
+
+<span class="c"># Druckbare Marker mit weißem Rand</span>
+python -m m1_vision_topdown.make_markers
+
+<span class="c"># Tests</span>
+pytest m1_vision_topdown</code></pre></div>
+    <div class="card"><h3>GUI (<code>python -m gui</code>)</h3>
+      <p><b>Tab M1 Erkennung:</b> Quelle wählen (Testbilder, Kamera, Datei), <i>Bild holen + analysieren</i>,
+        optional <i>Live</i>. Angezeigt werden das Kamerabild mit Overlay und die Draufsicht mit Pose.</p>
+      <p><b>Tab Ablauf:</b> Erkennung <i>mock / replay / camera / KI</i>. Mit <i>+ Zwischenschritte</i>
+        werden alle Bilder dieser Seite unter <code>logs/&lt;datum&gt;/…/steps/</code> gespeichert.</p>
+      <p><b>Tab M2 → Zeigetest:</b> M1 erkennt das Bauteil, der Roboter zeigt darauf. Das ist der
+        Praxistest für M1 und die Kalibrierung zusammen.</p></div>
+  </div>
+  <h3>Teststrategie</h3>
+  <ul>
+    <li><b>Synthetische Szenen</b> (<code>tests/test_topdown.py</code>): Ein Bauteil wird mit bekannter Pose
+      in ein perspektivisch verzerrtes Bild gezeichnet. Prüfung: Fehler &lt; 2 mm und &lt; 2°, für ArUco
+      und Rahmen.</li>
+    <li><b>Echte Fotos</b> als Regressionstest: Die bekannten Ergebnisse dürfen sich durch Codeänderungen
+      nicht verschlechtern.</li>
+    <li><b>MockDetector</b>: liefert Zufallsposen, damit Orchestrator und M2 ohne Kamera laufen.</li>
+  </ul>
+</section>
+
+<!-- ============================================================== -->
+<section id="grenzen">
+  <h2><span class="num">12</span>Grenzen, Entscheidungen &amp; offene Punkte</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Thema</th><th>Stand / Begründung</th></tr></thead>
+    <tbody>
+      <tr><td>Klassische BV statt KI</td><td>Ein einzelnes, bekanntes Bauteil auf einem kontrastreichen Tisch. Dafür reicht klassische BV, die ohne Trainingsdaten auskommt, jeden Schritt nachvollziehbar macht und schnell läuft. KI-Greifen wird in M4 als Alternative untersucht.</td></tr>
+      <tr><td>Parallaxe</td><td>Die Homographie gilt nur für die Tischebene. Die Oberseite des Bauteils liegt höher und erscheint verschoben, außerdem werden sichtbare Seitenflächen mitsegmentiert. Abhilfe: Kamera hoch und senkrecht über der Mitte montieren; optional eine Korrektur über die Bauteilhöhe.</td></tr>
+      <tr><td>Linsenverzeichnung</td><td>Eine intrinsische Kalibrierung nach Zhang ist vorgesehen (<code>calibration_file</code>), wird aber noch nicht verwendet.</td></tr>
+      <tr><td>Marker-Quiet-Zone</td><td>Die ersten 3D-gedruckten Marker hatten keinen hellen Rand und verschmolzen mit der dunklen Platte. Lösung: Marker mit weißem Rand (<code>make_markers.py</code>).</td></tr>
+      <tr><td>Fase nicht erkannt</td><td>Dann gilt confidence 0,5, und θ ist nur bis auf 180° eindeutig. Das Teil könnte gedreht an der Prüfstation landen.</td></tr>
+      <tr><td>Ein Bauteil</td><td>Projektabgrenzung: Es liegt genau ein Teil im Arbeitsbereich, gewählt wird die größte Kontur.</td></tr>
+      <tr><td>Offen</td><td>Feste Top-down-Kamera montieren und Belichtung fixieren, Genauigkeitsmessung über N Zeigetests (<code>logs/point_tests.csv</code>).</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================== -->
+<section id="praesentation">
+  <h2><span class="num">13</span>Präsentation: Kernaussagen &amp; mögliche Fragen</h2>
+  <div class="card">
+    <h3>Die fünf Sätze, die sitzen sollten</h3>
+    <ol>
+      <li>Vier ArUco-Marker definieren den Arbeitsbereich, eine Homographie macht daraus eine maßstabsgetreue Draufsicht (2 px/mm).</li>
+      <li>Das Bauteil ist „deutlich heller oder bunter als der Tisch“, mit Schwellen relativ zum Median, also robust gegen Lichtänderungen.</li>
+      <li>Wir verwenden Lab-Chroma statt HSV-Sättigung, weil die Sättigung auf dunklem Untergrund Reflexe aufbläht. Das war ein echter Fehler auf den Laborfotos.</li>
+      <li>Schwerpunkt aus den Bildmomenten, Längsachse aus dem minAreaRect, und die Fase macht θ über 0–360° eindeutig.</li>
+      <li>Eine eingemessene 2D-Starrkörpertransformation liefert die Pose direkt im Roboter-KS. Gleiche Szene aus drei Höhen ergibt &lt; 1 mm Abweichung.</li>
+    </ol>
+  </div>
+  <h3>Mögliche Fragen</h3>
+  <details class="qa"><summary>Warum braucht man überhaupt eine Homographie? Reicht nicht ein Maßstab?</summary><div class="a">
+    <p>Ein einzelner Maßstab gilt nur, wenn die Kamera exakt senkrecht über dem Tisch hängt. Sonst ist das
+      Bild perspektivisch verzerrt, und weiter entfernte Bereiche erscheinen kleiner. Die Homographie
+      korrigiert genau diese projektive Verzerrung der Tischebene. Vier Punkte reichen, weil H 8
+      Freiheitsgrade hat.</p></div></details>
+  <details class="qa"><summary>Was passiert, wenn ein Marker verdeckt ist?</summary><div class="a">
+    <p>Dann wirft <code>find_workspace_aruco</code> einen <code>VisionError</code>, und der Orchestrator geht
+      in den Fehlerzustand. Mit nur drei Punkten wäre die Homographie nicht eindeutig bestimmt. Eine
+      Rückfallebene ist der weiße Rahmen (<code>method: auto</code>). Denkbar wäre auch, die letzte
+      gültige Homographie wiederzuverwenden, solange die Kamera fest montiert ist.</p></div></details>
+  <details class="qa"><summary>Wie genau ist die Erkennung?</summary><div class="a">
+    <p>Auf den Fotos ist sie bei gleicher Szene auf &lt; 1 mm und 0,1° wiederholbar. Die synthetischen
+      Tests prüfen &lt; 2 mm / 2°. Die absolute Genauigkeit im Roboter-KS hängt zusätzlich von der
+      Kalibrierung ab und wird mit dem Zeigetest gemessen: Der Roboter zeigt auf das erkannte Bauteil, der
+      Versatz wird protokolliert. Zielwert ±2 mm / ±2°.</p></div></details>
+  <details class="qa"><summary>Warum nicht einfach Otsu-Schwellwert oder Hintergrundsubtraktion?</summary><div class="a">
+    <p>Otsu braucht ein zweigipfliges Histogramm. Bei einem kleinen Teil auf einer großen Platte ist der
+      Bauteil-Gipfel aber winzig. Hintergrundsubtraktion bräuchte ein aktuelles Leerbild und reagiert auf
+      Lichtänderungen. Unsere relative Schwelle (Median + Δ) braucht beides nicht.</p></div></details>
+  <details class="qa"><summary>Was ist der Unterschied zwischen HSV-Sättigung und Lab-Chroma?</summary><div class="a">
+    <p>Die Sättigung S = (max − min) / max ist relativ zur Helligkeit. Ein dunkles Pixel mit leichtem
+      Farbstich bekommt deshalb ein hohes S. Die Chroma C* = √(a*² + b*²) ist der Abstand von der
+      Graudiagonale im Lab-Raum und unabhängig von der Helligkeit. Gemessen: Tisch C* ≈ 2, Reflex ≈ 9,
+      Bauteil 40–52. Das ist eine klare Trennung.</p></div></details>
+  <details class="qa"><summary>Funktioniert das auch mit einem anderen Bauteil oder einer anderen Farbe?</summary><div class="a">
+    <p>Die Segmentierung ja, solange sich das Teil in Helligkeit oder Buntheit vom Tisch abhebt. Die
+      Fasenerkennung ist dagegen auf dieses Bauteil zugeschnitten. Ein anderes asymmetrisches Merkmal
+      bräuchte eine angepasste Richtungsbestimmung, z. B. über Template-Matching oder Momente höherer
+      Ordnung. Bei symmetrischen Teilen reichen 0–180°.</p></div></details>
+  <details class="qa"><summary>Wie kommt die Pose ins Roboterkoordinatensystem?</summary><div class="a">
+    <p>Über eine 2D-Starrkörpertransformation (Drehung φ + Verschiebung t). Sie wird einmal eingemessen,
+      indem der Roboter die vier Markermitten anfährt. Ein Least-Squares-Fit (Kabsch/SVD) liefert φ und t
+      sowie den Restfehler je Marker. Ein RMS über 3 mm deutet auf vertauschte IDs oder schlecht
+      angefahrene Punkte hin.</p></div></details>
+  <details class="qa"><summary>Was ist mit der Bauteilhöhe, wenn die Kamera nur die Oberseite sieht?</summary><div class="a">
+    <p>Das ist die Parallaxe, eine bekannte Grenze. Die Homographie gilt für die Tischebene, die Oberseite
+      liegt höher und wird deshalb leicht nach außen verschoben abgebildet. Der Effekt ist klein, wenn die
+      Kamera hoch und senkrecht über der Mitte hängt. Eine Korrektur über die bekannte Bauteilhöhe wäre
+      möglich.</p></div></details>
+  <details class="qa"><summary>Wie lässt sich das ohne Hardware testen?</summary><div class="a">
+    <p>Die Pipeline ist kamerafrei. Die Variante <code>replay</code> spielt Fotos als Kamera ab, Unit-Tests
+      erzeugen synthetische Bilder mit bekannter Pose, und der MockDetector entkoppelt M2/M3 komplett.
+      Dadurch lief der Gesamtablauf, bevor die Kamera montiert war.</p></div></details>
+</section>
+
+<!-- ============================================================== -->
+<section id="glossar">
+  <h2><span class="num">14</span>Glossar</h2>
+  <dl class="gloss">
+    <dt>ArUco-Marker</dt><dd>Quadratische Schwarz-Weiß-Codes mit eindeutiger ID, die OpenCV robust und subpixelgenau findet.</dd>
+    <dt>Homographie</dt><dd>3 × 3-Matrix, die eine Ebene projektiv auf eine andere abbildet (8 Freiheitsgrade, aus 4 Punktpaaren bestimmbar).</dd>
+    <dt>Draufsicht / Rektifizierung</dt><dd>Mit H umgerechnetes Bild, als würde die Kamera senkrecht von oben schauen; fester Maßstab.</dd>
+    <dt>HSV / Lab</dt><dd>Farbräume. HSV: Farbton, Sättigung, Hellwert. Lab: Helligkeit L* und zwei Farbachsen a*, b*; Chroma = √(a*² + b*²).</dd>
+    <dt>Morphologie</dt><dd>Öffnen entfernt kleine Störungen, Schließen füllt kleine Lücken in Binärmasken.</dd>
+    <dt>Kontur</dt><dd>Umrisslinie einer zusammenhängenden Fläche in der Maske (<code>cv2.findContours</code>).</dd>
+    <dt>Bildmomente</dt><dd>Gewichtete Summen über die Fläche; m00 = Fläche, (m10/m00, m01/m00) = Schwerpunkt.</dd>
+    <dt>minAreaRect</dt><dd>Kleinstes gedrehtes Rechteck, das die Kontur umschließt; seine lange Seite ist die Längsachse.</dd>
+    <dt>Fase</dt><dd>Abgeschrägte Ecke des Bauteils; bricht die 180°-Symmetrie.</dd>
+    <dt>Starrkörpertransformation</dt><dd>Drehung + Verschiebung ohne Verzerrung oder Skalierung.</dd>
+    <dt>Parallaxe</dt><dd>Scheinbare Verschiebung von Punkten, die nicht in der Referenzebene (Tisch) liegen.</dd>
+  </dl>
+</section>
+
+<footer>Erstellt aus dem Code-Stand vom 20.10.2026 (<code>code/m1_vision_topdown/</code>, <code>config/system.yaml</code>) und der Thesis, Kapitel 5. Bilder: echte Pipeline-Zwischenschritte auf den Testfotos.</footer>
+</main>
+</div>
+</body>
+</html>
