@@ -76,7 +76,7 @@ Die neue Kapitelfolge enthält ein zusätzliches Kapitel „Integration und Bedi
 4a. Vorgehen im Projekt: bestehendes Projekt analysiert (Taktzeiten als Vergleichsbasis), leeres Bahnmodul (nur Start-, Ziel- und Vorposen) für alle KI-Werkzeuge, eigene manuelle Bahnen als Vergleich und zum Lernen. `	odo`: Taktzeittabelle, falls vorhanden
 5. Werkzeuge: Robotic Automatic Path Planner (getestet, bei Zeitoptimierung werden Geschwindigkeiten ungewollt geändert, z. B. LIN Vorpose → Ziel), Realtime Robotics (keine Lizenz), alternative Verfahren → `	odo{Kommilitone}`
 6. Bedeutung für das Projekt: Vorpose + LIN (Kap. 06), Arbeitsraumgrenzen ≈ vereinfachter Arbeitsraum, Erweiterung Werkzeugkugeln/Schutzräume, Kollisionsprüfung per Offline-Simulation `neura2024offlinesim`, Randbedingungen für KI-Ausgaben (M4)
-- Bilder: `figures/grob/*.png` (umbenannt, ohne Leerzeichen). **Freigabe durch GROB klären** (reale Anlagendaten).
+- Bilder: `figures/grob/*.png` (umbenannt, ohne Leerzeichen). Freigabe liegt vor (2026-10-21).
 
 ### Kap. 2 – Grundlagen
 **Kernaussage:** Breiter Überblick über die verwendeten und die alternativen Verfahren. Die Modulkapitel verweisen hierher.
@@ -177,6 +177,7 @@ Aus `references.bib` sind bereits verwendbar: `garrido2014`, `zhang2000`, `hartl
 - 2026-09-27: Kapitel `02b_vorprojekt.tex` (Vorprojekt GROB) ergänzt, Einleitung (Motivation, Aufbau) angepasst. Offen: Abschnitt „Alternative Verfahren“ (Kommilitone), Freigabe der Bilder durch GROB, Begründung A4/A6.
 - 2026-09-27: Greifer korrigiert (Kap. 04, Tab. `tab:hardware`): Zimmer MATCH LWR50L-23-00004-A + Robotermodul LWR50F-13-05-A, Quellen `zimmer_lwr50l`, `zimmer_lwr50f` (Datenblätter in `docs/greifer/`). Absatz „Bauteil bewusst einfach, damit Standard-Parallelgreifer ohne eigenes Greiferdesign“ ergänzt. Werkzeug heißt in der Steuerung weiterhin „RobotiQ“ → `\todo` Masse/TCP prüfen.
 - 2026-10-06 (Code, bei Fall D/E nachziehen): Werkzeug heißt im Labor „ZimmerLWR50“ (197,5 mm) → Kap. 04 `\todo` zu RobotiQ anpassen. Greifer 23° verdreht montiert → Greifwinkel Home + θ + 113° (Kap. 06). Pick/Place zweistufig (schnell bis 20 mm über dem Ziel, dann langsam) und kein Home-Umweg an der Prüfstation (Zustandsautomat in Kap. 03/06/09 prüfen). GUI-Ablauf zeigt M1/M3 je Schritt (Kap. 09). Erster vollständiger Ablauf im Labor.
+- **2026-10-21 – Thesis passt nicht mehr zum Code (im nächsten Schreibintervall ändern):** M4 ersetzt nicht mehr M1, sondern übernimmt PICK und PLACE_INSPECT von M2 (M1 erkennt weiter, nach M3 greift wieder M2). Code: neue Schnittstelle `Grasper` (`RobotGrasper` = M2, `AiGrasper` = M4), Variante `grasper: robot | ai`, Erkennung ohne `ai`. Betroffen: Kap. 04 (Abb. Modulübersicht „M1 / M4“ Z. ~161, Tab. Zustände Z. ~232, `ObjectPose` Z. ~258, Tab. Interfaces Z. ~284), Kap. 09 (Tab. Varianten Z. ~97), §2 Punkt 3 und Kap. 8 Punkt 2 in diesem Blueprint („Austauschbarkeit M1 ↔ M4“). Kap. 08 (M4) schreibt Person 4.
 - Noch offen aus §5: Quellen für die Motivation (Kap. 1) und die Normen zu kollaborativen Robotern (Kap. 2.6).
 
 ## 7. So geht es weiter

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ObjectPose:
-    """Grasp pose of the part in the robot base frame (M1/M4 -> M2)."""
+    """Grasp pose of the part in the robot base frame (M1 -> M2 / M4)."""
     x_mm: float
     y_mm: float
     z_mm: float
@@ -65,7 +65,7 @@ class InspectionError(RuntimeError):
 # --- Module interfaces -------------------------------------------------------
 
 class ObjectDetector(ABC):
-    """M1 (classic vision) and M4 (AI grasping) implement this."""
+    """M1 implements this."""
 
     @abstractmethod
     def detect(self) -> ObjectPose | None:
@@ -100,6 +100,38 @@ class RobotController(ABC):
 
     def reset(self) -> None:
         """Acknowledge a stop/error and make the robot ready for motions again."""
+
+
+class Grasper(ABC):
+    """Grasps the detected part and puts it down at the inspection fixture (PICK, PLACE_INSPECT).
+
+    Default: RobotGrasper (M2 does it). M4 (AI grasping with the wrist camera) implements this
+    as an alternative. Picking up again at the fixture and sorting always stays with M2.
+    """
+
+    @abstractmethod
+    def pick(self, pose: ObjectPose) -> None:
+        """Grasp the part; `pose` from M1 is the starting point (robot base frame)."""
+
+    @abstractmethod
+    def place(self, target: RobotTarget) -> None:
+        """Put the held part down at `target` (the inspection fixture)."""
+
+    def close(self) -> None:
+        pass
+
+
+class RobotGrasper(Grasper):
+    """PICK and PLACE_INSPECT done by M2 directly."""
+
+    def __init__(self, robot: RobotController):
+        self.robot = robot
+
+    def pick(self, pose: ObjectPose) -> None:
+        self.robot.pick(pose)
+
+    def place(self, target: RobotTarget) -> None:
+        self.robot.place(target)
 
 
 class Inspector(ABC):

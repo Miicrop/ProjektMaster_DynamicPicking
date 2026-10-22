@@ -54,7 +54,12 @@
 - [x] Segmentierung + Pose (inkl. Fasenerkennung für 360°) implementieren
 - [~] Kalibrierung Arbeitsbereich → Roboter (gemeinsam mit M2): Werkzeug `robot_check calib` fertig, am Aufbau durchführen
 - [x] Zwischenbilder der Verarbeitung für die Doku speicherbar (`--save-steps`, GUI *+ Zwischenschritte*)
-- [ ] Parallaxe durch die Bauteilhöhe bewerten und ggf. korrigieren
+- [ ] Parallaxe durch die Bauteilhöhe bewerten und ggf. korrigieren. **Befund 2026-10-21:** Auf allen
+  5 Testfotos (Handy, 05.10.) misst M1 das Bauteil zu groß: 64,5–69,1 × 43,3–46,4 mm statt 60 × 40 mm
+  (+8 bis +15 %). Die Homographie gilt für die Tischebene, die 15 mm hohe Oberseite und sichtbare
+  Seitenflächen erscheinen größer. Die Lage ist bei gleicher Position stabil (±0,4 mm, 3 Fotos), kann
+  aber systematisch nach außen verschoben sein → im Zeigetest (`robot_check point`) Versatz je
+  Position notieren, an Rand- **und** Mittelpositionen; mit der endgültigen Stangenkamera wiederholen.
 - [ ] Genauigkeitsmessung: N Ablagen an bekannten Positionen, Fehlerstatistik
 - [x] Unit-Tests mit synthetischen Bildern und Beispielfotos (`tests/data/`)
 

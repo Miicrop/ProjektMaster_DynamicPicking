@@ -100,7 +100,7 @@ function drawCycle(el, mod) {
             stroke="${on ? "var(--accent)" : "currentColor"}" stroke-opacity="${on ? 1 : .2}" stroke-width="${on ? 2 : 1}"/>
           <text x="${x + 10}" y="${y0 + 21}" font-size="12" font-family="var(--mono)" font-weight="700" class="${on ? "f-acc" : "f-muted"}">${name}</text>
           <text x="${x + 10}" y="${y0 + 44}" font-size="13" class="f-text">${desc}</text>
-          <text x="${x + w - 10}" y="${y0 + h - 9}" font-size="13" text-anchor="end" font-weight="700" class="${on ? "f-acc" : "f-muted"}">${m}${m === "M1" ? " / M4" : ""}</text>`;
+          <text x="${x + w - 10}" y="${y0 + h - 9}" font-size="13" text-anchor="end" font-weight="700" class="${on ? "f-acc" : "f-muted"}">${m}${name === "PICK" || name === "PLACE_INSPECT" ? " / M4" : ""}</text>`;
     if (out) s += `<text x="${x + w / 2}" y="${y0 + h + 22}" font-size="13" text-anchor="middle" font-family="var(--mono)" class="f-muted">→ ${out}</text>`;
     const ax = k === 0 ? 58 : x - gap + 2;
     s += `<line x1="${ax}" y1="${y0 + h / 2}" x2="${x - 3}" y2="${y0 + h / 2}" stroke="currentColor" stroke-opacity=".45" marker-end="url(#ah${mod})"/>`;

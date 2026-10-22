@@ -1,3 +1,3 @@
-from m4_ai_grasping.ai_detector import AiGraspDetector
+from m4_ai_grasping.ai_grasper import AiGrasper
 
-__all__ = ["AiGraspDetector"]
+__all__ = ["AiGrasper"]

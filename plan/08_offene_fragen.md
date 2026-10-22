@@ -11,12 +11,14 @@
 - [ ] Welche Kameras (Modell, Auflösung, USB/GigE)? Die Testfotos stammen von einer Handykamera (Top-down) bzw. einer 4K-Kamera (seitlich)
 - [ ] Beleuchtung an der Prüfstation vorhanden?
 - [ ] Handgelenkkamera (für M4): Modell, Anschluss, Montage; Hand-Auge-Kalibrierung nötig?
+- [~] **Rolle M4 geändert** (2026-10-21): M4 übernimmt PICK und PLACE_INSPECT von M2 (M1 erkennt weiter, nach M3 greift wieder M2). Umgesetzt: Schnittstelle `Grasper` mit `AiGrasper`-Gerüst, Orchestrator, Factory (`--grasper ai`), GUI, Plan, Anleitung, Präsentation (6.1). **Offen:** Schnittstelle mit Jeremy bestätigen (reichen `pick`/`place` mit dem `RobotController`?), Thesis Kap. 4 und 9 im nächsten Schreibintervall (`thesis/blueprint.md` §6a). Siehe [05_modul4](05_modul4_ki_greifen.md)
 - [ ] USB-Bandbreite bei drei Kameras (zwei davon ggf. 4K) am Laptop prüfen
 - [x] **ArUco-Marker:** Die 3D-gedruckten Marker haben keinen hellen Rand und sind deshalb nicht detektierbar → weißen Rand ergänzen oder Papiermarker (`make_markers.py`). Markergröße und IDs (Dictionary `DICT_4X4_50`) festhalten.
 - [~] Innenmaß des weißen Rahmens und Markerpositionen ausmessen (`workspace.size_mm`, `markers_mm`) – Niklas misst vor Ort
 
 ### Bauteil
-- [~] Geometrie und Abmessungen des Bauteils? Benötigt: Höhe in der Seitenansicht (`part_height_mm`), Loch-Solldurchmesser und Toleranz – Niklas misst vor Ort
+- [x] Geometrie und Abmessungen des Bauteils? → **60 × 40 × 15 mm, Loch 10 mm** (2026-10-21); `part_height_mm` = 15, `hole_nominal_mm` = 10. Toleranz bleibt bei ±0,4 mm (Demonstrationswert)
+- [ ] **M1 misst das Bauteil zu groß** (Befund 2026-10-21): 64,5–69,1 × 43,3–46,4 mm statt 60 × 40 mm auf allen 5 Testfotos (Parallaxe/Seitenflächen). Beobachten: Ist auch die Greifposition verschoben? → Zeigetest-Versatz je Lage auswerten, mit der Stangenkamera wiederholen. Falls ja: Korrektur über die Bauteilhöhe (Oberseite statt Tischebene entzerren) oder nur die Oberseite segmentieren. Details: [02_modul1](02_modul1_objekterkennung.md#aufgaben)
 - [x] Ist das Teil in der Draufsicht symmetrisch? → Nein, die **abgeschrägte Ecke** macht die Lage eindeutig (360°)
 - [x] Was ist die „Kerbe“? → die **kleine eckige Öffnung** rechts in der Seitenansicht (bestätigt 2026-09-26)
 - [~] Wie muss das Teil an der Prüfposition liegen (Etikettseite zur Kamera)? → Ablagen geteacht (rz −157°, Teil mit der langen Seite entlang Marker-Kante 0–3). Greifwinkel = Home + θ + 113° → **im Labor mit dem Zeigetest prüfen**; ohne erkannte Fase kann das Teil um 180° verdreht liegen
@@ -39,7 +41,7 @@
 - [~] Kalibrierung Arbeitsbereich → Roboter: Verfahren steht (TCP auf die 4 Marker-Mitten, `robot_check calib` → `fit_rigid_2d` + Restfehler; Prüfung mit Zeigetest `robot_check point`). Nach dem Labortest in Kap. 3.4 / 4 / 5 beschreiben
 - [ ] GitHub-Repo mit den bisherigen Robotertests bereitstellen
 - [~] Greifer: Werkzeug „ZimmerLWR50“ mit 197,5 mm angelegt (2026-10-06). Offen: Öffnen/Schließen des Zimmer-Greifers (IO-Link) aus dem Code
-- [ ] Vorprojekt GROB (Kap. 02b): Dürfen Vorprojekt und Bildschirmfotos gezeigt werden (Freigabe GROB)? Wer schreibt den Abschnitt „Alternative Verfahren“?
+- [~] Vorprojekt GROB (Kap. 02b): Bilder dürfen genutzt werden (2026-10-21). Offen: Wer schreibt den Abschnitt „Alternative Verfahren“?
 
 ## Entscheidungen
 

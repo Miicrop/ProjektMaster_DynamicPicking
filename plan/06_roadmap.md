@@ -79,7 +79,7 @@ Plan, Stand und Vorgehen fürs Weiterschreiben: [../thesis/blueprint.md](../thes
 - [x] Gliederung und Gesamtplan (Blueprint)
 - [~] Kurzfassung (Ergebnissatz fehlt)
 - [~] Einleitung
-- [~] Vorprojekt GROB (Abschnitt „Alternative Verfahren“ und Freigabe der Bilder offen)
+- [~] Vorprojekt GROB (Abschnitt „Alternative Verfahren“ offen; Bilder freigegeben 2026-10-21)
 - [~] Grundlagen (Abschnitt lernbasiertes Greifen: Person 4)
 - [~] Systemkonzept / Architektur (Kalibrierung offen)
 - [~] Umsetzungskapitel M1, M2, M3 (Durchsicht durch Person 1–3, Zwischenfazits nach den Tests)

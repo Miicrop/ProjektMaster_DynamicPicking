@@ -60,7 +60,7 @@ sequenceDiagram
 | M1 – Objekterkennung | Person 1 | Arbeitsbereich + Objektpose aus Top-down-Kamera |
 | M2 – Robotersteuerung | Person 2 | Greifen, Ablegen, Sortieren mit dem Neura-Roboter |
 | M3 – Sichtprüfung | Person 3 | Seriennummer, Lochdurchmesser, Kerbe → gut/schlecht |
-| M4 – KI-Greifen | Person 4 | Alternativer, lernbasierter Greifansatz |
+| M4 – KI-Greifen | Person 4 | Lernbasiertes Greifen mit der Handgelenkkamera: übernimmt Greifen und Ablegen an der Prüfung von M2 |
 | Integration / Orchestrator | gemeinsam (initial: Niklas) | Ablaufsteuerung, Schnittstellen, Konfiguration |
 
 ## Abgrenzung
@@ -68,4 +68,4 @@ sequenceDiagram
 - Es wird jeweils **ein** Bauteil im Arbeitsbereich betrachtet (keine Vereinzelung aus Schüttgut).
 - Das Bauteil liegt flach auf dem Tisch → Pose ist 2D (x, y, θ), Greifhöhe ist bekannt.
 - Keine sicherheitszertifizierte Anlage; Betrieb nur unter Aufsicht mit reduzierter Geschwindigkeit.
-- M4 wird eigenständig entwickelt und nutzt dieselbe Schnittstelle wie M1, ist aber nicht Voraussetzung für den Demonstrator.
+- M4 wird eigenständig entwickelt und ersetzt per Konfiguration PICK und PLACE_INSPECT von M2 (M1 erkennt weiter, nach M3 greift wieder M2); es ist nicht Voraussetzung für den Demonstrator.

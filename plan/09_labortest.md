@@ -45,7 +45,8 @@ Nach jedem Schritt mit Config-Änderung: in der GUI speichern (Strg+S).
   Fehler wächst zum Bildrand hin → im Zeigetest Randpositionen mit messen.
 - **Parallaxe:** M1 sieht die Oberseite des Teils, die über der Tischebene liegt. Das verschiebt die
   Position nach außen, je weiter das Teil von der Bildmitte weg ist. Kamera möglichst hoch und
-  mittig über dem Arbeitsbereich.
+  mittig über dem Arbeitsbereich. **Gemessen (Testfotos):** Bauteil erscheint 8–15 % zu groß →
+  beim Zeigetest prüfen, ob der Versatz mit der Lage im Arbeitsraum wächst.
 - **Fase nicht gefunden** (Confidence 0,5): Winkel nur bis auf 180° eindeutig. Dann liegt das Teil
   an der Prüfstation evtl. verdreht und das Etikett zeigt von der Kamera weg.
 - **Kamera oder Marker bewegt:** Eine bewegte Kamera ist für M1 unkritisch, weil die Marker in jedem

@@ -1,6 +1,7 @@
 """Cycle state machine: DETECT -> PICK -> PLACE_INSPECT -> INSPECT -> PICK_INSPECT -> SORT.
 
-See plan/01_architektur.md, section "Zustandsautomat".
+PICK and PLACE_INSPECT are done by the grasper (M2 by default, M4 as alternative),
+PICK_INSPECT and SORT always by M2. See plan/01_architektur.md, section "Zustandsautomat".
 """
 from __future__ import annotations
 
@@ -11,8 +12,8 @@ from enum import Enum, auto
 from typing import Any, Callable
 
 from common.config import robot_target
-from common.interfaces import (InspectionResult, Inspector, ObjectDetector, ObjectPose,
-                               RobotController)
+from common.interfaces import (Grasper, InspectionResult, Inspector, ObjectDetector, ObjectPose,
+                               RobotController, RobotGrasper)
 
 log = logging.getLogger(__name__)
 
@@ -48,11 +49,12 @@ StateListener = Callable[[State, CycleResult], None]
 
 class Orchestrator:
     def __init__(self, cfg: dict[str, Any], detector: ObjectDetector,
-                 robot: RobotController, inspector: Inspector):
+                 robot: RobotController, inspector: Inspector, grasper: Grasper | None = None):
         self.cfg = cfg
         self.detector = detector
         self.robot = robot
         self.inspector = inspector
+        self.grasper = grasper or RobotGrasper(robot)
         self.state = State.IDLE
         self._cycle_id = 0
         self.listeners: list[StateListener] = []   # e.g. GUI updates, called on every transition
@@ -82,13 +84,13 @@ class Orchestrator:
                 return result
 
             self._enter(State.PICK, result)
-            self.robot.pick(result.pose)
+            self.grasper.pick(result.pose)
 
             self._enter(State.PLACE_INSPECT, result)
             inspection_pose = robot_target(self.cfg, "inspection")
             # place() ends at approach height above the fixture - outside the inspection camera's
             # view (lab 2026-10-06), so no detour via home; pick() below starts right there
-            self.robot.place(inspection_pose)
+            self.grasper.place(inspection_pose)
 
             self._enter(State.INSPECT, result)
             result.inspection = self.inspector.inspect()

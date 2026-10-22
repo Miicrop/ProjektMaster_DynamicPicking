@@ -112,9 +112,8 @@
     x_mm: float; y_mm: float; z_mm: float
     theta_deg: float
     confidence: float = 1.0</code></pre>
-  <p>Dasselbe Interface implementiert auch M4 (KI-Greifen). Deshalb lässt sich M1 per Konfiguration
-    (<code>implementations.detector: ai</code>) gegen M4 austauschen, ohne dass der Orchestrator oder M2
-    etwas davon merken.</p>
+  <p>Die <code>ObjectPose</code> geht an den Greifer: standardmäßig M2, alternativ M4 (KI-Greifen mit der
+    Handgelenkkamera), der sie als Startpunkt nutzt.</p>
 </section>
 
 <!-- ============================================================== -->
@@ -174,7 +173,7 @@
   </div>
   <p style="margin-top:14px">Im Gesamtsystem baut <code>orchestrator/factory.py</code> den Detektor je nach Variante:
     <span class="pill">mock</span> <span class="pill">replay</span> (Testfotos als Kamera)
-    <span class="pill">camera</span> <span class="pill">ai</span> (M4).</p>
+    <span class="pill">camera</span>.</p>
 </section>
 
 <!-- ============================================================== -->
@@ -573,7 +572,7 @@ pytest m1_vision_topdown</code></pre></div>
   <div class="tablewrap"><table>
     <thead><tr><th>Thema</th><th>Stand / Begründung</th></tr></thead>
     <tbody>
-      <tr><td>Klassische BV statt KI</td><td>Ein einzelnes, bekanntes Bauteil auf einem kontrastreichen Tisch. Dafür reicht klassische BV, die ohne Trainingsdaten auskommt, jeden Schritt nachvollziehbar macht und schnell läuft. KI-Greifen wird in M4 als Alternative untersucht.</td></tr>
+      <tr><td>Klassische BV statt KI</td><td>Ein einzelnes, bekanntes Bauteil auf einem kontrastreichen Tisch. Dafür reicht klassische BV, die ohne Trainingsdaten auskommt, jeden Schritt nachvollziehbar macht und schnell läuft. KI-Greifen wird in M4 untersucht (für das Greifen selbst, die Erkennung bleibt bei M1).</td></tr>
       <tr><td>Parallaxe</td><td>Die Homographie gilt nur für die Tischebene. Die Oberseite des Bauteils liegt höher und erscheint verschoben, außerdem werden sichtbare Seitenflächen mitsegmentiert. Abhilfe: Kamera hoch und senkrecht über der Mitte montieren; optional eine Korrektur über die Bauteilhöhe.</td></tr>
       <tr><td>Linsenverzeichnung</td><td>Eine intrinsische Kalibrierung nach Zhang ist vorgesehen (<code>calibration_file</code>), wird aber noch nicht verwendet.</td></tr>
       <tr><td>Marker-Quiet-Zone</td><td>Die ersten 3D-gedruckten Marker hatten keinen hellen Rand und verschmolzen mit der dunklen Platte. Lösung: Marker mit weißem Rand (<code>make_markers.py</code>).</td></tr>

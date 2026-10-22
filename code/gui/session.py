@@ -16,7 +16,7 @@ from m1_vision_topdown import TopDownPipeline
 from m1_vision_topdown.detector import TopDownResult
 from m3_inspection import InspectionPipeline
 from m3_inspection.inspector import InspectionDetails
-from orchestrator.factory import build_detector, build_inspector, build_robot, open_source
+from orchestrator.factory import build_detector, build_grasper, build_inspector, build_robot, open_source
 from orchestrator.state_machine import Orchestrator
 
 log = logging.getLogger(__name__)
@@ -107,13 +107,14 @@ class Session:
             log.warning("STOP sent to robot")
 
     # -- automatic cycle -----------------------------------------------------------
-    def build_orchestrator(self, detector_kind: str, robot_kind: str, inspector_kind: str) -> Orchestrator:
+    def build_orchestrator(self, detector_kind: str, robot_kind: str, inspector_kind: str,
+                           grasper_kind: str = "robot") -> Orchestrator:
         cam1 = self.camera("m1", detector_kind) if detector_kind in ("replay", "camera") else None
         cam3 = self.camera("m3", inspector_kind) if inspector_kind in ("replay", "camera") else None
         detector = build_detector(self.cfg, detector_kind, camera=cam1)
         inspector = build_inspector(self.cfg, inspector_kind, camera=cam3, pipeline=self.m3)
         robot = self.connect_robot(robot_kind)
-        return Orchestrator(self.cfg, detector, robot, inspector)
+        return Orchestrator(self.cfg, detector, robot, inspector, build_grasper(self.cfg, grasper_kind, robot))
 
     def close(self) -> None:
         self.disconnect_robot()

@@ -6,6 +6,7 @@
     python -m orchestrator --replay --vm-robot                  # ... NeuraRobot against the Neura VM
     python -m orchestrator --replay --save-steps                # + intermediate images (masks, ROIs) for docs
     python -m orchestrator --detector camera --robot real --inspector camera --cycles 0   # until Ctrl+C
+    python -m orchestrator --replay --sim-robot --grasper ai    # M4 grasps and places at inspection
     python -m orchestrator                                      # kinds from config/system.yaml
 
 Every cycle is appended to logs/cycles_<date>.csv.
@@ -17,8 +18,8 @@ import logging
 
 from common.config import DEFAULT_CONFIG, load_config
 from orchestrator import logbook
-from orchestrator.factory import (DETECTOR_KINDS, INSPECTOR_KINDS, ROBOT_KINDS, build_detector,
-                                  build_inspector, build_robot)
+from orchestrator.factory import (DETECTOR_KINDS, GRASPER_KINDS, INSPECTOR_KINDS, ROBOT_KINDS, build_detector,
+                                  build_grasper, build_inspector, build_robot)
 from orchestrator.state_machine import Orchestrator, State
 
 
@@ -33,6 +34,7 @@ def main() -> None:
     ap.add_argument("--detector", choices=DETECTOR_KINDS)
     ap.add_argument("--robot", choices=ROBOT_KINDS)
     ap.add_argument("--inspector", choices=INSPECTOR_KINDS)
+    ap.add_argument("--grasper", choices=GRASPER_KINDS, help="PICK + PLACE_INSPECT by M2 (robot) or M4 (ai)")
     ap.add_argument("--cycles", type=int, default=1, help="0 = run until Ctrl+C")
     ap.add_argument("--save-images", action="store_true", help="save M1/M3 debug images per cycle")
     ap.add_argument("--save-steps", action="store_true",
@@ -44,6 +46,7 @@ def main() -> None:
                         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
 
     kinds = dict(cfg["implementations"])
+    grasper_kind = args.grasper or kinds.get("grasper", "robot")
     kinds = {"detector": kinds["detector"], "robot": kinds["robot"], "inspector": kinds["inspector"]}
     if args.mock:
         kinds = {k: "mock" for k in kinds}
@@ -56,7 +59,7 @@ def main() -> None:
     for k in kinds:
         if getattr(args, k):
             kinds[k] = getattr(args, k)
-    print(f"detector={kinds['detector']} robot={kinds['robot']} inspector={kinds['inspector']}")
+    print(f"detector={kinds['detector']} robot={kinds['robot']} inspector={kinds['inspector']} grasper={grasper_kind}")
 
     robot = build_robot(cfg, kinds["robot"])
     detector = build_detector(cfg, kinds["detector"])
@@ -66,7 +69,8 @@ def main() -> None:
         for module in (detector, inspector):
             if hasattr(module, "trace_steps"):
                 module.trace_steps = True
-    orch = Orchestrator(cfg, detector, robot, inspector)
+    grasper = build_grasper(cfg, grasper_kind, robot)
+    orch = Orchestrator(cfg, detector, robot, inspector, grasper)
 
     robot.connect()
     n = 0
@@ -96,6 +100,7 @@ def main() -> None:
         robot.disconnect()
         detector.close()
         inspector.close()
+        grasper.close()
     print(f"log: {csv_file if n else '-'}")
 
 

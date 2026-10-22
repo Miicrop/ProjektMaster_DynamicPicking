@@ -6,6 +6,7 @@ implementations:
   detector: mock
   robot: mock
   inspector: mock
+  grasper: robot     # PICK + PLACE_INSPECT: robot (M2) | ai (M4, wrist camera)
 
 logging:
   level: INFO
@@ -126,10 +127,10 @@ inspection:
   label_roi: [0.0, 0.0, 0.58, 1.0]
   hole_roi: [0.52, 0.0, 0.86, 1.0]
   notch_roi: [0.84, 0.1, 1.0, 0.9]
-  # Scale: visible part height in the side view is the length reference (tbd, measure part)
+  # Scale: visible part height in the side view is the length reference (part 60 x 40 x 15 mm)
   part_height_mm: 15.0
   serial_pattern: "^[0-9]{5}$"
   ocr_min_confidence: 0.4
-  # Placeholder: test photos give D/H = 0.655 -> 9.8 mm for a 15 mm part (tbd, from drawing)
+  # Hole 10 mm (confirmed 2026-10-21); test photos give D/H = 0.655 -> 9.8 mm for a 15 mm part
   hole_nominal_mm: 10.0
   hole_tolerance_mm: 0.4

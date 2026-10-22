@@ -1,9 +1,10 @@
 """Build detector / robot / inspector from a kind name. Shared by CLI and GUI.
 
 Kinds
-    detector : mock | replay | camera | ai
+    detector : mock | replay | camera
     robot    : mock | sim | vm | real
     inspector: mock | replay | camera
+    grasper  : robot | ai      (who does PICK + PLACE_INSPECT: M2 or M4)
 
 replay = real image processing on the stored test photos, sim = NeuraRobot code
 against the built-in fake controller, vm = NeuraRobot against the official Neura
@@ -15,13 +16,14 @@ import logging
 from typing import Any
 
 from common.camera import FileCamera, OpenCVCamera, open_camera
-from common.interfaces import Inspector, ObjectDetector, RobotController
+from common.interfaces import Grasper, Inspector, ObjectDetector, RobotController, RobotGrasper
 
 log = logging.getLogger(__name__)
 
-DETECTOR_KINDS = ("mock", "replay", "camera", "ai")
+DETECTOR_KINDS = ("mock", "replay", "camera")
 ROBOT_KINDS = ("mock", "sim", "vm", "real")
 INSPECTOR_KINDS = ("mock", "replay", "camera")
+GRASPER_KINDS = ("robot", "ai")
 
 REPLAY_SOURCES = {
     "topdown_camera": "m1_vision_topdown/tests/data/*.jpg",
@@ -50,9 +52,6 @@ def build_detector(cfg: dict[str, Any], kind: str, camera=None) -> ObjectDetecto
     if kind in ("replay", "camera"):
         from m1_vision_topdown import TopDownDetector
         return TopDownDetector(cfg, camera or open_source(cfg, "topdown_camera", kind))
-    if kind == "ai":
-        from m4_ai_grasping import AiGraspDetector
-        return AiGraspDetector(cfg, camera=camera)
     raise ValueError(f"Unknown detector kind: {kind}")
 
 
@@ -76,6 +75,15 @@ def build_robot(cfg: dict[str, Any], kind: str) -> RobotController:
         log.info("Fake Neura controller on port %d", server.port)
         return robot
     raise ValueError(f"Unknown robot kind: {kind}")
+
+
+def build_grasper(cfg: dict[str, Any], kind: str, robot: RobotController) -> Grasper:
+    if kind == "robot":
+        return RobotGrasper(robot)
+    if kind == "ai":
+        from m4_ai_grasping import AiGrasper
+        return AiGrasper(cfg, robot)
+    raise ValueError(f"Unknown grasper kind: {kind}")
 
 
 def build_inspector(cfg: dict[str, Any], kind: str, camera=None, pipeline=None) -> Inspector:

@@ -1,8 +1,9 @@
 from common.config import load_config
-from common.interfaces import ObjectDetector
+from common.interfaces import Grasper, ObjectDetector, RobotGrasper
 from m1_vision_topdown import MockDetector
 from m2_robot_control import MockRobot
 from m3_inspection import MockInspector
+from orchestrator.factory import build_grasper
 from orchestrator.state_machine import Orchestrator, State
 
 CFG = load_config()
@@ -71,3 +72,33 @@ def test_stop_then_reset_allows_new_cycles():
     assert not result.ok and "acknowledge" in result.error
     orch.reset()                                 # "Fehler quittieren"
     assert orch.run_cycle().ok
+
+
+class _RecordingGrasper(Grasper):
+    """Stands in for M4: records what it was asked to do."""
+
+    def __init__(self):
+        self.calls = []
+
+    def pick(self, pose):
+        self.calls.append("pick")
+
+    def place(self, target):
+        self.calls.append(f"place at {target.name}")
+
+
+def test_grasper_does_pick_and_place_inspect_m2_does_the_rest():
+    robot = MockRobot(CFG)
+    grasper = _RecordingGrasper()
+    orch = Orchestrator(CFG, MockDetector(CFG, seed=0), robot, MockInspector(CFG, good_ratio=1.0, seed=0), grasper)
+    assert orch.run_cycle().ok
+    assert grasper.calls == ["pick", "place at inspection"]
+    moves = [h.split(" (")[0] for h in robot.history if h.startswith(("home", "pick", "place"))]
+    assert moves == ["pick at inspection", "place at bin_good", "home"]
+
+
+def test_factory_builds_graspers():
+    robot = MockRobot(CFG)
+    assert isinstance(build_grasper(CFG, "robot", robot), RobotGrasper)
+    ai = build_grasper(CFG, "ai", robot)
+    assert isinstance(ai, Grasper) and ai.robot is robot

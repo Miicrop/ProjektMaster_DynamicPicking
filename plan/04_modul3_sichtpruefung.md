@@ -60,7 +60,7 @@ Die Seitenkamera betrachtet das an der Prüfposition abgelegte Bauteil und prüf
 
 - [ ] Kamera + Beleuchtung aufbauen, Prüfposition mit Anschlag festlegen
 - [ ] Referenzbilder von Gut- und **echten** Schlechtteilen aufnehmen (Testset)
-- [ ] Bauteilmaße aus Zeichnung: `part_height_mm`, `hole_nominal_mm`, Toleranz
+- [x] Bauteilmaße: 60 × 40 × 15 mm, Loch 10 mm (`part_height_mm`, `hole_nominal_mm`); Toleranz ±0,4 mm als Demonstrationswert
 - [x] Klären, was genau die „Kerbe“ ist → eckige Öffnung
 - [x] OCR-Pipeline + Regex-Validierung
 - [x] Lochvermessung

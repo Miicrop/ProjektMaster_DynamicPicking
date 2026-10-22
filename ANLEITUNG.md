@@ -36,7 +36,7 @@ einer Prüfstation ab und sortiert es danach in **Gut** oder **Schlecht**.
 | M1 Erkennung (Kamera oben) | `code/m1_vision_topdown/` | Person 1 |
 | M2 Robotersteuerung | `code/m2_robot_control/` | Person 2 |
 | M3 Sichtprüfung (Kamera seitlich) | `code/m3_inspection/` | Person 3 |
-| M4 KI-Greifen (Alternative zu M1) | `code/m4_ai_grasping/` | Person 4 |
+| M4 KI-Greifen (übernimmt Greifen + Ablegen an der Prüfung von M2) | `code/m4_ai_grasping/` | Person 4 |
 | Ablaufsteuerung, GUI, gemeinsamer Code | `code/orchestrator/`, `code/gui/`, `code/common/` | alle |
 
 Weitere Ordner: `plan/` (Planung, Aufgaben, Entscheidungen), `thesis/` (Ausarbeitung in LaTeX),
@@ -119,7 +119,7 @@ Unten in jedem Tab läuft das **Log** mit (Fehler rot, Warnungen orange).
 | **Testbilder** | echte Bildverarbeitung auf den Fotos in `m1_vision_topdown/tests/data/` | – | echte Prüfung auf den Fotos in `m3_inspection/tests/data/` |
 | **Simulator** | – | echter Robotercode gegen eine simulierte Steuerung | – |
 | **Kamera / Echter Roboter** | Live-Kamera | Neura LARA per Netzwerk | Live-Kamera |
-| **KI (M4)** | Modul von Person 4 | – | – |
+| **Greifen: KI (M4)** | – | Greifen und Ablegen an der Prüfung durch das Modul von Person 4, Rest wie gewählt | – |
 
 Die Varianten lassen sich frei kombinieren, z. B. echte Kameras mit Roboter-Simulator.
 
@@ -240,19 +240,24 @@ Planung und Aufgaben: [plan/04_modul3_sichtpruefung.md](plan/04_modul3_sichtprue
 
 ### Person 4 – M4 KI-Greifen
 
-Deine Klasse `AiGraspDetector` in `code/m4_ai_grasping/ai_detector.py` muss nur eine Methode
-haben: `detect()`. Sie liefert eine `ObjectPose` (x, y in mm und Winkel in ° im
-**Roboter-Koordinatensystem**) oder `None`, wenn kein Bauteil da ist. Was du intern machst,
-ist dir überlassen. Eigene Pakete (z. B. PyTorch-Modelle) bitte in einer eigenen
+M4 übernimmt im Ablauf **Greifen und Ablegen an der Prüfung** (Zustände PICK und
+PLACE_INSPECT). M1 erkennt das Bauteil wie bisher, nach der Prüfung greift wieder M2 und
+sortiert. Deine Klasse `AiGrasper` in `code/m4_ai_grasping/ai_grasper.py` braucht zwei
+Methoden:
+
+- `pick(pose)`: das Bauteil greifen. `pose` ist die `ObjectPose` von M1 (x, y in mm und Winkel
+  in ° im **Roboter-Koordinatensystem**) und dient als Startpunkt.
+- `place(target)`: das gehaltene Teil an der Prüfposition `target` ablegen.
+
+Bewegungen und Greifer laufen über `self.robot` (die Robotersteuerung von M2). Was du intern
+machst, ist dir überlassen. Eigene Pakete (z. B. PyTorch-Modelle) bitte in einer eigenen
 `m4_ai_grasping/requirements.txt` festhalten.
 
-- Bilder: Die Kamera oben bekommst du im Ablauf als `camera` übergeben. Die geplante
-  **Handgelenkkamera** am Roboter öffnest du mit `self.wrist_camera().read()` (Konfiguration:
-  `wrist_camera`). Zum Testen gibt es die Fotos in `m1_vision_topdown/tests/data/`.
-- Umrechnung Arbeitsbereich → Roboter: `common.transforms.workspace_to_robot` (wie M1).
-- Ausprobieren: im GUI-Tab *Ablauf* Erkennung = **KI (M4)** oder
-  `python -m orchestrator --detector ai --robot sim --inspector replay`.
-- Vergleich mit M1 für die Thesis: gleiche Bilder, beide Ergebnisse in der CSV (Abschnitt 8).
+- Bilder: Die geplante **Handgelenkkamera** öffnest du mit `self.wrist_camera().read()`
+  (Konfiguration: `wrist_camera`).
+- Ausprobieren: im GUI-Tab *Ablauf* Greifen = **KI (M4)** oder
+  `python -m orchestrator --replay --sim-robot --grasper ai`.
+- Vergleich mit M2 für die Thesis: Erfolgsquote und Lage an der Prüfung, beide Läufe im Logbuch (Abschnitt 8).
 
 Rahmen: [plan/05_modul4_ki_greifen.md](plan/05_modul4_ki_greifen.md)
 
