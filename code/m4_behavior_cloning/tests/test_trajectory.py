@@ -1,0 +1,340 @@
+"""Trajektorienplaner: Schrittweite, Dwell, Trichter-Distanz (AP 2.2/2.4/2.6)."""
+
+import _paths  # noqa: F401
+
+import numpy as np
+
+from bc import config, geometry
+from bc.trajectory import Waypoint, build_ideal_trajectory
+
+
+def _wp(x, y, z, gripper=False, approach=False):
+    pose = geometry.pose_rpy_to_quat([x, y, z, 0, 0, 0])
+    return Waypoint(pose, gripper_closed=gripper, approach=approach)
+
+
+def test_step_size_encodes_speed():
+    # AP 2.6: Die Geschwindigkeit steckt in der Schrittweite bei fester Rate.
+    traj = build_ideal_trajectory([_wp(0, 0, 0.5), _wp(0.30, 0, 0.5)])
+    steps = np.linalg.norm(np.diff(traj.poses_quat[:, :3], axis=0), axis=1)
+    expected = config.TRANSIT_SPEED_MS / config.CONTROL_RATE_HZ
+    assert np.all(steps <= expected + 1e-9)
+    # In der Mitte (nach der Rampe) faehrt die Bahn mit voller Geschwindigkeit
+    mid = steps[len(steps) // 2 - 3 : len(steps) // 2 + 3]
+    assert np.all(np.abs(mid - expected) / expected < 0.05)
+    # Dauer = konstante Fahrt + eine Rampendauer (zwei halbe Rampen)
+    duration = (len(traj) - 1) / config.CONTROL_RATE_HZ
+    nominal = 0.30 / config.TRANSIT_SPEED_MS + config.SEGMENT_RAMP_S
+    assert abs(duration - nominal) <= 1.0 / config.CONTROL_RATE_HZ + 1e-9
+
+
+def test_segments_start_and_stop_smoothly():
+    # Befund VM 2026-09-14: Geschwindigkeitsspruenge an Start, Dwell und
+    # LIN->PTP liessen den Controller ueberschwingen. Jetzt: Anfahren aus
+    # dem Stand, Stillstand an jedem Wegpunkt, begrenzte Beschleunigung.
+    traj = build_ideal_trajectory(
+        [_wp(0, 0, 0.5), _wp(0.20, 0, 0.5), _wp(0.20, 0.15, 0.5, gripper=True)]
+    )
+    dt = 1.0 / config.CONTROL_RATE_HZ
+    v = np.linalg.norm(np.diff(traj.poses_quat[:, :3], axis=0), axis=1) / dt
+    v_max = config.TRANSIT_SPEED_MS
+    # erster und letzter Takt deutlich unter der Hoechstgeschwindigkeit
+    assert v[0] < 0.1 * v_max and v[-1] < 1e-12
+    # am Zwischenpunkt (Richtungswechsel) wird angehalten
+    corner = int(np.argmin(np.linalg.norm(traj.poses_quat[:, :3] - [0.20, 0, 0.5], axis=1)))
+    assert v[corner - 1] < 0.1 * v_max and v[corner] < 0.1 * v_max
+    # Beschleunigung nirgends ueber dem Sinus-Profil (+ Abtastreserve)
+    acc = np.abs(np.diff(v)) / dt
+    a_peak = v_max * np.pi / (2.0 * config.SEGMENT_RAMP_S)
+    assert acc.max() <= 1.15 * a_peak
+
+
+def test_short_segment_keeps_peak_acceleration():
+    from bc.trajectory import segment_progress
+
+    dt = 1.0 / config.CONTROL_RATE_HZ
+    ramp = config.SEGMENT_RAMP_S
+    s = segment_progress(0.1, dt, ramp)  # viel kuerzer als die Rampe
+    assert s[-1] == 1.0 and np.all(np.diff(s) >= 0.0)
+    expected_duration = 2.0 * np.sqrt(0.1 * ramp)
+    assert abs(len(s) * dt - expected_duration) <= dt + 1e-9
+    assert np.allclose(segment_progress(0.0, dt), [1.0])
+
+
+def test_approach_segment_is_slower():
+    traj = build_ideal_trajectory(
+        [_wp(0, 0, 0.5), _wp(0.10, 0, 0.5), _wp(0.10, 0, 0.44, approach=True)]
+    )
+    steps = np.linalg.norm(np.diff(traj.poses_quat[:, :3], axis=0), axis=1)
+    approach_expected = config.APPROACH_SPEED_MS / config.CONTROL_RATE_HZ
+    # Die letzten Schritte (Approach-Segment) muessen deutlich kleiner sein
+    assert steps[-2] <= approach_expected + 1e-9
+
+
+def test_gripper_dwell_inserted():
+    traj = build_ideal_trajectory(
+        [_wp(0, 0, 0.5), _wp(0.05, 0, 0.5, gripper=True)]
+    )
+    assert int(traj.dwell_mask.sum()) == config.GRIPPER_DWELL_STEPS
+    dwell_idx = np.where(traj.dwell_mask)[0]
+    # Waehrend des Dwell: Position haelt, Greifer bereits "zu"
+    for i in dwell_idx:
+        assert np.allclose(traj.poses_quat[i], traj.poses_quat[dwell_idx[0]])
+        assert traj.gripper[i] == config.GRIPPER_CLOSED
+    # Vor dem Dwell ist der Greifer offen
+    assert traj.gripper[dwell_idx[0] - 1] == config.GRIPPER_OPEN
+
+
+def test_anchor_distance_is_zero_at_start_gripper_change_and_end():
+    traj = build_ideal_trajectory(
+        [_wp(0, 0, 0.5), _wp(0.20, 0, 0.5, gripper=True), _wp(0.20, 0, 0.7, gripper=True)]
+    )
+    d = traj.dist_to_anchor
+    dwell_idx = np.where(traj.dwell_mask)[0]
+    assert d[0] == 0.0  # Episodenstart
+    assert d[dwell_idx[0]] < 1e-9  # Greiferwechsel
+    assert d[-1] < 1e-9  # Episodenende / Uebergabe
+    # Vor dem Greifen faellt, nach dem Greifen steigt der Abstand wieder --
+    # beidseitig des Ankers, nicht nur davor (Befund 2026-09-14).
+    after = d[dwell_idx[-1] :]
+    k = int(np.argmax(after))
+    assert after[k] > 0.05
+    assert np.all(np.diff(after[: k + 1]) >= -1e-9)
+    assert np.all(np.diff(after[k:]) <= 1e-9)
+
+
+def test_ptp_segment_interpolates_in_joint_space():
+    import _fixtures
+
+    robot = _fixtures.make_robot("sim")
+    q_a = robot.read_state().joints
+    q_b = q_a + np.array([0.4, -0.1, 0.1, 0.0, 0.2, 0.3])
+    wp_a = Waypoint(robot.fk(q_a), name="A", joints=q_a)
+    wp_b = Waypoint(robot.fk(q_b), name="B", motion="ptp", joints=q_b)
+
+    traj = build_ideal_trajectory([wp_a, wp_b], fk=robot.fk)
+    assert traj.joints.shape == (len(traj), 6)
+    assert np.allclose(traj.joints[0], q_a)
+    assert np.allclose(traj.joints[-1], q_b)
+    # Linear im Gelenkraum: alle Gelenkschritte parallel zu q_b - q_a
+    # (Betrag folgt dem Rampenprofil)
+    dq = np.diff(traj.joints, axis=0)
+    direction = (q_b - q_a) / np.linalg.norm(q_b - q_a)
+    along = dq @ direction
+    assert np.all(along >= -1e-12)
+    assert np.allclose(dq, np.outer(along, direction), atol=1e-9)
+    # Keine Gelenkgeschwindigkeit ueber dem PTP-Limit
+    max_step = config.PTP_JOINT_SPEED_RADS / config.CONTROL_RATE_HZ
+    assert np.max(np.abs(dq)) <= max_step + 1e-9
+    # Posen sind die FK der Gelenkstellungen (nicht die Gerade im Raum)
+    mid = len(traj) // 2
+    assert np.allclose(traj.poses_quat[mid][:3], robot.fk(traj.joints[mid])[:3])
+
+
+def test_ptp_requires_joints_and_fk():
+    wp_a = _wp(0, 0, 0.5)
+    wp_b = Waypoint(_wp(0.1, 0, 0.5).pose_quat, motion="ptp", joints=np.zeros(6))
+    try:
+        build_ideal_trajectory([wp_a, wp_b], fk=lambda q: None)
+        assert False, "ValueError erwartet (Start ohne Gelenkstellung)"
+    except ValueError:
+        pass
+
+
+def test_joint_derivatives_match_motion():
+    from bc.trajectory import joint_derivatives
+
+    rate = config.CONTROL_RATE_HZ
+    t = np.arange(40) / rate
+    q = np.stack([0.3 * t, 0.1 * t**2, np.zeros_like(t)], axis=1)
+    vel, acc = joint_derivatives(q, rate)
+    # Innen exakt (zentrale Differenzen sind fuer Polynome 2. Grades exakt)
+    assert np.allclose(vel[1:-1, 0], 0.3)
+    assert np.allclose(vel[1:-1, 1], 0.2 * t[1:-1])
+    assert np.allclose(acc[1:-1, 1], 0.2)
+    # Stillstand bleibt Stillstand -- Dwell ergibt 0
+    assert np.allclose(vel[:, 2], 0.0) and np.allclose(acc[:, 2], 0.0)
+
+
+def _speeds(traj):
+    dt = 1.0 / config.CONTROL_RATE_HZ
+    return np.linalg.norm(np.diff(traj.poses_quat[:, :3], axis=0), axis=1) / dt
+
+
+def _blend_wp(x, y, z, blend=0.0, gripper=False):
+    wp = _wp(x, y, z, gripper=gripper)
+    wp.blend_m = blend
+    return wp
+
+
+def test_blend_keeps_speed_through_via_point():
+    # Ueberschleifen: am Durchfahrpunkt nicht anhalten (Anwender 2026-09-15)
+    stop = build_ideal_trajectory([_wp(0, 0, 0.5), _wp(0.2, 0, 0.5), _wp(0.2, 0.2, 0.5)])
+    blend = build_ideal_trajectory(
+        [_wp(0, 0, 0.5), _blend_wp(0.2, 0, 0.5, blend=0.05), _wp(0.2, 0.2, 0.5)]
+    )
+    assert blend.blend_applied[1] == 0.05
+    v_stop, v_blend = _speeds(stop), _speeds(blend)
+    corner = int(np.argmin(np.linalg.norm(stop.poses_quat[:, :3] - [0.2, 0, 0.5], axis=1)))
+    assert v_stop[corner] < 0.01
+    # Mit Ueberschleifen faellt die Geschwindigkeit nirgends unter ~70 % (90-Grad-Ecke)
+    ramp_steps = int(np.ceil(config.SEGMENT_RAMP_S * config.CONTROL_RATE_HZ)) + 1
+    inner = v_blend[ramp_steps:-ramp_steps]  # ohne Anfahren/Bremsen an Start und Ende
+    assert inner.min() > 0.6 * config.TRANSIT_SPEED_MS
+    assert inner.max() <= config.TRANSIT_SPEED_MS * 1.001
+    # Schneller am Ziel, Start und Ende unveraendert exakt
+    assert len(blend) < len(stop)
+    assert np.allclose(blend.poses_quat[0], stop.poses_quat[0])
+    assert np.allclose(blend.poses_quat[-1], stop.poses_quat[-1])
+    # Ecke verrundet: der Punkt selbst wird nicht erreicht, aber nur knapp verfehlt
+    miss = np.linalg.norm(blend.poses_quat[:, :3] - [0.2, 0, 0.5], axis=1).min()
+    assert 0.005 < miss < 0.05
+    # Ausserhalb des Radius liegt die Bahn auf den Geraden
+    p = blend.poses_quat[:, :3]
+    far = np.linalg.norm(p - [0.2, 0, 0.5], axis=1) > 0.05 + 1e-6
+    on_leg = (np.abs(p[:, 1]) < 1e-9) | (np.abs(p[:, 0] - 0.2) < 1e-9)
+    assert np.all(on_leg[far])
+    # Beschleunigung stetig und begrenzt
+    acc = np.abs(np.diff(v_blend)) * config.CONTROL_RATE_HZ
+    assert acc.max() <= 1.15 * config.TRANSIT_SPEED_MS * np.pi / (2 * config.SEGMENT_RAMP_S)
+
+
+def test_blend_collinear_is_constant_speed():
+    traj = build_ideal_trajectory(
+        [_wp(0, 0, 0.5), _blend_wp(0.2, 0, 0.5, blend=0.0375), _wp(0.4, 0, 0.5)]
+    )
+    v = _speeds(traj)
+    mid = v[10:-10]
+    assert np.allclose(mid, mid.mean(), rtol=0.03)
+
+
+def test_no_blend_at_gripper_change_or_ends():
+    traj = build_ideal_trajectory(
+        [
+            _blend_wp(0, 0, 0.5, blend=0.05),
+            _blend_wp(0.2, 0, 0.5, blend=0.05, gripper=True),
+            _blend_wp(0.2, 0.2, 0.5, blend=0.05, gripper=True),
+        ]
+    )
+    assert traj.blend_applied == (0.0, 0.0, 0.0)
+    assert int(traj.dwell_mask.sum()) == config.GRIPPER_DWELL_STEPS
+    dwell_idx = np.where(traj.dwell_mask)[0]
+    assert np.allclose(traj.poses_quat[dwell_idx, :3], [0.2, 0, 0.5])
+
+
+def test_blend_radius_limited_to_half_segment():
+    traj = build_ideal_trajectory(
+        [_wp(0, 0, 0.5), _blend_wp(0.04, 0, 0.5, blend=0.5), _wp(0.04, 0.3, 0.5)]
+    )
+    assert abs(traj.blend_applied[1] - 0.02) < 1e-9
+
+
+def test_small_blend_before_lin_approach_keeps_descent_straight():
+    # Entscheidung 2026-09-23: PRE_GRASP im Anflug mit 10 mm ueberschleifen,
+    # damit dort kein Stillstand entsteht (Deadlock AP 2.6). Die senkrechte
+    # Anfahrt ans Objekt muss dabei praktisch unveraendert bleiben.
+    pre, pick = np.array([0.45, 0.0, 0.40]), np.array([0.45, 0.0, 0.30])
+    stop = build_ideal_trajectory(
+        [_wp(0.25, -0.15, 0.40), _wp(*pre), _wp(*pick, approach=True)]
+    )
+    blend = build_ideal_trajectory(
+        [_wp(0.25, -0.15, 0.40), _blend_wp(*pre, blend=0.01), _wp(*pick, approach=True)]
+    )
+    assert blend.blend_applied[1] == 0.01
+    p = blend.poses_quat[:, :3]
+    # Ecke nur knapp verfehlt
+    assert np.linalg.norm(p - pre, axis=1).min() < 0.003
+    # Abstieg: ab 5 mm unter PRE_GRASP exakt auf der Senkrechten
+    descent = p[:, 2] < pre[2] - 0.005
+    assert np.abs(p[descent, :2] - pick[:2]).max() < 1e-9
+    # Kein Stillstand an der Ecke (ohne Ueberschleifen: praktisch 0)
+    ramp_steps = int(np.ceil(config.SEGMENT_RAMP_S * config.CONTROL_RATE_HZ)) + 1
+    corner = int(np.argmin(np.linalg.norm(p - pre, axis=1)))
+    corner_stop = int(np.argmin(np.linalg.norm(stop.poses_quat[:, :3] - pre, axis=1)))
+    assert _speeds(stop)[corner_stop] < 0.005
+    window = _speeds(blend)[corner - ramp_steps:corner + ramp_steps]
+    assert window.min() > 0.3 * config.APPROACH_SPEED_MS
+    assert np.allclose(p[-1], pick)
+
+
+def test_ptp_blend_in_joint_space():
+    import _fixtures
+
+    robot = _fixtures.make_robot("sim")
+    q_a = robot.read_state().joints
+    q_b = q_a + np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0])
+    q_c = q_b + np.array([0.0, -0.1, 0.1, 0.0, 0.2, 0.0])
+    wps = [
+        Waypoint(robot.fk(q_a), name="A", joints=q_a),
+        Waypoint(robot.fk(q_b), name="B", motion="ptp", joints=q_b, blend_m=0.05),
+        Waypoint(robot.fk(q_c), name="C", motion="ptp", joints=q_c),
+    ]
+    traj = build_ideal_trajectory(wps, fk=robot.fk)
+    # Alle Gelenkzeilen bekannt (Ueberlagerung im Gelenkraum), Posen = FK
+    assert not np.isnan(traj.joints).any()
+    for i in (0, len(traj) // 2, len(traj) - 1):
+        assert np.allclose(traj.poses_quat[i][:3], robot.fk(traj.joints[i])[:3], atol=1e-9)
+    # Keine Stillstandsstelle zwischen Start und Ende
+    dq = np.abs(np.diff(traj.joints, axis=0)).max(axis=1)
+    assert dq[3:-3].min() > 1e-3
+    assert np.allclose(traj.joints[-1], q_c)
+
+
+def test_lin_ptp_blend_leaves_joints_to_ik():
+    import _fixtures
+
+    robot = _fixtures.make_robot("sim")
+    q_a = robot.read_state().joints
+    p_a = robot.fk(q_a)
+    p_b = p_a.copy()
+    p_b[2] += 0.12
+    from bc.kinematics import Kinematics
+
+    q_b = Kinematics(robot).ik(p_b, q_a)
+    q_c = q_b + np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0])
+    wps = [
+        Waypoint(p_a, name="A", joints=q_a),
+        Waypoint(robot.fk(q_b), name="B", motion="lin", joints=q_b, blend_m=0.04),
+        Waypoint(robot.fk(q_c), name="C", motion="ptp", joints=q_c),
+    ]
+    traj = build_ideal_trajectory(wps, fk=robot.fk)
+    unknown = np.isnan(traj.joints).any(axis=1)
+    assert unknown.any()  # LIN und Ueberschleif-Fenster
+    assert not unknown[-1]
+    # Bahn ist stetig (keine Spruenge beim Uebergang ins/aus dem Fenster)
+    steps = np.linalg.norm(np.diff(traj.poses_quat[:, :3], axis=0), axis=1)
+    assert steps.max() <= config.TRANSIT_SPEED_MS / config.CONTROL_RATE_HZ * 1.2
+
+
+def test_requires_two_waypoints():
+    try:
+        build_ideal_trajectory([_wp(0, 0, 0.5)])
+        assert False, "ValueError erwartet"
+    except ValueError:
+        pass
+
+
+def test_slower_transit_speed_means_smaller_steps_and_longer_path():
+    """Planer-Tempo je Lauf (record.py --transit-speed, GUI): halbes Tempo,
+    halbe Schrittweite -- und damit halb so grosse Spruenge, wenn ein
+    Sollwert verspaetet ankommt (Auswertung 2026-10-03)."""
+    wps = [_wp(0, 0, 0.5), _wp(0.30, 0, 0.5)]
+    normal = build_ideal_trajectory(wps)
+    slow = build_ideal_trajectory(wps, transit_speed=config.TRANSIT_SPEED_MS / 2)
+    step = lambda t: np.linalg.norm(np.diff(t.poses_quat[:, :3], axis=0), axis=1).max()
+    # ganzzahlige Taktzahl je Segment: hoechstens ein Bruchteil Abweichung
+    assert abs(step(slow) / step(normal) - 0.5) < 0.02
+    # nicht ganz doppelt so lang: die Rampendauer (SEGMENT_RAMP_S) bleibt fest
+    assert len(slow) > 1.6 * len(normal)
+
+
+def test_planner_speed_problems():
+    from bc.trajectory import planner_speed_problems
+
+    assert planner_speed_problems(config.TRANSIT_SPEED_MS, config.APPROACH_SPEED_MS,
+                                  config.PTP_JOINT_SPEED_RADS) == []
+    assert planner_speed_problems(0.08, 0.03, 0.3) == []
+    zu_schnell = planner_speed_problems(0.15, 0.05, 0.9)
+    assert len(zu_schnell) == 1 and "PTP" in zu_schnell[0]
+    vertauscht = planner_speed_problems(0.04, 0.06, 0.3)
+    assert any("schneller als Transit" in p for p in vertauscht)

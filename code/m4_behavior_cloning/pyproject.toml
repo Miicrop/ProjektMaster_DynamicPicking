@@ -1,0 +1,66 @@
+# Abhaengigkeits-Deklaration der BC-Pipeline (AP 0.9 Punkt 9 / 0.10).
+#
+# Festlegung AP 0.10: Abhaengigkeiten werden hier nur DEKLARIERT und
+# gepinnt, nicht automatisch installiert. Die hardwarefreien Tests kommen
+# mit dem Kern (numpy/opencv/scipy) aus.
+#
+# WICHTIG (Training, AP 3.1): torch MUSS als cu128-Build installiert
+# werden, sonst fehlt sm_120 fuer die RTX 5070 Ti:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+# Anschliessend mit tools/check_gpu.py verifizieren (get_arch_list()
+# muss sm_120 enthalten). Der Index-URL kann nicht in pyproject.toml
+# stehen, daher ist torch bewusst NICHT unter dependencies gelistet.
+
+[project]
+name = "bc-pipeline"
+version = "0.1.0"
+description = "Behavior Cloning (Diffusion Policy) fuer den Neura LARA 5 -- lokale, autarke Pipeline"
+requires-python = ">=3.11"
+dependencies = [
+    # Kern -- reicht fuer alle hardwarefreien Module und Tests
+    "numpy>=1.26,<3",
+    "opencv-python>=4.8,<5",     # inkl. cv2.aruco (Rektifizierung AP 1.4)
+    "scipy>=1.13,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+]
+gamepad = [
+    # Teachen der Wegpunkte (AP 2.2); nur am Steuerungsrechner noetig
+    "pygame>=2.5,<3",
+]
+gui = [
+    # Bedienoberflaeche bc/gui (AP 1.2). Bewusst OPTIONAL: die Pipeline und
+    # die hardwarefreien Tests laufen ohne Qt, und die Qt-freien Schichten
+    # der Oberflaeche (session, requirements, checks, training) sind in
+    # tests/test_gui.py ohne PySide6 abgedeckt.
+    "PySide6>=6.6,<7",
+]
+report = [
+    # Nur die Diagramm-Werkzeuge tools/report_zittern.py und
+    # tools/report_servo_stream.py; Pipeline und Tests brauchen es nicht.
+    # In bc_env installiert 2026-10-14 (3.11.2).
+    "matplotlib>=3.8,<4",
+]
+train = [
+    # GEPINNT 2026-09-17 (AP 0.9 Punkt 6): das Datensatzformat (v3.0) und
+    # die Checkpoints haengen an der Version -- bc.config.LEROBOT_VERSION
+    # wird beim Export und Training geprueft. Auf JEDEM Trainings- und
+    # Inferenzrechner dieselbe Version installieren (vollstaendige Liste:
+    # Dokumentation/environment-lock.txt).
+    # torch: siehe Hinweis oben (cu128-Index, nicht ueber PyPI-Default).
+    "lerobot==0.6.1",
+    "diffusers==0.39.0",   # Noise-Scheduler der Diffusion Policy
+    "torchcodec==0.11.1",  # Video-Dekodierung im DataLoader
+    "av==15.1.0",
+]
+
+# Hardware-SDKs ohne PyPI-Paket (manuell zu installieren):
+#   gxipy    -- aus dem Daheng Galaxy SDK (Wrist-Kamera, AP 1.1)
+#   neurapy  -- liegt in der Repo-Wurzel (Dynamic_Robot_Project/neurapy)
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
