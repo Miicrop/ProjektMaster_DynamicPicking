@@ -93,3 +93,13 @@ def test_stop_aborts_running_inference(monkeypatch):
     threading.Timer(1.0, grasper.stop).start()
     with pytest.raises(RuntimeError, match="abgebrochen: STOPP"):
         grasper.pick(POSE)
+
+
+def test_neura_run_needs_topdown_serial_unless_sim_cameras():
+    cfg = _cfg()
+    cfg["topdown_camera"]["source"] = "daheng"           # serial not entered yet
+    with pytest.raises(RuntimeError, match="Seriennummer"):
+        BcGrasper(cfg, MockRobot(cfg), "vm").command()
+    cfg["m4"]["cameras"] = "sim"
+    argv, _, _ = BcGrasper(cfg, MockRobot(cfg), "vm").command()
+    assert argv[argv.index("--cameras") + 1] == "sim" and not any(a.startswith("scene=") for a in argv)

@@ -52,7 +52,11 @@ class BcGrasper(Grasper):
         cameras = mc.get("cameras", "auto")
         specs = []
         serial = daheng_serial(self._cfg["topdown_camera"]["source"])
-        if bc_robot == "neura" and cameras != "sim" and serial:
+        if bc_robot == "neura" and cameras != "sim":
+            if not serial:
+                raise RuntimeError("M4: Seriennummer der Draufsichtkamera fehlt (= Szenenkamera von M4) - "
+                                   "'topdown_camera.source: daheng:<Seriennummer>' eintragen (python -m common.camera), "
+                                   "zum Testen ohne Kameras 'm4.cameras: sim'")
             specs.append(f"scene=daheng:{serial}")          # scene camera = M1 top-down camera
         argv = infer_argv(checkpoint, robot_kind=bc_robot, episodes=1, camera_specs=specs,
                           max_steps=mc.get("max_steps"), real_robot=real)
@@ -100,7 +104,7 @@ class BcGrasper(Grasper):
             raise RuntimeError(f"M4 abgebrochen: {self._stopped}")
         self.last_rollout = progress.rollouts[-1] if progress.rollouts else None
         if code != 0 or self.last_rollout is None or not self.last_rollout.success:
-            reason = self.last_rollout.stop_reason if self.last_rollout else (tail[-1] if tail else f"Exit {code}")
+            reason = self.last_rollout.stop_reason if self.last_rollout else (" / ".join(tail[-3:]) or f"Exit {code}")
             raise RuntimeError(f"M4 hat den Übergabepunkt nicht erreicht: {reason}")
         if hasattr(self.robot, "holding"):
             self.robot.holding = True     # part is in the gripper now (MockRobot keeps track of it)
