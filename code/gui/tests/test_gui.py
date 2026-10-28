@@ -371,3 +371,38 @@ def test_robot_tab_commissioning_pages(store, tmp_path, monkeypatch):
 def steps_axes():
     from m2_robot_control.steps import AXES_SEQUENCE
     return AXES_SEQUENCE
+
+
+def test_m4_tab_sits_between_m3_and_settings(store):
+    """M4 (m4_behavior_cloning) hangs in with its backend bar and its own mode tabs."""
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+    from gui.app import MainWindow
+    from gui.session import Session
+
+    QApplication.instance() or QApplication([])
+    w = MainWindow(Session(store), start_tab="m4")
+    titles = [w.tabs.tabText(i) for i in range(w.tabs.count())]
+    assert titles[3:] == ["M3 Prüfung", "M4 Behavior Cloning", "Einstellungen"]
+    assert w.tabs.currentWidget() is w.tab_m4
+    assert [w.tab_m4.tabs.tabText(i) for i in range(w.tab_m4.tabs.count())] == \
+        ["Systemcheck", "Aufnahme", "Training", "Betrieb", "Konsole"]
+    assert w.tab_m4.bar is not None and not w.tab_m4.session.connected
+    store.dirty = False
+    w.close()
+    assert w.tab_m4._closed
+
+
+def test_gui_starts_without_m4(store, monkeypatch):
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+    import gui.app as app_mod
+    from gui.session import Session
+
+    monkeypatch.setattr(app_mod, "make_m4_tab", lambda: None)
+    QApplication.instance() or QApplication([])
+    w = app_mod.MainWindow(Session(store), start_tab="m4")
+    assert "M4 Behavior Cloning" not in [w.tabs.tabText(i) for i in range(w.tabs.count())]
+    assert w.tabs.currentWidget() is w.tab_auto
+    store.dirty = False
+    w.close()

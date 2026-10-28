@@ -6,7 +6,6 @@
     python -m orchestrator --replay --vm-robot                  # ... NeuraRobot against the Neura VM
     python -m orchestrator --replay --save-steps                # + intermediate images (masks, ROIs) for docs
     python -m orchestrator --detector camera --robot real --inspector camera --cycles 0   # until Ctrl+C
-    python -m orchestrator --replay --sim-robot --grasper ai    # M4 grasps and places at inspection
     python -m orchestrator                                      # kinds from config/system.yaml
 
 Every cycle is appended to logs/cycles_<date>.csv.
@@ -34,7 +33,7 @@ def main() -> None:
     ap.add_argument("--detector", choices=DETECTOR_KINDS)
     ap.add_argument("--robot", choices=ROBOT_KINDS)
     ap.add_argument("--inspector", choices=INSPECTOR_KINDS)
-    ap.add_argument("--grasper", choices=GRASPER_KINDS, help="PICK + PLACE_INSPECT by M2 (robot) or M4 (ai)")
+    ap.add_argument("--grasper", choices=GRASPER_KINDS, help="who does PICK + PLACE_INSPECT (only robot = M2 so far)")
     ap.add_argument("--cycles", type=int, default=1, help="0 = run until Ctrl+C")
     ap.add_argument("--save-images", action="store_true", help="save M1/M3 debug images per cycle")
     ap.add_argument("--save-steps", action="store_true",

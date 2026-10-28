@@ -1,7 +1,9 @@
 """Main window: one tab per module + automatic cycle + settings, log panel at the bottom.
 
     python -m gui                 # all tabs
-    python -m gui --tab m1        # start directly in a tab: auto | m1 | m2 | m3 | settings
+    python -m gui --tab m1        # start directly in a tab: auto | m1 | m2 | m3 | m4 | settings
+
+M4 (Behavior Cloning, m4_behavior_cloning/) is added if it loads - see gui/tab_m4.py.
 """
 from __future__ import annotations
 
@@ -15,12 +17,13 @@ from PySide6.QtWidgets import QApplication, QDockWidget, QMainWindow, QMessageBo
 
 from gui.session import Session
 from gui.tab_auto import AutoTab
+from gui.tab_m4 import make_m4_tab
 from gui.tab_robot import RobotTab
 from gui.tab_settings import SettingsTab
 from gui.tab_vision import M1Tab, M3Tab
 from gui.widgets import LogView, QtLogHandler, TaskRunner
 
-TABS = ["auto", "m1", "m2", "m3", "settings"]
+TABS = ["auto", "m1", "m2", "m3", "m4", "settings"]
 
 
 class MainWindow(QMainWindow):
@@ -35,13 +38,16 @@ class MainWindow(QMainWindow):
         self.tab_m1 = M1Tab(self.s, self.runner)
         self.tab_m2 = RobotTab(self.s, self.runner)
         self.tab_m3 = M3Tab(self.s, self.runner)
+        self.tab_m4 = make_m4_tab()                  # None if m4_behavior_cloning does not load
         self.tab_settings = SettingsTab(self.s.store)
         self.tabs = QTabWidget()
         for w, title in ((self.tab_auto, "Ablauf (automatisch)"), (self.tab_m1, "M1 Erkennung"),
                          (self.tab_m2, "M2 Roboter"), (self.tab_m3, "M3 Prüfung"),
-                         (self.tab_settings, "Einstellungen")):
-            self.tabs.addTab(w, title)
-        self.tabs.setCurrentIndex(TABS.index(start_tab))
+                         (self.tab_m4, "M4 Behavior Cloning"), (self.tab_settings, "Einstellungen")):
+            if w is not None:
+                self.tabs.addTab(w, title)
+        start = getattr(self, f"tab_{start_tab}", None) or self.tab_auto
+        self.tabs.setCurrentWidget(start)
         self.tabs.currentChanged.connect(self._tab_changed)
         self.setCentralWidget(self.tabs)
         self.tab_settings.changed.connect(self._config_changed)
@@ -86,6 +92,8 @@ class MainWindow(QMainWindow):
         for tab in (self.tab_m1, self.tab_m3):
             tab.timer.stop()
         self.tab_m2.poll.stop()
+        if self.tab_m4 is not None:
+            self.tab_m4.shutdown()
         logging.getLogger().removeHandler(self.log_handler)
         self.runner.shutdown()
         self.s.close()

@@ -47,7 +47,7 @@ sequenceDiagram
 | Greifer | **Zimmer MATCH LWR50L-23-00004-A** (elektrischer 2-Backen-Parallelgreifer, IO-Link) auf Robotermodul LWR50F-13-05-A, Unterlagen in `docs/greifer/`. Werkzeug in der Steuerung: „ZimmerLWR50“ (TCP 197,5 mm), Greifer ca. 23° um z verdreht montiert; Ansteuerung noch offen |
 | Kamera 1 | Top-down über dem Arbeitsbereich (Modell tbd; Testfotos mit Handykamera) |
 | Kamera 2 | Seitlich an der Prüfposition (Testbilder 3840×2160), ggf. mit eigener Beleuchtung |
-| Kamera 3 (geplant) | Am Roboterhandgelenk, für das KI-Greifen (M4); Konfiguration `wrist_camera` vorbereitet |
+| Kamera 3 | Am Roboterhandgelenk (Daheng VEN-161), für M4 Behavior Cloning; verwaltet M4 selbst |
 | Marker | 4 ArUco-Marker (`DICT_4X4_50`, 3D-gedruckte Blöcke) an den Ecken eines weißen Rahmens |
 | Bauteil | lila 3D-Druck-Quader mit abgeschrägter Ecke (Draufsicht), seitlich: Etikett mit 5-stelliger Seriennummer, Durchgangsloch, kleine eckige Öffnung (= **Kerbe**) |
 | Ablagen | Prüfposition, Ablage GUT, Ablage SCHLECHT (feste Posen) |
@@ -60,7 +60,7 @@ sequenceDiagram
 | M1 – Objekterkennung | Person 1 | Arbeitsbereich + Objektpose aus Top-down-Kamera |
 | M2 – Robotersteuerung | Person 2 | Greifen, Ablegen, Sortieren mit dem Neura-Roboter |
 | M3 – Sichtprüfung | Person 3 | Seriennummer, Lochdurchmesser, Kerbe → gut/schlecht |
-| M4 – KI-Greifen | Person 4 | Lernbasiertes Greifen mit der Handgelenkkamera: übernimmt Greifen und Ablegen an der Prüfung von M2 |
+| M4 – Behavior Cloning | Person 4 | Lernbasiertes Greifen mit Diffusion Policy (Aufnahme, Training, Inferenz) als eigene Pipeline mit eigenem GUI-Reiter |
 | Integration / Orchestrator | gemeinsam (initial: Niklas) | Ablaufsteuerung, Schnittstellen, Konfiguration |
 
 ## Abgrenzung
@@ -68,4 +68,4 @@ sequenceDiagram
 - Es wird jeweils **ein** Bauteil im Arbeitsbereich betrachtet (keine Vereinzelung aus Schüttgut).
 - Das Bauteil liegt flach auf dem Tisch → Pose ist 2D (x, y, θ), Greifhöhe ist bekannt.
 - Keine sicherheitszertifizierte Anlage; Betrieb nur unter Aufsicht mit reduzierter Geschwindigkeit.
-- M4 wird eigenständig entwickelt und ersetzt per Konfiguration PICK und PLACE_INSPECT von M2 (M1 erkennt weiter, nach M3 greift wieder M2); es ist nicht Voraussetzung für den Demonstrator.
+- M4 (Behavior Cloning) wird eigenständig entwickelt und läuft als eigene Pipeline neben dem Ablauf M1 → M2 → M3; es ist nicht Voraussetzung für den Demonstrator.

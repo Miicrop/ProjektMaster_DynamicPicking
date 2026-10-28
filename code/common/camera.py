@@ -1,6 +1,6 @@
 """Camera access for all modules.
 
-Config sections: topdown_camera (M1), inspection_camera (M3), wrist_camera (M4, planned).
+Config sections: topdown_camera (M1), inspection_camera (M3). M4 (m4_behavior_cloning) opens its cameras itself.
 `source` decides the backend:
 - int      -> live OpenCV camera (device index)
 - str      -> image file or glob pattern, replayed in a loop (testing without hardware)
@@ -70,7 +70,7 @@ class FileCamera:
         pass
 
 
-CAMERA_SECTIONS = ("topdown_camera", "inspection_camera", "wrist_camera")
+CAMERA_SECTIONS = ("topdown_camera", "inspection_camera")
 
 
 def open_camera(section: dict[str, Any]) -> OpenCVCamera | FileCamera:

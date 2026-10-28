@@ -1,30 +1,37 @@
-# 05 – Modul 4: KI-basiertes Greifen (alternativer Ansatz)
+# 05 – Modul 4: Behavior Cloning (Person 4)
 
-**Verantwortlich:** Person 4 · **Code:** `code/m4_ai_grasping/` · **Interface:** `Grasper.pick(pose)`, `Grasper.place(target)`
+**Verantwortlich:** Person 4 · **Code:** `code/m4_behavior_cloning/` · **Bedienung:** GUI-Reiter „M4 Behavior Cloning“
 
-> Dieses Modul wird von Person 4 eigenständig konzipiert und implementiert. Diese Datei gibt nur den Rahmen vor; Inhalte bitte selbst ergänzen.
+> **Stand 2026-10-28:** Die Pipeline von Person 4 ist per `git subtree` aus `joshi99999/Dynamic_Robot_Project` (Ordner `Behavior Cloning/`) übernommen und als M4 in die GUI eingebaut. Der frühere Platzhalter `m4_ai_grasping` (`AiGrasper`, `--grasper ai`) ist entfernt. Thesis (Kap. 4 und 9) und Präsentation (6.1) beschreiben noch den alten Stand → [08](08_offene_fragen.md).
 
-> **Änderung 2026-10-21 (Stand Team):** M4 ersetzt **nicht M1**, sondern einen Teil von **M2**. Ablauf mit M4: M1 erkennt das Bauteil → M4 greift es automatisch (Handgelenkkamera) und legt es in der Sichtprüfung ab → M3 klassifiziert → M2 greift aus der Prüfung und sortiert. Code und Plan sind umgestellt; die Thesis (Kap. 4 und 9) beschreibt noch den alten Stand → `thesis/blueprint.md` §6a.
+## Was M4 ist
 
-## Rahmen
+Lokale Imitation-Learning-Pipeline für den Neura LARA 5:
 
-- Ziel: Das Bauteil wird lernbasiert mit der Handgelenkkamera gegriffen und an der Prüfposition abgelegt. Ausgangspunkt ist die grobe Pose von M1.
-- **Schnittstelle `Grasper`** (`common/interfaces.py`): `pick(pose: ObjectPose)` greift das Teil, `place(target: RobotTarget)` legt es an der Prüfposition ab. Beide Posen im **Roboter-Basis-KS**. Die Klasse `AiGrasper` (`code/m4_ai_grasping/ai_grasper.py`) bekommt den `RobotController` von M2 für Bewegungen und Greifer.
-- Der Orchestrator ruft den Greifer nur in PICK und PLACE_INSPECT auf; PICK_INSPECT und SORT macht immer M2. Standard ist `RobotGrasper` (M2 direkt).
-- Einschalten: GUI-Tab *Ablauf* → Greifen „KI (M4)“, `python -m orchestrator --grasper ai` oder `implementations.grasper: ai` in `config/system.yaml`.
-- Kamera: `self.wrist_camera()` (Konfiguration `wrist_camera`). Offen: Hand-Auge-Kalibrierung, d. h. wie Bilder der Handgelenkkamera ins Roboter-Basis-KS kommen ([08](08_offene_fragen.md)).
-- Vergleich M2 vs. M4 beim Greifen (Erfolgsquote, Lagefehler an der Prüfung, Zeit) ist ein möglicher Beitrag zum Evaluationskapitel der Thesis.
+- automatisierte Datenaufnahme mit Action Noise Injection (Wegpunkte teachen, Episoden aufzeichnen),
+- Training einer Diffusion Policy (LeRobot 0.6.1, torch cu128),
+- Live-Inferenz mit 15 Hz.
 
-## Ideen (zur Orientierung, nicht verbindlich)
+Hardware wird nur über Ports und Adapter angebunden (`bc/ports.py`, `bc/adapters/`). Die Logik läuft deshalb auch gegen Simulation und Neura-VM. Details stehen in seiner Doku, die maßgeblich ist:
 
-- Objektdetektion mit orientierten Bounding Boxes (z. B. YOLO-OBB)
-- Greifposen-Netz (z. B. GG-CNN-artige Grasp-Maps)
-- Instanzsegmentierung + Hauptachse
+- `code/m4_behavior_cloning/README.md`: Architektur, feste Werte
+- `code/m4_behavior_cloning/INTEGRATION.md`: Einbau, Umgebung, Start
+- `code/m4_behavior_cloning/Requierments/requierments.md`: Anforderungen und Entscheidungen
+- `code/m4_behavior_cloning/Dokumentation/`: Kameras, Labortage, Zittern, Training
 
-## Konzept
+## Einbindung
 
-_(von Person 4 zu ergänzen)_
+- Ein Reiter in der Gruppen-GUI (`code/gui/tab_m4.py`), aufgebaut wie sein eigenes Fenster. Sein Code bleibt unverändert.
+- Zwei Python-Umgebungen. Die GUI läuft in der Gruppen-venv (Python 3.11). Alles mit torch und lerobot läuft als Unterprozess mit `code/m4_behavior_cloning/.venv` (Python 3.12) über `BC_PYTHON`.
+- `neurapy` kommt aus `code/m2_robot_control/vendor` (`BC_NEURAPY_DIR`).
+- Nicht an den Zustandsautomaten angebunden: Der automatische Ablauf bleibt M1 → M2 → M3.
+- M2 und M4 verbinden sich jeweils selbst mit der Steuerung, deshalb nie beide gleichzeitig verbinden.
 
-## Aufgaben
+## Änderungen von Person 4 nachziehen
 
-_(von Person 4 zu ergänzen)_
+```bash
+# im Klon von Dynamic_Robot_Project
+git subtree split --prefix="Behavior Cloning" -b bc-export
+# hier
+git subtree pull --prefix=code/m4_behavior_cloning ../Dynamic_Robot_Project bc-export
+```

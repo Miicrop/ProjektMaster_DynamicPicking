@@ -15,7 +15,7 @@ Die Dateien sind die gemeinsame Grundlage für Code (`../code`) und Ausarbeitung
 | [02_modul1_objekterkennung.md](02_modul1_objekterkennung.md) | M1 – Top-down-Kamera: Arbeitsbereich & Objektpose |
 | [03_modul2_robotersteuerung.md](03_modul2_robotersteuerung.md) | M2 – Neura-Roboter: Greifen, Ablegen, Sortieren |
 | [04_modul3_sichtpruefung.md](04_modul3_sichtpruefung.md) | M3 – Seitliche Sichtprüfung: Seriennummer, Loch, Kerbe |
-| [05_modul4_ki_greifen.md](05_modul4_ki_greifen.md) | M4 – KI-basiertes Greifen (alternativer Ansatz) |
+| [05_modul4_ki_greifen.md](05_modul4_ki_greifen.md) | M4 – Behavior Cloning (Person 4) |
 | [06_roadmap.md](06_roadmap.md) | Meilensteine und Aufgabenlisten mit Status |
 | [07_erledigt.md](07_erledigt.md) | Log erledigter Arbeiten (datiert) |
 | [08_offene_fragen.md](08_offene_fragen.md) | Offene Fragen und Entscheidungen |

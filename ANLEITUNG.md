@@ -36,7 +36,7 @@ einer Prüfstation ab und sortiert es danach in **Gut** oder **Schlecht**.
 | M1 Erkennung (Kamera oben) | `code/m1_vision_topdown/` | Person 1 |
 | M2 Robotersteuerung | `code/m2_robot_control/` | Person 2 |
 | M3 Sichtprüfung (Kamera seitlich) | `code/m3_inspection/` | Person 3 |
-| M4 KI-Greifen (übernimmt Greifen + Ablegen an der Prüfung von M2) | `code/m4_ai_grasping/` | Person 4 |
+| M4 Behavior Cloning (lernbasiertes Greifen, eigener GUI-Reiter) | `code/m4_behavior_cloning/` | Person 4 |
 | Ablaufsteuerung, GUI, gemeinsamer Code | `code/orchestrator/`, `code/gui/`, `code/common/` | alle |
 
 Weitere Ordner: `plan/` (Planung, Aufgaben, Entscheidungen), `thesis/` (Ausarbeitung in LaTeX),
@@ -119,7 +119,6 @@ Unten in jedem Tab läuft das **Log** mit (Fehler rot, Warnungen orange).
 | **Testbilder** | echte Bildverarbeitung auf den Fotos in `m1_vision_topdown/tests/data/` | – | echte Prüfung auf den Fotos in `m3_inspection/tests/data/` |
 | **Simulator** | – | echter Robotercode gegen eine simulierte Steuerung | – |
 | **Kamera / Echter Roboter** | Live-Kamera | Neura LARA per Netzwerk | Live-Kamera |
-| **Greifen: KI (M4)** | – | Greifen und Ablegen an der Prüfung durch das Modul von Person 4, Rest wie gewählt | – |
 
 Die Varianten lassen sich frei kombinieren, z. B. echte Kameras mit Roboter-Simulator.
 
@@ -238,26 +237,24 @@ pytest m3_inspection
 Neue Testbilder in `m3_inspection/tests/data/` ablegen, dann erscheinen sie im GUI unter *Testbilder*.
 Planung und Aufgaben: [plan/04_modul3_sichtpruefung.md](plan/04_modul3_sichtpruefung.md)
 
-### Person 4 – M4 KI-Greifen
+### Person 4 – M4 Behavior Cloning
 
-M4 übernimmt im Ablauf **Greifen und Ablegen an der Prüfung** (Zustände PICK und
-PLACE_INSPECT). M1 erkennt das Bauteil wie bisher, nach der Prüfung greift wieder M2 und
-sortiert. Deine Klasse `AiGrasper` in `code/m4_ai_grasping/ai_grasper.py` braucht zwei
-Methoden:
+M4 ist eine eigenständige Behavior-Cloning-Pipeline (Diffusion Policy) für den LARA 5:
+Episoden aufnehmen, Policy trainieren, Live-Inferenz. Code und Doku liegen unverändert in
+`code/m4_behavior_cloning/` (Einstieg: `README.md`, `INTEGRATION.md`, `Dokumentation/`).
 
-- `pick(pose)`: das Bauteil greifen. `pose` ist die `ObjectPose` von M1 (x, y in mm und Winkel
-  in ° im **Roboter-Koordinatensystem**) und dient als Startpunkt.
-- `place(target)`: das gehaltene Teil an der Prüfposition `target` ablegen.
-
-Bewegungen und Greifer laufen über `self.robot` (die Robotersteuerung von M2). Was du intern
-machst, ist dir überlassen. Eigene Pakete (z. B. PyTorch-Modelle) bitte in einer eigenen
-`m4_ai_grasping/requirements.txt` festhalten.
-
-- Bilder: Die geplante **Handgelenkkamera** öffnest du mit `self.wrist_camera().read()`
-  (Konfiguration: `wrist_camera`).
-- Ausprobieren: im GUI-Tab *Ablauf* Greifen = **KI (M4)** oder
-  `python -m orchestrator --replay --sim-robot --grasper ai`.
-- Vergleich mit M2 für die Thesis: Erfolgsquote und Lage an der Prüfung, beide Läufe im Logbuch (Abschnitt 8).
+- **Bedienung:** Reiter **„M4 Behavior Cloning“** in der normalen GUI (`start_gui.bat`, direkt:
+  `start_gui.bat --tab m4`). Oben die Backend-Leiste (Simulation/Neura, Override, „Reale Anlage
+  freigeben“, Verbinden), darunter Systemcheck, Aufnahme, Training, Betrieb und Konsole.
+  Allein im eigenen Fenster: `code\m4_behavior_cloning\BC-Oberflaeche.bat`.
+- **Eigene Umgebung (einmalig):** torch und lerobot brauchen Python 3.12 und vertragen sich nicht
+  mit der GUI-Umgebung (EasyOCR). Deshalb in `code\m4_behavior_cloning\` eine eigene
+  `.venv` mit `py -3.12 -m venv .venv` anlegen und nach `INTEGRATION.md` Abschnitt 3 befüllen.
+  Die GUI nimmt diese venv automatisch für Training, Export und Inferenz. Fehlt sie, laufen
+  nur die Teile ohne torch.
+- **Achtung:** M2 und M4 verbinden sich jeweils selbst mit der Steuerung. Nie beide gleichzeitig
+  verbinden; vor einer M4-Aufnahme oder -Inferenz in M2 trennen.
+- Mit dem automatischen Ablauf (Reiter *Ablauf*) ist M4 nicht verbunden; dort greift M2.
 
 Rahmen: [plan/05_modul4_ki_greifen.md](plan/05_modul4_ki_greifen.md)
 
@@ -272,7 +269,7 @@ Die wichtigsten Werte (mit **tbd** = noch zu messen):
 
 | Abschnitt | Wert | Wofür / wann ändern |
 |---|---|---|
-| `topdown_camera` / `inspection_camera` / `wrist_camera` | `source` | Kameranummer (0, 1, …) oder Bildpfad, z. B. `"m1_vision_topdown/tests/data/*.jpg"`. Jede Kamera braucht eine eigene Nummer |
+| `topdown_camera` / `inspection_camera` | `source` | Kameranummer (0, 1, …) oder Bildpfad, z. B. `"m1_vision_topdown/tests/data/*.jpg"`. Jede Kamera braucht eine eigene Nummer |
 | `workspace` | `size_mm` **tbd** | Innenmaß des weißen Rahmens [Breite, Höhe] in mm – bestimmt alle mm-Werte von M1 |
 | `workspace` | `markers_mm` **tbd** | Markermitten in mm (Ursprung: innere linke untere Rahmenecke) |
 | `workspace` | `method` | `auto`, `aruco` oder `white_frame` |

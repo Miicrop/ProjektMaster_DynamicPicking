@@ -105,8 +105,8 @@ class RobotController(ABC):
 class Grasper(ABC):
     """Grasps the detected part and puts it down at the inspection fixture (PICK, PLACE_INSPECT).
 
-    Default: RobotGrasper (M2 does it). M4 (AI grasping with the wrist camera) implements this
-    as an alternative. Picking up again at the fixture and sorting always stays with M2.
+    Default and so far only implementation: RobotGrasper (M2 does it). Another grasper can
+    implement this as an alternative. Picking up again at the fixture and sorting always stays with M2.
     """
 
     @abstractmethod

@@ -19,13 +19,12 @@ from orchestrator.state_machine import CycleResult, State
 log = logging.getLogger(__name__)
 
 FLOW = [State.DETECT, State.PICK, State.PLACE_INSPECT, State.INSPECT, State.PICK_INSPECT, State.SORT]
-LABELS = {State.DETECT: "Erkennen\n(M1)", State.PICK: "Greifen\n(M2/M4)", State.PLACE_INSPECT: "Ablegen\nPrüfplatz",
+LABELS = {State.DETECT: "Erkennen\n(M1)", State.PICK: "Greifen\n(M2)", State.PLACE_INSPECT: "Ablegen\nPrüfplatz",
           State.INSPECT: "Prüfen\n(M3)", State.PICK_INSPECT: "Aufnehmen\nPrüfplatz", State.SORT: "Sortieren\n(M2)"}
 KINDS = {
     "detector": [("Mock", "mock"), ("Testbilder", "replay"), ("Kamera", "camera")],
     "robot": [("Mock", "mock"), ("Simulator", "sim"), ("Neura-VM", "vm"), ("Echter Roboter", "real")],
     "inspector": [("Mock", "mock"), ("Testbilder", "replay"), ("Kamera", "camera")],
-    "grasper": [("M2 Roboter", "robot"), ("KI (M4)", "ai")],   # PICK + PLACE_INSPECT
 }
 COLUMNS = ["#", "Zeit", "Dauer s", "x mm", "y mm", "θ °", "Seriennr.", "Loch mm", "Kerbe", "Ergebnis", "Grund / Fehler"]
 
@@ -45,10 +44,9 @@ class AutoTab(QWidget):
         # configuration row
         self.kind = {}
         cfg_impl = session.cfg["implementations"]
-        defaults = {"detector": "replay", "robot": "sim", "inspector": "replay", "grasper": "robot"}
+        defaults = {"detector": "replay", "robot": "sim", "inspector": "replay"}
         top = QHBoxLayout()
-        for key, title in (("detector", "Erkennung"), ("robot", "Roboter"), ("inspector", "Prüfung"),
-                           ("grasper", "Greifen")):
+        for key, title in (("detector", "Erkennung"), ("robot", "Roboter"), ("inspector", "Prüfung")):
             cb = QComboBox()
             for text, k in KINDS[key]:
                 cb.addItem(text, k)
@@ -172,7 +170,7 @@ class AutoTab(QWidget):
 
     def _run(self, kinds: dict[str, str], single: bool, opts: dict) -> None:
         """Worker thread (no widget access!): build the system and run cycles until stopped."""
-        orch = self.s.build_orchestrator(kinds["detector"], kinds["robot"], kinds["inspector"], kinds["grasper"])
+        orch = self.s.build_orchestrator(kinds["detector"], kinds["robot"], kinds["inspector"])
         self.orch = orch
         orch.listeners = [lambda st, res: self.state_changed.emit(st, res),
                           lambda st, res: self._stage_feedback(orch, st, res)]

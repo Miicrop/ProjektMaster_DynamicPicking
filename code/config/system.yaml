@@ -6,7 +6,7 @@ implementations:
   detector: mock
   robot: mock
   inspector: mock
-  grasper: robot     # PICK + PLACE_INSPECT: robot (M2) | ai (M4, wrist camera)
+  grasper: robot     # PICK + PLACE_INSPECT: robot (M2); M4 Behavior Cloning runs in its own GUI tab
 
 logging:
   level: INFO
@@ -15,7 +15,7 @@ logging:
 # --- M1: top-down camera ----------------------------------------------------
 topdown_camera:
   # int = OpenCV device index, string = image file / glob (replay, relative to code/).
-  # Three cameras: topdown_camera (M1), inspection_camera (M3), wrist_camera (M4) - each needs its own index.
+  # Two cameras: topdown_camera (M1), inspection_camera (M3) - each needs its own index (M4 opens its cameras itself).
   source: 0
   width: 1920
   height: 1080
@@ -101,13 +101,6 @@ robot:
     inspection: [520.8, 199.6, 42.0, -180.0, -0.0, -157.0]
     bin_good: [299.7, 185.4, 4.0, -180.0, -0.0, -157.0]
     bin_bad: [297.7, 319.4, 3.0, -180.0, -0.0, -157.0]
-
-# --- Wrist camera on the robot (planned, for M4 / AI grasping) -----------------
-wrist_camera:
-  source: 2                     # tbd; find indices with: python -m common.camera
-  width: 1280
-  height: 720
-  calibration_file: null
 
 # --- M3: inspection ----------------------------------------------------------
 inspection_camera:

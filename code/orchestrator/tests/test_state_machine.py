@@ -1,3 +1,5 @@
+import pytest
+
 from common.config import load_config
 from common.interfaces import Grasper, ObjectDetector, RobotGrasper
 from m1_vision_topdown import MockDetector
@@ -75,7 +77,7 @@ def test_stop_then_reset_allows_new_cycles():
 
 
 class _RecordingGrasper(Grasper):
-    """Stands in for M4: records what it was asked to do."""
+    """Stands in for another grasper: records what it was asked to do."""
 
     def __init__(self):
         self.calls = []
@@ -100,5 +102,5 @@ def test_grasper_does_pick_and_place_inspect_m2_does_the_rest():
 def test_factory_builds_graspers():
     robot = MockRobot(CFG)
     assert isinstance(build_grasper(CFG, "robot", robot), RobotGrasper)
-    ai = build_grasper(CFG, "ai", robot)
-    assert isinstance(ai, Grasper) and ai.robot is robot
+    with pytest.raises(ValueError):
+        build_grasper(CFG, "ai", robot)

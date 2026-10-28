@@ -8,6 +8,26 @@ abgearbeitet werden kann — auch von Claude.
 Quelle: Repo `joshi99999/Dynamic_Robot_Project`, Branch `main`, Ordner
 `Behavior Cloning/`.
 
+> **Stand im Repo (eingebaut als M4, 28.10.2026).** Abweichend vom Rest
+> dieser Anleitung, auf Wunsch der Gruppe:
+>
+> * Ort: **`code/m4_behavior_cloning/`** statt `behavior_cloning/`. Übernommen
+>   per `git subtree add --prefix=code/m4_behavior_cloning … bc-export`.
+> * Start: **`code\start_gui.bat`**. Die Gruppen-GUI zeigt den Reiter
+>   **„M4 Behavior Cloning“** (zwischen M3 und Einstellungen), darin die
+>   Backend-Leiste wie im eigenen Fenster und die Modi Systemcheck · Aufnahme
+>   · Training · Betrieb · Konsole. Direkt hinein: `start_gui.bat --tab m4`.
+>   Eingehängt von `code/gui/tab_m4.py`. `start_gruppen_gui.py` und
+>   `BC-in-Gruppen-GUI.bat` sind deshalb entfallen.
+> * BC-Umgebung: **`code/m4_behavior_cloning/.venv`** (Python 3.12, wie in
+>   Abschnitt 3). `tab_m4.py` setzt `BC_PYTHON` darauf, falls nicht schon
+>   gesetzt, und `BC_NEURAPY_DIR` auf `code/m2_robot_control/vendor`.
+> * Ist der Ordner nicht ladbar, startet die Gruppen-GUI ohne M4 und schreibt
+>   den Grund ins Log.
+> * Änderungen nachziehen (Abschnitt 7) mit
+>   `git subtree pull --prefix=code/m4_behavior_cloning ../Dynamic_Robot_Project bc-export`.
+> * `BC-Oberflaeche.bat` (BC allein) gilt unverändert.
+
 ---
 
 ## 0. Regeln (bitte nicht abweichen)

@@ -21,7 +21,7 @@ from orchestrator.state_machine import Orchestrator
 
 log = logging.getLogger(__name__)
 
-SECTIONS = {"m1": "topdown_camera", "m3": "inspection_camera", "wrist": "wrist_camera"}
+SECTIONS = {"m1": "topdown_camera", "m3": "inspection_camera"}
 
 
 class Session:

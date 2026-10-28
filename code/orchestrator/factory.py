@@ -4,7 +4,7 @@ Kinds
     detector : mock | replay | camera
     robot    : mock | sim | vm | real
     inspector: mock | replay | camera
-    grasper  : robot | ai      (who does PICK + PLACE_INSPECT: M2 or M4)
+    grasper  : robot           (who does PICK + PLACE_INSPECT; only M2 so far)
 
 replay = real image processing on the stored test photos, sim = NeuraRobot code
 against the built-in fake controller, vm = NeuraRobot against the official Neura
@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 DETECTOR_KINDS = ("mock", "replay", "camera")
 ROBOT_KINDS = ("mock", "sim", "vm", "real")
 INSPECTOR_KINDS = ("mock", "replay", "camera")
-GRASPER_KINDS = ("robot", "ai")
+GRASPER_KINDS = ("robot",)
 
 REPLAY_SOURCES = {
     "topdown_camera": "m1_vision_topdown/tests/data/*.jpg",
@@ -80,9 +80,6 @@ def build_robot(cfg: dict[str, Any], kind: str) -> RobotController:
 def build_grasper(cfg: dict[str, Any], kind: str, robot: RobotController) -> Grasper:
     if kind == "robot":
         return RobotGrasper(robot)
-    if kind == "ai":
-        from m4_ai_grasping import AiGrasper
-        return AiGrasper(cfg, robot)
     raise ValueError(f"Unknown grasper kind: {kind}")
 
 

@@ -13,7 +13,7 @@ Architektur und Schnittstellen: [plan/01_architektur.md](../plan/01_architektur.
 | `m1_vision_topdown/` | Arbeitsbereich + Objektpose (Top-down-Kamera) | Person 1 |
 | `m2_robot_control/` | Neura-Robotersteuerung | Person 2 |
 | `m3_inspection/` | Seitliche Sichtprüfung | Person 3 |
-| `m4_ai_grasping/` | KI-basiertes Greifen | Person 4 |
+| `m4_behavior_cloning/` | Behavior Cloning (Diffusion Policy) für den LARA 5 – eigene Pipeline, eigene venv (Python 3.12), siehe [INTEGRATION.md](m4_behavior_cloning/INTEGRATION.md) | Person 4 |
 
 Jedes Modul enthält eine Mock-Implementierung, damit das Gesamtsystem ohne Hardware läuft.
 
@@ -38,6 +38,7 @@ EasyOCR (M3) installiert PyTorch (~1 GB) und lädt beim ersten Aufruf ein Modell
 | **M1 Erkennung** | Bild holen (Testbilder/Kamera/Datei), Arbeitsbereich und Bauteil im Kamerabild und im entzerrten Bild, Pose in beiden Koordinatensystemen, Live-Modus |
 | **M2 Roboter** | Simulator oder echter Roboter: verbinden, Status/TCP-Pose, Home, Greifer, Pick-Test, Posen teachen und anfahren, STOPP |
 | **M3 Prüfung** | Bild holen/Datei, Ergebnis GUT/SCHLECHT, Seriennummer, Lochdurchmesser, Kerbe, Prüfbereiche (ROIs) eingezeichnet |
+| **M4 Behavior Cloning** | Oberfläche von Person 4: Backend-Leiste (Sim/Neura, Verbinden) und die Modi Systemcheck, Aufnahme, Training, Betrieb, Konsole. Training/Inferenz laufen mit dem Python aus `m4_behavior_cloning/.venv`. Nie gleichzeitig mit M2 mit dem Roboter verbinden. |
 | **Einstellungen** | Alle Werte aus `system.yaml` bearbeiten (mit Kommentaren, Filter). Bildverarbeitung übernimmt Änderungen sofort, `Speichern`/Strg+S schreibt die Datei. |
 
 Unten läuft das Log aller Module mit. Bewegungen mit dem echten Roboter fragen vorher nach.

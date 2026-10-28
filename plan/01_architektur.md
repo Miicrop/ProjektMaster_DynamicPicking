@@ -13,9 +13,10 @@ Ein zentraler **Python-Orchestrator** steuert den Ablauf über einen Zustandsaut
           ┌──────────┘         │        └──────────┐
           ▼                    ▼                   ▼
   m1_vision_topdown     m2_robot_control     m3_inspection
-  (oder m4_ai_grasping)
           │                    │                   │
           └──────── common/ (interfaces, config, camera, transforms) ─┘
+
+  m4_behavior_cloning/ (Person 4): eigene Pipeline, nur über ihren GUI-Reiter
 
   Bedienung:  gui/ (Tabs je Modul + Ablauf + Einstellungen)  ·  CLI: python -m <modul> / orchestrator
 ```
@@ -24,7 +25,7 @@ Jedes Modul stellt eine **abstrakte Klasse** (Interface) und eine **Mock-Impleme
 
 - läuft der Orchestrator von Tag 1 an komplett durch (alles gemockt),
 - kann jede Person ihr Modul isoliert entwickeln und die übrigen Module mocken,
-- lassen sich Greifen und Ablegen an der Prüfung (PICK, PLACE_INSPECT) per Konfiguration von M2 an M4 übergeben (seit 2026-10-21; vorher war M4 als Ersatz für M1 gedacht).
+- könnte ein anderer Greifer PICK und PLACE_INSPECT über die Schnittstelle `Grasper` übernehmen (bisher nur M2). M4 (Behavior Cloning, seit 2026-10-28 in `code/m4_behavior_cloning/`) ist eine eigenständige Pipeline mit eigenem GUI-Reiter und nicht an den Zustandsautomaten angebunden.
 
 ## Zustandsautomat
 
@@ -52,8 +53,8 @@ stateDiagram-v2
 |---|---|---|
 | `IDLE` | Warten auf Start / nächsten Zyklus | – |
 | `DETECT` | Bild aufnehmen, Objektpose bestimmen | M1 |
-| `PICK` | Objekt an erkannter Pose greifen | M2 / M4 |
-| `PLACE_INSPECT` | An Prüfposition ablegen, auf Anfahrhöhe darüber warten (außerhalb des Kamerabilds) | M2 / M4 |
+| `PICK` | Objekt an erkannter Pose greifen | M2 |
+| `PLACE_INSPECT` | An Prüfposition ablegen, auf Anfahrhöhe darüber warten (außerhalb des Kamerabilds) | M2 |
 | `INSPECT` | Seriennummer, Loch, Kerbe prüfen | M3 |
 | `PICK_INSPECT` | Bauteil von Prüfposition greifen | M2 |
 | `SORT` | Auf Ablage GUT oder SCHLECHT legen | M2 |
@@ -63,7 +64,7 @@ stateDiagram-v2
 
 ```python
 @dataclass
-class ObjectPose:          # M1 -> Orchestrator -> M2 / M4
+class ObjectPose:          # M1 -> Orchestrator -> M2
     x_mm: float            # position in robot base frame
     y_mm: float
     z_mm: float            # table height / grasp height
@@ -94,7 +95,7 @@ Modul-Interfaces:
 |---|---|
 | `ObjectDetector` (M1) | `detect() -> ObjectPose \| None` |
 | `RobotController` (M2) | `connect()`, `home()`, `pick(pose)`, `place(target)`, `stop()` |
-| `Grasper` (M2 als `RobotGrasper`, M4 als `AiGrasper`) | `pick(pose)`, `place(target)` – nur für PICK und PLACE_INSPECT; Posen im Roboter-Basis-KS |
+| `Grasper` (M2 als `RobotGrasper`) | `pick(pose)`, `place(target)` – nur für PICK und PLACE_INSPECT; Posen im Roboter-Basis-KS |
 | `Inspector` (M3) | `inspect() -> InspectionResult` |
 
 ## Koordinatensysteme und Kalibrierung
@@ -128,7 +129,7 @@ Module über dieselbe Factory (`orchestrator/factory.py`) zusammen:
 | Erkennung | `mock`, `replay` (Testfotos), `camera` |
 | Roboter | `mock`, `sim` (NeuraRobot gegen Simulator), `real` |
 | Prüfung | `mock`, `replay` (Testfotos), `camera` |
-| Greifen (PICK, PLACE_INSPECT) | `robot` (M2), `ai` (M4, Handgelenkkamera) |
+| Greifen (PICK, PLACE_INSPECT) | `robot` (M2) |
 
 Die GUI (`python -m gui`, PySide6) hat einen Tab pro Modul, einen Tab für den automatischen Ablauf
 und einen Einstellungs-Tab. Eine gemeinsame `Session` hält Konfiguration, Kameras und

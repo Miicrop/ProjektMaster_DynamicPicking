@@ -10,8 +10,9 @@
 - [-] Offline-Simulation (Neura-VM): vorerst nicht benötigt, eigener Simulator reicht (2026-09-26)
 - [ ] Welche Kameras (Modell, Auflösung, USB/GigE)? Die Testfotos stammen von einer Handykamera (Top-down) bzw. einer 4K-Kamera (seitlich)
 - [ ] Beleuchtung an der Prüfstation vorhanden?
-- [ ] Handgelenkkamera (für M4): Modell, Anschluss, Montage; Hand-Auge-Kalibrierung nötig?
+- [x] Handgelenkkamera (für M4): Daheng VEN-161-61U3C, verwaltet M4 selbst (`code/m4_behavior_cloning/Dokumentation/Kamera-Inbetriebnahme.md`)
 - [~] **Rolle M4 geändert** (2026-10-21): M4 übernimmt PICK und PLACE_INSPECT von M2 (M1 erkennt weiter, nach M3 greift wieder M2). Umgesetzt: Schnittstelle `Grasper` mit `AiGrasper`-Gerüst, Orchestrator, Factory (`--grasper ai`), GUI, Plan, Anleitung, Präsentation (6.1). **Offen:** Schnittstelle mit Jeremy bestätigen (reichen `pick`/`place` mit dem `RobotController`?), Thesis Kap. 4 und 9 im nächsten Schreibintervall (`thesis/blueprint.md` §6a). Siehe [05_modul4](05_modul4_ki_greifen.md)
+- [x] **M4 eingebaut** (2026-10-28): Behavior Cloning von Person 4 per `git subtree` als `code/m4_behavior_cloning/`, eigener GUI-Reiter „M4 Behavior Cloning“. Platzhalter `m4_ai_grasping`/`AiGrasper` und `--grasper ai` entfernt. **Offen:** Thesis Kap. 4 und 9 sowie Präsentation (6.1) auf Behavior Cloning umstellen.
 - [ ] USB-Bandbreite bei drei Kameras (zwei davon ggf. 4K) am Laptop prüfen
 - [x] **ArUco-Marker:** Die 3D-gedruckten Marker haben keinen hellen Rand und sind deshalb nicht detektierbar → weißen Rand ergänzen oder Papiermarker (`make_markers.py`). Markergröße und IDs (Dictionary `DICT_4X4_50`) festhalten.
 - [~] Innenmaß des weißen Rahmens und Markerpositionen ausmessen (`workspace.size_mm`, `markers_mm`) – Niklas misst vor Ort
