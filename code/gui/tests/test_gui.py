@@ -406,3 +406,71 @@ def test_gui_starts_without_m4(store, monkeypatch):
     assert w.tabs.currentWidget() is w.tab_auto
     store.dirty = False
     w.close()
+
+
+def test_m4_scripts_that_use_robot_or_camera():
+    from gui.tab_m4 import uses_camera, uses_robot
+    assert uses_robot(["apps/infer.py", "--checkpoint", "x", "--robot", "neura"])
+    assert uses_robot(["tests/run_all.py", "--robot=neura", "contract.test_robot_contract"])
+    assert uses_robot([r"tools\check_gripper.py"]) and uses_robot(["apps/record.py", "--real-robot"])
+    assert not uses_robot(["apps/infer.py", "--robot", "sim"]) and not uses_robot(["apps/train.py"])
+    assert uses_camera(["apps/record.py", "--robot", "sim"]) and uses_camera(["tests/run_all.py", "--camera=daheng"])
+    assert not uses_camera(["apps/train.py"])
+
+
+def test_robot_access_switches_seamlessly_between_m2_and_m4(store, monkeypatch):
+    """M4 takes the robot from an idle M2 and vice versa; a busy side refuses."""
+    pytest.importorskip("PySide6")
+    import threading
+    from PySide6.QtWidgets import QApplication
+    from gui.app import MainWindow
+    from gui.robot_access import RobotBusy
+    from gui.session import Session
+    from m2_robot_control import MockRobot
+
+    app = QApplication.instance() or QApplication([])
+    s = Session(store)
+    w = MainWindow(s)
+    m4tab = w.tab_m4
+
+    # M2 connected to the VM and idle -> M4 connecting takes over, M2 is disconnected
+    s.robot, s.robot_kind, s.robot_connected = MockRobot(s.cfg), "vm", True
+    m4tab.before_robot_use()
+    assert not s.robot_connected and s.robot is None
+
+    # cycle running -> M4 is refused
+    s.robot, s.robot_kind, s.robot_connected = MockRobot(s.cfg), "vm", True
+    w.tab_auto.running = True
+    with pytest.raises(RobotBusy):
+        m4tab.before_robot_use()
+    w.tab_auto.running = False
+
+    # M2 / cycle connects from the robot worker thread -> M4 lets go (runs in the GUI thread)
+    released = []
+    monkeypatch.setattr(m4tab, "release_robot", lambda: released.append(threading.current_thread()) or True)
+    errors = []
+    t = threading.Thread(target=lambda: _catch(errors, s.before_robot_connect, "vm"))
+    t.start()
+    while t.is_alive():
+        app.processEvents()
+    assert released == [threading.main_thread()] and not errors
+
+    # M4 busy with the robot -> M2 is refused, the error reaches the worker thread
+    monkeypatch.setattr(m4tab, "robot_busy_reason", lambda: "Aufnahme: Skript läuft")
+    t = threading.Thread(target=lambda: _catch(errors, s.before_robot_connect, "real"))
+    t.start()
+    while t.is_alive():
+        app.processEvents()
+    assert len(errors) == 1 and isinstance(errors[0], RobotBusy)
+    s.before_robot_connect("sim")         # fake controller / mock never conflict with M4
+
+    store.dirty = False
+    s.robot, s.robot_connected = None, False
+    w.close()
+
+
+def _catch(errors, fn, *args):
+    try:
+        fn(*args)
+    except Exception as e:
+        errors.append(e)

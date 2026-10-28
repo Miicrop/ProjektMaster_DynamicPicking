@@ -24,8 +24,10 @@ Hardware wird nur über Ports und Adapter angebunden (`bc/ports.py`, `bc/adapter
 - Ein Reiter in der Gruppen-GUI (`code/gui/tab_m4.py`), aufgebaut wie sein eigenes Fenster. Sein Code bleibt unverändert.
 - Zwei Python-Umgebungen. Die GUI läuft in der Gruppen-venv (Python 3.11). Alles mit torch und lerobot läuft als Unterprozess mit `code/m4_behavior_cloning/.venv` (Python 3.12) über `BC_PYTHON`.
 - `neurapy` kommt aus `code/m2_robot_control/vendor` (`BC_NEURAPY_DIR`).
-- Nicht an den Zustandsautomaten angebunden: Der automatische Ablauf bleibt M1 → M2 → M3.
-- M2 und M4 verbinden sich jeweils selbst mit der Steuerung, deshalb nie beide gleichzeitig verbinden.
+- Im automatischen Ablauf (Greifen = „M4 Behavior Cloning“, `--grasper bc`) greift die Policy: `orchestrator/m4_grasper.py` startet `apps/infer.py` für eine Fahrt. Sie endet am Übergabepunkt PRE_PLACE [512.8, 196.8, 135.7] mm, rz −156°, das Teil ist dann im Greifer, ~9 cm über der Prüfposition [520.8, 199.6, 42.0]. M2 macht `reset()` (Tool, Override, init_program), legt ab, danach M3 und M2 wie gehabt. Die M1-Pose wird nur protokolliert; die Policy sucht das Teil selbst im Bild.
+- Roboter und Draufsichtkamera (= Szenenkamera von M4) werden automatisch zwischen M2/M1 und M4 umgeschaltet (`gui/robot_access.py`); läuft auf der anderen Seite etwas, gibt es eine Meldung statt der Umschaltung.
+- Einrichten der Umgebung: `code/setup_m4.bat`.
+- Offen (Rücksprache Person 4, VM-Test): siehe [08](08_offene_fragen.md).
 
 ## Änderungen von Person 4 nachziehen
 

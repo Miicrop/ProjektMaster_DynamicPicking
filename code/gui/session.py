@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -35,6 +35,10 @@ class Session:
         self.robot = None
         self.robot_kind: str | None = None
         self.robot_connected = False
+        self.grasper = None                  # of the running automatic cycle (STOP aborts M4 too)
+        # called with the robot kind before M2 / the cycle connects - M4 lets go of the controller
+        # there (gui/robot_access.py); may raise to refuse
+        self.before_robot_connect: Callable[[str], None] | None = None
 
     # -- cameras -----------------------------------------------------------------
     def camera(self, module: str, kind: str):
@@ -78,6 +82,8 @@ class Session:
         """Connect (and prepare) the robot; reuses an existing connection of the same kind."""
         if self.robot is not None and self.robot_kind == kind and self.robot_connected:
             return self.robot
+        if self.before_robot_connect is not None:
+            self.before_robot_connect(kind)
         self.disconnect_robot()
         robot = build_robot(self.cfg, kind)
         robot.connect()
@@ -102,6 +108,8 @@ class Session:
 
     def emergency_stop(self) -> None:
         """Software stop - independent of any running task."""
+        if self.grasper is not None:
+            self.grasper.stop()
         if self.robot is not None:
             self.robot.stop()
             log.warning("STOP sent to robot")
@@ -114,7 +122,9 @@ class Session:
         detector = build_detector(self.cfg, detector_kind, camera=cam1)
         inspector = build_inspector(self.cfg, inspector_kind, camera=cam3, pipeline=self.m3)
         robot = self.connect_robot(robot_kind)
-        return Orchestrator(self.cfg, detector, robot, inspector, build_grasper(self.cfg, grasper_kind, robot))
+        self.grasper = build_grasper(self.cfg, grasper_kind, robot, robot_kind,
+                                     getattr(cam1, "release", None))   # M4 uses the top-down camera too
+        return Orchestrator(self.cfg, detector, robot, inspector, self.grasper)
 
     def close(self) -> None:
         self.disconnect_robot()

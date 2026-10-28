@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ObjectPose:
-    """Grasp pose of the part in the robot base frame (M1 -> M2 / M4)."""
+    """Grasp pose of the part in the robot base frame (M1 -> M2)."""
     x_mm: float
     y_mm: float
     z_mm: float
@@ -105,8 +105,9 @@ class RobotController(ABC):
 class Grasper(ABC):
     """Grasps the detected part and puts it down at the inspection fixture (PICK, PLACE_INSPECT).
 
-    Default and so far only implementation: RobotGrasper (M2 does it). Another grasper can
-    implement this as an alternative. Picking up again at the fixture and sorting always stays with M2.
+    Default: RobotGrasper (M2 does it). Alternative: BcGrasper (orchestrator/m4_grasper.py) - the
+    M4 Behavior Cloning policy grasps, M2 places. Picking up again at the fixture and sorting always
+    stays with M2.
     """
 
     @abstractmethod
@@ -116,6 +117,9 @@ class Grasper(ABC):
     @abstractmethod
     def place(self, target: RobotTarget) -> None:
         """Put the held part down at `target` (the inspection fixture)."""
+
+    def stop(self) -> None:
+        """Abort what is running (software STOP); stopping the robot itself is RobotController.stop()."""
 
     def close(self) -> None:
         pass

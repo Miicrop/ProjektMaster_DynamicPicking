@@ -6,7 +6,7 @@ implementations:
   detector: mock
   robot: mock
   inspector: mock
-  grasper: robot     # PICK + PLACE_INSPECT: robot (M2); M4 Behavior Cloning runs in its own GUI tab
+  grasper: robot     # PICK: robot (M2) | bc (M4 Behavior Cloning policy, settings below in m4); PLACE_INSPECT always M2
 
 logging:
   level: INFO
@@ -14,9 +14,12 @@ logging:
 
 # --- M1: top-down camera ----------------------------------------------------
 topdown_camera:
-  # int = OpenCV device index, string = image file / glob (replay, relative to code/).
-  # Two cameras: topdown_camera (M1), inspection_camera (M3) - each needs its own index (M4 opens its cameras itself).
-  source: 0
+  # int = OpenCV device index, "daheng:<serial>" = Daheng camera (Galaxy SDK), other string = image file / glob
+  # (replay, relative to code/). Find cameras and serials with: python -m common.camera
+  # The top-down camera is a Daheng VEN-161 (1440x1080, width/height unused) - also the scene camera of M4.
+  source: daheng                # tbd: daheng:<serial>, required as soon as the wrist camera (M4) is plugged in too
+  exposure_us: null             # null = auto exposure (Daheng)
+  gain_db: null                 # null = auto gain (Daheng)
   width: 1920
   height: 1080
   calibration_file: null        # tbd, e.g. config/topdown_intrinsics.yaml
@@ -127,3 +130,13 @@ inspection:
   # Hole 10 mm (confirmed 2026-10-21); test photos give D/H = 0.655 -> 9.8 mm for a 15 mm part
   hole_nominal_mm: 10.0
   hole_tolerance_mm: 0.4
+
+# --- M4: Behavior Cloning (code/m4_behavior_cloning, person 4) -----------------------
+# Used when the cycle picks with M4 (implementations.grasper: bc / tab Ablauf -> Greifen "M4").
+# The policy runs as a subprocess with M4's own Python (code/m4_behavior_cloning/.venv, setup_m4.bat),
+# grasps the part and stops at its handover point PRE_PLACE above the inspection fixture; M2 places.
+m4:
+  checkpoint: null              # policy folder from training, relative to code/m4_behavior_cloning (e.g. checkpoints/<name>/policy)
+  cameras: auto                 # auto | sim | real | wrist-real | wrist-uvc (apps/infer.py --cameras); scene = topdown_camera
+  max_steps: null               # null = what the policy was trained with
+  timeout_s: 300                # abort the run if the handover point is not reached by then

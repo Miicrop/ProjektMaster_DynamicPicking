@@ -119,6 +119,7 @@ Unten in jedem Tab läuft das **Log** mit (Fehler rot, Warnungen orange).
 | **Testbilder** | echte Bildverarbeitung auf den Fotos in `m1_vision_topdown/tests/data/` | – | echte Prüfung auf den Fotos in `m3_inspection/tests/data/` |
 | **Simulator** | – | echter Robotercode gegen eine simulierte Steuerung | – |
 | **Kamera / Echter Roboter** | Live-Kamera | Neura LARA per Netzwerk | Live-Kamera |
+| **Greifen: M4 Behavior Cloning** | – | die Policy von Person 4 greift das Teil und hält über der Prüfung; M2 legt ab, Rest wie gewählt | – |
 
 Die Varianten lassen sich frei kombinieren, z. B. echte Kameras mit Roboter-Simulator.
 
@@ -239,22 +240,29 @@ Planung und Aufgaben: [plan/04_modul3_sichtpruefung.md](plan/04_modul3_sichtprue
 
 ### Person 4 – M4 Behavior Cloning
 
-M4 ist eine eigenständige Behavior-Cloning-Pipeline (Diffusion Policy) für den LARA 5:
-Episoden aufnehmen, Policy trainieren, Live-Inferenz. Code und Doku liegen unverändert in
-`code/m4_behavior_cloning/` (Einstieg: `README.md`, `INTEGRATION.md`, `Dokumentation/`).
+M4 ist eine Behavior-Cloning-Pipeline (Diffusion Policy) für den LARA 5: Episoden aufnehmen,
+Policy trainieren, Live-Inferenz. Code und Doku liegen in `code/m4_behavior_cloning/`
+(Einstieg: `README.md`, `INTEGRATION.md`, `Dokumentation/`).
 
 - **Bedienung:** Reiter **„M4 Behavior Cloning“** in der normalen GUI (`start_gui.bat`, direkt:
   `start_gui.bat --tab m4`). Oben die Backend-Leiste (Simulation/Neura, Override, „Reale Anlage
   freigeben“, Verbinden), darunter Systemcheck, Aufnahme, Training, Betrieb und Konsole.
   Allein im eigenen Fenster: `code\m4_behavior_cloning\BC-Oberflaeche.bat`.
-- **Eigene Umgebung (einmalig):** torch und lerobot brauchen Python 3.12 und vertragen sich nicht
-  mit der GUI-Umgebung (EasyOCR). Deshalb in `code\m4_behavior_cloning\` eine eigene
-  `.venv` mit `py -3.12 -m venv .venv` anlegen und nach `INTEGRATION.md` Abschnitt 3 befüllen.
-  Die GUI nimmt diese venv automatisch für Training, Export und Inferenz. Fehlt sie, laufen
-  nur die Teile ohne torch.
-- **Achtung:** M2 und M4 verbinden sich jeweils selbst mit der Steuerung. Nie beide gleichzeitig
-  verbinden; vor einer M4-Aufnahme oder -Inferenz in M2 trennen.
-- Mit dem automatischen Ablauf (Reiter *Ablauf*) ist M4 nicht verbunden; dort greift M2.
+- **Im Ablauf:** Reiter *Ablauf* → Greifen **„M4 Behavior Cloning“** (CLI: `--grasper bc`).
+  M1 erkennt, die Policy von M4 greift das Teil und hält mit dem Teil im Greifer an ihrem
+  Übergabepunkt PRE_PLACE, etwa 9 cm über der Prüfvorrichtung. M2 stellt seine Einstellungen
+  wieder her (Tool, Geschwindigkeit), legt ab und macht wie gewohnt weiter (M3, Sortieren).
+  Welches Modell: `m4.checkpoint` in den Einstellungen. Erreicht M4 den Übergabepunkt nicht, stoppt
+  der Zyklus mit Fehler; NOT-STOPP bricht auch M4 ab.
+- **Eigene Umgebung (einmalig):** `code\setup_m4.bat` doppelklicken. Es legt
+  `code\m4_behavior_cloning\.venv` mit Python 3.12, torch und lerobot an (mit NVIDIA-Karte die
+  CUDA-Version, sonst CPU). Eigen, weil lerobot Python 3.12 braucht und sich torch/OpenCV nicht mit
+  EasyOCR (M3) vertragen. Die GUI nimmt sie automatisch für alles mit torch. Fehlt sie, gehen
+  Aufnahme und Systemcheck, Training und Inferenz nicht.
+- **Roboter und Kamera oben teilen sich M2 und M4 automatisch:** Wer den Roboter will, bekommt ihn,
+  die andere Seite wird getrennt und das steht im Log. Läuft auf der anderen Seite gerade etwas
+  (Ablauf, Bewegung, M4-Aufnahme/Inferenz), kommt stattdessen eine Meldung. Genauso gibt M1 die
+  Kamera oben frei, bevor M4 sie öffnet.
 
 Rahmen: [plan/05_modul4_ki_greifen.md](plan/05_modul4_ki_greifen.md)
 
@@ -269,7 +277,7 @@ Die wichtigsten Werte (mit **tbd** = noch zu messen):
 
 | Abschnitt | Wert | Wofür / wann ändern |
 |---|---|---|
-| `topdown_camera` / `inspection_camera` | `source` | Kameranummer (0, 1, …) oder Bildpfad, z. B. `"m1_vision_topdown/tests/data/*.jpg"`. Jede Kamera braucht eine eigene Nummer |
+| `topdown_camera` / `inspection_camera` | `source` | Kameranummer (0, 1, …), `"daheng:<Seriennummer>"` (Daheng-Kamera, Kamera oben) oder Bildpfad, z. B. `"m1_vision_topdown/tests/data/*.jpg"`. Jede Kamera braucht eine eigene Nummer |
 | `workspace` | `size_mm` **tbd** | Innenmaß des weißen Rahmens [Breite, Höhe] in mm – bestimmt alle mm-Werte von M1 |
 | `workspace` | `markers_mm` **tbd** | Markermitten in mm (Ursprung: innere linke untere Rahmenecke) |
 | `workspace` | `method` | `auto`, `aruco` oder `white_frame` |
@@ -295,9 +303,14 @@ Reihenfolge für den ersten Termin im Labor. Immer zu zweit, eine Person hat die
    `inspection.part_height_mm`, `hole_nominal_mm`, `hole_tolerance_mm`.
 2. **Kameras zuordnen:** alle Kameras anschließen, dann `python -m common.camera` ausführen. Das
    Werkzeug listet alle gefundenen Kameranummern und speichert je ein Foto nach `code/logs/cameras/`.
-   So siehst du, welche Nummer die Kamera oben, die seitliche und (später) die am Roboterhandgelenk
-   hat. Windows vergibt die Nummern nach der Reihenfolge beim Einstecken, also immer dieselben
-   USB-Buchsen benutzen. Nummern in die Einstellungen eintragen (`topdown_camera.source` usw.).
+   So siehst du, welche Nummer die seitliche Kamera (M3, einfache USB-Kamera) hat. Windows vergibt
+   die Nummern nach der Reihenfolge beim Einstecken, also immer dieselben USB-Buchsen benutzen.
+   Die **Kamera oben** und die **Handgelenkkamera** (M4) sind Daheng-Kameras (VEN-161): Sie brauchen
+   das **Daheng Galaxy SDK** (Treiber, einmal mit Adminrechten installieren, siehe
+   `code/m4_behavior_cloning/Dokumentation/Kamera-Inbetriebnahme.md`) und werden über ihre
+   **Seriennummer** angesprochen, nicht über eine Nummer. `python -m common.camera` listet sie mit
+   auf; die der Kamera oben als `topdown_camera.source: daheng:<Seriennummer>` eintragen. Die Kamera
+   oben ist zugleich die Szenenkamera von M4.
    **Kamera oben:**
    Im Tab **M1** Quelle *Kamera* wählen und *Live* einschalten. Der grüne Rahmen muss sauber auf der
    Innenkante liegen, das Bauteil rot umrandet sein.

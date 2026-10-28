@@ -4,6 +4,7 @@
     python -m orchestrator --replay --cycles 4                  # M1/M3 on the test photos, robot mocked
     python -m orchestrator --replay --sim-robot --save-images   # ... NeuraRobot against the fake controller
     python -m orchestrator --replay --vm-robot                  # ... NeuraRobot against the Neura VM
+    python -m orchestrator --replay --vm-robot --grasper bc     # M4 policy picks, M2 places at inspection
     python -m orchestrator --replay --save-steps                # + intermediate images (masks, ROIs) for docs
     python -m orchestrator --detector camera --robot real --inspector camera --cycles 0   # until Ctrl+C
     python -m orchestrator                                      # kinds from config/system.yaml
@@ -33,7 +34,7 @@ def main() -> None:
     ap.add_argument("--detector", choices=DETECTOR_KINDS)
     ap.add_argument("--robot", choices=ROBOT_KINDS)
     ap.add_argument("--inspector", choices=INSPECTOR_KINDS)
-    ap.add_argument("--grasper", choices=GRASPER_KINDS, help="who does PICK + PLACE_INSPECT (only robot = M2 so far)")
+    ap.add_argument("--grasper", choices=GRASPER_KINDS, help="who does PICK: robot (M2) or bc (M4 Behavior Cloning); PLACE_INSPECT is always M2")
     ap.add_argument("--cycles", type=int, default=1, help="0 = run until Ctrl+C")
     ap.add_argument("--save-images", action="store_true", help="save M1/M3 debug images per cycle")
     ap.add_argument("--save-steps", action="store_true",
@@ -68,7 +69,11 @@ def main() -> None:
         for module in (detector, inspector):
             if hasattr(module, "trace_steps"):
                 module.trace_steps = True
-    grasper = build_grasper(cfg, grasper_kind, robot)
+    if grasper_kind == "bc" and kinds["robot"] == "real" and             input("M4 faehrt die REALE ANLAGE. Zum Fortfahren 'ANLAGE' eintippen: ").strip() != "ANLAGE":
+        print("abgebrochen")
+        return
+    camera = getattr(detector, "_camera", None)
+    grasper = build_grasper(cfg, grasper_kind, robot, kinds["robot"], getattr(camera, "release", None))
     orch = Orchestrator(cfg, detector, robot, inspector, grasper)
 
     robot.connect()

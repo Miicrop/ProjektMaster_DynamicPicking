@@ -20,8 +20,18 @@ Quelle: Repo `joshi99999/Dynamic_Robot_Project`, Branch `main`, Ordner
 >   Eingehängt von `code/gui/tab_m4.py`. `start_gruppen_gui.py` und
 >   `BC-in-Gruppen-GUI.bat` sind deshalb entfallen.
 > * BC-Umgebung: **`code/m4_behavior_cloning/.venv`** (Python 3.12, wie in
->   Abschnitt 3). `tab_m4.py` setzt `BC_PYTHON` darauf, falls nicht schon
->   gesetzt, und `BC_NEURAPY_DIR` auf `code/m2_robot_control/vendor`.
+>   Abschnitt 3), angelegt von **`code\setup_m4.bat`** (CUDA oder CPU, gxipy
+>   aus dem Galaxy SDK). `code/common/m4.py` setzt `BC_PYTHON` darauf, falls
+>   nicht schon gesetzt, und `BC_NEURAPY_DIR` auf `code/m2_robot_control/vendor`.
+> * Im automatischen Ablauf der Gruppe greift die Policy, wenn dort
+>   Greifen = „M4 Behavior Cloning“ gewählt ist (`code/orchestrator/m4_grasper.py`):
+>   `apps/infer.py` mit einer Fahrt, Ende am Übergabepunkt PRE_PLACE, danach legt
+>   M2 an der Prüfung ab. Modell: `m4.checkpoint` in `code/config/system.yaml`,
+>   Szenenkamera = Draufsichtkamera der Gruppe (`--camera scene=daheng:<SN>`).
+> * Roboter: M2 und dieser Reiter schalten automatisch um
+>   (`code/gui/robot_access.py`): Verbinden, ein Skript mit `--robot neura`
+>   oder eine Daheng-Vorschau holt sich Roboter bzw. Draufsichtkamera von
+>   M2/M1, solange dort nichts läuft; sonst erscheint „Start gescheitert“ mit Grund.
 > * Ist der Ordner nicht ladbar, startet die Gruppen-GUI ohne M4 und schreibt
 >   den Grund ins Log.
 > * Änderungen nachziehen (Abschnitt 7) mit

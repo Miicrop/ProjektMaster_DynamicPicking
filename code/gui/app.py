@@ -3,7 +3,8 @@
     python -m gui                 # all tabs
     python -m gui --tab m1        # start directly in a tab: auto | m1 | m2 | m3 | m4 | settings
 
-M4 (Behavior Cloning, m4_behavior_cloning/) is added if it loads - see gui/tab_m4.py.
+M4 (Behavior Cloning, m4_behavior_cloning/) is added if it loads - see gui/tab_m4.py. M2 and M4 share
+the robot and the top-down camera, gui/robot_access.py switches between them.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QApplication, QDockWidget, QMainWindow, QMessageBox, QTabWidget
 
+from gui.robot_access import RobotAccess
 from gui.session import Session
 from gui.tab_auto import AutoTab
 from gui.tab_m4 import make_m4_tab
@@ -46,6 +48,7 @@ class MainWindow(QMainWindow):
                          (self.tab_m4, "M4 Behavior Cloning"), (self.tab_settings, "Einstellungen")):
             if w is not None:
                 self.tabs.addTab(w, title)
+        self.robot_access = RobotAccess(self.s, self.runner, self.tab_m2, self.tab_auto, self.tab_m4)             if self.tab_m4 is not None else None
         start = getattr(self, f"tab_{start_tab}", None) or self.tab_auto
         self.tabs.setCurrentWidget(start)
         self.tabs.currentChanged.connect(self._tab_changed)

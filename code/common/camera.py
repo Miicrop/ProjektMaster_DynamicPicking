@@ -1,9 +1,12 @@
 """Camera access for all modules.
 
-Config sections: topdown_camera (M1), inspection_camera (M3). M4 (m4_behavior_cloning) opens its cameras itself.
+Config sections: topdown_camera (M1), inspection_camera (M3). M4 (m4_behavior_cloning) opens its
+cameras itself; its scene camera is the M1 top-down camera.
 `source` decides the backend:
-- int      -> live OpenCV camera (device index)
-- str      -> image file or glob pattern, replayed in a loop (testing without hardware)
+- int              -> live OpenCV camera (device index), e.g. the M3 USB camera
+- "daheng:<serial>" -> Daheng USB3-Vision camera via the Galaxy SDK (M1 top-down, VEN-161);
+                      "daheng" alone = the only connected one
+- other str        -> image file or glob pattern, replayed in a loop (testing without hardware)
 
 Which index is which camera? Windows numbers USB cameras in plug-in order, so with several
 cameras run `python -m common.camera` - it opens every index, prints the resolution and saves
@@ -46,6 +49,50 @@ class OpenCVCamera:
         self._cap.release()
 
 
+class DahengCamera:
+    """Daheng USB3-Vision camera via the Galaxy SDK (gxipy) - OpenCV cannot open it.
+
+    Uses the camera code of M4 (bc/adapters/cam_daheng.py, in use at the plant): it finds gxipy
+    in the SDK install and sets trigger, exposure and white balance. Full sensor (1440x1080).
+    Opened on the first read; release() closes it so M4 can use the same camera in its own
+    process (scene camera) - the next read() opens it again.
+    """
+
+    def __init__(self, serial: str | None = None, exposure_us: float | None = None,
+                 gain_db: float | None = None):
+        self.serial = serial or None
+        self.exposure_us, self.gain_db = exposure_us, gain_db
+        self._cam = None
+
+    def _open(self):
+        from common import m4
+        m4.prepare()
+        from bc.adapters.cam_daheng import DahengCamera as BcDahengCamera
+        from bc.config import CameraConfig
+        cfg = CameraConfig(name="topdown", backend="daheng", device=self.serial, width=None, height=None,
+                           exposure_us=self.exposure_us, gain_db=self.gain_db, fps=None)
+        try:
+            return BcDahengCamera(cfg).open()
+        except Exception as e:
+            raise RuntimeError(f"Daheng camera {self.serial or ''}: {e}") from e
+
+    def read(self) -> np.ndarray:
+        if self._cam is None:
+            self._cam = self._open()
+        try:
+            rgb = self._cam.read().image
+        except Exception as e:
+            raise RuntimeError(f"Camera read failed (Daheng {self.serial or ''}): {e}") from e
+        return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+
+    def release(self) -> None:
+        if self._cam is not None:
+            self._cam.close()
+            self._cam = None
+
+    close = release
+
+
 class FileCamera:
     """Replays image files in a loop."""
 
@@ -73,10 +120,20 @@ class FileCamera:
 CAMERA_SECTIONS = ("topdown_camera", "inspection_camera")
 
 
-def open_camera(section: dict[str, Any]) -> OpenCVCamera | FileCamera:
+def daheng_serial(source: Any) -> str | None:
+    """Serial of a "daheng:<serial>" source ("" for plain "daheng"), None if it is no Daheng source."""
+    if isinstance(source, str) and source.split(":", 1)[0].strip().lower() == "daheng":
+        return source.partition(":")[2].strip()
+    return None
+
+
+def open_camera(section: dict[str, Any]) -> OpenCVCamera | DahengCamera | FileCamera:
     src = section["source"]
     if isinstance(src, int):
         return OpenCVCamera(src, section.get("width"), section.get("height"))
+    serial = daheng_serial(src)
+    if serial is not None:
+        return DahengCamera(serial, section.get("exposure_us"), section.get("gain_db"))
     return FileCamera(str(src))
 
 
@@ -111,6 +168,19 @@ def main() -> None:
         print(f"  index {i}: {w}x{h}   used by: {', '.join(users) or '-'}")
     if not found:
         print("  no camera found")
+    try:
+        from common import m4
+        m4.prepare()
+        from bc.adapters import list_daheng_devices
+        devices, note = list_daheng_devices()
+    except Exception as e:      # M4 folder missing
+        devices, note = [], str(e)
+    for d in devices:
+        src = f"daheng:{d.device}"
+        users = [s for s in CAMERA_SECTIONS if cfg.get(s, {}).get("source") == src]
+        print(f"  {src}: {d.label}   used by: {', '.join(users) or '-'}")
+    if note:
+        print(f"  Daheng: {note}")
     print(f"Snapshots: {CODE_ROOT / cfg['logging']['cycle_dir'] / 'cameras'}  ->  set 'source' in config/system.yaml")
 
 

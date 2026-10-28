@@ -4,7 +4,7 @@ Kinds
     detector : mock | replay | camera
     robot    : mock | sim | vm | real
     inspector: mock | replay | camera
-    grasper  : robot           (who does PICK + PLACE_INSPECT; only M2 so far)
+    grasper  : robot | bc      (PICK: M2 or the M4 Behavior Cloning policy; PLACE_INSPECT always M2)
 
 replay = real image processing on the stored test photos, sim = NeuraRobot code
 against the built-in fake controller, vm = NeuraRobot against the official Neura
@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 DETECTOR_KINDS = ("mock", "replay", "camera")
 ROBOT_KINDS = ("mock", "sim", "vm", "real")
 INSPECTOR_KINDS = ("mock", "replay", "camera")
-GRASPER_KINDS = ("robot",)
+GRASPER_KINDS = ("robot", "bc")
 
 REPLAY_SOURCES = {
     "topdown_camera": "m1_vision_topdown/tests/data/*.jpg",
@@ -77,9 +77,15 @@ def build_robot(cfg: dict[str, Any], kind: str) -> RobotController:
     raise ValueError(f"Unknown robot kind: {kind}")
 
 
-def build_grasper(cfg: dict[str, Any], kind: str, robot: RobotController) -> Grasper:
+def build_grasper(cfg: dict[str, Any], kind: str, robot: RobotController, robot_kind: str = "mock",
+                  release_cameras=None) -> Grasper:
+    """robot_kind: how `robot` is connected (decides where M4 drives); release_cameras: frees the
+    M1 top-down camera for M4 (its scene camera)."""
     if kind == "robot":
         return RobotGrasper(robot)
+    if kind == "bc":
+        from orchestrator.m4_grasper import BcGrasper
+        return BcGrasper(cfg, robot, robot_kind, release_cameras)
     raise ValueError(f"Unknown grasper kind: {kind}")
 
 
