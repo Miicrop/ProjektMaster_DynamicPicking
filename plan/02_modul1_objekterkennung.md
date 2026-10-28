@@ -46,7 +46,7 @@
 
 ## Aufgaben
 
-- [ ] Kamera auswählen/anbinden, feste Belichtung einstellen
+- [~] Kamera auswählen/anbinden, feste Belichtung einstellen – Kamera ist eine **Daheng VEN-161** (wie die Handgelenkkamera von M4, 1440×1080, Global Shutter). Angebunden über `source: daheng:<Seriennummer>` (`common/camera.py`, nutzt den Daheng-Code von M4; Belichtung/Gain über `exposure_us`/`gain_db`, null = Automatik). Offen: Galaxy SDK am Laborrechner, Seriennummer, Test mit echtem Bild, feste Belichtung festlegen. Die Kamera ist zugleich Szenenkamera von M4 – M1 gibt sie frei, wenn M4 sie braucht
 - [ ] Intrinsische Kalibrierung durchführen, Ergebnis in `config/` speichern
 - [ ] Marker mit weißem Rand versehen/neu drucken, Rahmen und Markerpositionen vermessen (`workspace.size_mm`, `markers_mm`)
 - [x] ArUco-Detektion + Homographie implementieren

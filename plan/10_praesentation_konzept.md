@@ -133,12 +133,19 @@ Hinweis Koordinatensysteme: Posen in `system.yaml` sind **TCP im Roboter-Basis-K
 ## Offene Punkte
 
 - Vortragsdauer → bestimmt, welche (k)-Szenen bleiben.
-- Kameras (Stand 21.10., vorläufig): drei Stück – Übersicht an einer Stange schräg seitlich (M1), Seite (M3), Handgelenk (M4). Montageort der M1-Kamera vor dem Bau von 1.2/3.1 bestätigen.
+- Kameras (Stand 28.10.): drei Stück – Übersicht an einer Stange schräg seitlich (M1, Daheng VEN-161, zugleich Szenenkamera M4), Seite (M3, USB), Handgelenk (M4, Daheng VEN-161 Fisheye). Montageort der M1-Kamera vor dem Bau von 1.2/3.1 bestätigen.
 - Endgültiger Titel (Arbeitstitel aus Thesis: „Dynamisches Greifen und automatisierte Sichtprüfung mit einem kollaborativen Roboter“).
 - Erwähnung Pflegerobotik (7.4), echte Messwerte für 7.2 (nach Evaluation).
 - Bauteil 60 × 40 × 15 mm, Loch 10 mm (bestätigt 21.10.). Kameras wie beschrieben angenommen, Position später verschiebbar.
 - ~~LARA-URDF/CAD~~ → URDF mit Meshes liegt in `public/urdf/` (21.10.).
 - **Rolle M4 geändert (21.10.):** M4 ersetzt nicht M1, sondern einen Teil von M2 (siehe 6.1). Szene 6.1, Code (`Grasper`, `--grasper ai`) und Plan sind angepasst; die Thesis folgt im nächsten Schreibintervall → [08_offene_fragen](08_offene_fragen.md).
+- **Stand 28.10. – M4 ist eingebaut, Präsentation noch nicht angepasst** (bewusst zum Schluss, wenn der Code steht). Zu ändern:
+  - **6.1:** M4 = **Behavior Cloning (Diffusion Policy)** von Jeremy. Im Zustandsring klappt nur **PICK** auf M4 um; die Policy endet am Übergabepunkt PRE_PLACE ~9 cm über der Prüfvorrichtung, **PLACE_INSPECT bleibt bei M2** (bisher: beide auf M4). Kurz zeigen: M4 sucht das Teil selbst im Bild, die M1-Pose braucht es nicht.
+  - **1.2 / Kameras:** Übersichtskamera (M1) und Handgelenkkamera (M4) sind **Daheng VEN-161** (Global Shutter, Galaxy SDK); die Übersichtskamera ist zugleich Szenenkamera von M4. Seitenkamera (M3) bleibt eine einfache USB-Kamera.
+  - **2.x / 2.4 (GUI):** sechster Reiter „M4 Behavior Cloning“ (Systemcheck, Aufnahme, Training, Betrieb, Konsole); im Ablauf Auswahl Greifen M2/M4. Für einen neuen Screenshot `tools/gui_shot.py`.
+  - **Architektur:** zwei Python-Umgebungen (GUI 3.11 / M4 3.12 mit torch und lerobot), Inferenz als Unterprozess; Roboter und Kamera werden automatisch zwischen M2 und M4 umgeschaltet.
+  - **7.1 / 7.3:** VM-Test der Übergabe M4 → M2 (28.10.) als erledigt; offen: Lauf mit trainiertem Modell an der Anlage.
+  - **6.2:** füllt Jeremy (Quellen: `code/m4_behavior_cloning/Berichte/`, `Dokumentation/`, z. B. Zittern-Analyse, Rauschstudie).
 - Optional später: Greifer-CAD (`docs/greifer/**/*.stp`) per FreeCAD/cadquery → glb statt Grundkörper; Fotos/Video vom Labortag.
 
 ## Kontrolle vor dem Vortrag

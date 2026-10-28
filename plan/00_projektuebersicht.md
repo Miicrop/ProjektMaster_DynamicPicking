@@ -35,7 +35,7 @@ sequenceDiagram
 ```
 
 1. **Erkennen (M1):** Die Top-down-Kamera findet den Arbeitsbereich über vier ArUco-Marker (Rückfall: weißer Rahmen), entzerrt das Bild und bestimmt Position und Orientierung des Bauteils.
-2. **Greifen (M2):** Der Roboter fährt die Pose an, greift sicher und legt das Bauteil an der definierten Prüfposition ab.
+2. **Greifen (M2 oder M4):** Der Roboter fährt die Pose an, greift sicher und legt das Bauteil an der definierten Prüfposition ab. Alternativ greift die Behavior-Cloning-Policy von M4 (aus den Bildern der Handgelenk- und Draufsichtkamera) und übergibt über der Prüfung an M2, das ablegt.
 3. **Prüfen (M3):** Eine seitliche Kamera liest die Seriennummer, vermisst einen Lochdurchmesser und prüft, ob eine Kerbe vorhanden ist. Nur wenn alles erfüllt ist → Gutteil.
 4. **Sortieren (M2):** Der Roboter holt das Bauteil wieder ab und legt es auf der Gut- bzw. Schlecht-Ablage ab.
 
@@ -45,9 +45,9 @@ sequenceDiagram
 |---|---|
 | Roboter | Neura Robotics **LARA** (6 Achsen), Software v5.0.8, Python-API NeuraPy, IP 192.168.2.20 (prüfen) |
 | Greifer | **Zimmer MATCH LWR50L-23-00004-A** (elektrischer 2-Backen-Parallelgreifer, IO-Link) auf Robotermodul LWR50F-13-05-A, Unterlagen in `docs/greifer/`. Werkzeug in der Steuerung: „ZimmerLWR50“ (TCP 197,5 mm), Greifer ca. 23° um z verdreht montiert; Ansteuerung noch offen |
-| Kamera 1 | Top-down über dem Arbeitsbereich (Modell tbd; Testfotos mit Handykamera) |
-| Kamera 2 | Seitlich an der Prüfposition (Testbilder 3840×2160), ggf. mit eigener Beleuchtung |
-| Kamera 3 | Am Roboterhandgelenk (Daheng VEN-161), für M4 Behavior Cloning; verwaltet M4 selbst |
+| Kamera 1 | Top-down über dem Arbeitsbereich: **Daheng VEN-161** (1440×1080, USB3 Vision, braucht das Galaxy SDK); zugleich Szenenkamera von M4. Testfotos mit Handykamera |
+| Kamera 2 | Seitlich an der Prüfposition, einfache USB-Kamera (Testbilder 3840×2160), ggf. mit eigener Beleuchtung |
+| Kamera 3 | Am Roboterhandgelenk (Daheng VEN-161, Fisheye), nur für M4 Behavior Cloning; verwaltet M4 selbst |
 | Marker | 4 ArUco-Marker (`DICT_4X4_50`, 3D-gedruckte Blöcke) an den Ecken eines weißen Rahmens |
 | Bauteil | lila 3D-Druck-Quader mit abgeschrägter Ecke (Draufsicht), seitlich: Etikett mit 5-stelliger Seriennummer, Durchgangsloch, kleine eckige Öffnung (= **Kerbe**) |
 | Ablagen | Prüfposition, Ablage GUT, Ablage SCHLECHT (feste Posen) |
@@ -60,7 +60,7 @@ sequenceDiagram
 | M1 – Objekterkennung | Person 1 | Arbeitsbereich + Objektpose aus Top-down-Kamera |
 | M2 – Robotersteuerung | Person 2 | Greifen, Ablegen, Sortieren mit dem Neura-Roboter |
 | M3 – Sichtprüfung | Person 3 | Seriennummer, Lochdurchmesser, Kerbe → gut/schlecht |
-| M4 – Behavior Cloning | Person 4 | Lernbasiertes Greifen mit Diffusion Policy (Aufnahme, Training, Inferenz) als eigene Pipeline mit eigenem GUI-Reiter |
+| M4 – Behavior Cloning | Person 4 (Jeremy) | Lernbasiertes Greifen mit Diffusion Policy (Aufnahme, Training, Inferenz), eigener GUI-Reiter; greift im Ablauf wahlweise statt M2 |
 | Integration / Orchestrator | gemeinsam (initial: Niklas) | Ablaufsteuerung, Schnittstellen, Konfiguration |
 
 ## Abgrenzung
@@ -68,4 +68,4 @@ sequenceDiagram
 - Es wird jeweils **ein** Bauteil im Arbeitsbereich betrachtet (keine Vereinzelung aus Schüttgut).
 - Das Bauteil liegt flach auf dem Tisch → Pose ist 2D (x, y, θ), Greifhöhe ist bekannt.
 - Keine sicherheitszertifizierte Anlage; Betrieb nur unter Aufsicht mit reduzierter Geschwindigkeit.
-- M4 (Behavior Cloning) wird eigenständig entwickelt und läuft als eigene Pipeline neben dem Ablauf M1 → M2 → M3; es ist nicht Voraussetzung für den Demonstrator.
+- M4 (Behavior Cloning) wird eigenständig entwickelt und kann im Ablauf das Greifen übernehmen (PICK bis zum Übergabepunkt über der Prüfung, Ablegen macht M2); es ist nicht Voraussetzung für den Demonstrator.

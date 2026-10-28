@@ -24,7 +24,7 @@ Schritt 8 eingemessen – vorher greift der Roboter mit Platzhalterwerten danebe
 | 2 | Not-Halt testen, Override 20 % | Pendant, `robot.override` | – |
 | 3 | Home, Greifer, Achsentest | `robot_check home`, `gripper`, `axes` | Richtungen +X/+Y/+rz im Raum |
 | 4 | Werkzeug/TCP prüfen | Pendant | ✓ 2026-10-06: Werkzeug „ZimmerLWR50“ mit 197,5 mm angelegt |
-| 5 | Kameras | `python -m common.camera`, Kameras fest montieren, Licht | Indizes → `source` in der Config |
+| 5 | Kameras | Galaxy SDK installieren (Daheng), `python -m common.camera`, Kameras fest montieren, Licht | Seitenkamera: Index → `inspection_camera.source`; Kamera oben: `daheng:<Seriennummer>` → `topdown_camera.source`; Seriennummer Handgelenkkamera für M4 |
 | 6 | Maße | Maßband | Rahmen-Innenmaß → `workspace.size_mm`, Marker-Mitten → `markers_mm`, Bauteilhöhe, Lochdurchmesser |
 | 7 | M1 live | GUI Tab M1, Methode `aruco` | Alle 4 Marker erkannt? Bauteilpose plausibel? |
 | 8 | Kalibrierung | `robot_check calib` (Anleitung 7a) | RMS in mm, Ausgabe aufheben |

@@ -1,5 +1,18 @@
 # 06 – Roadmap
 
+## Stand 2026-10-28
+
+- **Alle vier Module im Code:** M1, M2, M3 und M4 (Behavior Cloning von Jeremy) laufen in einer GUI und
+  im automatischen Ablauf; M4 greift wahlweise statt M2 (Greifen „M4 Behavior Cloning“). 118 Tests grün.
+- **Erprobt:** Labortag 06.10. (Roboter, Posen, erster Ablauf mit Testbildern); Übergabe M4 → M2 in der
+  Neura-VM (28.10.).
+- **Als Nächstes (Labor):** Galaxy SDK auf dem Laborrechner, Seriennummern der beiden Daheng-Kameras
+  eintragen, M1 mit dem Daheng-Bild testen (1440×1080), `setup_m4.bat`, ein Lauf mit Jeremys Modell
+  (`m4.checkpoint`), dann vollständiger Zyklus mit echten Kameras und Greifer.
+- **Rücksprache Jeremy:** Zykluszeit (Inferenz startet je Zyklus neu), Freigabe „ANLAGE“ im Ablauf → [08](08_offene_fragen.md).
+- **Danach:** Evaluation (Messreihen), Thesis und Präsentation auf den Stand bringen
+  (Änderungsliste: [../thesis/blueprint.md](../thesis/blueprint.md) §6a, [10_praesentation_konzept.md](10_praesentation_konzept.md)).
+
 ## Zwischenstand (2026-09-26)
 
 **Läuft ohne Hardware** (mit Testfotos und Roboter-Simulator, 73 automatische Tests grün, Stand 2026-09-28):
@@ -9,7 +22,7 @@
 | M1 Erkennung | Arbeitsbereich über weißen Rahmen (ArUco implementiert, aktuelle Marker aber nicht erkennbar), Bauteilpose inkl. Orientierung 0–360° – alle 4 Testfotos korrekt |
 | M2 Roboter | `NeuraRobot` nach NeuraPy v5.0.8, Greif-/Ablegesequenz, Arbeitsraumgrenzen, Simulator, Inbetriebnahme-Werkzeug + Anleitung |
 | M3 Prüfung | Seriennummer (OCR), Lochdurchmesser, Kerbe, Gut/Schlecht – alle 3 Testbilder korrekt, künstliche Fehler werden erkannt |
-| M4 KI-Greifen | Platzhalter mit Schnittstelle, Umsetzung durch Person 4 |
+| M4 KI-Greifen | (Stand 28.10.: Behavior Cloning von Jeremy eingebaut, siehe oben) |
 | Ablauf | Zustandsautomat, automatischer Betrieb, CSV-Protokoll, Fehlerbehandlung |
 | Bedienung | GUI mit Tabs pro Modul, Ablauf und Einstellungen; jedes Modul auch einzeln per Kommandozeile |
 
@@ -59,6 +72,9 @@ Alle Maße in `config/system.yaml` sind Platzhalter.
 - [x] Zyklus-Logging: CSV je Tag + optional Debug-Bilder je Zyklus, optional alle Zwischenschritte M1/M3
 - [x] Jedes Modul einzeln startbar (`python -m <modul>`), Gesamtablauf `python -m orchestrator`
 - [x] GUI: Tabs für M1, M2, M3, automatischen Ablauf und Einstellungen (`python -m gui`)
+- [x] M4 eingebunden: eigener Reiter, Greifer `bc` im Ablauf, automatische Roboter-/Kameraumschaltung, `setup_m4.bat` (2026-10-28)
+- [x] Übergabe M4 → M2 in der Neura-VM getestet (2026-10-28)
+- [ ] M4 mit trainiertem Modell im Ablauf (VM, dann Labor)
 - [ ] Fehlerbehandlung und Reset am realen System
 - [ ] GUI am echten Aufbau erproben (Kameras, Roboter), Rückmeldungen des Teams einarbeiten
 

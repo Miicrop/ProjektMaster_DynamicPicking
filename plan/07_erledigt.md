@@ -2,6 +2,26 @@
 
 Neueste Einträge oben. Format: `YYYY-MM-DD – Wer – Was`
 
+## 2026-10-28 – Niklas
+- **M4 übernommen:** Behavior Cloning (Diffusion Policy) von Jeremy per `git subtree` aus
+  `joshi99999/Dynamic_Robot_Project` (Ordner `Behavior Cloning/`, mit Historie) nach
+  `code/m4_behavior_cloning/`. Sein Code bleibt nutzbar wie gewohnt (`BC-Oberflaeche.bat`).
+- **GUI:** Reiter „M4 Behavior Cloning“ zwischen M3 und Einstellungen (`gui/tab_m4.py`), aufgebaut wie
+  sein Fenster: Backend-Leiste + Systemcheck, Aufnahme, Training, Betrieb, Konsole; `--tab m4`.
+- **Ablauf:** Greifen „M4 Behavior Cloning“ (`--grasper bc`, `orchestrator/m4_grasper.py`): die Policy
+  greift (`apps/infer.py`, eine Fahrt) und hält am Übergabepunkt PRE_PLACE ~9 cm über der Prüfung, M2
+  stellt Tool/Override wieder her und legt ab. Einstellungen `m4.*` (Modell, Kameras, Timeout).
+- **Gemeinsamer Roboterzugriff** (`gui/robot_access.py`): M2/Ablauf und M4 schalten automatisch um,
+  belegt → Meldung statt Umschaltung. Gleiches für die Draufsichtkamera (= Szenenkamera von M4).
+- **Kamera oben = Daheng VEN-161:** `source: daheng:<Seriennummer>` (`common/camera.py`, nutzt den
+  Daheng-Code von M4); `python -m common.camera` listet Daheng-Kameras mit Seriennummer.
+- **Zwei Python-Umgebungen:** GUI wie bisher (3.11), M4 eigene venv (3.12, torch, lerobot), eingerichtet
+  per `code/setup_m4.bat` (CUDA oder CPU). Grund: lerobot braucht 3.12, torch/OpenCV kollidieren mit EasyOCR.
+- Platzhalter `m4_ai_grasping` (`AiGrasper`, `--grasper ai`) und Config `wrist_camera` entfernt.
+- **Neura-VM:** Übergabe M2 → M4 → M2 getestet (zwei gleichzeitige Verbindungen, danach `reset()` und
+  Ablegen durch M2 fehlerfrei). Werkzeug `ZimmerLWR50` in der VM angelegt (Offset Z noch eintragen).
+- 118 Tests grün (+ 468 von Jeremys Tests, 1 bekannte Ausnahme `test_rectify`).
+
 ## 2026-10-06 (2) – Niklas
 - **Labor:** Punkte vermessen, Roboter im M2-Tab und im Automatikbetrieb genutzt, erster vollständiger
   Ablauf (noch ohne Greiferansteuerung und ohne Arbeitsraum-Kamera, M1/M3 mit Testbildern).

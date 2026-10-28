@@ -60,6 +60,7 @@ Alle Befehle aus dem Ordner `code/`:
 python -m orchestrator --mock --cycles 5                      # alles gemockt
 python -m orchestrator --replay --cycles 4                    # M1 + M3 auf den Testfotos, Roboter gemockt
 python -m orchestrator --replay --sim-robot --save-images     # + Neura-Code gegen Simulator, Bilder speichern
+python -m orchestrator --replay --vm-robot --grasper bc       # M4 greift (Policy), M2 legt ab; Modell: m4.checkpoint
 python -m orchestrator --replay --save-steps                  # + Zwischenbilder M1/M3 (Masken, ROIs) für die Doku
 python -m orchestrator --detector camera --robot real --inspector camera --cycles 0   # echt, bis Strg+C
 python -m orchestrator                                        # Auswahl laut config/system.yaml (implementations)
