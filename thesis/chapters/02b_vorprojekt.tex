@@ -273,24 +273,30 @@ Bauteils am realen Roboter. Mehrere Erkenntnisse aus dem Vorprojekt sind trotzde
 \begin{description}
   \item[Vorpose und geradlinige Anfahrt] Die Greif- und Ablegesequenz des Demonstrators folgt
     demselben Muster wie bei GROB: Eine Vorpose wird mit einer Gelenkbewegung angefahren, das
-    Ziel dann langsam und geradlinig (\cref{sec:m2-sequenz}). Die Erfahrung mit dem
-    Robotic Automatic Path Planner zeigt, dass diese langsame Anfahrt als feste Vorgabe gelten
-    muss, auch wenn Bahnen später automatisch erzeugt oder optimiert werden.
+    Ziel dann geradlinig, auf den letzten Millimetern langsam (\cref{sec:m2-sequenz}). Die
+    Erfahrung mit dem Robotic Automatic Path Planner zeigt, dass diese langsame Endanfahrt als
+    feste Vorgabe gelten muss, auch wenn Bahnen später automatisch erzeugt oder optimiert
+    werden.
   \item[Sichere Bereiche] Die Robotersteuerung des Demonstrators prüft vor jeder Bewegung,
     ob Zielpose und Vorposition in einem festgelegten Quader liegen (\cref{sec:m2-sicherheit}).
     Das entspricht in vereinfachter Form einem Arbeitsraum. Geprüft wird dabei nur der \ac{tcp}.
     Eine mögliche Erweiterung wäre, Greifer und Bauteil wie bei den Werkzeugkugeln durch Kugeln
     anzunähern und zusätzlich Schutzräume um Kameras und Prüfstation festzulegen.
-  \item[Kollisionsprüfung in der Simulation] Im Demonstrator werden die Posen geteacht, und die
-    Wege dazwischen führen durch freien Raum über dem Tisch. Eine Kollisionsprüfung ist deshalb
-    nicht nötig. Würde die Zelle erweitert, könnten die Bahnen vorab in einer Simulation mit
-    einem Zellmodell und Kollisionssets geprüft werden. Für den eingesetzten Roboter bietet der
-    Hersteller dafür eine Offline-Simulation an~\cite{neura2024offlinesim}.
+  \item[Kollisionsprüfung in der Simulation] Im klassischen Ablauf des Demonstrators werden die
+    Posen geteacht, und die Wege dazwischen führen durch freien Raum über dem Tisch. Eine
+    Kollisionsprüfung ist dort nicht nötig. Würde die Zelle erweitert, könnten die Bahnen vorab
+    in einer Simulation mit einem Zellmodell und Kollisionssets geprüft werden. Für den
+    eingesetzten Roboter bietet der Hersteller dafür eine Offline-Simulation
+    an~\cite{neura2024offlinesim}.
   \item[Randbedingungen für KI-Verfahren] Im Vorprojekt sollte eine KI die Bahnen erzeugen, im
-    Demonstrator bestimmt ein lernbasiertes Verfahren optional die Greifpose
+    Demonstrator steuert optional eine gelernte Policy den Roboter beim Greifen
     (\cref{ch:kigreifen}). In beiden Fällen gilt: Das Ergebnis der KI muss die
     Randbedingungen der Anlage einhalten, also kollisionsfrei sein, in den erlaubten Bereichen
-    liegen und feste Vorgaben wie Geschwindigkeiten beibehalten. Im Demonstrator prüft deshalb
-    die Robotersteuerung jede Zielpose gegen die Arbeitsraumgrenzen, unabhängig davon, welches
-    Modul sie liefert.
+    liegen und feste Vorgaben wie Geschwindigkeiten beibehalten. Da die Policy keine Zielpose
+    liefert, sondern laufend Gelenk-Sollwerte über eine eigene Verbindung sendet, prüft sie
+    diese Randbedingungen selbst: Jeder Sollwert wird auf Geschwindigkeit und Achsgrenzen
+    geprüft, und ein Kollisionsmodell aus Quadern mit Prüfpunkten entlang des Arms überwacht
+    den Abstand zu Tisch und Hindernissen (\cref{sec:m4-sicherheit}). Das entspricht in
+    einfacher Form den Kollisionssets und Werkzeugkugeln aus dem Vorprojekt. Die Bewegungen der
+    Robotersteuerung prüft diese weiterhin gegen ihre Arbeitsraumgrenzen.
 \end{description}

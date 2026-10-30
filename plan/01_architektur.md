@@ -101,7 +101,7 @@ Modul-Interfaces:
 ## Koordinatensysteme und Kalibrierung
 
 1. **Bild-KS** (Pixel, u/v) der Top-down-Kamera.
-2. **Arbeitsbereich-KS** (mm): Ursprung in der inneren linken unteren Ecke des weißen Rahmens (Kamerasicht), x nach rechts, y nach oben. Die Homographie `H_img→ws` wird aus den vier ArUco-Markern (bekannte Positionen in mm) oder aus den vier Innenecken des Rahmens berechnet.
+2. **Arbeitsbereich-KS** (mm): Ursprung in der Ecke unten links des Arbeitsbereichs, 35 mm innerhalb von Marker 0 (Kamerasicht), x nach rechts, y nach oben, Arbeitsbereich 330 × 330 mm. Die Homographie `H_img→ws` wird aus den vier ArUco-Markermitten (bekannte Positionen in mm) berechnet.
 3. **Roboter-Basis-KS** (mm): Die Transformation `T_ws→robot` (2D: Rotation + Translation, ggf. Höhe) wird einmalig bestimmt, indem der Roboter-TCP die Marker-Mittelpunkte anfährt → Least-Squares-Fit mit Restfehler je Punkt (`robot_check calib`, `common.transforms.fit_workspace_to_robot`). Prüfung danach mit dem Zeigetest (`robot_check point`).
 
 `ObjectPose` wird von M1 **bereits im Roboter-KS** geliefert; die Transformationen liegen in `common/transforms.py` und die Kalibrierwerte in `config/system.yaml`.

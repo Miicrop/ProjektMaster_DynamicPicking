@@ -434,4 +434,98 @@ und dem Buchstaben O.
 % ==============================================================================
 \section{Lernbasiertes Greifen}
 \label{sec:ki-greifen-grundlagen}
-\todo[inline]{Person 4: Überblick lernbasierter Greifansätze, z.\,B.\ GG-CNN~\cite{morrison2018}.}
+
+\subsection{Greifposen und Policies}
+
+Lernbasierte Greifverfahren lassen sich grob danach unterscheiden, was das neuronale Netz
+ausgibt. \emph{Greifposenbasierte} Verfahren schätzen aus einem Bild, wo und wie gegriffen
+werden soll. Das Generative Grasping CNN (GG-CNN)~\cite{morrison2018} bestimmt zum Beispiel
+für jeden Bildpunkt eines Tiefenbildes eine Greifqualität, einen Greifwinkel und eine
+Öffnungsweite. Die beste Greifpose wird anschließend klassisch angefahren. Das Netz ersetzt
+damit die Objekterkennung, die Bewegung bleibt programmiert.
+
+Eine \emph{Policy} (Steuerungsstrategie) bildet dagegen eine Beobachtung direkt auf eine
+Bewegung ab. Sie erhält in jedem Takt die Kamerabilder und den Zustand des Roboters und gibt
+die nächsten Sollwerte der Gelenke und des Greifers aus. Ein solches Netz übernimmt
+Erkennung und Bewegungsplanung gemeinsam und kann während der Fahrt auf Änderungen in der
+Szene reagieren. Policies, die aus Bildern Bewegungen erzeugen, heißen auch
+\emph{visuomotorisch}.
+
+\subsection{Imitation Learning und Behavior Cloning}
+\label{sec:bc-grundlagen}
+
+Eine Policy kann aus Vorführungen gelernt werden, ohne dass eine Belohnungsfunktion
+formuliert werden muss. Dieses Lernen aus Demonstrationen (Imitation Learning) ist für die
+Robotik ausführlich beschrieben~\cite{argall2009,osa2018}. Die einfachste Form ist das
+\ac{bc}. Aus vorgeführten Fahrten entstehen Paare aus Beobachtung $o_t$ und der dabei
+ausgeführten Aktion $a_t$, und die Policy $\pi_\theta$ wird wie bei einer gewöhnlichen
+Regression darauf trainiert, die Aktion aus der Beobachtung vorherzusagen:
+\begin{equation}
+  \theta^{*} = \arg\min_{\theta} \sum_{(o_t, a_t)} \ell\bigl(\pi_\theta(o_t),\, a_t\bigr) .
+  \label{eq:bc}
+\end{equation}
+
+Das Verfahren hat eine bekannte Schwäche. Die Policy sieht im Training nur Zustände, die
+in den Demonstrationen vorkommen. Weicht sie bei der Ausführung etwas ab, gerät sie in
+Zustände, für die sie keine Beispiele hat, und der Fehler kann sich von Takt zu Takt
+aufschaukeln. Ross, Gordon und Bagnell~\cite{ross2011} zeigen, dass der erwartete Fehler
+dadurch im ungünstigen Fall quadratisch mit der Länge der Aufgabe wächst, und schlagen mit
+DAgger ein Verfahren vor, bei dem ein Experte die von der Policy tatsächlich besuchten
+Zustände nachträglich mit der richtigen Aktion versieht. Laskey et al.~\cite{laskey2017}
+gehen mit DART einen anderen Weg: Schon während der Demonstration wird Rauschen auf die
+Bewegung gegeben, sodass der Roboter von der Idealbahn abweicht. Die Aktionen, die den
+Roboter zurückführen, landen im Datensatz, und die Policy lernt dadurch auch, Abweichungen
+zu korrigieren.
+
+Für ein Rauschen, das sich glatt über die Zeit ändert statt in jedem Takt zu springen,
+eignet sich der Ornstein-Uhlenbeck-Prozess~\cite{uhlenbeck1930}:
+\begin{equation}
+  \mathrm{d}x = -\frac{x}{\tau}\,\mathrm{d}t + \sigma\,\mathrm{d}W .
+  \label{eq:ou}
+\end{equation}
+Die Abweichung $x$ wird mit der Zeitkonstante $\tau$ zur Null zurückgezogen und durch den
+Zufallsanteil $\sigma\,\mathrm{d}W$ (Wiener-Prozess) immer wieder ausgelenkt. Das Ergebnis
+ist eine langsame, schwankende Auslenkung mit begrenzter Amplitude.
+
+\subsection{Diffusionsmodelle}
+
+Diffusionsmodelle~\cite{ho2020} sind generative Modelle, die eine Probe schrittweise aus
+reinem Rauschen erzeugen. Im Training wird einer Probe $x_0$ (zum Beispiel einem Bild) in
+$K$ Schritten immer mehr Gaußsches Rauschen hinzugefügt, bis nur noch Rauschen übrig ist.
+Ein neuronales Netz lernt, diesen Vorgang umzukehren, also aus einer verrauschten Probe
+$x_k$ und dem Schritt $k$ die Probe einen Schritt weniger verrauscht zu schätzen. Zur
+Erzeugung beginnt man bei zufälligem Rauschen und wendet das Netz $K$-mal an. Das Netz kann
+dabei entweder das enthaltene Rauschen vorhersagen (Vorhersageziel $\varepsilon$) oder
+direkt die unverrauschte Probe $x_0$.
+
+Viele Schritte machen die Erzeugung langsam. Denoising Diffusion Implicit Models
+(DDIM)~\cite{song2021} verwenden ein Netz, das mit $K$ Schritten trainiert wurde, und
+überspringen bei der Erzeugung Zwischenschritte. Mit zehn statt hundert Schritten verkürzt
+sich die Rechenzeit etwa um den Faktor zehn.
+
+\subsection{Diffusion Policy}
+\label{sec:diffusion-policy}
+
+Die Diffusion Policy~\cite{chi2024} wendet dieses Prinzip auf Robotersteuerungen an. Die
+erzeugte Probe ist kein Bild, sondern eine Folge zukünftiger Aktionen, und das Netz wird
+zusätzlich mit den letzten Beobachtungen gespeist. Die Kamerabilder werden dafür von einem
+\ac{cnn} wie ResNet~\cite{he2016} in Merkmalsvektoren übersetzt, mit dem Roboterzustand
+verbunden und an ein Netz übergeben, das die Aktionsfolge schrittweise entrauscht.
+
+Gegenüber einer direkten Regression nach \cref{eq:bc} hat das zwei Vorteile. Erstens kann
+ein Diffusionsmodell mehrdeutige Lösungen darstellen. Führen zwei Demonstrationen auf
+unterschiedlichen Wegen zum selben Ziel, wählt es einen davon, während eine Regression
+den Mittelwert beider Wege lernen würde, der unter Umständen durch ein Hindernis führt.
+Zweitens sagt das Modell eine ganze Folge von Aktionen voraus statt nur der nächsten, was
+die Bewegung über mehrere Takte gleichmäßig macht.
+
+Ausgeführt wird jeweils nur der vordere Teil der vorhergesagten Folge. Danach wird mit einer
+neuen Beobachtung erneut vorhergesagt. Dieses Vorgehen mit überlappenden
+Aktionsblöcken (Action Chunking) beschreiben Zhao et al.~\cite{zhao2023}; überlappende
+Vorhersagen für denselben Takt werden dort gemittelt, was ruckartige Übergänge zwischen
+zwei Blöcken glättet.
+
+Eine frei verfügbare Umsetzung der Diffusion Policy und weiterer Verfahren enthält die
+Bibliothek LeRobot~\cite{lerobot}. Sie legt außerdem ein Datensatzformat fest, in dem
+Zustände, Aktionen und Kamerabilder einer Demonstration zeitlich zusammengehörig gespeichert
+werden.

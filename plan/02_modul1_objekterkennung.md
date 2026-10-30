@@ -1,6 +1,7 @@
-# 02 – Modul 1: Objekterkennung (Top-down-Kamera)
+# 02 – Modul 1: Objekterkennung (Kamera oben)
 
 **Verantwortlich:** Person 1 · **Code:** `code/m1_vision_topdown/` · **Interface:** `ObjectDetector.detect() -> ObjectPose | None`
+Aufgaben: [06_offen.md](06_offen.md)
 
 ## Aufgabe
 
@@ -8,19 +9,48 @@
 - Bauteil innerhalb des Arbeitsbereichs finden.
 - Position (x, y) und Orientierung θ bestimmen und im **Roboter-Koordinatensystem** an den Orchestrator übergeben.
 
-## Verarbeitungskette (Konzept – Abweichungen in der Umsetzung siehe unten)
+## Kamera
 
-1. **Bildaufnahme** – Kamera mit fester Belichtung (kein Auto-Exposure, reproduzierbare Ergebnisse).
-2. **Entzerrung** – Linsenverzeichnung mit intrinsischer Kalibrierung korrigieren (`cv2.undistort`, Kalibrierung per Schachbrett/ChArUco, Verfahren nach Zhang).
-3. **ArUco-Detektion** – `cv2.aruco.ArucoDetector` mit festem Dictionary (z. B. `DICT_4X4_50`), Marker-IDs 0–3. Fehlt ein Marker → `VisionError` bzw. letzte gültige Homographie wiederverwenden (konfigurierbar).
-4. **Homographie** – Aus den vier Markerzentren (bzw. Innenecken) und deren bekannten Positionen in mm: `cv2.findHomography` → Vogelperspektive des Arbeitsbereichs (`cv2.warpPerspective`) mit festem Maßstab (z. B. 1 px = 0,5 mm).
-5. **Segmentierung** – Im entzerrten Arbeitsbereichsbild: Graustufen → Glättung → Schwellwert (Otsu) oder Hintergrundsubtraktion gegen Leerbild → Morphologie → Konturen. Marker-Bereiche ausmaskieren.
-6. **Objektauswahl** – Größte Kontur mit plausibler Fläche (min/max aus Config).
-7. **Pose** – Schwerpunkt über Bildmomente, Orientierung über `cv2.minAreaRect` oder Hauptachse (Momente 2. Ordnung). Bei symmetrischen Teilen θ auf [0°, 180°) normieren; falls eine Kerbe/ein Merkmal die Richtung eindeutig macht → [0°, 360°).
-8. **Transformation** – Arbeitsbereich-mm → Roboter-KS über `common/transforms.py`.
-9. **Rückgabe** – `ObjectPose` inkl. Konfidenz und Debug-Bild.
+- **Daheng VEN-161** (1440×1080, Global Shutter, USB3 Vision), angebunden über
+  `topdown_camera.source: daheng:<Seriennummer>` (`common/camera.py`, nutzt den Daheng-Code von M4).
+  Dafür muss das Galaxy SDK installiert sein. `python -m common.camera` listet die Kameras.
+- Belichtung und Gain über `exposure_us`/`gain_db`, `null` = Automatik.
+- Die Kamera ist zugleich die Szenenkamera von M4. M1 gibt sie frei, wenn M4 sie braucht
+  (`gui/robot_access.py`).
+- Die Testfotos in `tests/data/` stammen von einer Handykamera.
 
-## Anforderungen (vorläufig)
+## Arbeitsbereich und Marker
+
+- 4 ArUco-Marker `DICT_4X4_50` auf Papier mit weißem Rand (Quiet Zone), erzeugt mit
+  `python -m m1_vision_topdown.make_markers`. Das schwarze Quadrat misst 50 mm.
+- Die Markermitten liegen 400 mm auseinander. Der Arbeitsbereich ist das Quadrat dazwischen,
+  35 mm eingerückt, also **330 × 330 mm**, damit das Markerpapier nicht als Teil erkannt wird.
+- **Arbeitsraum-KS:** Der Ursprung liegt in der Ecke unten links (35 mm innerhalb von Marker 0),
+  x zeigt nach rechts, y nach oben (aus Kamerasicht). Marker 0–3: (−35, −35), (365, −35),
+  (365, 365), (−35, 365) mm.
+- `workspace.method: aruco`. Der Rückfall über einen weißen Rahmen (`white_frame`, `auto`) ist noch
+  im Code, wird aber nicht genutzt, weil es keinen Rahmen mehr gibt.
+- Die Umrechnung ins Roboter-KS (`workspace_to_robot`) wird über die Marker eingemessen
+  (siehe [03_modul2](03_modul2_robotersteuerung.md#kalibrierung-gemeinsam-mit-m1)).
+
+## Verarbeitungskette
+
+1. Bild aufnehmen.
+2. ArUco-Marker erkennen (`cv2.aruco.ArucoDetector`, IDs 0–3), Homographie aus den Markermitten,
+   entzerrte Draufsicht mit 2 px/mm (`cv2.warpPerspective`).
+3. Segmentierung relativ zur Platte: Pixel deutlich heller **oder** bunter (Lab-Chroma) als der
+   Median der Platte. Dadurch ist sie unabhängig von der Bauteilfarbe und robust gegen Licht.
+   Ein Rand von 5 mm wird ignoriert.
+4. Größte Kontur mit plausibler Fläche auswählen (300–20 000 mm²).
+5. Pose: Schwerpunkt über Bildmomente, Rechteck über `cv2.minAreaRect`. Die Ecke des Rechtecks mit
+   dem größten Abstand zur Kontur ist die **Fase**, damit ist θ eindeutig in [0°, 360°).
+   Wird die Fase nicht gefunden, ist die Konfidenz 0,5 und θ nur bis auf 180° eindeutig.
+6. Umrechnung Arbeitsbereich-mm → Roboter-KS (`common/transforms.py`), Rückgabe `ObjectPose` mit
+   Konfidenz und Debug-Bild.
+
+Die Objektivverzerrung wird noch nicht korrigiert (`calibration_file` ungenutzt).
+
+## Anforderungen (Zielwerte)
 
 | Größe | Ziel |
 |---|---|
@@ -29,49 +59,20 @@
 | Laufzeit `detect()` | < 500 ms |
 | Robustheit | funktioniert bei Raumlicht, leichten Schatten |
 
-## Umsetzung (Stand 2026-09-26)
+## Bekannte Befunde
 
-- Arbeitsbereich wahlweise über **ArUco** (Markermittelpunkte → Homographie) oder die **Innenkante
-  des weißen Rahmens** (4-Eck-Kontur → Homographie); `workspace.method: auto` versucht ArUco und
-  fällt auf den Rahmen zurück.
-- Segmentierung relativ zur Platte (Median von Helligkeit/Sättigung), dadurch unabhängig von der
-  Bauteilfarbe und robust gegen Lichtänderungen.
-- Orientierung über die **abgeschrägte Ecke**: Die Ecke des minimalen Rechtecks mit dem größten
-  Abstand zur Kontur ist die Fase → θ eindeutig in [0°, 360°).
-- **Befund:** Die aktuellen 3D-gedruckten Marker werden nicht erkannt. Es fehlt der helle Rand
-  (Quiet Zone), der schwarze Markerrand verschmilzt mit der dunklen Platte. → Marker mit weißem
-  Rand drucken (`python -m m1_vision_topdown.make_markers`).
-- Tests: 8 synthetische Szenen (ArUco und Rahmen, perspektivisch verzerrt) mit Fehler < 2 mm / 2°,
-  4 echte Fotos als Regressionstest.
-
-## Aufgaben
-
-- [~] Kamera auswählen/anbinden, feste Belichtung einstellen – Kamera ist eine **Daheng VEN-161** (wie die Handgelenkkamera von M4, 1440×1080, Global Shutter). Angebunden über `source: daheng:<Seriennummer>` (`common/camera.py`, nutzt den Daheng-Code von M4; Belichtung/Gain über `exposure_us`/`gain_db`, null = Automatik). Offen: Galaxy SDK am Laborrechner, Seriennummer, Test mit echtem Bild, feste Belichtung festlegen. Die Kamera ist zugleich Szenenkamera von M4 – M1 gibt sie frei, wenn M4 sie braucht
-- [ ] Intrinsische Kalibrierung durchführen, Ergebnis in `config/` speichern
-- [ ] Marker mit weißem Rand versehen/neu drucken, Rahmen und Markerpositionen vermessen (`workspace.size_mm`, `markers_mm`)
-- [x] ArUco-Detektion + Homographie implementieren
-- [x] Alternative: Arbeitsbereich über den weißen Rahmen
-- [x] Segmentierung + Pose (inkl. Fasenerkennung für 360°) implementieren
-- [~] Kalibrierung Arbeitsbereich → Roboter (gemeinsam mit M2): Werkzeug `robot_check calib` fertig, am Aufbau durchführen
-- [x] Zwischenbilder der Verarbeitung für die Doku speicherbar (`--save-steps`, GUI *+ Zwischenschritte*)
-- [ ] Parallaxe durch die Bauteilhöhe bewerten und ggf. korrigieren. **Befund 2026-10-21:** Auf allen
-  5 Testfotos (Handy, 05.10.) misst M1 das Bauteil zu groß: 64,5–69,1 × 43,3–46,4 mm statt 60 × 40 mm
-  (+8 bis +15 %). Die Homographie gilt für die Tischebene, die 15 mm hohe Oberseite und sichtbare
-  Seitenflächen erscheinen größer. Die Lage ist bei gleicher Position stabil (±0,4 mm, 3 Fotos), kann
-  aber systematisch nach außen verschoben sein → im Zeigetest (`robot_check point`) Versatz je
-  Position notieren, an Rand- **und** Mittelpositionen; mit der endgültigen Stangenkamera wiederholen.
-- [ ] Genauigkeitsmessung: N Ablagen an bekannten Positionen, Fehlerstatistik
-- [x] Unit-Tests mit synthetischen Bildern und Beispielfotos (`tests/data/`)
+- **Parallaxe:** Auf allen 5 Testfotos misst M1 das Bauteil zu groß, 64,5–69,1 × 43,3–46,4 mm
+  statt 60 × 40 mm (+8 bis +15 %). Die Homographie gilt für die Tischebene, die 15 mm hohe Oberseite
+  und die sichtbaren Seitenflächen erscheinen größer. Die Lage ist bei gleicher Position stabil
+  (±0,4 mm), kann aber systematisch nach außen verschoben sein, je weiter das Teil von der Bildmitte
+  entfernt liegt. Das prüft der Zeigetest. Abhilfe: Kamera möglichst hoch und mittig.
+- **Marker-Zuordnung:** Stimmt die Zuordnung von ID zu Ecke nicht, wird das Bild ohne Fehler falsch
+  entzerrt.
 
 ## Testen
 
-- GUI: Tab **M1 Erkennung** – Testbilder, Kamera oder Datei; Overlay im Kamerabild + entzerrtes Bild
-- `python -m m1_vision_topdown "m1_vision_topdown/tests/data/*.jpg"` – Debug-Bilder in `logs/m1`
-- `pytest m1_vision_topdown` – synthetische Szenen mit bekannter Pose + echte Fotos
-
-## Nächste Schritte
-
-1. Rahmen und Marker ausmessen → `workspace.size_mm`, `markers_mm` (danach Regressionswerte in `tests/test_topdown.py` anpassen)
-2. Top-down-Kamera fest montieren, im Tab M1 mit „Live“ prüfen
-3. Marker mit weißem Rand versehen, dann `workspace.method: aruco` testen
-4. Kalibrierung Arbeitsbereich → Roboter mit Person 2 (`robot_check calib`, danach Zeigetest `robot_check point`; Ablauf in [09_labortest.md](09_labortest.md))
+- GUI: Tab **M1 Erkennung** mit Testbildern, Kamera oder Datei; Overlay im Kamerabild und entzerrtes Bild.
+- `python -m m1_vision_topdown "m1_vision_topdown/tests/data/*.jpg"` schreibt Debug-Bilder nach
+  `logs/m1`. Mit `--save-steps` kommen die 13 Zwischenbilder dazu.
+- `pytest m1_vision_topdown` prüft synthetische Szenen mit bekannter Pose (Fehler < 2 mm / 2°)
+  und echte Fotos als Regressionstest.

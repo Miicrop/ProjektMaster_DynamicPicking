@@ -12,19 +12,19 @@ LaTeX (KOMA `scrreprt`), Deutsch, Zitierstil IEEE über `biblatex` (`style=ieee`
 | `main.tex` | Präambel, Metadaten (Titel, Autoren), Kapitelreihenfolge |
 | `chapters/` | Ein File pro Kapitel (siehe unten) |
 | `references.bib` | Literatur – nur verifizierte Einträge (DOI prüfen) |
-| `figures/` | Abbildungen (PDF/PNG), eingebunden per `\includegraphics{name}`; Unterordner je Thema (z. B. `grob/`), Dateinamen ohne Leerzeichen |
+| `figures/` | Abbildungen (PDF/PNG), eingebunden per `\includegraphics{name}`; Unterordner je Thema (`grob/`, `m1/`, `m3/`, `m4/`, `gui/`), Dateinamen ohne Leerzeichen |
 
 | Datei | Kapitel | Verantwortlich |
 |---|---|---|
 | `01_abstract.tex` | Kurzfassung | alle |
 | `02_einleitung.tex` | Einleitung | alle |
 | `02b_vorprojekt.tex` | Vorprojekt: KI-basierte Roboterbahnen (GROB) | alle (Abschnitt „Alternative Verfahren“: Kommilitone) |
-| `03_grundlagen.tex` | Grundlagen | alle (Abschnitt lernbasiertes Greifen: Person 4) |
+| `03_grundlagen.tex` | Grundlagen | alle (Abschnitt lernbasiertes Greifen: Entwurf Claude, Durchsicht Person 4) |
 | `04_systemkonzept.tex` | Systemkonzept | Niklas |
 | `05_objekterkennung.tex` | Objekterkennung (M1) | Person 1 |
 | `06_robotersteuerung.tex` | Robotersteuerung (M2) | Person 2 |
 | `07_sichtpruefung.tex` | Sichtprüfung (M3) | Person 3 |
-| `08_ki_greifen.tex` | KI-basiertes Greifen (M4) | Person 4 |
+| `08_ki_greifen.tex` | KI-basiertes Greifen (M4) | Person 4 (Entwurf Claude 2026-10-30 aus seinen Unterlagen) |
 | `09_integration.tex` | Integration und Bedienung | Niklas |
 | `10_evaluation.tex` | Evaluation | alle |
 | `11_fazit.tex` | Fazit und Ausblick | alle |

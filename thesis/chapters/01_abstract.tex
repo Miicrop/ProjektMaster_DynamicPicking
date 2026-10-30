@@ -17,18 +17,24 @@ Robotersteuerung rechnet diese Lage in eine Greifpose um und führt die Greif- u
 mit reduzierter Geschwindigkeit innerhalb fester Arbeitsraumgrenzen aus. An der Prüfstation
 liest die Sichtprüfung mit einer seitlichen Kamera eine fünfstellige Seriennummer mittels
 Texterkennung, misst den Durchmesser eines Durchgangslochs über eine Ellipsenanpassung und prüft,
-ob eine Kerbe vorhanden ist. Ein lernbasierter Greifansatz wird als Alternative zur klassischen
-Objekterkennung entwickelt und kann über dieselbe Schnittstelle eingebunden werden.
+ob eine Kerbe vorhanden ist. Als Alternative zum programmierten Greifen wird ein lernbasierter
+Ansatz entwickelt: Eine Diffusion Policy lernt aus Demonstrationen, die der Roboter mit
+gezielt eingespeistem Rauschen selbst fährt, das Bauteil anhand der Bilder einer Kamera am
+Greifer und der Kamera über dem Arbeitsbereich zu greifen. Sie ist über eine gemeinsame
+Schnittstelle in den Ablauf eingebunden und übergibt das Bauteil über der Prüfstation an die
+Robotersteuerung.
 
 Ein zentraler Zustandsautomat steuert den Ablauf aus Erkennen, Greifen, Prüfen und Sortieren,
 reagiert auf Fehler mit einem Stopp des Roboters und protokolliert jeden Zyklus. Bedient wird
 das System über eine grafische Oberfläche. Jedes Modul kann mit Platzhaltern, gespeicherten
-Testbildern, einer Nachbildung der Robotersteuerung oder der realen Hardware betrieben werden,
+Testbildern, einer Nachbildung der Robotersteuerung, der Simulation des Herstellers oder der
+realen Hardware betrieben werden,
 sodass sich die Module unabhängig voneinander entwickeln und schrittweise in Betrieb nehmen
 lassen. Die eingesetzten Verfahren der Bildverarbeitung sind bewusst einfach und
 nachvollziehbar gehalten.
 
-Die Erprobung an der realen Anlage umfasst wiederholte Durchläufe mit einem Gutteil in
-zufälliger Lage sowie gezielt fehlerhafte Bauteile ohne Kerbe, mit abweichendem
-Lochdurchmesser und ohne Seriennummer.
+Am realen Roboter lief ein erster vollständiger Ablauf durch, mit Erkennung und Prüfung auf
+Testbildern. Die Erprobung an der realen Anlage umfasst
+wiederholte Durchläufe mit einem Gutteil in zufälliger Lage sowie gezielt fehlerhafte Bauteile
+ohne Kerbe, mit abweichendem Lochdurchmesser und ohne Seriennummer.
 \todo[inline]{Ergebnisse der Versuche in ein bis zwei Sätzen ergänzen.}

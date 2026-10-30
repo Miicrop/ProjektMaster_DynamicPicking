@@ -4,7 +4,7 @@ Dieser Ordner beschreibt das Projekt: **was** es ist, **was** zu tun ist, **was*
 Die Dateien sind die gemeinsame Grundlage für Code (`../code`) und Ausarbeitung (`../thesis`).
 
 **Wie man das Projekt benutzt** (Installation, GUI, eigenes Modul testen, echter Aufbau):
-[../ANLEITUNG.md](../ANLEITUNG.md) · **Aktueller Stand:** [06_roadmap.md → Zwischenstand](06_roadmap.md#zwischenstand-2026-09-26)
+[../ANLEITUNG.md](../ANLEITUNG.md) · **Aktueller Stand und alle Aufgaben:** [06_offen.md](06_offen.md)
 
 ## Dateien
 
@@ -16,10 +16,8 @@ Die Dateien sind die gemeinsame Grundlage für Code (`../code`) und Ausarbeitung
 | [03_modul2_robotersteuerung.md](03_modul2_robotersteuerung.md) | M2 – Neura-Roboter: Greifen, Ablegen, Sortieren |
 | [04_modul3_sichtpruefung.md](04_modul3_sichtpruefung.md) | M3 – Seitliche Sichtprüfung: Seriennummer, Loch, Kerbe |
 | [05_modul4_ki_greifen.md](05_modul4_ki_greifen.md) | M4 – Behavior Cloning (Person 4) |
-| [06_roadmap.md](06_roadmap.md) | Meilensteine und Aufgabenlisten mit Status |
-| [07_erledigt.md](07_erledigt.md) | Log erledigter Arbeiten (datiert) |
-| [08_offene_fragen.md](08_offene_fragen.md) | Offene Fragen und Entscheidungen |
-| [09_labortest.md](09_labortest.md) | Checkliste für den Labortest mit echter Hardware |
+| [06_offen.md](06_offen.md) | **Alle** offenen Aufgaben und Fragen: Stand, Labor, M4, Evaluation, Thesis, Präsentation |
+| [07_erledigt.md](07_erledigt.md) | Log erledigter Arbeiten, geklärte Fragen, Entscheidungen |
 | [10_praesentation_konzept.md](10_praesentation_konzept.md) | Abschlusspräsentation: Konzept, Gestaltung, Storyboard |
 
 ## Konventionen
@@ -33,9 +31,10 @@ Die Dateien sind die gemeinsame Grundlage für Code (`../code`) und Ausarbeitung
 
 **Pflege**
 
-- Jede Person pflegt die Datei ihres Moduls selbst.
-- Wird eine Aufgabe erledigt: in `06_roadmap.md` abhaken **und** einen datierten Eintrag in `07_erledigt.md` ergänzen.
-- Neue Unklarheiten kommen in `08_offene_fragen.md`; getroffene Entscheidungen werden dort mit Datum und Begründung festgehalten.
+- **Aufgaben und offene Fragen stehen nur in `06_offen.md`**, nicht in den Moduldateien.
+- Erledigt: in `06_offen.md` löschen und einen datierten Eintrag in `07_erledigt.md` ergänzen.
+  Entscheidungen kommen mit Datum und Begründung in die Tabelle in `07_erledigt.md`.
+- Die Moduldateien (02–05) beschreiben nur, was man für das Modul wissen muss. Jede Person pflegt ihre selbst.
 - Schnittstellenänderungen (`code/common/interfaces.py`) werden **vorher** in `01_architektur.md` abgestimmt, da sie alle Module betreffen.
 
 **Sprache**

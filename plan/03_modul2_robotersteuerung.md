@@ -1,63 +1,85 @@
 # 03 – Modul 2: Robotersteuerung (Neura)
 
 **Verantwortlich:** Person 2 · **Code:** `code/m2_robot_control/` · **Interface:** `RobotController`
+Aufgaben: [06_offen.md](06_offen.md)
 
-> **Einstieg:** [code/m2_robot_control/ANLEITUNG_NEURA.md](../code/m2_robot_control/ANLEITUNG_NEURA.md) –
-> Laptop einrichten, verbinden, erste Bewegung, Posen teachen, Fehlersuche.
+> **Einstieg:** [code/m2_robot_control/ANLEITUNG_NEURA.md](../code/m2_robot_control/ANLEITUNG_NEURA.md)
+> erklärt, wie man den Laptop einrichtet, verbindet und die erste Bewegung fährt. Sie beschreibt auch
+> das Teachen von Posen, die Kalibrierung, den Zeigetest und die Fehlersuche.
 >
-> Roboter: Neura **LARA**, 6 Achsen, Software v5.0.8. API: **NeuraPy** – ein dünner JSON-über-TCP-Client
-> (Port 65432), Posen `[x, y, z, roll, pitch, yaw]` in m/rad. Wichtig laut Doku: vor Bewegungen
-> `init_program()`, am Ende `stop()`. Doku: [docs/neura/](../docs/neura/README.md).
-> Das GitHub-Repo mit den bisherigen Tests liegt noch nicht vor.
+> Roboter: Neura **LARA**, 6 Achsen, Software v5.0.8, IP **192.168.2.13** (die .20 auf dem Sockel
+> ist falsch). API: **NeuraPy**, ein dünner JSON-über-TCP-Client (Port 65432), Posen
+> `[x, y, z, roll, pitch, yaw]` in m/rad. Vor Bewegungen `init_program()`, am Ende `stop()`.
+> Doku: [docs/neura/](../docs/neura/README.md).
 
 ## Aufgabe
 
 - `ObjectPose` entgegennehmen und das Bauteil **sicher greifen**.
 - Bauteil an der **Prüfposition** ablegen und den Sichtbereich der Seitenkamera freigeben.
-- Nach der Prüfung Bauteil wieder aufnehmen und auf **Ablage GUT** oder **Ablage SCHLECHT** legen.
+- Nach der Prüfung das Bauteil wieder aufnehmen und auf **Ablage GUT** oder **Ablage SCHLECHT** legen.
+- Greift M4 (`--grasper bc`), übernimmt M2 erst am Übergabepunkt über der Prüfung: `reset()`, dann ablegen.
 
 ## Interface
 
 | Methode | Beschreibung |
 |---|---|
-| `connect()` / `disconnect()` | Verbindung zur Steuerung, Servo an/aus |
-| `home()` | Sichere Ausgangsposition (außerhalb des Kamerabilds) |
+| `connect()` / `disconnect()` | Verbindung zur Steuerung. Prüft das Werkzeug (TCP ±1 mm), sonst keine Bewegung |
+| `home()` | Sichere Ausgangsposition außerhalb des Kamerabilds |
 | `pick(pose: ObjectPose)` | Greifsequenz an beliebiger Pose |
-| `place(target: RobotTarget)` | Ablegesequenz an benannter Pose |
-| `stop()` | Sofortiger Stopp (Software), wird im `ERROR`-Zustand aufgerufen |
+| `place(target: RobotTarget)` | Ablegesequenz an einer benannten Pose |
+| `stop()` / `reset()` | Sofortiger Stopp (Software) im `ERROR`-Zustand. Danach werden Bewegungen abgelehnt, bis `reset()` (erneut `init_program()`) aufgerufen wird. Das geschieht bewusst nicht automatisch |
 
 ## Greifsequenz `pick()`
 
 1. Greifer öffnen.
-2. **Vorposition** anfahren: (x, y, z + Sicherheitsabstand), TCP-Rotation um z = θ + Greifer-Offset (PTP-Bewegung).
-3. Linear auf Greifhöhe absenken (LIN, reduzierte Geschwindigkeit).
-4. Greifer schließen, Greiferzustand prüfen (Teil vorhanden? – noch nicht umgesetzt).
-5. Linear auf Vorposition anheben.
+2. Vorposition 80 mm über dem Ziel anfahren, TCP-Rotation um z = Home + θ + **113°** (PTP).
+3. Linear absenken: schnell (0,10 m/s) bis 20 mm über dem Ziel, den Rest langsam (0,03 m/s).
+4. Greifer schließen. Eine Rückmeldung, ob ein Teil gegriffen wurde, wird noch nicht ausgewertet.
+5. Auf demselben Weg zurück: erst langsam, dann schnell auf die Vorposition.
 
-`place()` analog: Vorposition → absenken → öffnen → anheben.
+`place()` läuft analog: Vorposition → absenken → öffnen → anheben. Beim Prüfen gibt es keinen
+Home-Umweg. Der Roboter wartet auf Anfahrhöhe über der Prüfvorrichtung, wo der Greifer nicht im
+Bild der Seitenkamera ist.
 
-## Definierte Posen (in `config/system.yaml`)
+Greifer-Offset 113° = 90° + 23°, weil der Greifer um 23° verdreht montiert ist. An den Ablagen ist
+rz = −157° (Home + 23°). Das Teil liegt dort mit der langen Seite entlang der Marker-Kante 0–3.
 
-- `home` – Ruheposition außerhalb der Kamerabilder
-- `inspection` – Ablage für die Sichtprüfung (Lage des Teils reproduzierbar, ggf. mechanischer Anschlag)
-- `bin_good`, `bin_bad` – Sortierablagen
+## Werkzeug und Greifer
 
-Die Posen werden am realen Roboter geteacht und in die Config übernommen.
+- Zimmer MATCH LWR50L-23-00004-A mit Robotermodul LWR50F-13-05-A, Standardbacken (passen für 40 mm).
+  Datenblätter und CAD liegen in `docs/greifer/`.
+- Werkzeug in der Steuerung: **„ZimmerLWR50“**, TCP 197,5 mm. Soll-Last 1,75 kg, Schwerpunkt
+  z ≈ 81 mm (ANLEITUNG_NEURA Abschnitt 4).
+- `gripper_enabled` schaltet Öffnen/Schließen. In der Neura-VM ist es immer aus.
+
+## Posen (`config/system.yaml`, TCP im Basis-KS, mm/°)
+
+| Pose | x | y | z | rz |
+|---|---|---|---|---|
+| `home` | 420,0 | 0,0 | 237,0 | 180 |
+| `inspection` (Prüfvorrichtung, Fläche 38 mm über der Platte) | 520,8 | 199,6 | 42,0 | −157 |
+| `bin_good` | 299,7 | 185,4 | 4,0 | −157 |
+| `bin_bad` | 297,7 | 319,4 | 3,0 | −157 |
+
+Geteacht werden die Posen mit `robot_check teach` oder im Tab M2.
 
 ## Sicherheit
 
-- Reduzierte Geschwindigkeit/Beschleunigung im Testbetrieb (konfigurierbar).
-- Software-Arbeitsraumgrenzen: Posen außerhalb des erlaubten Quaders werden abgelehnt (`RobotError`).
+- Reduzierte Geschwindigkeit (`override` 0,2 im Testbetrieb).
+- Software-Arbeitsraumgrenzen `limits_mm`: Posen außerhalb werden abgelehnt (`RobotError`).
 - Plausibilitätsprüfung der `ObjectPose` (Konfidenz, Lage im Arbeitsbereich).
-- Hardware-Not-Halt immer in Reichweite; Betrieb nur unter Aufsicht.
+- Hardware-Not-Halt immer in Reichweite, Betrieb nur unter Aufsicht.
 
 ## Kalibrierung (gemeinsam mit M1)
 
-- Roboter-TCP nacheinander auf die vier Marker-Mittelpunkte setzen → `robot_check calib` berechnet `T_ws→robot` per Least Squares (`common.transforms.fit_workspace_to_robot`) samt Restfehler je Marker und gibt die Config-Zeilen aus. Vorgehen in `ANLEITUNG_NEURA.md` Abschnitt 7a.
-- Prüfung mit dem Zeigetest `robot_check point` (Abschnitt 7b): Greifer fährt über das erkannte Bauteil, greift nicht; gemessener Versatz → `logs/point_tests.csv` (Positionsgenauigkeit für die Evaluation).
-- Greifer-Offset (Winkel zwischen Greiferbacken und Bauteil-Hauptachse) bestimmen.
+- Der Roboter-TCP wird nacheinander auf die vier Markermitten gesetzt. `robot_check calib` berechnet
+  daraus `workspace_to_robot` per Least Squares (`common.transforms.fit_workspace_to_robot`), mit
+  Restfehler je Marker. Ab 3 mm RMS gibt es eine Warnung. Aktuell: 0,35°, [205,1, −319,7] mm,
+  Tisch z 2,1 mm.
+- Der Zeigetest `robot_check point` fährt über das erkannte Bauteil, ohne zu greifen. Der Versatz
+  landet in `logs/point_tests.csv`.
 
-## Umsetzung (Stand 2026-09-26)
+## Umsetzung
 
 | Schritt | NeuraPy-Aufruf |
 |---|---|
@@ -66,25 +88,16 @@ Die Posen werden am realen Roboter geteacht und in die Config übernommen.
 | Große Bewegung | `compute_inverse_kinematics()` + `move_joint()` (PTP) |
 | Anfahren/Abheben | `move_linear(target_pose=[start, ziel], speed=…)` (LIN) |
 | Greifer | `grasp()` / `release()` |
-| Ende / Fehler | `stop()` – beendet das Programm auf der Steuerung; weitere Bewegungen erst nach `reset()` (= erneut `init_program()`), bewusst nicht automatisch |
+| Ende / Fehler | `stop()` |
 
-- `fake_neura_server.py` simuliert die Steuerung (gleiches Protokoll). Die Tests laufen über den
-  **unveränderten** Neura-Client, dadurch ist der komplette Codepfad ohne Roboter prüfbar.
-- `robot_check.py` (`python -m m2_robot_control …`) für die schrittweise Inbetriebnahme (`info` → `home` → `gripper` → `axes`/`jog` → `pose` → `calib` → `point` → `pick-test`).
-- GUI-Tab **M2 Roboter**: dieselben Schritte per Knopf, Posen teachen/anfahren, Draufsicht, STOPP.
+Testen lässt sich das in drei Stufen:
 
-## Aufgaben
+1. `fake_neura_server.py` simuliert die Steuerung mit demselben Protokoll. Die Tests laufen über den
+   unveränderten Neura-Client.
+2. Die **Neura-VM** (VirtualBox) betreibt die echte Steuerungssoftware ohne Roboter.
+3. Danach kommt die Anlage.
 
-- [x] Neura-Doku sichten, API-Aufrufe für PTP/LIN/Greifer dokumentieren
-- [ ] GitHub-Repo mit bisherigen Tests sichten (liegt noch nicht vor)
-- [x] `NeuraRobot(RobotController)` implementieren
-- [x] Simulator der Steuerung + Tests
-- [x] Anleitung für die Inbetriebnahme vom Laptop
-- [ ] Am echten Roboter: IP, Werkzeug, Betriebsartwechsel verifizieren (`robot_check info`)
-- [ ] Posen teachen und in Config eintragen
-- [ ] Greif-/Ablegesequenz mit reduzierter Geschwindigkeit testen (`robot_check pick-test`)
-- [ ] Greiforientierung prüfen (yaw-Konvention bei roll = 180°, Greifer-Offset)
-- [x] Arbeitsraumgrenzen und Stopp implementieren
-- [ ] Greifer-Rückmeldung (Teil gegriffen?) auswerten
-- [~] Kalibrierung Arbeitsbereich → Roboter mit M1: Skript (`calib`) und Zeigetest (`point`) fertig, am Aufbau durchführen
-- [ ] Wiederholgenauigkeit an der Prüfposition messen (wichtig für M3)
+Schrittweise Inbetriebnahme mit `python -m m2_robot_control …`:
+`info` → `home` → `gripper` → `axes`/`jog` → `pose`/`teach` → `calib` → `point` → `pick-test`.
+Der GUI-Tab **M2 Roboter** bietet dieselben Schritte per Knopf, dazu Joggen, Posen und die
+Draufsicht. Der Haken *Ohne Rückfrage joggen* ist nur fürs Joggen gedacht und wird nicht gespeichert.

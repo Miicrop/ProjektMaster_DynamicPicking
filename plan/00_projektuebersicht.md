@@ -34,24 +34,24 @@ sequenceDiagram
     M2-->>O: fertig → nächster Zyklus
 ```
 
-1. **Erkennen (M1):** Die Top-down-Kamera findet den Arbeitsbereich über vier ArUco-Marker (Rückfall: weißer Rahmen), entzerrt das Bild und bestimmt Position und Orientierung des Bauteils.
+1. **Erkennen (M1):** Die Top-down-Kamera findet den Arbeitsbereich über vier ArUco-Marker, entzerrt das Bild und bestimmt Position und Orientierung des Bauteils.
 2. **Greifen (M2 oder M4):** Der Roboter fährt die Pose an, greift sicher und legt das Bauteil an der definierten Prüfposition ab. Alternativ greift die Behavior-Cloning-Policy von M4 (aus den Bildern der Handgelenk- und Draufsichtkamera) und übergibt über der Prüfung an M2, das ablegt.
 3. **Prüfen (M3):** Eine seitliche Kamera liest die Seriennummer, vermisst einen Lochdurchmesser und prüft, ob eine Kerbe vorhanden ist. Nur wenn alles erfüllt ist → Gutteil.
 4. **Sortieren (M2):** Der Roboter holt das Bauteil wieder ab und legt es auf der Gut- bzw. Schlecht-Ablage ab.
 
-## Hardware (Stand: vorläufig, siehe [08_offene_fragen.md](08_offene_fragen.md))
+## Hardware
 
 | Komponente | Beschreibung |
 |---|---|
-| Roboter | Neura Robotics **LARA** (6 Achsen), Software v5.0.8, Python-API NeuraPy, IP 192.168.2.20 (prüfen) |
-| Greifer | **Zimmer MATCH LWR50L-23-00004-A** (elektrischer 2-Backen-Parallelgreifer, IO-Link) auf Robotermodul LWR50F-13-05-A, Unterlagen in `docs/greifer/`. Werkzeug in der Steuerung: „ZimmerLWR50“ (TCP 197,5 mm), Greifer ca. 23° um z verdreht montiert; Ansteuerung noch offen |
+| Roboter | Neura Robotics **LARA** (6 Achsen), Software v5.0.8, Python-API NeuraPy, IP 192.168.2.13 (bestätigt; die Angabe .20 auf dem Sockel ist falsch) |
+| Greifer | **Zimmer MATCH LWR50L-23-00004-A** (elektrischer 2-Backen-Parallelgreifer, IO-Link) auf Robotermodul LWR50F-13-05-A, Unterlagen in `docs/greifer/`. Werkzeug in der Steuerung: „ZimmerLWR50“ (TCP 197,5 mm), Standardbacken, Greifer ca. 23° um z verdreht montiert; Öffnen/Schließen funktioniert |
 | Kamera 1 | Top-down über dem Arbeitsbereich: **Daheng VEN-161** (1440×1080, USB3 Vision, braucht das Galaxy SDK); zugleich Szenenkamera von M4. Testfotos mit Handykamera |
 | Kamera 2 | Seitlich an der Prüfposition, einfache USB-Kamera (Testbilder 3840×2160), ggf. mit eigener Beleuchtung |
 | Kamera 3 | Am Roboterhandgelenk (Daheng VEN-161, Fisheye), nur für M4 Behavior Cloning; verwaltet M4 selbst |
-| Marker | 4 ArUco-Marker (`DICT_4X4_50`, 3D-gedruckte Blöcke) an den Ecken eines weißen Rahmens |
-| Bauteil | lila 3D-Druck-Quader mit abgeschrägter Ecke (Draufsicht), seitlich: Etikett mit 5-stelliger Seriennummer, Durchgangsloch, kleine eckige Öffnung (= **Kerbe**) |
-| Ablagen | Prüfposition, Ablage GUT, Ablage SCHLECHT (feste Posen) |
-| Rechner | Windows-Laptop mit Python 3.11 (getestet), LAN-Verbindung zur Robotersteuerung |
+| Marker | 4 ArUco-Marker (`DICT_4X4_50`) auf Papier, Mittenabstand 400 mm, Arbeitsbereich 330 × 330 mm dazwischen |
+| Bauteil | lila 3D-Druck-Quader 60 × 40 × 15 mm mit abgeschrägter Ecke (Draufsicht), Loch 10 mm, seitlich: Etikett mit 5-stelliger Seriennummer, Durchgangsloch, kleine eckige Öffnung (= **Kerbe**) |
+| Ablagen | Prüfvorrichtung (gedruckt, 38 mm hoch, mit Kamerahalter), Ablage GUT, Ablage SCHLECHT (geteachte Posen) |
+| Rechner | Windows-Laptop, Python 3.11 (GUI) und 3.12 (M4), LAN-Verbindung zur Robotersteuerung |
 
 ## Rollen
 

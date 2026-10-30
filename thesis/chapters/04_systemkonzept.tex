@@ -71,13 +71,17 @@ nicht-funktionalen Anforderungen in \cref{tab:anf-nichtfunktional}.
 \label{sec:hardware}
 
 Der Demonstrator besteht aus einem Roboter mit Greifer, zwei fest montierten Kameras,
-einem durch Marker begrenzten Arbeitsbereich und drei Ablagepositionen. Gesteuert wird er
-von einem Rechner, der über \ac{lan} mit der Robotersteuerung verbunden ist.
+einem durch Marker begrenzten Arbeitsbereich und drei Ablagepositionen. Eine dritte Kamera am
+Greifer nutzt nur das lernbasierte Greifen aus \cref{ch:kigreifen}. Gesteuert wird der
+Demonstrator von einem Rechner, der über \ac{lan} mit der Robotersteuerung verbunden ist.
 \Cref{fig:aufbau} zeigt den Aufbau, \cref{tab:hardware} fasst die Komponenten zusammen.
 
 \begin{figure}[htbp]
   \centering
-  \missingfigure[figwidth=0.9\textwidth]{Foto oder Skizze der Roboterzelle: Roboter, Arbeitsbereich mit Markern, Top-down-Kamera, Prüfposition mit Seitenkamera, Ablagen GUT/SCHLECHT}
+  \missingfigure[figwidth=0.9\textwidth]{Foto der Roboterzelle schräg von oben: Roboter mit
+  Greifer und Handgelenkkamera, dunkle Platte mit den vier ArUco-Markern, Kamera oben an der
+  Stange, Prüfvorrichtung mit Seitenkamera, Ablagen GUT und SCHLECHT. Komponenten im Bild
+  beschriften.}
   \caption{Aufbau des Demonstrators}
   \label{fig:aufbau}
 \end{figure}
@@ -95,27 +99,39 @@ von einem Rechner, der über \ac{lan} mit der Robotersteuerung verbunden ist.
     Greifer & Elektrischer 2-Backen-Parallelgreifer Zimmer Group MATCH LWR50L-23-00004-A:
               Hub \SI{16}{\milli\metre} je Backe, Greifkraft einstellbar bis \SI{500}{\newton},
               Schließzeit \SI{0,3}{\second}, Wiederholgenauigkeit \SI{\pm 0,02}{\milli\metre},
-              Masse \SI{1,4}{\kilo\gram}, Ansteuerung über IO-Link~\cite{zimmer_lwr50l}
-              \todo[inline]{Werkzeugdaten in der Steuerung prüfen: Das Werkzeug heißt dort
-              \enquote{RobotiQ}. Masse und \acs{tcp} müssen zum Zimmer-Greifer passen.} \\
+              Masse \SI{1,4}{\kilo\gram}, Ansteuerung über IO-Link~\cite{zimmer_lwr50l}.
+              In der Steuerung als Werkzeug \enquote{ZimmerLWR50} mit dem \ac{tcp}
+              \SI{197,5}{\milli\metre} vor dem Flansch angelegt (Greifer mit Backen
+              \SI{169,5}{\milli\metre}, Adapter \SI{28}{\milli\metre}); Sollwerte der Last
+              \SI{1,75}{\kilo\gram}, Schwerpunkt etwa \SI{81}{\milli\metre} vor dem Flansch
+              \todo[inline]{Lastdaten am Bedienhandgerät mit den Sollwerten vergleichen.} \\
     Adapter & Zimmer Group MATCH-Robotermodul LWR50F-13-05-A zwischen Roboterflansch und
               Greifer: Schnellwechsler mit integrierter elektrischer Energieübertragung,
               Anschlussflansch nach EN ISO 9409-1 (TK~50), Masse
               \SI{0,35}{\kilo\gram}~\cite{zimmer_lwr50f} \\
-    Top-down-Kamera & über dem Arbeitsbereich, Auflösung $1920 \times 1080$~Pixel
-              \todo[inline]{Kameramodell und Montagehöhe} \\
-    Seitenkamera & an der Prüfposition, Auflösung $3840 \times 2160$~Pixel
+    Top-down-Kamera & Daheng VEN-161, $1440 \times 1080$~Pixel, Global Shutter,
+              \ac{usb}3 Vision; an einer Stange schräg über dem Arbeitsbereich montiert,
+              zugleich Szenenkamera von Modul~4
+              \todo[inline]{Montagehöhe und Objektiv angeben} \\
+    Seitenkamera & \ac{usb}-Kamera an der Prüfposition; die Testbilder haben
+              $3840 \times 2160$~Pixel
               \todo[inline]{Kameramodell, Abstand, Beleuchtung} \\
-    Arbeitsbereich & weißer Rahmen auf dunkler Platte, vier ArUco-Marker an den Ecken
-              (Wörterbuch \texttt{DICT\_4X4\_50}, IDs~0 bis~3)
-              \todo[inline]{Innenmaß des Rahmens vermessen} \\
-    Bauteil & 3D-gedruckter Quader mit einer abgeschrägten Ecke (Fase); an einer
-              Seitenfläche ein aufgeklebtes Etikett mit fünfstelliger Seriennummer, ein
-              Durchgangsloch und eine kleine rechteckige Öffnung (Kerbe)
-              \todo[inline]{Maße aus der Zeichnung} \\
-    Ablagen & Prüfposition, Ablage GUT und Ablage SCHLECHT als feste Posen
-              \todo[inline]{mechanischer Anschlag an der Prüfposition?} \\
-    Rechner & Windows-Laptop mit Python~3.11, \ac{lan}-Verbindung zur Robotersteuerung \\
+    Handgelenkkamera & Daheng VEN-161-61U3C mit Fischaugenobjektiv am Greifer, nur für
+              Modul~4 (\cref{tab:m4-hardware}) \\
+    Arbeitsbereich & dunkle Platte mit vier ArUco-Markern auf Papier (Kantenlänge
+              \SI{50}{\milli\metre}, Wörterbuch \texttt{DICT\_4X4\_50}, IDs~0 bis~3), Abstand
+              der Markermitten \SI{400}{\milli\metre}; der Arbeitsbereich ist das Quadrat von
+              $330 \times 330$~\si{\milli\metre} zwischen den Markern \\
+    Bauteil & 3D-gedruckter Quader, $60 \times 40 \times 15$~\si{\milli\metre}, mit einer abgeschrägten
+              Ecke (Fase); an einer langen Seitenfläche ein aufgeklebtes Etikett mit
+              fünfstelliger Seriennummer, ein Durchgangsloch mit \SI{10}{\milli\metre}
+              Durchmesser und eine kleine rechteckige Öffnung (Kerbe) \\
+    Ablagen & 3D-gedruckte Prüfvorrichtung (Auflage \SI{38}{\milli\metre} über der
+              Platte, mit Kamerahalter und Hintergrund), Ablage GUT und Ablage SCHLECHT; alle drei als feste Posen hinter der
+              oberen Markerkante \\
+    Rechner & Windows-Laptop, \ac{lan}-Verbindung zur Robotersteuerung; Python~3.11 für
+              Bedienoberfläche und Module~1 bis~3, eine zweite Umgebung mit Python~3.12 für
+              Modul~4 \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -128,14 +144,16 @@ Seite zur Seitenkamera abgelegt werden kann.
 Die Form des Bauteils ist bewusst einfach gehalten. Die beiden langen Seitenflächen des
 Quaders sind parallel, sodass der Parallelgreifer das Bauteil mit seinen Greifbacken direkt
 an diesen Flächen fassen kann. Eigene Greifbacken oder ein eigener Greifer mussten deshalb
-nicht entwickelt werden. Voraussetzung ist nur, dass die Breite des Bauteils in den Hub der
-Greifbacken passt.
+nicht entwickelt werden: Die Standardbacken des Zimmer-Greifers fassen das
+\SI{40}{\milli\metre} breite Bauteil ohne Anpassung.
 
-\todo[inline]{Bauteilbreite gegen den Backenhub (\SI{16}{\milli\metre} je Backe) und die
-Öffnungsweite der verwendeten Greifbacken prüfen.}
+Der Arbeitsbereich liegt \SI{35}{\milli\metre} innerhalb der Markermitten. So bleibt das
+weiße Papier der Marker außerhalb und wird nicht als Bauteil erkannt.
 
-Eine dritte Kamera am Handgelenk des Roboters ist für das lernbasierte Greifen in
-\cref{ch:kigreifen} vorgesehen und für den Grundablauf nicht erforderlich.
+Die Prüfvorrichtung ist eine erhöhte Ablagefläche mit einem Halter für die Seitenkamera, der
+deren Abstand zum Bauteil festlegt, und einem Hintergrund hinter dem Bauteil, vor dem sich das
+Loch gut abhebt. Einen Formschluss gibt es nicht; die Lage des Bauteils ergibt sich allein aus
+der Ablegepose des Roboters (\cref{sec:m3-aufbau}).
 
 % ------------------------------------------------------------------------------
 \section{Softwarearchitektur}
@@ -156,29 +174,35 @@ Koordinatentransformationen liegen in einem Paket \texttt{common}.
       box/.style={draw, rounded corners, align=center, minimum height=11mm, text width=30mm, font=\small},
       arr/.style={-{Stealth[length=2.5mm]}, thick},
       lbl/.style={font=\scriptsize, fill=white, inner sep=1pt}]
-    \node[box, text width=42mm, fill=black!5] (orch) {\textbf{Orchestrator}\\Zustandsautomat};
-    \node[box, below=of orch] (m2) {\textbf{M2}\\Robotersteuerung};
-    \node[box, left=of m2] (m1) {\textbf{M1 / M4}\\Objekterkennung};
-    \node[box, right=of m2] (m3) {\textbf{M3}\\Sichtprüfung};
-    \node[box, below=10mm of m2, text width=100mm, fill=black!5] (common)
+    \node[box, text width=42mm, fill=black!5] (orch) at (0,0) {\textbf{Orchestrator}\\Zustandsautomat};
+    \node[box, text width=31mm] (m2) at (-1.85,-3.0) {\textbf{M2}\\Robotersteuerung};
+    \node[box, text width=31mm] (m4) at (1.85,-3.0) {\textbf{M4}\\KI-Greifen};
+    \node[box, text width=31mm] (m1) at (-5.75,-3.0) {\textbf{M1}\\Objekterkennung};
+    \node[box, text width=31mm] (m3) at (5.75,-3.0) {\textbf{M3}\\Sichtprüfung};
+    \node[draw, dashed, rounded corners, inner sep=2.5mm, fit=(m2)(m4)] (grasp) {};
+    \node[font=\scriptsize, anchor=south west, inner sep=1pt] at (grasp.north west) {Greifen: M2 oder M4};
+    \node[box, below=10mm of grasp, text width=144mm, fill=black!5] (common)
       {\textbf{common}: Schnittstellen, Konfiguration, Kamerazugriff, Transformationen};
     \node[box, above=8mm of orch, text width=42mm] (gui) {Bedienoberfläche / Kommandozeile};
     \draw[arr] (m1.north) |- node[lbl, pos=0.25] {\texttt{ObjectPose}} ([yshift=-2mm]orch.west);
-    \draw[arr] (orch.south) -- node[lbl] {\texttt{ObjectPose}, \texttt{RobotTarget}} (m2.north);
+    \draw[arr] (orch.south) -- node[lbl] {\texttt{ObjectPose}, \texttt{RobotTarget}} (grasp.north);
     \draw[arr] (m3.north) |- node[lbl, pos=0.25] {\texttt{InspectionResult}} ([yshift=-2mm]orch.east);
     \draw[arr] (gui) -- (orch);
-    \foreach \m in {m1,m2,m3} \draw[dashed] (\m.south) -- (\m.south |- common.north);
+    \foreach \m in {m1,m3} \draw[dashed] (\m.south) -- (\m.south |- common.north);
+    \draw[dashed] (grasp.south) -- (common.north);
   \end{tikzpicture}
-  \caption{Modulstruktur der Software}
+  \caption[Modulstruktur der Software]{Modulstruktur der Software. Das Greifen übernimmt wahlweise die Robotersteuerung
+  (M2) oder das lernbasierte Greifen (M4); alle übrigen Bewegungen führt M2 aus.}
   \label{fig:architektur}
 \end{figure}
 
 Für jedes Modul gibt es eine abstrakte Schnittstelle und mehrere Implementierungen,
 darunter immer eine Mock-Implementierung, die zufällige, aber plausible Ergebnisse liefert,
 ohne auf Hardware zuzugreifen. Welche Implementierung verwendet wird, legt die Konfiguration fest.
-Dadurch lässt sich jedes Modul isoliert entwickeln, während die übrigen gemockt werden, und
-die Objekterkennung aus \cref{ch:objekterkennung} kann ohne Codeänderung gegen den
-lernbasierten Ansatz aus \cref{ch:kigreifen} getauscht werden.
+Dadurch lässt sich jedes Modul isoliert entwickeln, während die übrigen gemockt werden.
+Auf dieselbe Weise ist das Greifen austauschbar: Statt der Robotersteuerung aus
+\cref{ch:robotersteuerung} kann das lernbasierte Greifen aus \cref{ch:kigreifen} das Bauteil
+aufnehmen und an die Prüfposition bringen, ohne dass sich am Ablauf etwas ändert.
 
 \subsection{Ablaufsteuerung}
 
@@ -229,9 +253,11 @@ und zur Bedienung folgen in \cref{ch:integration}.
     Zustand & Aktion & Modul \\
     \midrule
     \texttt{IDLE}          & Warten auf Start bzw.\ nächsten Zyklus & -- \\
-    \texttt{DETECT}        & Bild aufnehmen, Pose des Bauteils bestimmen & M1 / M4 \\
-    \texttt{PICK}          & Bauteil an der erkannten Pose greifen & M2 \\
-    \texttt{PLACE\_INSPECT} & An der Prüfposition ablegen, Sichtfeld der Seitenkamera freigeben & M2 \\
+    \texttt{DETECT}        & Bild aufnehmen, Pose des Bauteils bestimmen & M1 \\
+    \texttt{PICK}          & Bauteil greifen: M2 an der erkannten Pose, M4 mit der gelernten
+                             Policy bis zum Übergabepunkt über der Prüfposition & M2 / M4 \\
+    \texttt{PLACE\_INSPECT} & An der Prüfposition ablegen, auf Anfahrhöhe über der
+                             Prüfvorrichtung außerhalb des Bilds der Seitenkamera warten & M2 \\
     \texttt{INSPECT}       & Seriennummer, Lochdurchmesser und Kerbe prüfen & M3 \\
     \texttt{PICK\_INSPECT}  & Bauteil an der Prüfposition greifen & M2 \\
     \texttt{SORT}          & Auf Ablage GUT oder SCHLECHT ablegen & M2 \\
@@ -255,9 +281,9 @@ Einheiten der Roboterschnittstelle übernimmt die Robotersteuerung.
     \toprule
     Datenobjekt & Richtung & Inhalt \\
     \midrule
-    \texttt{ObjectPose} & M1/M4 $\rightarrow$ M2 &
+    \texttt{ObjectPose} & M1 $\rightarrow$ M2 (M4) &
       Position $x$, $y$, $z$ und Drehwinkel $\theta$ um die Hochachse im Roboter-\ac{ks},
-      Konfidenz, Zeitstempel, optional ein Debug-Bild \\
+      Konfidenz, Zeitstempel, optional ein Debug-Bild; M4 protokolliert die Pose nur \\
     \texttt{RobotTarget} & Konfiguration $\rightarrow$ M2 &
       Name und kartesische Pose (Position und drei Drehwinkel) einer festen Roboterposition,
       z.\,B.\ Prüfposition oder Ablage \\
@@ -281,10 +307,13 @@ den Zustand \texttt{ERROR} reagiert.
     \toprule
     Schnittstelle & Modul & Methoden \\
     \midrule
-    \texttt{ObjectDetector} & M1, M4 & \texttt{detect()}: liefert eine \texttt{ObjectPose} oder
+    \texttt{ObjectDetector} & M1 & \texttt{detect()}: liefert eine \texttt{ObjectPose} oder
       \enquote{kein Bauteil} \\
-    \texttt{RobotController} & M2 & \texttt{connect()}, \texttt{home()},
+    \texttt{RobotController} & M2 & \texttt{connect()}, \texttt{disconnect()}, \texttt{home()},
       \texttt{pick(pose)}, \texttt{place(target)}, \texttt{stop()}, \texttt{reset()} \\
+    \texttt{Grasper} & M2, M4 & \texttt{pick(pose)}, \texttt{place(target)}, \texttt{stop()}:
+      Greifen und Ablegen an der Prüfposition; Varianten \texttt{RobotGrasper} (M2) und
+      \texttt{BcGrasper} (M4, legt über M2 ab) \\
     \texttt{Inspector} & M3 & \texttt{inspect()}: liefert ein \texttt{InspectionResult} \\
     \bottomrule
   \end{tabularx}
@@ -301,8 +330,9 @@ werden drei Koordinatensysteme unterschieden:
 \begin{description}
   \item[Bild-\ac{ks}] Pixelkoordinaten $(u, v)$ im Bild der Top-down-Kamera.
   \item[Arbeitsbereich-\ac{ks}] Metrisches \ac{ks} in der Tischebene mit Ursprung in der
-    inneren linken unteren Ecke des weißen Rahmens (aus Kamerasicht), $x$-Achse nach rechts,
-    $y$-Achse nach oben. Die Lage der vier ArUco-Marker ist in diesem \ac{ks} bekannt.
+    linken unteren Ecke des Arbeitsbereichs (aus Kamerasicht), $x$-Achse nach rechts,
+    $y$-Achse nach oben. Die Mittelpunkte der vier ArUco-Marker liegen in diesem \ac{ks} bei
+    $(-35, -35)$, $(365, -35)$, $(365, 365)$ und $(-35, 365)$~\si{\milli\metre}.
   \item[Roboter-Basis-\ac{ks}] Das \ac{ks} der Robotersteuerung, in dem alle Bewegungsbefehle
     angegeben werden.
 \end{description}
@@ -315,8 +345,26 @@ Starrkörpertransformation aus Drehung und Verschiebung (\cref{sec:transformatio
 um die bekannte Tischhöhe. Die Objekterkennung liefert die \texttt{ObjectPose} bereits im
 Roboter-\ac{ks}, sodass die Robotersteuerung keine Kenntnis über die Kamera benötigt.
 
-\todo[inline]{Kalibrierung Arbeitsbereich $\rightarrow$ Roboter: Verfahren noch offen, wird
-ergänzt, sobald es am Aufbau erprobt ist.}
+\subsection*{Kalibrierung zwischen Arbeitsbereich und Roboter}
+
+Drehung und Verschiebung zwischen Arbeitsbereich und Roboter werden mit dem Roboter selbst
+eingemessen. Der Bediener setzt die Greiferspitze nacheinander auf die Mittelpunkte der vier
+Marker, deren Lage im Arbeitsbereich bekannt ist, und übernimmt jeweils die aktuelle
+\ac{tcp}-Position. Aus den vier Punktpaaren wird nach der Methode der kleinsten Quadrate die
+ebene Starrkörpertransformation bestimmt~\cite{umeyama1991}. Für jeden Marker wird
+anschließend der Restfehler zwischen gemessener und transformierter Position ausgegeben,
+zusammen mit dem quadratischen Mittelwert (\ac{rms}). Liegt dieser über \SI{3}{\milli\metre},
+warnt das Werkzeug; Ursache sind dann meist vertauschte Marker, falsch eingetragene
+Markerpositionen oder ein nicht mittig gesetzter \ac{tcp}. Die Kalibrierung setzt voraus,
+dass der \ac{tcp} des Werkzeugs in der Steuerung stimmt.
+
+Geprüft wird das Ergebnis mit einem Zeigetest: Die Objekterkennung bestimmt die Pose eines
+Bauteils, der Roboter fährt den Greifer \SI{30}{\milli\metre} über diese Pose, ohne zu greifen,
+und der Bediener notiert den sichtbaren Versatz. Kalibrierung und Zeigetest stehen in der
+Bedienoberfläche und als Kommandozeilenwerkzeug zur Verfügung (\cref{sec:m2-inbetriebnahme}).
+
+\todo[inline]{Ergebnis der Kalibrierung im Labor eintragen (Restfehler je Marker, \acs{rms})
+und Versatz aus dem Zeigetest an mehreren Stellen des Arbeitsbereichs.}
 
 % ------------------------------------------------------------------------------
 \section{Test- und Inbetriebnahmestrategie}
@@ -339,7 +387,8 @@ Roboter.
     \midrule
     Mock & zufällige Pose im Arbeitsbereich & Bewegungen werden nur protokolliert, Arbeitsraumgrenzen werden geprüft & zufälliges Prüfergebnis, überwiegend Gutteile \\
     Wiedergabe & gespeicherte Testfotos & -- & gespeicherte Testfotos \\
-    Simulation & -- & Nachbildung der Robotersteuerung mit gleichem Protokoll & -- \\
+    Simulation & -- & eigene Nachbildung der Robotersteuerung mit gleichem Protokoll & -- \\
+    \ac{vm} & -- & offizielle Simulation der Steuerung als virtuelle Maschine des Herstellers & -- \\
     Real & Live-Bild der Top-down-Kamera & realer Roboter & Live-Bild der Seitenkamera \\
     \bottomrule
   \end{tabularx}
@@ -352,7 +401,12 @@ Kamerazugriff getrennt ist, durchläuft ein Testfoto denselben Programmcode wie 
 In der Simulationsstufe spricht die Robotersteuerung mit einer Nachbildung der Steuerung,
 die dasselbe Kommunikationsprotokoll verwendet. So wird der komplette Programmpfad der
 Robotersteuerung einschließlich der unveränderten Herstellerbibliothek ausgeführt, ohne dass
-sich ein Roboter bewegt.
+sich ein Roboter bewegt. Die eigene Nachbildung kennt keine Kinematik. Die \ac{vm} des
+Herstellers rechnet dagegen mit dem echten Robotermodell und der echten
+Steuerungssoftware, sodass Erreichbarkeit, Bewegungsarten und Werkzeugdaten vor dem ersten
+Test am Roboter geprüft werden können. Das lernbasierte Greifen aus \cref{ch:kigreifen} bringt
+eigene Stufen mit: eine eigene Simulation des Roboters, die \ac{vm} und den realen Roboter,
+jeweils wahlweise mit Platzhalterbildern statt echter Kameras.
 
 Damit lassen sich große Teile der Software ohne Roboter testen. Das ersetzt jedoch nicht die
 Erprobung an der realen Anlage, bei der Einflüsse wie Beleuchtung, Greifverhalten und

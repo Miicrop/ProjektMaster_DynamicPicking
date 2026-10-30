@@ -1,8 +1,8 @@
 \chapter{Integration und Bedienung}
 \label{ch:integration}
 
-Die \cref{ch:objekterkennung,ch:robotersteuerung,ch:sichtpruefung} haben die Module einzeln
-beschrieben. Dieses Kapitel zeigt, wie sie zu einem lauffähigen Gesamtsystem zusammengesetzt
+Die \cref{ch:objekterkennung,ch:robotersteuerung,ch:sichtpruefung,ch:kigreifen} haben die
+Module einzeln beschrieben. Dieses Kapitel zeigt, wie sie zu einem lauffähigen Gesamtsystem zusammengesetzt
 werden: wie ein Arbeitszyklus abläuft, wie das System konfiguriert und bedient wird, wie es
 auf Fehler reagiert und wie die Ergebnisse protokolliert werden.
 
@@ -12,43 +12,47 @@ auf Fehler reagiert und wie die Ergebnisse protokolliert werden.
 
 Ein Arbeitszyklus folgt dem Zustandsautomaten aus \cref{sec:architektur}.
 \Cref{fig:sequenz} zeigt die Aufrufe, die der Orchestrator dabei an die Module richtet.
-Zuerst liefert die Objekterkennung die Pose des Bauteils. Die Robotersteuerung greift das
-Bauteil, legt es an der Prüfposition ab und fährt anschließend in die Ruheposition, damit der
-Roboterarm das Sichtfeld der Seitenkamera freigibt. Danach prüft die Sichtprüfung das Bauteil.
-Abhängig vom Ergebnis nimmt der Roboter das Bauteil wieder auf, legt es auf der Ablage für
-Gut- oder Schlechtteile ab und kehrt in die Ruheposition zurück. Damit ist der Zyklus
-beendet, und der nächste kann beginnen.
+Zuerst liefert die Objekterkennung die Pose des Bauteils. Das Greifen übernimmt je nach
+Einstellung die Robotersteuerung oder das lernbasierte Greifen; in beiden Fällen liegt das
+Bauteil danach auf der Prüfposition, und der Roboter wartet auf Anfahrhöhe darüber, außerhalb
+des Bilds der Seitenkamera. Danach prüft die Sichtprüfung das Bauteil. Abhängig vom Ergebnis
+nimmt der Roboter das Bauteil wieder auf, legt es auf der Ablage für Gut- oder Schlechtteile
+ab und kehrt in die Ruheposition zurück. Damit ist der Zyklus beendet, und der nächste kann
+beginnen.
 
 \begin{figure}[htbp]
   \centering
   \begin{tikzpicture}[
-      head/.style={draw, rounded corners, fill=black!5, minimum width=24mm, minimum height=8mm, font=\small},
+      head/.style={draw, rounded corners, fill=black!5, minimum width=24mm, minimum height=8mm,
+                   font=\small, align=center},
       msg/.style={-{Stealth[length=2mm]}, thick},
       ret/.style={-{Stealth[length=2mm]}, dashed},
       lbl/.style={font=\scriptsize, above, inner sep=1pt}]
-    \def\yend{-11.2}
-    \foreach \x/\n/\t in {0/o/Orchestrator, 3.8/m1/M1 Erkennung, 7.6/m2/M2 Roboter, 11.4/m3/M3 Prüfung} {
+    \def\yend{-10.4}
+    \foreach \x/\n/\t in {0/o/Orchestrator, 3.2/m1/M1 Erkennung, 6.4/g/Greifen\\(M2 oder M4),
+                          9.6/m2/M2 Roboter, 12.8/m3/M3 Prüfung} {
       \node[head] (\n) at (\x,0) {\t};
-      \draw[black!40] (\x,-0.4) -- (\x,\yend);
+      \draw[black!40] (\x,-0.5) -- (\x,\yend);
     }
-    \draw[msg] (0,-1.0) -- node[lbl] {\texttt{detect()}} (3.8,-1.0);
-    \draw[ret] (3.8,-1.6) -- node[lbl] {\texttt{ObjectPose}} (0,-1.6);
-    \draw[msg] (0,-2.4) -- node[lbl, pos=0.75] {\texttt{pick(pose)}} (7.6,-2.4);
-    \draw[msg] (0,-3.2) -- node[lbl, pos=0.75] {\texttt{place(inspection)}} (7.6,-3.2);
-    \draw[msg] (0,-4.0) -- node[lbl, pos=0.75] {\texttt{home()}} (7.6,-4.0);
-    \draw[msg] (0,-4.8) -- node[lbl, pos=0.85] {\texttt{inspect()}} (11.4,-4.8);
-    \draw[ret] (11.4,-5.4) -- node[lbl, pos=0.15] {\texttt{InspectionResult}} (0,-5.4);
-    \draw[msg] (0,-6.2) -- node[lbl, pos=0.75] {\texttt{pick(inspection)}} (7.6,-6.2);
-    \draw[black!50, rounded corners] (-0.6,-6.7) rectangle (12.4,-9.6);
-    \node[font=\scriptsize, anchor=north west, fill=black!5, draw=black!50] at (-0.6,-6.7) {alt};
-    \node[font=\scriptsize, anchor=west] at (0.4,-7.05) {[Gutteil]};
-    \draw[msg] (0,-7.5) -- node[lbl, pos=0.75] {\texttt{place(bin\_good)}} (7.6,-7.5);
-    \draw[black!50, dash pattern=on 2pt off 2pt] (-0.6,-8.1) -- (12.4,-8.1);
-    \node[font=\scriptsize, anchor=west] at (0.4,-8.45) {[Schlechtteil]};
-    \draw[msg] (0,-8.9) -- node[lbl, pos=0.75] {\texttt{place(bin\_bad)}} (7.6,-8.9);
-    \draw[msg] (0,-10.4) -- node[lbl, pos=0.75] {\texttt{home()}} (7.6,-10.4);
+    \draw[msg] (0,-1.1) -- node[lbl] {\texttt{detect()}} (3.2,-1.1);
+    \draw[ret] (3.2,-1.7) -- node[lbl] {\texttt{ObjectPose}} (0,-1.7);
+    \draw[msg] (0,-2.5) -- node[lbl, pos=0.7] {\texttt{pick(pose)}} (6.4,-2.5);
+    \draw[msg] (0,-3.3) -- node[lbl, pos=0.7] {\texttt{place(inspection)}} (6.4,-3.3);
+    \draw[msg] (0,-4.1) -- node[lbl, pos=0.88] {\texttt{inspect()}} (12.8,-4.1);
+    \draw[ret] (12.8,-4.7) -- node[lbl, pos=0.12] {\texttt{InspectionResult}} (0,-4.7);
+    \draw[msg] (0,-5.5) -- node[lbl, pos=0.8] {\texttt{pick(inspection)}} (9.6,-5.5);
+    \draw[black!50, rounded corners] (-0.6,-6.0) rectangle (13.8,-8.9);
+    \node[font=\scriptsize, anchor=north west, fill=black!5, draw=black!50] at (-0.6,-6.0) {alt};
+    \node[font=\scriptsize, anchor=west] at (0.4,-6.35) {[Gutteil]};
+    \draw[msg] (0,-6.8) -- node[lbl, pos=0.8] {\texttt{place(bin\_good)}} (9.6,-6.8);
+    \draw[black!50, dash pattern=on 2pt off 2pt] (-0.6,-7.4) -- (13.8,-7.4);
+    \node[font=\scriptsize, anchor=west] at (0.4,-7.75) {[Schlechtteil]};
+    \draw[msg] (0,-8.2) -- node[lbl, pos=0.8] {\texttt{place(bin\_bad)}} (9.6,-8.2);
+    \draw[msg] (0,-9.7) -- node[lbl, pos=0.8] {\texttt{home()}} (9.6,-9.7);
   \end{tikzpicture}
-  \caption{Aufrufe des Orchestrators an die Module während eines Arbeitszyklus}
+  \caption{Aufrufe des Orchestrators an die Module während eines Arbeitszyklus. Greifen und
+  Ablegen an der Prüfposition laufen über die Schnittstelle \texttt{Grasper}: entweder direkt
+  über M2 oder mit der Policy von M4, die anschließend über M2 ablegt.}
   \label{fig:sequenz}
 \end{figure}
 
@@ -75,6 +79,7 @@ Konfigurationsdatei im YAML-Format. Dazu gehören:
   \item Netzwerkadresse, Werkzeug, Geschwindigkeiten, Arbeitsraumgrenzen und feste Posen des
         Roboters,
   \item Sollwerte und Format der Prüfmerkmale,
+  \item für Modul~4 das trainierte Modell, die Kameras und die Zeitgrenze einer Fahrt,
   \item die standardmäßig verwendete Implementierung jedes Moduls.
 \end{itemize}
 
@@ -94,11 +99,15 @@ Wege dasselbe System aufbauen.
     Erkennung & \texttt{mock}   & zufällige Pose, keine Kamera \\
               & \texttt{replay} & Objekterkennung auf gespeicherten Testfotos \\
               & \texttt{camera} & Objekterkennung auf dem Live-Bild der Top-down-Kamera \\
-              & \texttt{ai}     & lernbasierter Ansatz aus \cref{ch:kigreifen} \\
     \midrule
     Roboter   & \texttt{mock}   & Bewegungen werden nur protokolliert \\
-              & \texttt{sim}    & Robotersteuerung gegen die Nachbildung der Steuerung \\
+              & \texttt{sim}    & Robotersteuerung gegen die eigene Nachbildung der Steuerung \\
+              & \texttt{vm}     & Robotersteuerung gegen die \ac{vm} des Herstellers \\
               & \texttt{real}   & realer Roboter \\
+    \midrule
+    Greifen   & \texttt{robot}  & M2 greift an der erkannten Pose und legt ab \\
+              & \texttt{bc}     & die Policy von M4 greift bis zum Übergabepunkt, M2 legt ab
+                                  (\cref{ch:kigreifen}) \\
     \midrule
     Prüfung   & \texttt{mock}   & zufälliges Prüfergebnis, keine Kamera \\
               & \texttt{replay} & Sichtprüfung auf gespeicherten Testfotos \\
@@ -112,7 +121,7 @@ Wege dasselbe System aufbauen.
 \label{sec:int-gui}
 
 Für Inbetriebnahme und Betrieb gibt es eine grafische Bedienoberfläche (\ac{gui}), die mit
-dem Framework Qt über dessen Python-Anbindung PySide6 umgesetzt ist. Sie ist in fünf Reiter
+dem Framework Qt über dessen Python-Anbindung PySide6 umgesetzt ist. Sie ist in sechs Reiter
 gegliedert (\cref{tab:gui-reiter}). Unter den Reitern zeigt ein Protokollfenster laufend die
 Meldungen aller Module an.
 
@@ -124,17 +133,23 @@ Meldungen aller Module an.
     \toprule
     Reiter & Funktion \\
     \midrule
-    Ablauf & Auswahl der Varianten, einzelner Zyklus oder Dauerbetrieb, Anzeige des aktuellen
-             Zustands, der Bilder von Erkennung und Prüfung, einer Draufsicht auf den
-             Roboterarbeitsraum sowie einer Tabelle und Zählung der Ergebnisse \\
+    Ablauf & Auswahl der Varianten für Erkennung, Roboter, Prüfung und Greifen (M2 oder M4),
+             einzelner Zyklus oder Dauerbetrieb mit einstellbarer Pause, Anzeige des aktuellen
+             Zustands, der Bilder von Erkennung und Prüfung direkt nach dem jeweiligen Schritt,
+             einer Draufsicht auf den Roboterarbeitsraum sowie einer Tabelle und Zählung der
+             Ergebnisse; optional Speichern der Bilder und Zwischenschritte \\
     M1 Erkennung & Bild aus Kamera, Testfoto oder Datei holen und analysieren, optional
              fortlaufend; Anzeige des Kamerabilds mit erkannten Markern und der entzerrten
              Draufsicht mit Pose \\
-    M2 Roboter & Verbinden mit Simulator oder realem Roboter, Status, Greifer öffnen und
-             schließen, feste Posen anfahren, aktuelle Roboterpose als feste Pose übernehmen
-             (Teachen), Stopp und Freigabe \\
+    M2 Roboter & Verbinden mit Simulator, \ac{vm} oder realem Roboter, Status, Greifer öffnen
+             und schließen, Tippbetrieb, Stopp und Freigabe; Seiten für die Inbetriebnahme
+             (Erste Schritte, Achsentest, Posen teachen, Kalibrierung, Zeigetest,
+             \cref{sec:m2-inbetriebnahme}) \\
     M3 Prüfung & wie M1 für die Seitenkamera; Anzeige der Prüfbereiche und der erkannten
              Merkmale zum Einstellen der Parameter \\
+    M4 Behavior Cloning & Verbindung zu Simulation, \ac{vm} oder realem Roboter mit Override
+             und Freigabe der realen Anlage; Unterreiter Systemcheck, Aufnahme, Training,
+             Betrieb und Konsole (\cref{ch:kigreifen}) \\
     Einstellungen & alle Werte der Konfigurationsdatei als bearbeitbarer Baum; Änderungen
              wirken sofort, Speichern schreibt die Datei unter Erhalt der Kommentare \\
     \bottomrule
@@ -143,15 +158,46 @@ Meldungen aller Module an.
 
 \begin{figure}[htbp]
   \centering
-  \missingfigure[figwidth=0.9\textwidth]{Screenshot Reiter \enquote{Ablauf} während eines Zyklus}
-  \caption{Bedienoberfläche, Reiter \enquote{Ablauf}}
+  \includegraphics[width=\textwidth]{gui/auto.png}
+  \caption{Bedienoberfläche, Reiter \enquote{Ablauf} nach drei Zyklen mit Testfotos und
+  simuliertem Roboter. Oben die Auswahl der Varianten, darunter die Ablaufkette, die Bilder
+  von Erkennung und Prüfung, die Draufsicht auf den Roboterarbeitsraum und die
+  Ergebnistabelle.}
   \label{fig:gui-ablauf}
 \end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{gui/robot.png}
+  \caption{Bedienoberfläche, Reiter \enquote{M2 Roboter} mit dem Simulator verbunden: links
+  Verbindung, Status, Override und Tippbetrieb, rechts die Draufsicht und die Seiten für die
+  Inbetriebnahme}
+  \label{fig:gui-roboter}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{gui/m4.png}
+  \caption{Bedienoberfläche, Reiter \enquote{M4 Behavior Cloning}, Unterreiter Systemcheck}
+  \label{fig:gui-m4}
+\end{figure}
+
+\todo[inline]{Screenshots mit echten Kamerabildern am Aufbau ersetzen, sobald vorhanden; für M4
+z.\,B.\ den Unterreiter \enquote{Aufnahme} mit Live-Bildern beider Kameras.}
 
 Alle Reiter greifen auf eine gemeinsame Sitzung zu, die Konfiguration, Kameras und
 Roboterverbindung hält. Eine Kamera oder eine Roboterverbindung wird dadurch nur einmal
 geöffnet, auch wenn sie in mehreren Reitern genutzt wird, und Einzeltests in den Modulreitern
 und der automatische Ablauf verwenden dieselbe Hardware.
+
+Modul~4 baut eine eigene Verbindung zur Robotersteuerung auf und öffnet die Draufsichtkamera
+selbst als Szenenkamera. Damit nie zwei Seiten gleichzeitig den Roboter bewegen, regelt die
+Oberfläche den Zugriff: Wer den Roboter braucht, übernimmt ihn, und die andere Seite wird
+getrennt, sofern sie gerade nichts tut. Läuft auf der anderen Seite noch ein Zyklus, eine
+Aufnahme oder eine Fahrt, wird die Übernahme mit einer Meldung abgelehnt. Ebenso gibt die
+Objekterkennung die Draufsichtkamera frei, bevor Modul~4 sie öffnet. Training und Ausführung
+der Policy laufen als Unterprozess in einer eigenen Python-Umgebung
+(\cref{sec:m4-integration}), die ein Einrichtungsskript anlegt.
 
 Damit die Oberfläche während langer Roboterbewegungen oder Bildverarbeitungsschritte
 bedienbar bleibt, laufen diese Aufgaben in eigenen Hintergrund-Threads. Alle Befehle an den
@@ -173,12 +219,15 @@ zurück.
 
 Zusätzlich gibt es in der Oberfläche einen Stopp-Knopf, der den Roboter unabhängig vom
 Zustand des Ablaufs sofort anhält. Er läuft in einem eigenen Thread, damit er nicht hinter
-einer gerade laufenden Bewegung in der Warteschlange des Roboter-Threads wartet. Der
-Software-Stopp ergänzt den Hardware-Not-Halt, ersetzt ihn aber nicht.
+einer gerade laufenden Bewegung in der Warteschlange des Roboter-Threads wartet. Greift gerade
+Modul~4, bricht der Stopp auch dessen Fahrt ab. Der Software-Stopp ergänzt den
+Hardware-Not-Halt, ersetzt ihn aber nicht.
 
 Bevor der Roboter an der realen Anlage aus der Oberfläche heraus bewegt wird, fragt ein Dialog,
-ob der Arbeitsraum frei ist und der Not-Halt in Reichweite. Im Dauerbetrieb kann der Ablauf
-außerdem so angehalten werden, dass der laufende Zyklus noch zu Ende geführt wird.
+ob der Arbeitsraum frei ist und der Not-Halt in Reichweite. Greift im Ablauf Modul~4, nennt der
+Dialog das ausdrücklich; die Bestätigung ersetzt die Freigabe, die Modul~4 für Fahrten am realen
+Roboter verlangt (\cref{sec:m4-sicherheit}). Im Dauerbetrieb kann der Ablauf außerdem so
+angehalten werden, dass der laufende Zyklus noch zu Ende geführt wird.
 
 % ------------------------------------------------------------------------------
 \section{Protokollierung}
@@ -188,7 +237,11 @@ Jeder Zyklus wird als Zeile in einer \ac{csv}-Datei protokolliert; pro Tag entst
 Datei. Eine Zeile enthält Zeitpunkt und Nummer des Zyklus, ob er erfolgreich war, bei einem
 Fehler dessen Meldung, die Dauer, die erkannte Pose, die Prüfergebnisse (Seriennummer,
 Lochdurchmesser, Kerbe), das Gesamturteil und die Gründe für ein Schlechtteil. Optional werden
-zu jedem Zyklus die Zwischenbilder von Objekterkennung und Sichtprüfung mit eingezeichneten
-Ergebnissen gespeichert, sodass sich einzelne Zyklen nachträglich nachvollziehen lassen.
+zu jedem Zyklus die Ergebnisbilder von Objekterkennung und Sichtprüfung gespeichert, auf
+Wunsch zusammen mit allen Zwischenschritten der Bildverarbeitung (13 Bilder der
+Objekterkennung, 14 der Sichtprüfung). So lassen sich einzelne Zyklen nachträglich
+nachvollziehen; die Abbildungen in \cref{ch:objekterkennung,ch:sichtpruefung} stammen aus
+dieser Funktion. Fahrten von Modul~4 werden zusätzlich von dessen eigener Protokollierung
+erfasst (\cref{sec:m4-inferenz}).
 
 Diese Protokolle sind die Datengrundlage für die Evaluation in \cref{ch:evaluation}.

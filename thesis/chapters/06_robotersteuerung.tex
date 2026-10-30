@@ -27,8 +27,14 @@ Bevor der Roboter Bewegungen ausführt, wird er vorbereitet: Die Antriebe werden
 eingeschaltet, die Steuerung wird bei Bedarf vom Handbetrieb in den Automatikbetrieb
 umgeschaltet, das Werkzeug des Greifers wird ausgewählt, und Geschwindigkeitsbegrenzungen
 werden gesetzt. Abschließend wird auf der Steuerung ein Bewegungsprogramm gestartet, ohne das
-keine Bewegungsbefehle angenommen werden. Diese Vorbereitung läuft beim Verbinden und nach
-jedem Stopp erneut ab.
+keine Bewegungsbefehle angenommen werden. Diese Vorbereitung läuft beim Verbinden, nach
+jedem Stopp und nach einer Fahrt des lernbasierten Greifens (\cref{sec:m4-integration})
+erneut ab, da dieses eigene Einstellungen an der Steuerung vornimmt.
+
+Beim Verbinden vergleicht die Robotersteuerung außerdem den \ac{tcp} des ausgewählten Werkzeugs
+mit dem in der Konfiguration erwarteten Wert. Weichen beide um mehr als \SI{1}{\milli\metre}
+voneinander ab, verweigert sie jede Bewegung. Alle Posen beziehen sich auf den \ac{tcp}; ein
+falscher Werkzeugeintrag würde jede Zielpose um die Differenz verschieben.
 
 Für die Bewegungen werden zwei Bewegungsarten genutzt (\cref{sec:robotik}):
 \begin{itemize}
@@ -49,24 +55,34 @@ abgeleitet. Die Position übernimmt $x$ und $y$ direkt; die Höhe ergibt sich au
 Tischhöhe plus einer festen Greifhöhe, die von Bauteil und Greifer abhängt. Der Greifer zeigt
 immer senkrecht nach unten. Dazu wird die Orientierung der Ruheposition übernommen und nur um
 die Hochachse des Roboters gedreht, und zwar um den erkannten Bauteilwinkel $\theta$ plus
-einen festen Greifer-Offset. Der Offset von \ang{90} sorgt dafür, dass sich die Greiferbacken
-quer zur Längsachse schließen, also an den beiden langen Seiten des Bauteils anliegen. Der
-resultierende Winkel wird auf den Bereich \ang{-180} bis \ang{180} normiert.
+einen festen Greifer-Offset. Der Offset setzt sich aus zwei Teilen zusammen: \ang{90} sorgen
+dafür, dass sich die Greiferbacken quer zur Längsachse schließen, also an den beiden langen
+Seiten des Bauteils anliegen. Weitere \ang{23} gleichen aus, dass der Greifer gegenüber dem
+Flansch verdreht montiert ist. Der Offset beträgt damit \ang{113}. Der resultierende Winkel
+wird auf den Bereich \ang{-180} bis \ang{180} normiert.
 
-\todo[inline]{Greifer-Offset und Drehrichtung der Hochachse bei nach unten zeigendem Werkzeug
-(roll = \ang{180}) am realen Roboter prüfen.}
+Die Drehrichtung wurde in der \ac{vm} mit einem Achsentest geprüft: Eine positive Drehung um
+die Hochachse dreht das nach unten zeigende Werkzeug von oben gesehen gegen den Uhrzeigersinn,
+passend zur Formel.
+
+Ein erster, grober Zeigetest am realen Roboter bestätigte den Greifwinkel. Ein genauer
+Zeigetest mit der endgültigen Kamera steht noch aus.
 
 % ------------------------------------------------------------------------------
 \section{Greif- und Ablegesequenz}
 \label{sec:m2-sequenz}
 
 Greifen und Ablegen laufen nach demselben Muster ab: Der Roboter fährt zunächst eine
-Vorposition oberhalb des Ziels an, senkt sich dann langsam und geradlinig ab, schließt bzw.\
-öffnet den Greifer und hebt wieder auf die Vorposition an (\cref{fig:m2-pick}). Die
-Vorposition liegt einen festen Sicherheitsabstand über dem Ziel, sodass der Roboter bei der
-schnelleren Gelenkbewegung nicht mit dem Bauteil oder dem Tisch kollidiert. Nach dem Schließen
-und Öffnen des Greifers wird eine kurze Zeit gewartet, bis der Greifer seine Endlage erreicht
-hat.
+Vorposition oberhalb des Ziels an, senkt sich dann geradlinig ab, schließt bzw.\ öffnet den
+Greifer und hebt wieder auf die Vorposition an (\cref{fig:m2-pick}). Die Vorposition liegt
+\SI{80}{\milli\metre} über dem Ziel, sodass der Roboter bei der schnelleren Gelenkbewegung
+nicht mit dem Bauteil oder dem Tisch kollidiert.
+
+Das Absenken erfolgt in zwei Stufen. Bis \SI{20}{\milli\metre} über dem Ziel fährt der
+Roboter mit \SI{0.10}{\metre\per\second}, den Rest mit \SI{0.03}{\metre\per\second}. Beim
+Anheben ist es umgekehrt. So bleibt die Annäherung an Bauteil und Tisch langsam, während
+der größte Teil des Wegs zügig zurückgelegt wird. Nach dem Schließen und Öffnen des Greifers
+wird eine kurze Zeit gewartet, bis der Greifer seine Endlage erreicht hat.
 
 \begin{figure}[htbp]
   \centering
@@ -92,8 +108,12 @@ hat.
       \node[font=\scriptsize, anchor=south] at (2.5,4.1) {\acs{ptp}};
       \draw[pap arr] (4.6,2.6) -- (4.6,1.05);
       \draw[pap arr] (5.0,1.05) -- (5.0,2.6);
-      \node[stepnr] at (4.6,1.8) {2};
-      \node[stepnr] at (5.0,1.8) {4};
+      \draw[very thick, black!55] (4.52,1.45) -- (4.68,1.45);
+      \draw[very thick, black!55] (4.92,1.45) -- (5.08,1.45);
+      \node[stepnr] at (4.6,2.05) {2};
+      \node[stepnr] at (5.0,2.05) {4};
+      \draw[densely dotted] (5.1,1.45) -- (6.0,1.45);
+      \node[font=\scriptsize, anchor=west] at (6.0,1.45) {$s$};
       \node[stepnr] at (5.85,0.8) {3};
       \draw[densely dotted] (3.6,2.7) -- (4.7,2.7);
       \draw[densely dotted] (3.6,0.3) -- (4.13,0.3);
@@ -111,57 +131,84 @@ hat.
       vorab & $Z$ aus erkannter Pose, $V$ und $Z$ prüfen, Greifer öffnen
             & $Z$ = benannte Pose, $V$ und $Z$ prüfen \\
       \stepmark{1} & \multicolumn{2}{l}{\acs{ptp} nach $V$} \\
-      \stepmark{2} & \multicolumn{2}{l}{\acs{lin} nach $Z$, langsam} \\
+      \stepmark{2} & \multicolumn{2}{l}{\acs{lin} nach $Z$, ab $s$ langsam} \\
       \stepmark{3} & Greifer schließen, warten & Greifer öffnen, warten \\
-      \stepmark{4} & \multicolumn{2}{l}{\acs{lin} zurück nach $V$} \\
+      \stepmark{4} & \multicolumn{2}{l}{\acs{lin} zurück nach $V$, bis $s$ langsam} \\
       \bottomrule
     \end{tabularx}
   \end{minipage}
   \caption{Greif- und Ablegesequenz: Bewegung in der Seitenansicht (links) und Schritte von
-  \texttt{pick} und \texttt{place} (rechts). Die Vorposition $V$ liegt um den
-  Sicherheitsabstand $h$ über der Zielpose $Z$. Geprüft wird gegen die Arbeitsraumgrenzen.}
+  \texttt{pick} und \texttt{place} (rechts). Die Vorposition $V$ liegt um
+  $h = \SI{80}{\milli\metre}$ über der Zielpose $Z$; ab $s = \SI{20}{\milli\metre}$ über $Z$
+  fährt der Roboter langsam. Geprüft wird gegen die Arbeitsraumgrenzen.}
   \label{fig:m2-pick}
 \end{figure}
 
 Das Greifen an der Prüfposition nutzt dieselbe Sequenz. Statt einer erkannten Pose wird
 dabei die fest hinterlegte Pose der Prüfposition übergeben, da das Bauteil dort in bekannter
-Lage liegt.
+Lage liegt. Nach dem Ablegen an der Prüfposition fährt der Roboter nicht in die
+Ruheposition, sondern bleibt auf der Vorposition über der Prüfvorrichtung stehen. Dort ist der
+Greifer nicht im Bild der Seitenkamera, und nach der Prüfung kann der Roboter ohne
+Gelenkbewegung direkt wieder absenken.
 
-\todo[inline]{Greifer-Rückmeldung auswerten: Nach dem Schließen prüfen, ob tatsächlich ein
-Bauteil gegriffen wurde.}
+Am realen Roboter greift die Sequenz das Bauteil zuverlässig. Eine Rückmeldung, ob nach dem
+Schließen tatsächlich ein Bauteil zwischen den Backen liegt, wird nicht ausgewertet. Sollte
+ein Griff fehlschlagen, ist die wahrscheinlichste Ursache ein Versatz der erkannten Pose durch
+die Parallaxe (\cref{sec:m1-transformation}); das lässt sich erst mit der endgültigen
+Top-down-Kamera prüfen.
 
 % ------------------------------------------------------------------------------
 \section{Feste Posen}
 \label{sec:m2-posen}
 
 Neben der erkannten Bauteilpose fährt der Roboter vier feste Posen an
-(\cref{tab:m2-posen}). Sie werden am realen Aufbau im Handbetrieb angefahren (geteacht) und
-in die Konfiguration übernommen. Die Ruheposition ist als benannter Punkt auf der Steuerung
-gespeichert und wird direkt in Gelenkkoordinaten angefahren.
+(\cref{tab:m2-posen}). Die drei Ablagen wurden am realen Aufbau angefahren
+(geteacht) und in die Konfiguration übernommen. Jede Pose ist die genaue Ablegepose
+einschließlich ihrer Höhe; an der Prüfposition liegt sie auf der Auflage der Prüfvorrichtung.
+Die Ruheposition ist als benannter Punkt auf der Steuerung gespeichert und wird direkt in
+Gelenkkoordinaten angefahren.
 
 \begin{table}[htbp]
   \centering
-  \caption{Feste Posen des Roboters}
+  \caption[Feste Posen des Roboters]{Feste Posen des Roboters (\ac{tcp} im Basis-\ac{ks};
+  Position in mm, Drehung um die Hochachse $r_z$ in Grad)}
   \label{tab:m2-posen}
-  \begin{tabularx}{\textwidth}{@{}l X@{}}
+  \begin{tabularx}{\textwidth}{@{}l r r r r X@{}}
     \toprule
-    Pose & Zweck \\
+    Pose & $x$ & $y$ & $z$ & $r_z$ & Zweck \\
     \midrule
-    \texttt{home} & Ruheposition außerhalb der Kamerabilder; Start- und Endpunkt \\
-    \texttt{inspection} & Ablage an der Prüfposition im Sichtfeld der Seitenkamera \\
-    \texttt{bin\_good} & Ablage für Gutteile \\
-    \texttt{bin\_bad} & Ablage für Schlechtteile \\
+    \texttt{home} & 420,0 & 0,0 & 237,0 & 180 & Ruheposition außerhalb der Kamerabilder;
+      Start- und Endpunkt \\
+    \texttt{inspection} & 520,8 & 199,6 & 42,0 & $-157$ & Ablage an der Prüfposition im
+      Sichtfeld der Seitenkamera \\
+    \texttt{bin\_good} & 299,7 & 185,4 & 4,0 & $-157$ & Ablage für Gutteile \\
+    \texttt{bin\_bad} & 297,7 & 319,4 & 3,0 & $-157$ & Ablage für Schlechtteile \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
-\todo[inline]{Posen am realen Roboter teachen und eintragen. Wiederholgenauigkeit an der
-Prüfposition beurteilen, da die Sichtprüfung eine reproduzierbare Lage voraussetzt.}
+Geteacht wird über eine eigene Seite der Bedienoberfläche oder das Prüfprogramm
+(\cref{sec:m2-inbetriebnahme}): Der Bediener fährt den Greifer im Tippbetrieb an die
+gewünschte Stelle, und die aktuelle \ac{tcp}-Pose wird unter dem Namen der Pose übernommen.
+
+\todo[inline]{Wiederholgenauigkeit an der Prüfposition beurteilen, da die Sichtprüfung eine
+reproduzierbare Lage voraussetzt.}
 
 % ------------------------------------------------------------------------------
 \section{Kalibrierung zwischen Kamera und Roboter}
 \label{sec:m2-kalibrierung}
-\todo[inline]{Verfahren noch offen (siehe \cref{sec:koordinatensysteme}).}
+
+Die Robotersteuerung stellt für die Kalibrierung aus \cref{sec:koordinatensysteme} die
+Werkzeuge bereit: Tippbetrieb, das Übernehmen der \ac{tcp}-Position an jedem Marker und den
+Zeigetest, bei dem der Greifer über einem erkannten Bauteil stehen bleibt, ohne zu greifen.
+Die Transformation selbst rechnet ein gemeinsames Paket der Software aus, sodass
+Objekterkennung und Robotersteuerung dieselben Werte verwenden.
+
+Am realen Aufbau wurde die Transformation eingemessen. Sie besteht aus einer Drehung um
+\ang{0.35}, einer Verschiebung um $(205{,}1;\ -319{,}7)$~\si{\milli\metre} und einer Tischhöhe
+von \SI{2,1}{\milli\metre} im Roboter-\ac{ks}.
+
+\todo[inline]{Restfehler der Kalibrierung (\acs{rms}) und Ergebnis des Zeigetests ergänzen.}
 
 % ------------------------------------------------------------------------------
 \section{Sicherheitskonzept}
@@ -173,8 +220,11 @@ Softwaremaßnahmen:
 
 \begin{description}
   \item[Reduzierte Geschwindigkeit] Im Testbetrieb sind die globale Geschwindigkeit der
-    Steuerung und die Gelenkgeschwindigkeit auf \SI{20}{\percent} begrenzt. Die geradlinige
-    Annäherung an das Bauteil erfolgt zusätzlich mit geringer Geschwindigkeit.
+    Steuerung und die Gelenkgeschwindigkeit auf \SI{20}{\percent} begrenzt. Geradlinige
+    Bewegungen fahren höchstens \SI{0.10}{\metre\per\second}, die letzten
+    \SI{20}{\milli\metre} vor Bauteil und Tisch \SI{0.03}{\metre\per\second}.
+  \item[Werkzeugprüfung] Stimmt der \ac{tcp} des Werkzeugs in der Steuerung nicht mit der
+    Konfiguration überein, werden keine Bewegungen ausgeführt (\cref{sec:m2-api}).
   \item[Arbeitsraumgrenzen] Vor jeder Bewegung wird geprüft, ob die Zielpose und die
     Vorposition innerhalb eines festgelegten Quaders im Roboter-\ac{ks} liegen. Liegt eine
     Pose außerhalb, wird die Bewegung nicht ausgeführt, und die Robotersteuerung meldet einen
@@ -192,14 +242,35 @@ Softwaremaßnahmen:
 \label{sec:m2-inbetriebnahme}
 
 Für die schrittweise Inbetriebnahme am realen Roboter gibt es ein Prüfprogramm, das die
-Funktionen einzeln ausführt: Verbindung und Statusabfrage, Anfahren der Ruheposition,
-Öffnen und Schließen des Greifers, Anfahren einer festen Pose und schließlich ein
-vollständiger Greif- und Ablegevorgang. Dieselben Schritte stehen in der Bedienoberfläche
-zur Verfügung (\cref{ch:integration}). Vor dem Einsatz am Roboter wurde der gesamte
-Programmpfad gegen die Nachbildung der Steuerung getestet (\cref{sec:teststrategie}).
+Funktionen einzeln ausführt: Verbindung und Statusabfrage, Lesen der aktuellen Pose, Anfahren
+der Ruheposition, Öffnen und Schließen des Greifers, ein Achsentest, bei dem der Roboter
+nacheinander kleine Schritte entlang jeder Achse fährt, der Tippbetrieb, die Kalibrierung,
+der Zeigetest, das Teachen der festen Posen und schließlich ein vollständiger Greif- und
+Ablegevorgang an der Prüfposition. Dieselben Schritte stehen im Reiter der Robotersteuerung in
+der Bedienoberfläche zur Verfügung, gegliedert in die Seiten \enquote{Erste Schritte},
+\enquote{Achsentest}, \enquote{Posen teachen}, \enquote{Kalibrierung} und
+\enquote{Zeigetest} (\cref{ch:integration}). Am realen Roboter fragt jede Bewegung vorher
+nach; nur beim Tippen kann der Bediener diese Rückfrage für die laufende Sitzung abschalten,
+um viele kleine Schritte zügig fahren zu können.
 
-\todo[inline]{IP-Adresse, Werkzeug und Betriebsartwechsel am realen Roboter verifizieren.}
+Vor dem Einsatz am Roboter wurde der gesamte Programmpfad zunächst gegen die eigene
+Nachbildung der Steuerung und dann gegen die \ac{vm} des Herstellers getestet
+(\cref{sec:teststrategie}).
+
+Die Steuerung ist im Labornetz unter der Adresse 192.168.2.13 erreichbar.
 
 % ------------------------------------------------------------------------------
 \section{Zwischenfazit}
-\todo[inline]{Nach den Versuchen ergänzen: Was hat funktioniert, welche Probleme traten auf?}
+
+Die Robotersteuerung ist am realen Roboter in Betrieb genommen. Werkzeug, feste Posen und
+Kalibrierung sind eingerichtet, ein vollständiger Ablauf mit Erkennung und Prüfung auf
+Testbildern lief durch, und der Roboter greift das Bauteil zuverlässig. Bei der
+Inbetriebnahme zeigten sich drei Punkte, die in die beschriebene Lösung eingeflossen sind: Der
+Greifer ist um \ang{23} verdreht montiert (Offset \ang{113}), eine durchgehend langsame
+Annäherung kostet zu viel Zeit (zweistufiges Absenken), und der Arm muss nicht in die
+Ruheposition fahren, um das Bild der Seitenkamera freizugeben (Warten über der
+Prüfvorrichtung).
+
+\todo[inline]{Nach den Versuchen mit den echten Kameras ergänzen: Greifen an der erkannten
+Pose (Einfluss der Parallaxe), Wiederholgenauigkeit an der Prüfposition, aufgetretene
+Probleme.}

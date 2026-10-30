@@ -1,113 +1,115 @@
 # 07 – Erledigt
 
-Neueste Einträge oben. Format: `YYYY-MM-DD – Wer – Was`
+Neueste Einträge oben. Offenes steht in [06_offen.md](06_offen.md).
 
-## 2026-10-28 – Niklas
-- **M4 übernommen:** Behavior Cloning (Diffusion Policy) von Jeremy per `git subtree` aus
-  `joshi99999/Dynamic_Robot_Project` (Ordner `Behavior Cloning/`, mit Historie) nach
-  `code/m4_behavior_cloning/`. Sein Code bleibt nutzbar wie gewohnt (`BC-Oberflaeche.bat`).
-- **GUI:** Reiter „M4 Behavior Cloning“ zwischen M3 und Einstellungen (`gui/tab_m4.py`), aufgebaut wie
-  sein Fenster: Backend-Leiste + Systemcheck, Aufnahme, Training, Betrieb, Konsole; `--tab m4`.
-- **Ablauf:** Greifen „M4 Behavior Cloning“ (`--grasper bc`, `orchestrator/m4_grasper.py`): die Policy
-  greift (`apps/infer.py`, eine Fahrt) und hält am Übergabepunkt PRE_PLACE ~9 cm über der Prüfung, M2
-  stellt Tool/Override wieder her und legt ab. Einstellungen `m4.*` (Modell, Kameras, Timeout).
-- **Gemeinsamer Roboterzugriff** (`gui/robot_access.py`): M2/Ablauf und M4 schalten automatisch um,
-  belegt → Meldung statt Umschaltung. Gleiches für die Draufsichtkamera (= Szenenkamera von M4).
-- **Kamera oben = Daheng VEN-161:** `source: daheng:<Seriennummer>` (`common/camera.py`, nutzt den
-  Daheng-Code von M4); `python -m common.camera` listet Daheng-Kameras mit Seriennummer.
-- **Zwei Python-Umgebungen:** GUI wie bisher (3.11), M4 eigene venv (3.12, torch, lerobot), eingerichtet
-  per `code/setup_m4.bat` (CUDA oder CPU). Grund: lerobot braucht 3.12, torch/OpenCV kollidieren mit EasyOCR.
-- Platzhalter `m4_ai_grasping` (`AiGrasper`, `--grasper ai`) und Config `wrist_camera` entfernt.
-- **Neura-VM:** Übergabe M2 → M4 → M2 getestet (zwei gleichzeitige Verbindungen, danach `reset()` und
-  Ablegen durch M2 fehlerfrei). Werkzeug `ZimmerLWR50` in der VM angelegt (Offset Z noch eintragen).
-- 118 Tests grün (+ 468 von Jeremys Tests, 1 bekannte Ausnahme `test_rectify`).
+## Log
 
-## 2026-10-06 (2) – Niklas
-- **Labor:** Punkte vermessen, Roboter im M2-Tab und im Automatikbetrieb genutzt, erster vollständiger
-  Ablauf (noch ohne Greiferansteuerung und ohne Arbeitsraum-Kamera, M1/M3 mit Testbildern).
-- **GUI M2:** Haken *Ohne Rückfrage joggen* (nur Jog, Standard aus, Reset beim Trennen).
-- **M2:** Greifwinkel korrigiert: `gripper_angle_offset_deg` 90 → 113 (Greifer 23° verdreht montiert);
-  Test, dass Greif- und Ablage-rz zusammenpassen. Pick/Place zweistufig: schnell (`linear_speed_mps`)
-  bis `approach_slow_mm` = 20 mm über dem Ziel, Rest langsam.
-- **Ablauf:** kein Home-Umweg mehr beim Prüfen (wartet über der Prüfvorrichtung). GUI-Ablauf zeigt
-  M1-/M3-Bild und Kurzinfo direkt nach jedem Schritt, bei Fehler das Rohbild.
-- **Simulator:** Werkzeug `ZimmerLWR50` (197,5 mm); Robotertests unabhängig von `gripper_enabled`.
-  105 Tests grün.
+### 2026-10-30 – Niklas
+- **Thesis auf Code-Stand** (ARS `academic-paper`):
+  - Kap. 08 (M4) aus Jeremys Unterlagen entworfen.
+  - Grundlagen „Lernbasiertes Greifen“ geschrieben.
+  - 11 neue Quellen mit geprüfter DOI.
+  - Kap. 01–11 angepasst.
+  - Abbildungen in `thesis/figures/{m1,m3,gui,m4}`.
+  - Keine Datumsangaben zu Laborterminen im Text.
+  - 94 Seiten, baut fehlerfrei.
+- Klargestellt:
+  - IP der Steuerung ist 192.168.2.13, die .20 auf dem Sockel ist falsch.
+  - Öffnen und Schließen des Greifers funktioniert im Labor (noch nicht gepusht).
+  - Greifbacken sind die Standardbacken von Zimmer, 40 mm passt.
+  - Die Prüfvorrichtung ist eine erhöhte Ablage mit Kamerahalter und Hintergrund, ohne Formschluss.
+  - Ein grober Zeigetest sah vielversprechend aus.
+- Checkliste zum Abhaken als Artifact. Planungsdateien aufgeräumt: Roadmap, offene Fragen und
+  Labortest sind in 06/07 aufgegangen, die Module enthalten nur noch Wissen.
 
-## 2026-09-28 – Niklas
-- **GUI:** Roboter-Draufsicht gedreht – Basis oben, x nach unten, y nach rechts (Blick des Bedieners).
-- **M1/M3:** Zwischenschritte der Bildverarbeitung speicherbar (`common/trace.py`): GUI-Ablauf
-  *+ Zwischenschritte*, CLI `--save-steps` → `logs/<datum>/…/steps/`, 13 Bilder M1, 14 Bilder M3.
-  Nebenbei: `last_result`/`last_details` werden je Durchlauf zurückgesetzt (vorher blieben nach
-  einem Fehlschlag die Bilder des vorigen Zyklus stehen).
-- **M2:** `robot_check calib` (Kalibrierung Arbeitsbereich → Roboter über die Marker-Mitten, mit
-  Restfehler) und `robot_check point` (Zeigetest ohne Greifen, Protokoll `logs/point_tests.csv`);
-  `NeuraRobot.point_at` / `retreat`.
-- **Plan:** Checkliste für den Labortest [09_labortest.md](09_labortest.md). 73 Tests grün.
+### 2026-10-28 – Niklas
+- **M4 übernommen:** Behavior Cloning (Diffusion Policy) von Jeremy per `git subtree` nach
+  `code/m4_behavior_cloning/`.
+  - GUI-Reiter „M4 Behavior Cloning“.
+  - Im Ablauf Greifer `bc` (`orchestrator/m4_grasper.py`): Die Policy greift bis PRE_PLACE, M2 legt ab.
+  - `setup_m4.bat` richtet die zweite Python-Umgebung ein (3.12, torch, lerobot).
+- Gemeinsamer Roboter- und Kamerazugriff M2/M1 ↔ M4 (`gui/robot_access.py`).
+- Kamera oben = Daheng VEN-161 (`source: daheng:<Seriennummer>`).
+- Platzhalter `m4_ai_grasping`/`AiGrasper` und Config `wrist_camera` entfernt.
+- **Neura-VM:** Übergabe M2 → M4 → M2 getestet. Zwei gleichzeitige Verbindungen gehen,
+  danach laufen `reset()` und Ablegen durch M2 fehlerfrei.
+- 118 Tests grün (+ 468 von Jeremy).
 
-## 2026-09-27 – Niklas
-- **Thesis:** Neues Kapitel `02b_vorprojekt.tex` zum Vorprojekt bei GROB (KI-basierte Roboterbahnen
-  in Process Simulate): Aufgabe und Eingrenzung, Kollisionssets, Zell-/Robotersicherheit, manuelle
-  Bahnplanung, Vorgehen, Robotic Automatic Path Planner, Bezug zum Demonstrator. Bilder unter
-  `thesis/figures/grob/`. Einleitung angepasst.
-- **Thesis:** Pseudocode durch Grafiken ersetzt (Vorprojekt, M1-Pose, M2-Greifsequenz, M3-Entscheidung);
-  gemeinsame TikZ-Stile `pap …` in `main.tex`.
-- **Thesis:** Greifer korrigiert: Zimmer MATCH LWR50L-23-00004-A mit Robotermodul LWR50F-13-05-A
-  (Datenblätter und CAD in `docs/greifer/`). Absatz zum bewusst einfachen Bauteil ergänzt.
-- **Repo:** Neura-Doku (`docs/neura/`) und NeuraPy-Client (`vendor/neurapy/`) dürfen ins Git;
-  nur `resources/` bleibt ausgeschlossen. Hinweise in README, ANLEITUNG und vendor-README angepasst.
+### 2026-10-21/22 – Niklas (Präsentation, Klärungen)
+- Präsentation `presentation/abschluss/`: 37 von 39 Szenen gebaut. Einzelheiten stehen in
+  [10_praesentation_konzept.md](10_praesentation_konzept.md).
+- **Bauteil:** 60 × 40 × 15 mm, Loch 10 mm, Toleranz ±0,4 mm (Demonstrationswert).
+- **Rolle M4:** übernimmt nur PICK, PLACE_INSPECT macht M2.
+- GROB-Bilder für das Vorprojekt dürfen genutzt werden.
+- Befund M1: Das Bauteil erscheint auf den Testfotos 8–15 % zu groß (Parallaxe). Die Lage ist
+  stabil (±0,4 mm). Die Bewertung ist offen.
 
-## 2026-09-26 (6) – Niklas
-- **Thesis:** Gesamtplan im geführten Dialog erstellt (`thesis/blueprint.md`).
-- Entwürfe für Kurzfassung, Einleitung, Grundlagen, Systemkonzept, M1–M3 und das neue Kapitel
-  „Integration und Bedienung“; Gerüste für Evaluation und Fazit. Offene Stellen als `\todo`.
-- Kapitelfolge: `09_integration.tex` neu, Evaluation → `10_evaluation.tex`, Fazit → `11_fazit.tex`.
-- `main.tex`: Titelblatt korrigiert, Pakete für TikZ, Pseudocode (deutsch) und `todonotes`.
-- 8 Literaturquellen ergänzt (DOI über Crossref geprüft). Baut lokal mit MiKTeX (`latexmk main.tex`).
+### 2026-10-06 – Niklas (Labor)
+- **Erster vollständiger Ablauf am echten Roboter.** M1 und M3 liefen mit Testbildern, ohne
+  Greiferansteuerung.
+- Werkzeug „ZimmerLWR50“ (TCP 197,5 mm) angelegt.
+- Posen geteacht: inspection, bin_good, bin_bad, Home.
+- Kalibrierung eingemessen (0,35°, [205,1, −319,7] mm, Tisch z 2,1 mm).
+- Papier-Marker, Mittenabstand 400 mm, Arbeitsbereich 330 × 330 mm.
+- Code:
+  - Greifwinkel-Offset 113° (Greifer 23° verdreht montiert).
+  - Pick/Place in zwei Stufen.
+  - Kein Home-Umweg beim Prüfen.
+  - Haken *Ohne Rückfrage joggen*.
+  - Schrittbilder im GUI-Ablauf.
 
-## 2026-09-26 (5) – Niklas
-- **Bugfix:** Nach NOT-STOPP + „Fehler quittieren“ ließ sich der Ablauf nicht neu starten, weil
-  `init_program()` fehlte (neurapy `stop()` beendet das Programm auf der Steuerung). Jetzt: nach
-  `stop()` lehnt der Roboter Bewegungen ab, `reset()` bereitet ihn neu vor; GUI „Fehler quittieren“
-  (Ablauf) bzw. „Freigeben“ (Tab M2). Regressionstests für Simulator, Ablauf und GUI.
-- Kameras: dritte Kamera `wrist_camera` (Handgelenk, für M4) vorbereitet, `python -m common.camera`
-  listet Kameranummern mit Foto, Fehlermeldung bei doppelt vergebener Kameranummer. 59 Tests grün.
+### 2026-09-26 bis 09-28 – Niklas (Aufbau ohne Hardware)
+- Projektstruktur, Planungsdokumente, Code-Gerüst mit Schnittstellen und Mocks.
+- **M1:** Arbeitsbereich über ArUco (anfangs mit Rückfall auf einen weißen Rahmen), Pose mit Fase
+  für 0–360°.
+- **M2:** `NeuraRobot` auf NeuraPy v5.0.8, eigener Simulator der Steuerung, `robot_check`
+  einschließlich `calib` und `point`, `ANLEITUNG_NEURA.md`.
+- **M3:** Seriennummer (EasyOCR), Loch (Maßstab über die Bauteilhöhe), Kerbe, Gut/Schlecht.
+  Alle Testbilder korrekt.
+- **Ablauf:** Zustandsautomat, CSV-Logbuch, Zwischenschritte M1/M3 (`--save-steps`), jedes Modul
+  einzeln startbar.
+- **GUI** (PySide6) mit Tabs für Ablauf, M1–M3 und Einstellungen. STOPP mit `reset()`.
+- `ANLEITUNG.md` für das Team.
+- Neura-Doku und NeuraPy-Client im Repo.
+- **Thesis:**
+  - Gesamtplan (`thesis/blueprint.md`) erstellt.
+  - Entwürfe aller Kapitel und Kap. 02b Vorprojekt GROB geschrieben.
+  - Pseudocode durch TikZ-Grafiken ersetzt.
+  - Erste Quellen mit DOI.
 
-## 2026-09-26 (4) – Niklas
-- Zwischenstand dokumentiert: Planungsdateien an den Code angeglichen (Kerbe bestätigt, θ 0–360°,
-  Logging, Kalibrierung über Rahmenecken, Konzept vs. Umsetzung), Zwischenstand und nächste Schritte
-  in `06_roadmap.md`.
-- `ANLEITUNG.md` für das Team: Einrichten, erster Start ohne Hardware, GUI, Arbeit am eigenen Modul,
-  Einstellungen, Inbetriebnahme am echten Aufbau, Logs, Tests, Spielregeln, Fehlersuche.
+## Geklärte Fragen
 
-## 2026-09-26 (3) – Niklas
-- Offene Punkte geklärt: Kerbe = eckige Öffnung; IP und Maße prüft Niklas vor Ort; Neura-VM vorerst nicht nötig.
-- Alle Module einzeln startbar (`python -m m1_vision_topdown | m2_robot_control | m3_inspection`),
-  Gesamtablauf `python -m orchestrator` mit frei wählbaren Varianten (`--detector/--robot/--inspector`).
-- `orchestrator/factory.py` (gemeinsamer Aufbau für CLI und GUI), `orchestrator/logbook.py`
-  (CSV-Protokoll je Zyklus + Debug-Bilder), Zustandsbeobachter und Zyklusdauer im Orchestrator.
-- **GUI** (`python -m gui` bzw. `start_gui.bat`, PySide6): Tabs Ablauf, M1, M2, M3, Einstellungen;
-  Live-Anzeige von Zustand, Bildern, Roboter-Draufsicht und Ergebnissen; Posen teachen; STOPP;
-  Einstellungen bearbeiten und speichern, ohne dass Kommentare in `system.yaml` verloren gehen (ruamel.yaml).
-- 56 Tests grün (inkl. GUI-Test ohne Bildschirm).
+| Frage | Antwort |
+|---|---|
+| Roboter | Neura **LARA**, 6 Achsen, Software/API v5.0.8, IP 192.168.2.13 |
+| Greifer | Zimmer MATCH LWR50L-23-00004-A mit Robotermodul LWR50F-13-05-A. Werkzeug „ZimmerLWR50“, TCP 197,5 mm, Standardbacken |
+| Kameras | Oben und Handgelenk: Daheng VEN-161 (1440×1080, Global Shutter). Seite: einfache USB-Kamera |
+| Marker | ArUco `DICT_4X4_50` auf Papier mit weißem Rand. Die 3D-gedruckten Marker waren ohne hellen Rand nicht erkennbar |
+| Bauteil | 60 × 40 × 15 mm, Loch 10 mm ±0,4 mm. Die Fase macht die Lage eindeutig (360°). Kerbe = kleine eckige Öffnung, Seriennummer 5 Ziffern |
+| Prüfvorrichtung | Gedruckt, Fläche 38 mm über der Platte, mit Kamerahalter und Hintergrund, ohne Formschluss |
+| Rolle M4 | Greift (PICK bis PRE_PLACE ~9 cm über der Prüfung), M2 legt ab. Für den Demonstrator nicht nötig |
+| Thesis | Gemeinsame Arbeit, Modulkapitel je Person. Baut lokal mit MiKTeX (`latexmk`), Titelblatt eingetragen |
 
-## 2026-09-26 (2) – Niklas
-- Inhalt von `new_input/` einsortiert: Top-down-Fotos → `code/m1_vision_topdown/tests/data/`,
-  Seitenbilder → `code/m3_inspection/tests/data/`, Neura-PDFs → `docs/neura/`,
-  NeuraPy-Windows-Client → `code/m2_robot_control/vendor/neurapy/`, Steuerungssoftware und
-  Roboter-Backup → `resources/neura_controller/` (nicht versioniert).
-- **M1:** Arbeitsbereich über ArUco oder weißen Rahmen, Bauteilpose inkl. Fase (0–360°), Marker-Generator.
-  Befund: Die gedruckten Marker haben keinen hellen Rand und werden nicht erkannt.
-- **M2:** `NeuraRobot` auf Basis von NeuraPy v5.0.8, Simulator der Steuerung, `robot_check`-Werkzeug,
-  Einsteiger-Anleitung `ANLEITUNG_NEURA.md`.
-- **M3:** Bauteil/ROIs, Lochdurchmesser (Maßstab über Bauteilhöhe), Kerbe, OCR mit EasyOCR →
-  alle 3 Testbilder korrekt (Seriennummer 69420, D/H ≈ 0,65, Kerbe erkannt).
-- Orchestrator: `--replay`, `--sim-robot`, `--save-images`. 49 Tests grün.
-- OpenCV auf `opencv-python-headless` vereinheitlicht (EasyOCR installiert dieses Paket, zwei cv2-Pakete kollidieren).
+## Entscheidungen
 
-## 2026-09-26 – Niklas
-- Projektstruktur angelegt: `plan/`, `code/`, `thesis/`.
-- Planungsdokumente 00–08 erstellt (Übersicht, Architektur, Module, Roadmap, offene Fragen).
-- Code-Gerüst: gemeinsame Schnittstellen (`common/interfaces.py`), Konfiguration, Transformationen, Orchestrator mit Zustandsautomat, Modul-Workspaces M1–M4 mit Interfaces und Mocks.
-- 16 Unit-Tests (Transformationen, Mocks, Gut/Schlecht-Logik, Zustandsautomat) grün; `python -m orchestrator.main --mock` durchläuft komplette Zyklen.
-- Thesis-Gerüst in LaTeX (KOMA `scrreprt`, biblatex `style=ieee`, biber) mit Kapitelstruktur und ersten Literaturquellen (noch nicht kompiliert, keine lokale TeX-Installation).
+| Datum | Entscheidung | Begründung |
+|---|---|---|
+| 2026-09-26 | Zentraler Python-Orchestrator mit Datenklassen | Einfach, gut testbar, kein Middleware-Setup |
+| 2026-09-26 | Jedes Modul: abstraktes Interface + Mock | Unabhängige Entwicklung ohne Hardware |
+| 2026-09-26 | Doku/Thesis Deutsch, Code Englisch | Abgabe auf Deutsch, Code international lesbar |
+| 2026-09-26 | LaTeX mit biblatex (`style=ieee`) + biber | IEEE-Zitierstil gefordert |
+| 2026-09-26 | Neura-Client unverändert unter `vendor/`, IP per Config | Kein Installationsschritt; Client-Update = Datei tauschen |
+| 2026-09-26 | Eigener Simulator der Neura-Steuerung | Tests des Robotercodes ohne Hardware |
+| 2026-09-26 | M3: Maßstab über Bauteilhöhe, ROIs relativ zum Bauteil | Unabhängig vom Kameraabstand, keine mm/px-Kalibrierung |
+| 2026-09-26 | OCR mit EasyOCR | Läuft per `pip` ohne Tesseract-Installation |
+| 2026-09-26 | `opencv-python-headless` statt `opencv-contrib-python` | EasyOCR bringt headless mit, zwei cv2-Pakete kollidieren |
+| 2026-09-26 | Thesis als Projektbericht ohne Forschungsfrage; Erfolg = vollautomatischer Durchlauf | Selbst gewähltes Projekt; Details in `thesis/blueprint.md` |
+| 2026-09-26 | Thesis: kein Quellcode, nur Diagramme; offene Punkte als `\todo` | Lesbarkeit; Offenes bleibt im PDF sichtbar |
+| 2026-10-06 | Jog-Rückfrage per Haken abschaltbar, nur fürs Joggen, nicht gespeichert | Viele kleine Schritte beim Teachen |
+| 2026-10-06 | `gripper_angle_offset_deg` = 113° (90° + 23°) | Greifer um 23° verdreht montiert |
+| 2026-10-06 | Pick/Place: schnell bis 20 mm über dem Ziel, Rest langsam | Zykluszeit; langsame Endanfahrt bleibt |
+| 2026-10-06 | Kein Home-Umweg beim Prüfen, Roboter wartet über der Prüfvorrichtung | Greifer dort nicht im Bild; spart zwei Bewegungen |
+| 2026-10-06 | Arbeitsbereich nur über ArUco (Rahmen-Rückfall ungenutzt) | Kein weißer Rahmen mehr auf der Platte |
+| 2026-10-28 | M4 als eigener Python-Prozess (3.12) | lerobot braucht 3.12; torch/OpenCV kollidieren mit EasyOCR |
+| 2026-10-28 | Neura-VM als Teststufe zwischen Simulator und Anlage | Echte Steuerungssoftware, z. B. für die Übergabe M4 → M2 |
+| 2026-10-30 | Thesis ohne Datumsangaben zu Laborterminen | Allgemein halten |

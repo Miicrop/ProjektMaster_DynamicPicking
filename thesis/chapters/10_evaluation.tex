@@ -13,6 +13,11 @@ Genauigkeit einzelner Verfahren. Grundlage sind die Zyklusprotokolle aus
 Alle Versuche finden an der realen Anlage statt, mit allen Modulen in der Betriebsstufe
 \enquote{Real} (\cref{sec:teststrategie}). Es werden zwei Versuchsreihen durchgeführt.
 
+Als Vorstufe lief bereits ein vollständiger Zyklus am realen Roboter, wobei Erkennung und
+Prüfung noch auf Testbildern arbeiteten (\cref{ch:robotersteuerung}). Dieser Lauf zeigte,
+dass Zustandsautomat, Robotersteuerung und Posen zusammenpassen, ist aber noch kein Ergebnis
+im Sinne der Versuchsreihen.
+
 \paragraph{Versuchsreihe 1: Wiederholbarkeit.}
 Ein Gutteil wird wiederholt von Hand an zufälliger Position und mit zufälliger Orientierung in
 den Arbeitsbereich gelegt, und jeweils ein vollständiger Zyklus wird gestartet. Die Reihe zeigt,
@@ -54,5 +59,27 @@ Zyklusdauer).}
 
 \section{Vergleich klassischer und KI-basierter Ansatz}
 \label{sec:eval-vergleich}
-\todo[inline]{Person 4: Vergleich der Objekterkennung (\cref{ch:objekterkennung}) mit dem
-lernbasierten Ansatz (\cref{ch:kigreifen}).}
+
+Verglichen wird das Greifen: einmal mit der Objekterkennung und der programmierten
+Greifsequenz von Modul~2 (\cref{ch:objekterkennung,ch:robotersteuerung}), einmal mit der
+gelernten Policy von Modul~4 (\cref{ch:kigreifen}). Prüfung und Sortieren sind in beiden
+Fällen gleich. Beide Varianten lassen sich im Reiter \enquote{Ablauf} umschalten, sodass
+dieselbe Versuchsreihe~1 mit beiden Varianten gefahren werden kann.
+
+Die Übergabe zwischen beiden Modulen wurde in der \ac{vm} der Steuerung geprüft. Modul~4 fuhr dabei über eine zweite Verbindung zur Steuerung, anschließend setzte
+Modul~2 seine Einstellungen zurück, legte an der Prüfposition ab und fuhr in die
+Ruheposition, ohne dass ein Fehler auftrat. Zwei gleichzeitige Verbindungen zur Steuerung
+sind demnach kein Problem. Da für diesen Test kein trainiertes Modell vorlag, hielt die
+Policy ihre Stellung, statt zu greifen; der Übergabepunkt wurde also nicht erreicht. In der
+\ac{vm} meldete die Ausführung außerdem viele Taktüberschreitungen (562 bei 45 Takten), die
+auf die Rechenleistung der \ac{vm} zurückgehen dürften und an der Anlage zu prüfen sind.
+
+Als Vergleichsgrößen bieten sich der Anteil erfolgreicher Griffe und die Robustheit gegenüber
+Störungen an, etwa bei veränderter Beleuchtung oder verschobener Szenenkamera. Die
+Zykluszeit eignet sich nur eingeschränkt: Die Policy fährt im Tempo ihrer Aufzeichnung
+(\cref{sec:m4-zustand}), und im Ablauf wird ihre Ausführung für jeden Zyklus neu gestartet,
+einschließlich des Ladens des Modells.
+
+\todo[inline]{Jeremy: Vergleich nach den Läufen mit trainiertem Modell ergänzen (Anzahl
+Versuche, Erfolgsrate beider Varianten, Verhalten bei Störungen). Dauer des Starts der
+Inferenz je Zyklus messen.}

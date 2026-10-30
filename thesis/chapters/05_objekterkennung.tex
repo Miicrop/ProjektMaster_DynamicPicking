@@ -39,25 +39,32 @@ Dadurch lässt sie sich mit gespeicherten Fotos genauso ausführen wie mit Live-
 \section{Bildaufnahme und Kamerakalibrierung}
 \label{sec:m1-kalibrierung}
 
-Die Top-down-Kamera ist fest über dem Arbeitsbereich montiert und liefert Bilder mit
-$1920 \times 1080$~Pixeln. Für reproduzierbare Ergebnisse soll die Belichtung fest
-eingestellt und nicht automatisch nachgeregelt werden.
+Die Top-down-Kamera, eine Daheng VEN-161 mit $1440 \times 1080$~Pixeln und Global Shutter,
+ist an einer Stange schräg über dem Arbeitsbereich montiert. Sie wird über das Software-Paket
+des Herstellers angesprochen und über ihre Seriennummer ausgewählt, da am selben Rechner
+eine baugleiche Handgelenkkamera für Modul~4 hängt. Dieselbe Kamera dient Modul~4 als
+Szenenkamera; vor einer Fahrt von Modul~4 gibt die Objekterkennung sie frei und öffnet sie
+beim nächsten Bild wieder (\cref{sec:m4-integration}). Die bisherigen Testbilder stammen von
+einer Smartphone-Kamera aus derselben Perspektive.
 
-Eine Korrektur der Linsenverzeichnung mit einer intrinsischen Kalibrierung nach Zhang
-(\cref{sec:kalibrierung}) ist vorgesehen, aber noch nicht umgesetzt. Die Verarbeitung
-arbeitet derzeit direkt auf dem unkorrigierten Bild.
+Für reproduzierbare Ergebnisse soll die Belichtung fest eingestellt werden. Derzeit regelt
+die Kamera Belichtung und Verstärkung noch automatisch. Eine Korrektur der
+Linsenverzeichnung mit einer intrinsischen Kalibrierung nach Zhang (\cref{sec:kalibrierung})
+ist vorgesehen, aber noch nicht umgesetzt. Die Verarbeitung arbeitet derzeit direkt auf dem
+unkorrigierten Bild.
 
-\todo[inline]{Kameramodell, Montagehöhe und Belichtungseinstellung ergänzen. Intrinsische
-Kalibrierung durchführen und beschreiben, sofern sie umgesetzt wird.}
+\todo[inline]{Montagehöhe ergänzen, feste Belichtung festlegen. Intrinsische Kalibrierung
+durchführen und beschreiben, sofern sie umgesetzt wird.}
 
 % ------------------------------------------------------------------------------
 \section{Detektion des Arbeitsbereichs}
 \label{sec:m1-arbeitsbereich}
 
-Der Arbeitsbereich wird durch einen weißen Rahmen begrenzt, an dessen vier Ecken
-ArUco-Marker aus dem Wörterbuch \texttt{DICT\_4X4\_50} mit den IDs~0 bis~3 angebracht
-sind~\cite{garrido2014}. Die Mittelpunkte der Marker sind im Arbeitsbereich-\ac{ks}
-vermessen und in der Konfiguration hinterlegt.
+Der Arbeitsbereich ist durch vier ArUco-Marker aus dem Wörterbuch \texttt{DICT\_4X4\_50}
+mit den IDs~0 bis~3 festgelegt~\cite{garrido2014}. Die Marker sind auf Papier gedruckt und
+auf die dunkle Platte geklebt; der weiße Rand um jeden Marker hebt dessen schwarze Kante vom
+dunklen Untergrund ab. Ihre Mittelpunkte liegen \SI{400}{\milli\metre} auseinander und sind
+im Arbeitsbereich-\ac{ks} in der Konfiguration hinterlegt (\cref{sec:koordinatensysteme}).
 
 Die Marker werden mit dem ArUco-Detektor von OpenCV~\cite{bradski2000opencv} im
 Graustufenbild gesucht; die Markerecken werden dabei subpixelgenau verfeinert. Aus den vier
@@ -68,15 +75,18 @@ bestimmt ist.
 Die vier Markermittelpunkte im Bild und ihre bekannten Positionen im Arbeitsbereich bilden
 vier Punktkorrespondenzen, aus denen eine Homographie zwischen Bildebene und Tischebene
 berechnet wird (\cref{sec:aruco}). Mit ihr wird das Kamerabild in eine entzerrte Draufsicht
-des Arbeitsbereichs umgerechnet. Diese Draufsicht hat einen festen Maßstab von
-\SI{2}{Pixel\per\milli\metre}; ein Pixel entspricht also \SI{0,5}{\milli\metre} auf dem
-Tisch, und die Perspektive der schräg oder außermittig montierten Kamera ist ausgeglichen.
-Alle weiteren Schritte arbeiten in dieser Draufsicht.
+des Arbeitsbereichs umgerechnet. Sie zeigt das Quadrat von $330 \times 330$~\si{\milli\metre}
+zwischen den Markern, sodass das helle Markerpapier außerhalb liegt. Die Draufsicht hat einen
+festen Maßstab von \SI{2}{Pixel\per\milli\metre}; ein Pixel entspricht also
+\SI{0,5}{\milli\metre} auf dem Tisch, und die Perspektive der schräg montierten Kamera ist
+ausgeglichen. Alle weiteren Schritte arbeiten in dieser Draufsicht. \Cref{fig:m1-debug} zeigt
+ein Kamerabild mit den erkannten Markern und die daraus berechnete Draufsicht.
 
-Als Rückfallebene kann der Arbeitsbereich auch ohne Marker über die Innenkante des weißen
-Rahmens gefunden werden. Dazu wird der größte viereckige, innen liegende Rand eines hellen,
-ungesättigten Bereichs gesucht und seine vier Ecken dienen als Korrespondenzen. Im Regelbetrieb
-werden die ArUco-Marker verwendet.
+Da die Marker in jedem Bild neu gefunden werden, ist ein Verschieben der Kamera für die
+Objekterkennung unkritisch. Werden dagegen die Marker verschoben, müssen ihre Positionen neu
+vermessen und die Kalibrierung zum Roboter wiederholt werden. Der Code enthält zusätzlich
+einen Rückfall, der den Arbeitsbereich über die Innenkante eines weißen Rahmens findet; im
+aktuellen Aufbau gibt es keinen solchen Rahmen mehr, und es werden nur die Marker verwendet.
 
 % ------------------------------------------------------------------------------
 \section{Segmentierung des Bauteils}
@@ -127,8 +137,9 @@ Testfotos korrekt segmentiert.
   \end{tabular}
 \end{table}
 
-Die entstehende Binärmaske wird am Rand des Arbeitsbereichs beschnitten, damit der Rahmen
-nicht als Bauteil erkannt wird, und anschließend morphologisch bereinigt: Ein Öffnen
+Die entstehende Binärmaske wird an einem schmalen Streifen von \SI{5}{\milli\metre} entlang
+des Rands des Arbeitsbereichs beschnitten, damit Reste des Markerpapiers nicht als Bauteil
+erkannt werden, und anschließend morphologisch bereinigt: Ein Öffnen
 entfernt einzelne Störpixel, ein Schließen füllt kleine Lücken im Bauteil. Von den
 gefundenen Konturen werden nur solche mit plausibler Fläche betrachtet; die größte davon
 ist das Bauteil. Wird keine passende Kontur gefunden, meldet das Modul \enquote{kein Bauteil},
@@ -215,16 +226,44 @@ Tischhöhe eingetragen. Das Ergebnis wird zusammen mit der Konfidenz und einem D
 
 \begin{figure}[htbp]
   \centering
-  \missingfigure[figwidth=0.9\textwidth]{Kamerabild mit erkannten Markern und Bauteilkontur (links) und entzerrte Draufsicht mit Pose und Fase (rechts)}
-  \caption{Zwischenergebnisse der Objekterkennung}
+  \begin{minipage}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{m1/m1_02_aruco_markers.jpg}
+  \end{minipage}\hfill
+  \begin{minipage}[b]{0.41\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{m1/m1_10_result.jpg}
+  \end{minipage}
+  \caption{Zwischenergebnisse der Objekterkennung an einem Testfoto: Kamerabild mit den vier
+  erkannten Markern (links) und entzerrte Draufsicht des Arbeitsbereichs mit Kontur (rot),
+  umschließendem Rechteck (grün) und Orientierung (Pfeil zur Fase); oben die Pose im
+  Arbeitsbereich-\ac{ks} (rechts).}
   \label{fig:m1-debug}
 \end{figure}
 
-\todo[inline]{Kalibrierung Arbeitsbereich $\rightarrow$ Roboter: Verfahren noch offen (siehe
-\cref{sec:koordinatensysteme}).}
-\todo[inline]{Parallaxe: Die Kamera sieht die Oberseite des Bauteils, die um die
-Bauteilhöhe über dem Tisch liegt. Einfluss auf die Position bewerten und ggf. korrigieren.}
+Die Transformation wird mit dem Roboter eingemessen (\cref{sec:koordinatensysteme}).
+
+\subsection*{Parallaxe}
+
+Die Homographie bildet die Tischebene maßstabsgetreu ab. Die Oberseite des Bauteils liegt
+aber \SI{15}{\milli\metre} über dem Tisch, und bei der schräg blickenden Kamera sind zusätzlich
+Seitenflächen sichtbar. Auf allen fünf Testfotos erscheint das Bauteil deshalb zu groß:
+\numrange{64.5}{69.1}~\si{\milli\metre} $\times$ \numrange{43.3}{46.4}~\si{\milli\metre}
+statt $60 \times 40$~\si{\milli\metre}, also \SIrange{8}{15}{\percent} mehr. Die Position ist
+dabei stabil; drei Fotos derselben Lage weichen um höchstens \SI{0.4}{\milli\metre}
+voneinander ab. Sie kann aber systematisch zur Bildmitte hin oder von ihr weg verschoben sein,
+und zwar umso mehr, je weiter das Bauteil vom Punkt unter der Kamera entfernt liegt.
+
+\todo[inline]{Parallaxe am Aufbau bewerten: Versatz im Zeigetest an Rand- und Mittelpositionen
+notieren. Falls nötig korrigieren, z.\,B.\ die Oberseite statt der Tischebene entzerren.}
 
 % ------------------------------------------------------------------------------
 \section{Zwischenfazit}
-\todo[inline]{Nach den Versuchen ergänzen: Was hat funktioniert, welche Probleme traten auf?}
+
+Auf den Testfotos findet die Objekterkennung die Marker und das Bauteil zuverlässig und
+bestimmt die Orientierung über die Fase eindeutig. Die gemessene Größe des Bauteils zeigt den
+erwarteten Einfluss der Parallaxe. Wie stark er die Greifposition verschiebt, zeigt erst der
+Zeigetest am Aufbau mit der endgültigen Kamera.
+
+\todo[inline]{Nach den Versuchen ergänzen: Ergebnisse mit der Daheng-Kamera, Versatz im
+Zeigetest, aufgetretene Probleme.}

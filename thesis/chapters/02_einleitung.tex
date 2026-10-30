@@ -39,8 +39,10 @@ Prüfergebnis sortiert der Roboter das Bauteil als Gut- oder Schlechtteil aus.
 
 Das System ist in vier Module gegliedert: die Objekterkennung mit einer Kamera über dem
 Arbeitsbereich, die Robotersteuerung, die Sichtprüfung mit einer seitlichen Kamera und ein
-lernbasierter Ansatz zum Greifen, der als Alternative zur klassischen Objekterkennung
-entwickelt wird. Ein zentraler Ablauf verbindet die Module zu einem Gesamtsystem.
+lernbasierter Ansatz zum Greifen. Bei diesem greift eine aus Demonstrationen gelernte Policy
+das Bauteil anhand der Bilder einer Kamera am Greifer und der Kamera über dem Arbeitsbereich;
+sie ist eine Alternative zum programmierten Greifen der Robotersteuerung. Ein zentraler Ablauf
+verbindet die Module zu einem Gesamtsystem.
 
 \section{Zielsetzung}
 
@@ -59,8 +61,9 @@ Um den Umfang des Projekts zu begrenzen, gelten folgende Annahmen und Einschrän
         Tischebene und einen Drehwinkel vollständig beschrieben, die Greifhöhe ist bekannt.
   \item Die Anlage ist nicht sicherheitszertifiziert. Sie wird nur unter Aufsicht und mit
         reduzierter Geschwindigkeit betrieben.
-  \item Der lernbasierte Greifansatz ist eine Alternative zur klassischen Objekterkennung und
-        keine Voraussetzung für den Demonstrator.
+  \item Der lernbasierte Greifansatz ist eine Alternative zum programmierten Greifen und
+        keine Voraussetzung für den Demonstrator. Er übernimmt nur das Greifen bis über die
+        Prüfposition; alle übrigen Bewegungen führt die Robotersteuerung aus.
 \end{itemize}
 
 \section{Aufbau der Arbeit}

@@ -41,22 +41,42 @@ Kamerazugriff getrennt, sodass sie sich mit gespeicherten Bildern testen lässt
 \section{Aufbau der Prüfstation}
 \label{sec:m3-aufbau}
 
-Die Seitenkamera ist fest neben der Prüfposition montiert und liefert Bilder mit
-$3840 \times 2160$~Pixeln. Sie blickt möglichst senkrecht auf die Seitenfläche des Bauteils,
-da eine schräge Ansicht die Längen im Bild perspektivisch verzerren würde. Da die Objekterkennung die
-Orientierung über die Fase eindeutig bestimmt (\cref{sec:m1-pose}) und der Roboter das
-Bauteil immer in derselben Lage relativ zum Greifer aufnimmt, liegt es an der Prüfposition
-stets gleich orientiert, mit Etikett, Loch und Kerbe zur Kamera.
+Die Seitenkamera, eine \ac{usb}-Kamera, ist fest neben der Prüfposition montiert; die
+bisherigen Testbilder haben $3840 \times 2160$~Pixel. Sie blickt möglichst senkrecht auf die
+Seitenfläche des Bauteils, da eine schräge Ansicht die Längen im Bild perspektivisch verzerren
+würde. Das Bauteil liegt auf einer 3D-gedruckten Prüfvorrichtung, deren Auflage
+\SI{38}{\milli\metre} über der Platte liegt (\cref{fig:m3-vorrichtung}). Ein Halter an der
+Vorrichtung legt den Abstand der Kamera zum Bauteil fest, und ein Hintergrund hinter dem
+Bauteil sorgt dafür, dass sich das Loch deutlich von der Seitenfläche abhebt. Das Bauteil wird
+nicht formschlüssig geführt; seine Lage ergibt sich aus der Ablegepose des Roboters. Während
+der Prüfung wartet der Roboter über der Vorrichtung, sodass der Greifer nicht im Bild ist
+(\cref{sec:m2-sequenz}).
 
 \begin{figure}[htbp]
   \centering
-  \missingfigure[figwidth=0.9\textwidth]{Bild der Seitenkamera mit Bauteil-Box, den drei Prüfbereichen (Etikett, Loch, Kerbe) und den erkannten Merkmalen}
-  \caption{Seitenansicht des Bauteils mit Prüfbereichen}
+  \missingfigure[figwidth=0.9\textwidth]{Prüfvorrichtung als CAD-Ansicht oder Foto: erhöhte
+  Ablagefläche mit Bauteil, Kamerahalter mit Seitenkamera und Hintergrund hinter dem Bauteil.}
+  \caption{Prüfvorrichtung mit Seitenkamera}
+  \label{fig:m3-vorrichtung}
+\end{figure}
+
+Da die Objekterkennung die Orientierung über die Fase eindeutig bestimmt (\cref{sec:m1-pose})
+und der Roboter das Bauteil immer in derselben Lage relativ zum Greifer aufnimmt, liegt es an
+der Prüfposition stets gleich orientiert, mit Etikett, Loch und Kerbe zur Kamera. Wird die Fase
+nicht gefunden, ist die Orientierung nur bis auf \ang{180} bestimmt; das Bauteil kann dann
+verdreht liegen, und die Prüfmerkmale zeigen von der Kamera weg. Die Objekterkennung meldet
+diesen Fall mit einer verringerten Konfidenz.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{m3/m3_14_result.jpg}
+  \caption{Seitenansicht eines Testbilds mit dem Ergebnis der Sichtprüfung: Bauteil-Box (grün),
+  Prüfbereiche für Etikett, Loch und Kerbe, angepasste Ellipse am Loch (rot) und erkannte
+  Kerbe (blau). Oben links das Urteil mit Seriennummer, Lochdurchmesser und Kerbe.}
   \label{fig:m3-rois}
 \end{figure}
 
-\todo[inline]{Kameramodell, Abstand und Beleuchtung der Prüfstation ergänzen. Mechanischer
-Anschlag an der Prüfposition?}
+\todo[inline]{Kameramodell, Abstand und Beleuchtung der Prüfstation ergänzen.}
 
 % ------------------------------------------------------------------------------
 \section{Lokalisierung des Bauteils und Maßstab}
@@ -195,9 +215,19 @@ entspricht keiner Fertigungsvorgabe.
   \label{fig:m3-entscheidung}
 \end{figure}
 
-\todo[inline]{Bauteilmaße aus der Zeichnung übernehmen: Bauteilhöhe (Maßstab),
-Soll-Durchmesser und Toleranz des Lochs.}
+Für das Testbauteil gelten eine Bauteilhöhe von \SI{15}{\milli\metre} als Maßstab, ein
+Soll-Durchmesser des Lochs von \SI{10}{\milli\metre} und eine Toleranz von
+\SI{\pm 0,4}{\milli\metre}. Die Toleranz ist ein Demonstrationswert und keine
+Fertigungstoleranz.
 
 % ------------------------------------------------------------------------------
 \section{Zwischenfazit}
-\todo[inline]{Nach den Versuchen ergänzen: Was hat funktioniert, welche Probleme traten auf?}
+
+Auf vier Testbildern eines Gutteils wird die Seriennummer \enquote{69420} jedes Mal richtig
+gelesen. Das Verhältnis von Lochdurchmesser zu Bauteilhöhe streut auf den ersten drei Bildern
+um \SI{\pm 1,2}{\percent} (0,647; 0,663; 0,649), was etwa \SIrange{9.7}{9.9}{\milli\metre}
+entspricht. Künstlich erzeugte Fehler, bei denen Kerbe oder Loch im Bild übermalt sind, werden
+als Schlechtteil erkannt.
+
+\todo[inline]{Nach den Versuchen ergänzen: Ergebnisse mit der Seitenkamera am Aufbau, echte
+Fehlerteile, aufgetretene Probleme.}

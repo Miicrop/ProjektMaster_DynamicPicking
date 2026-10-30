@@ -4,7 +4,7 @@ Studienprojekt (4 Personen): Ein Neura-Roboter greift ein kamerabasiert lokalisi
 führt es einer automatischen Sichtprüfung zu und sortiert es in Gut- und Schlechtteile.
 
 **➜ Einstieg: [ANLEITUNG.md](ANLEITUNG.md)** (Einrichten, GUI, eigenes Modul testen, echter Aufbau) ·
-**Stand:** [plan/06_roadmap.md](plan/06_roadmap.md#zwischenstand-2026-09-26)
+**Stand:** [plan/06_offen.md](plan/06_offen.md)
 
 | Ordner | Inhalt |
 |---|---|

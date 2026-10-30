@@ -3,22 +3,28 @@
 **Stand:** 2026-10-21 – Konzept + Storyboard, Gerüst in [`presentation/abschluss/`](../presentation/abschluss/README.md) (alle Szenen als Entwurfsblätter durchklickbar).
 **Vorlage:** Masterarbeits-Präsentation „Das Zerlegeschema wird lebendig“ (`Masterarbeit_Neu/presentation/abschluss`, Konzept dort in `plan/11-praesentation-konzept.md`). Engine, Bausteine und Werkzeuge sind von dort übernommen.
 
-> **Wiedereinstieg**
+> **Wiedereinstieg** (Aufgaben: [06_offen.md](06_offen.md) Abschnitt 9, Verlauf: [07_erledigt.md](07_erledigt.md))
 >
-> - **Stand 21.10. (Feedback-Runde):** Profil lang/kurz entfernt (eine Fassung). 2.1 aktueller Zustand voll eingefärbt, Quittieren-Pfeil korrigiert. 3.2 Homographie in OpenCV-Grün. 4.2 Geschwindigkeit als eigene Karte. 5.2 Boxen kräftig mit dunklem Saum, Beschriftungen zentriert. 5.3 → 5.4 ohne erneuten GUT-Stempel. 6.1 neu: M4 übernimmt PICK/PLACE_INSPECT von M2. 7.5 neu: LARA holt das Schild „Noch Fragen?“ rechts (aus Zuschauersicht) aus dem Halter und dreht es in einer Bewegung zur Zuschauerkamera, ein Klick (Kamera so weit draußen, dass die Zelle sichtbar bleibt). Neue Kontrollen beim Laden: jede Zielpose muss erreicht werden, das Schild hält ≥ 20 mm Abstand zu den Armsegmenten (Kapseln r 70 mm) und zum Tisch – sonst Warnung in der Konsole (`tools/shoot.mjs` meldet sie). Aktuell 132 mm.
-> - **Stand 22.10. (Nachtrag 2):** 7.4 Ausblick gebaut (cell-Welt): Arbeitsraum → „Mensch ärgere Dich nicht“-Spielfeld, LARA (Ocker/M2) würfelt 6 und setzt, würfelt 3 und schlägt Blau; 7.5 baut das Spielfeld zurück und startet den Schlechtfall. 37 von 39 Szenen gebaut.
-> - **Stand 22.10. (Nachtrag):** 3.2 Markernummern einheitlich (blendeten nie ganz ein). 4.2 Codekarte in fünf Abschnitten (Nummer, Bedeutung, Funktion), deckend, rz-Summe mit −360° nur noch in der Karte; Skizze weiter rechts. 4.7 neu als GUI-Blatt (s. u.). 5.2 schrittweise. 5.5 in drei Klicks (ROI+Region → Kanten → Kandidat), dann alle vier Testbilder mit ihren Kerben-Zwischenbildern (`build_data.py` → `m3.notches`); bei test_img_1/2 gewinnt der Kanten-, bei 3/4 der Region-Weg.
-> - **Stand 22.10.: Akt 4 und 5 vertieft, 36 von 39 Szenen gebaut.** Neu: 4.2 Bauteil → Greifpose, 4.7 robot_check, 5.2 Masken, 5.3–5.5 Detailblätter (Seriennummer, Loch inkl. Maßstab, Kerbe); alte 5.4 in 5.4 Loch aufgegangen. Die Detailblätter liegen in der inspect-Welt unter dem Foto, die Kamera fährt hin. `build_data.py` exportiert dafür `m3.trace` (Zwischenbilder des Hero-Bilds, Formwerte) und `m2.check` (robot_check gegen den Simulator, schreibt nichts nach `logs/`).
-> - **Stand 21.10. (abends): 32 von 35 Szenen gebaut.** Offen (Entwurfsblatt): 6.2 (Jeremy), 7.2 Messwerte (nach der Evaluation), 7.4 Ausblick (nach Teamentscheidung).
->   - Neu: 2.4 echter GUI-Screenshot (`tools/gui_shot.py`, Qt offscreen, drei Zyklen mit Testbildern + Simulator) und Logbuch-Auszug vom 26.09. (Simulator). 4.5 Schattenroboter: LARA fährt, der Simulator springt ans Ziel (keine Kinematik), Aufrufprotokoll daneben. 7.1 Labortag 06.10. mit Posen vor/nach dem Teachen aus Commit 1f5cdc1 (`build_data.py` → `data.lab`). 7.3 erledigt/offen. Nebenbei: `build_data.py` las die Zykluslogs mit falschem Trennzeichen (`;`), behoben.
->   - Achtung: Das Log vom 05.10. stammt aus der Neura-VM, nicht vom Labortag; vom 06.10. liegt kein Log im Repo.
->   - `cell.js` + `kit/lara.js`: Aufstellungsplan (1.1), 3D-Zelle mit Positionsnummern (1.2), Bauteil (1.3), ganzer Zyklus mit Zustandsanzeige (1.4), LARA mit Gelenken und TCP-Maß (4.1), Greifsequenz mit Geschwindigkeitsmaßband (4.2), Greifwinkel-Skizze (4.3), Software-Grenzen (4.4), Finale mit zweitem Teil → SCHLECHT, dann Schild „Noch Fragen?“ (7.5).
->   - LARA aus der URDF (`public/urdf/lara5.urdf`, STL-Meshes), Kinematik aus den URDF-Gelenken. **Geprüft:** Home-Pose aus `system.yaml` ergibt Flansch-z 434,5 mm wie im Roboter-Backup, alle Stationsposen sind vom Home-Seed aus erreichbar. Greifwinkel nach derselben Formel wie `m2_robot_control.robot.as_target`.
->   - Angenommen (im Bild als solche gekennzeichnet bzw. leicht verschiebbar in `cell.js`): Lage der Stangenkamera, der Seitenkamera und der Ablagenmaße; Fase 12 mm.
->   - Weitere Welten: `arch.js` (Akt 2, 6.1), `vision.js` (Akt 3), `inspect.js` (Akt 5), `sheets.js` (1.5, 1.6, 2.4, 7.1, 7.3, Anhang).
->   - Befund M1 (Bauteil 8–15 % zu groß) steht in plan/02, 08 und 09.
-> - **Nächste Schritte:** (1) Generalprobe / Zeitbudget, ggf. (k)-Szenen streichen. (2) Fotos vom Labortag für 7.1, Stand in 7.3 vor dem Vortrag prüfen. (3) 7.2 nach der Evaluation, 7.4 nach Teamentscheidung. (4) 6.2 von Jeremy. (5) `public/urdf/collision/` (15 MB) wird nicht gebraucht – aus `public/` nehmen, dann ist `dist/` ~22 MB.
-> - Die Szenenliste in `src/storyboard.js` ist die maßgebliche Fassung; Änderungen an der Dramaturgie dort **und** hier eintragen.
+> - **Stand:** 37 von 39 Szenen gebaut. Offen sind 6.2 (Jeremy) und 7.2 (Messwerte). Die M4-Umstellung
+>   (6.1, 1.2, 2.4, Architektur, 7.1/7.3) fehlt noch.
+> - Die Szenenliste in `src/storyboard.js` ist die maßgebliche Fassung. Änderungen an der Dramaturgie
+>   dort **und** hier eintragen.
+> - **Welten:**
+>   - `cell.js` + `kit/lara.js`: Zelle, Zyklus, Greifsequenz, Grenzen, Finale mit Schild „Noch Fragen?“ (7.5) und Ausblick-Spielfeld (7.4).
+>   - `arch.js`: Akt 2 und 6.1.
+>   - `vision.js`: Akt 3.
+>   - `inspect.js`: Akt 5, mit Detailblättern unter dem Foto.
+>   - `sheets.js`: 1.5, 1.6, 2.4, 4.7, 7.1, 7.3 und der Anhang.
+> - **Daten:** `build_data.py` exportiert Config, M1/M3-Ergebnisse auf den Testbildern, Zwischenbilder
+>   (`m3.trace`, `m3.notches`), `robot_check` gegen den Simulator (`m2.check`) und die Posen vom
+>   Labortag aus Commit 1f5cdc1 (`data.lab`). Der GUI-Screenshot entsteht mit `tools/gui_shot.py`
+>   (Qt offscreen).
+> - **LARA** stammt aus der URDF (`public/urdf/lara5.urdf`, Kinematik aus den Gelenken). Die Home-Pose
+>   ergibt Flansch-z 434,5 mm wie im Roboter-Backup. Alle Stationsposen sind erreichbar, und der
+>   Greifwinkel folgt derselben Formel wie `m2_robot_control.robot.as_target`.
+> - **Kontrollen beim Laden:** Jede Zielpose muss erreicht werden, und das Schild hält ≥ 20 mm Abstand
+>   zu Arm und Tisch. Sonst kommt eine Warnung in der Konsole (`tools/shoot.mjs` meldet sie).
+> - **Achtung:** Das Log vom 05.10. stammt aus der Neura-VM. Vom Labortag liegt kein Log im Repo.
 
 ## Rahmen
 
@@ -130,23 +136,17 @@ Ort: `presentation/abschluss/` in diesem Repo (Ordner `presentation/` ist leer).
 
 Hinweis Koordinatensysteme: Posen in `system.yaml` sind **TCP im Roboter-Basis-KS**; M1 rechnet im Arbeitsraum-KS. Die Zelle wird im Basis-KS aufgebaut (Arbeitsraum über `workspace_to_robot` platziert), Szene 3.5 macht genau diesen Unterschied sichtbar.
 
-## Offene Punkte
+## Annahmen im Bild
 
-- Vortragsdauer → bestimmt, welche (k)-Szenen bleiben.
-- Kameras (Stand 28.10.): drei Stück – Übersicht an einer Stange schräg seitlich (M1, Daheng VEN-161, zugleich Szenenkamera M4), Seite (M3, USB), Handgelenk (M4, Daheng VEN-161 Fisheye). Montageort der M1-Kamera vor dem Bau von 1.2/3.1 bestätigen.
-- Endgültiger Titel (Arbeitstitel aus Thesis: „Dynamisches Greifen und automatisierte Sichtprüfung mit einem kollaborativen Roboter“).
-- Erwähnung Pflegerobotik (7.4), echte Messwerte für 7.2 (nach Evaluation).
-- Bauteil 60 × 40 × 15 mm, Loch 10 mm (bestätigt 21.10.). Kameras wie beschrieben angenommen, Position später verschiebbar.
-- ~~LARA-URDF/CAD~~ → URDF mit Meshes liegt in `public/urdf/` (21.10.).
-- **Rolle M4 geändert (21.10.):** M4 ersetzt nicht M1, sondern einen Teil von M2 (siehe 6.1). Szene 6.1, Code (`Grasper`, `--grasper ai`) und Plan sind angepasst; die Thesis folgt im nächsten Schreibintervall → [08_offene_fragen](08_offene_fragen.md).
-- **Stand 28.10. – M4 ist eingebaut, Präsentation noch nicht angepasst** (bewusst zum Schluss, wenn der Code steht). Zu ändern:
-  - **6.1:** M4 = **Behavior Cloning (Diffusion Policy)** von Jeremy. Im Zustandsring klappt nur **PICK** auf M4 um; die Policy endet am Übergabepunkt PRE_PLACE ~9 cm über der Prüfvorrichtung, **PLACE_INSPECT bleibt bei M2** (bisher: beide auf M4). Kurz zeigen: M4 sucht das Teil selbst im Bild, die M1-Pose braucht es nicht.
-  - **1.2 / Kameras:** Übersichtskamera (M1) und Handgelenkkamera (M4) sind **Daheng VEN-161** (Global Shutter, Galaxy SDK); die Übersichtskamera ist zugleich Szenenkamera von M4. Seitenkamera (M3) bleibt eine einfache USB-Kamera.
-  - **2.x / 2.4 (GUI):** sechster Reiter „M4 Behavior Cloning“ (Systemcheck, Aufnahme, Training, Betrieb, Konsole); im Ablauf Auswahl Greifen M2/M4. Für einen neuen Screenshot `tools/gui_shot.py`.
-  - **Architektur:** zwei Python-Umgebungen (GUI 3.11 / M4 3.12 mit torch und lerobot), Inferenz als Unterprozess; Roboter und Kamera werden automatisch zwischen M2 und M4 umgeschaltet.
-  - **7.1 / 7.3:** VM-Test der Übergabe M4 → M2 (28.10.) als erledigt; offen: Lauf mit trainiertem Modell an der Anlage.
-  - **6.2:** füllt Jeremy (Quellen: `code/m4_behavior_cloning/Berichte/`, `Dokumentation/`, z. B. Zittern-Analyse, Rauschstudie).
-- Optional später: Greifer-CAD (`docs/greifer/**/*.stp`) per FreeCAD/cadquery → glb statt Grundkörper; Fotos/Video vom Labortag.
+Aufgaben zur Präsentation stehen in [06_offen.md](06_offen.md), Abschnitt 9.
+
+- **Kameras:** Die Übersicht hängt an einer Stange schräg seitlich (M1, Daheng VEN-161, zugleich
+  Szenenkamera von M4). Dazu kommen die Seitenkamera (M3, USB) und die Handgelenkkamera
+  (M4, Daheng VEN-161 Fisheye). Die Lage der Stangenkamera und der Seitenkamera ist angenommen und
+  in `cell.js` leicht verschiebbar, ebenso die Maße der Ablagen und die Fase (12 mm).
+- **Bauteil:** 60 × 40 × 15 mm, Loch 10 mm.
+- **Arbeitstitel:** „Dynamisches Greifen und automatisierte Sichtprüfung mit einem kollaborativen Roboter“.
+- **Optional:** Greifer-CAD (`docs/greifer/**/*.stp`) per FreeCAD/cadquery als glb statt Grundkörper.
 
 ## Kontrolle vor dem Vortrag
 

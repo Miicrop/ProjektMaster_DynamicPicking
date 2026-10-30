@@ -2,7 +2,7 @@
 
 Stand: 26.09.2026 · Für alle im Team. Du brauchst keine Vorkenntnisse zum Projekt, nur einen
 Windows-Laptop. Was schon funktioniert und was noch fehlt, steht in
-[plan/06_roadmap.md → Zwischenstand](plan/06_roadmap.md#zwischenstand-2026-09-26).
+[plan/06_offen.md](plan/06_offen.md).
 
 **Inhalt**
 1. [Worum es geht](#1-worum-es-geht)
@@ -370,9 +370,9 @@ einen Test im `tests/`-Ordner des Moduls.
 
 ## 10. Spielregeln im Team
 
-- **Planung pflegen:** Wer eine Aufgabe erledigt, hakt sie in `plan/0x_…` bzw.
-  `plan/06_roadmap.md` ab (`[x]`) und schreibt eine Zeile in `plan/07_erledigt.md`.
-  Offene Fragen und Entscheidungen kommen nach `plan/08_offene_fragen.md`.
+- **Planung pflegen:** Alle Aufgaben stehen in `plan/06_offen.md`. Wer eine erledigt, löscht sie
+  dort und schreibt eine Zeile in `plan/07_erledigt.md`.
+  Offene Fragen kommen nach `plan/06_offen.md`, Entscheidungen nach `plan/07_erledigt.md`.
 - **Schnittstellen** (`code/common/interfaces.py`) betreffen alle. Änderungen erst in
   `plan/01_architektur.md` vorschlagen und absprechen.
 - **Einstellungen** gehören in `system.yaml`, nicht als feste Zahlen in den Code.

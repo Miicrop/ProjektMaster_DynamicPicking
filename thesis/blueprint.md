@@ -34,6 +34,7 @@ Dieses Dokument ist die Referenz für alle Kapitelentwürfe. Änderungen an Umfa
 - **Kein Quellcode** im Text. Abläufe als **Grafik** (TikZ-Ablaufdiagramm, Stile `pap …` in `main.tex`) statt Pseudocode, weil Grafiken leichter lesbar sind (Entscheidung 2026-09-27). `algorithm`/`algpseudocode` bleiben geladen, werden aber nicht mehr genutzt.
 - **Offene Punkte** stehen als sichtbare `\todo{…}` im Text (Paket `todonotes`). Fehlende Abbildungen werden als Platzhalter per `\missingfigure{…}` eingefügt.
 - **Abkürzungen** nur über `\ac{…}` (`00_abkuerzungen.tex`), z. B. OCR, TCP, PTP, LIN, ROI, HSV, KS.
+- **Keine Datumsangaben** im Text (Labortage, Messungen, Tests) – allgemein formulieren, z. B. „am realen Aufbau“, „in einer Messreihe“ (Entscheidung 2026-10-30).
 - **Keine Irrwege und Entwicklungsprobleme** in den Entwürfen. Tatsächliche Probleme werden nach den Tests ergänzt.
 - **Freie Gliederung** der Modulkapitel, je nachdem, was das Kapitel braucht.
 - Allgemeine Aussagen zur Automatisierung (Motivation) werden entweder **belegt** (Quelle mit DOI) oder als **eigene Motivation** formuliert, nicht als unbelegte Tatsache.
@@ -51,7 +52,7 @@ Die neue Kapitelfolge enthält ein zusätzliches Kapitel „Integration und Bedi
 | 4 | `05_objekterkennung.tex` | Objekterkennung (M1) | 5–6 | Person 1 / Entwurf Claude |
 | 5 | `06_robotersteuerung.tex` | Robotersteuerung (M2) | 5–6 | Person 2 / Entwurf Claude |
 | 6 | `07_sichtpruefung.tex` | Sichtprüfung (M3) | 5–6 | Person 3 / Entwurf Claude |
-| 7 | `08_ki_greifen.tex` | KI-basiertes Greifen (M4) | *(Person 4)* | **Person 4, kein Entwurf** |
+| 7 | `08_ki_greifen.tex` | KI-basiertes Greifen (M4) | ≈ 13 mit Abb. | Person 4 / **Entwurf Claude 2026-10-30** aus seinen Unterlagen, Jeremy übernimmt oder schreibt um |
 | 8 | `09_integration.tex` **(neu)** | Integration und Bedienung | 3–5 | Niklas / Entwurf Claude |
 | 9 | `10_evaluation.tex` (bisher `09_evaluation.tex`) | Evaluation | 4–6 | alle / Gerüst Claude |
 | 10 | `11_fazit.tex` (bisher `10_fazit.tex`) | Fazit (mit Diskussion) | 2–3 | alle / nur Gerüst |
@@ -88,7 +89,7 @@ Die neue Kapitelfolge enthält ein zusätzliches Kapitel „Integration und Bedi
 6. Industrierobotik und Greifen: Basis-/TCP-KS, PTP/LIN, Greifertypen, kollaborative Roboter und Sicherheit `siciliano2016`
 7. Optische Messtechnik: Beleuchtung, Kanten, Hough `duda1972`, **Ellipsen- und Kreis-Fit (Least Squares)**, **Template-Matching und Konturanalyse**, Pixel-zu-mm-Umrechnung. *Quellen für Fit und Template nötig.*
 8. Texterkennung (OCR): Ablauf einer OCR-Pipeline, Tesseract `smith2007`, lernbasierte Verfahren und EasyOCR `easyocr`
-9. Lernbasiertes Greifen: **leerer Platzhalter** `\todo{Person 4}`
+9. Lernbasiertes Greifen: geschrieben 2026-10-30 (`chi2024`, `ho2020`, `song2021`, `ross2011`, `laskey2017`, `zhao2023`, `he2016`, `uhlenbeck1930`, `argall2009`, `osa2018`, `lerobot`)
 
 *Nicht in Kap. 2:* Zustandsautomat und Interfaces. Das ist Allgemeinwissen und steht direkt in Kap. 3.
 
@@ -126,7 +127,18 @@ Die neue Kapitelfolge enthält ein zusätzliches Kapitel „Integration und Bedi
 7. `\todo`s: Beleuchtung, mechanischer Anschlag, Bauteilmaße aus der Zeichnung
 
 ### Kap. 7 – KI-basiertes Greifen (M4)
-**Kein Entwurf.** Nur die Kapitelüberschrift mit `\todo{Person 4}`.
+**Entwurf 2026-10-30** (Nutzerentscheid: voller Entwurf, Jeremy darf übernehmen oder umschreiben). Quelle: `code/m4_behavior_cloning/` (Requierments, Dokumentation, Berichte), `orchestrator/m4_grasper.py`.
+1. Aufgabe und Abgrenzung (nur PICK bis PRE_PLACE, M2 legt ab; sechs Bahnabschnitte; binärer Greifer, Totzeit 0,5 s)
+2. Hardware und Software (Tab. `tab:m4-hardware`, Fisheye-Begründung, USB direkt am Rechner)
+3. Beobachtung und Aktion (Tab. `tab:m4-zustand`, 15 Hz → 60 Hz `servo_j`, Tempo wird mitgelernt)
+4. Datenaufnahme mit Rauschen (Abb. `fig:m4-aufnahme`, Trichter-Skizze `fig:m4-trichter`, IK + Kollisionsprüfung, Objektlagen)
+5. Modell und Training (Tab. `tab:m4-hyper`, 89,5 M Parameter gesamt = U-Net ~65 M + 2× ResNet18; `sample` statt `epsilon`)
+6. Ausführung (Abb. `fig:m4-takt`, asynchron ~77 ms, Mittelung, Endbedingung)
+7. Sicherheitsmaßnahmen (0,8 / 1,0 rad/s, 0,35 rad, Geofence, Schleppfehler, Freigabe, Stopp 96 ms)
+8. Ausführungsart an der Anlage (Zittern 7–8 Hz, `servo_j` Override 0,5; Bilder `figures/m4/`)
+9. Einbindung (`BcGrasper`, Unterprozess, zwei Umgebungen)
+10. Stand und Ergebnisse (Tab. Durchstich, Abb. Rollouts, Tab. Rauschstudie, erste echte Aufnahme 26.10.)
+11. Zwischenfazit — `\todo{Jeremy}` für echten Datensatz und Greifversuche
 
 ### Kap. 8 – Integration und Bedienung (neu)
 1. Ablauf eines Zyklus mit echten Modulen (Sequenzdiagramm aus `plan/00`)
@@ -184,12 +196,24 @@ Aus `references.bib` sind bereits verwendbar: `garrido2014`, `zhang2000`, `hartl
   - Kap. 04 Tab. `tab:hardware`: Kamera oben und Handgelenkkamera = **Daheng VEN-161** (1440×1080, Global Shutter, USB3 Vision, Galaxy SDK); Kamera oben ist zugleich Szenenkamera von M4. Seitenkamera = USB-Kamera.
   - Kap. 10 Evaluation: VM-Test Übergabe M4 → M2 (28.10.) erwähnen; Vergleich M2 vs. M4 beim Greifen erst nach Läufen mit trainiertem Modell.
   - **Fall C (§7) ist jetzt gegeben:** Jeremys Unterlagen liegen in `code/m4_behavior_cloning/` (`README.md`, `Requierments/requierments.md`, `Dokumentation/`, `Berichte/`). Kap. 08 schreibt weiterhin Jeremy; Grundlagen-Abschnitt lernbasiertes Greifen und Vergleich klassisch/KI mit ihm abstimmen.
+- **2026-10-30 – Schreibintervall „Stand M4-Integration“ (Fall C + Änderungslisten 06.10./21.10./28.10. erledigt):**
+  - Kap. 08 vollständig entworfen (siehe Kap.-7-Abschnitt oben), Grundlagen §2.9 „Lernbasiertes Greifen“ geschrieben (GG-CNN vs. Policy, BC und Verteilungsverschiebung, DAgger/DART, OU-Prozess, DDPM/DDIM, Diffusion Policy, Action Chunking, LeRobot).
+  - Neue Quellen, DOI geprüft (Crossref bzw. doi.org/DataCite): `argall2009`, `osa2018`, `ross2011`, `laskey2017`, `ho2020`, `song2021`, `chi2024`, `zhao2023`, `he2016`, `uhlenbeck1930`; `lerobot` als `@software`. Für NeurIPS/ICLR/CoRL/AISTATS gibt es keine Verlags-DOI → arXiv-DOI.
+  - Kap. 01, 02, 02b, 04, 05, 06, 07, 09, 10, 11 auf den Code-Stand gebracht: M4 = Alternative zu M2 beim Greifen (`Grasper`), Daheng-Kameras, Papiermarker ohne Rahmen (330 × 330 mm), Bauteilmaße, Prüfvorrichtung 38 mm, ZimmerLWR50 197,5 mm mit TCP-Prüfung, Offset 113°, zweistufiges Absenken, kein Home-Umweg, geteachte Posen (Tabelle), Kalibrierverfahren + Werte vom 06.10., VM-Stufe, sechs GUI-Reiter, Roboterzugriff M2/M4, Parallaxe-Messwerte, M3-Testergebnisse, VM-Übergabetest 28.10., Ausblick-Kandidaten.
+  - Abbildungen eingebunden: `figures/m1/` (Marker + Draufsicht), `figures/m3/` (Prüfergebnis), `figures/gui/` (Ablauf, M2, M4 – neu erzeugt mit `presentation/abschluss/tools/gui_shot.py`, Ausgabe umgelenkt), `figures/m4/` (Spektrum, H1, Rollouts aus dem Durchstich-PDF). Platzhalter bleiben: Zellfoto (Kap. 04), Handgelenkkamera, Kamerabilder der Policy (Kap. 08).
+  - Umfang jetzt 94 Seiten PDF (vorher 69).
+  - Korrekturen nach Durchsicht Niklas (30.10.): Greifer öffnet/schließt im Labor (Stand Laborlaptop, noch nicht gepusht) → `\todo`s in Kap. 04/06 entfernt; IP ist 192.168.2.13 (Sockelangabe .20 falsch); Abb. 4.2, 8.2, 8.4 korrigiert; `\todo{Jeremy}` unter Abb. 8.8 entfernt.
 - Noch offen aus §5: Quellen für die Motivation (Kap. 1) und die Normen zu kollaborativen Robotern (Kap. 2.6).
 
 ## 7. So geht es weiter
 
 Die Entwurfsphase aus dem ersten Durchgang ist abgeschlossen (siehe §6a). Ab jetzt wird
-anlassbezogen weitergearbeitet. Zu Beginn einer neuen Claude-Session immer sagen:
+anlassbezogen weitergearbeitet.
+
+> **Nächster Schritt (Stand 2026-10-30):** Durchsicht des Stands vom 30.10. (Niklas; Jeremy für
+> Kap. 08 und Grundlagen §2.9). Danach **`/ars-reviewer`** auf die ganze Arbeit (simuliertes
+> Gutachten, vorgezogen aus Fall F) und die Befunde mit `/ars-revision` einarbeiten. Die übrigen
+> Schritte aus Fall F folgen erst nach den Versuchen (Fall E). Zu Beginn einer neuen Claude-Session immer sagen:
 *„Lies `thesis/blueprint.md` und arbeite danach weiter.“* Dann den passenden Fall unten nennen.
 
 Offene Stellen findet man im PDF als orange `\todo`-Boxen oder mit
@@ -220,7 +244,7 @@ Offene Stellen findet man im PDF als orange `\todo`-Boxen oder mit
 
 ### Fall E – Versuche durchgeführt
 - CSV-Protokolle (`code/logs/cycles_*.csv`) und ggf. Debug-Bilder bereitstellen, vorher klären,
-  welche Kennzahlen gewünscht sind (siehe `plan/08_offene_fragen.md`).
+  welche Kennzahlen gewünscht sind (siehe `plan/06_offen.md`).
 - Dann füllen: Kap. 10 (Ergebnisse beider Versuchsreihen), Zwischenfazits in Kap. 05–07,
   tatsächlich aufgetretene Probleme in den Modulkapiteln, Kap. 11 (Zusammenfassung, Diskussion,
   Ausblick) und den Ergebnissatz der Kurzfassung.
@@ -234,4 +258,4 @@ Offene Stellen findet man im PDF als orange `\todo`-Boxen oder mit
 5. `/ars-disclosure`, falls die Hochschule eine Erklärung zur KI-Nutzung verlangt.
 
 ### Offene Entscheidungen
-Stehen gesammelt in `plan/08_offene_fragen.md`, Abschnitt „Thesis“.
+Stehen gesammelt in `plan/06_offen.md`, Abschnitte 6–8 (Thesis, Entscheidungen).
