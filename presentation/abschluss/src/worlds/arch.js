@@ -1,4 +1,4 @@
-// Akt 2 (Architektur & Integration) und 6.1 (M4 übernimmt PICK/PLACE_INSPECT): Zustandsautomat mit hervorgehobenem Zustand,
+// Akt 2 (Architektur & Integration) und 6.1 (M4 übernimmt PICK): Zustandsautomat mit hervorgehobenem Zustand,
 // darunter Orchestrator und Modulblöcke mit Datenkarten und Steckern (mock / Wiedergabe / echt).
 // Werte der Datenkarten aus data.json (echte M1-Pose, echtes M3-Ergebnis).
 import * as THREE from 'three';
@@ -200,12 +200,12 @@ export function createArch(ctx) {
   let lastTests = -1;
 
   // ---------- 6.1 M4 übernimmt das Greifen aus dem Rahmen ----------
-  // M1 erkennt weiter; M4 greift mit der Handgelenkkamera und legt in die Prüfung; nach M3 übernimmt M2 wieder.
-  const M4_STATES = [2, 3]; // PICK, PLACE_INSPECT
-  const m4Title = text('M4: KI-Greifen übernimmt einen Teil von M2', { font: 'title', size: 0.36, anchorY: 'bottom', opacity: 0 });
+  // M1 erkennt weiter; die Policy greift bis PRE_PLACE über der Prüfung, ab dort legt M2 ab, M3 prüft, M2 sortiert.
+  const M4_STATES = [2]; // PICK
+  const m4Title = text('M4: Behavior Cloning übernimmt das Greifen', { font: 'title', size: 0.36, anchorY: 'bottom', opacity: 0 });
   m4Title.position.set(-8.6, 3.9, 0.012);
   scene.add(m4Title);
-  const m4Sub = text('M1 erkennt · M4 greift mit der Handgelenkkamera und legt in die Prüfung ·\nM3 prüft · M2 greift aus der Prüfung und sortiert', {
+  const m4Sub = text('M1 erkennt · M4 greift aus dem Rahmen bis ~9 cm über die Prüfung ·\nM2 legt ab · M3 prüft · M2 sortiert', {
     font: 'sans', size: 0.2, hex: T.inkSoft, anchorY: 'top', lineHeight: 1.35, opacity: 0,
   });
   m4Sub.position.set(-8.6, 3.75, 0.012);
@@ -231,7 +231,7 @@ export function createArch(ctx) {
     });
     modTags.forEach((t, i) => {
       const mod = modOf(i);
-      const str = mod === 'ORCH' ? 'Orchestrator' : mod === 'M4' ? 'M4 · Handgelenkkamera' : mod;
+      const str = mod === 'ORCH' ? 'Orchestrator' : mod === 'M4' ? 'M4 · Diffusion Policy' : mod;
       if (str !== modTagText[i]) {
         t.text = str;
         t.color = color(MODULE_COLOR[mod]).getHex();

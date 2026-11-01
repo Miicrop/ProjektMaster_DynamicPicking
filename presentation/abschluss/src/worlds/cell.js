@@ -1,5 +1,6 @@
 // Die Roboterzelle: Aufstellungsplan (1.1) → 3D-Zelle (1.2) → Bauteil (1.3) → ein Zyklus (1.4) →
-// LARA im Detail (Akt 4: Gelenke, Bauteil → Greifpose, Greifsequenz, 23°, Grenzen) → Simulator (4.6) → Ausblick (7.4) → Finale (7.5). Alle Lagen aus system.yaml (über data.json), LARA aus der URDF.
+// LARA im Detail (Akt 4: Gelenke, Bauteil → Greifpose, Greifsequenz, 23°, Grenzen) → Simulator (4.6) → M4 lernt mit Rauschen (6.2)
+// → Übergabe M4 → M2 (6.8) → Ausblick (7.4) → Finale (7.5). Alle Lagen aus system.yaml (über data.json), LARA aus der URDF.
 // Roboter-Basis-KS = Papier-KS: x rechts, y oben, z aus dem Papier; 1 m = 10 Papiereinheiten.
 // Bewegungen wie am echten Roboter: PTP in Gelenkkoordinaten, Anfahren/Abheben linear (IK je Bild,
 // immer vom Startwert des Abschnitts aus → Sprünge und Rückwärtsschritte bleiben exakt).
@@ -29,6 +30,8 @@ const DEFAULTS = {
   angle: 0, // 4.4
   limits: 0, outside: 0, // 4.5
   ghost: 0, sim: 0, // 4.6
+  m4: 0, m4rec: 0, m4chain: 0, // 6.2
+  m4pol: 0, m4hand: 0, m4back: 0, // 6.8 (m4back: Rückfahrt zu Beginn von 7.4)
   game: 0, game1: 0, game2: 0, unboard: 0, // 7.4 (unboard: Rückbau zu Beginn von 7.5)
   cycle2: 0, outro: 0, finale: 0, // 7.5
 };
@@ -524,9 +527,9 @@ export function createCell(ctx) {
   const C3 = [
     [1, 'LARA (6 Achsen)', worldOf(lara.pivots[1].g), v3(-2.6, -0.6, 1.6)],
     [2, `Greifer ${rc.tool_name}`, worldOf(gHousing), v3(2.2, -0.4, 1.4)],
-    [3, 'Kamera M1 an der Stange', worldOf(camM1), v3(1.4, -0.4, 0.9)],
-    [4, 'Seitenkamera M3', null, v3(2.6, 0.2, 2.2)],
-    [5, 'Handgelenkkamera M4', worldOf(wristCam), v3(-2.6, -0.8, 0.9)],
+    [3, 'Kamera oben M1 (Daheng) · Szene für M4', worldOf(camM1), v3(1.4, -0.4, 0.9)],
+    [4, 'Seitenkamera M3 (USB)', null, v3(2.6, 0.2, 2.2)],
+    [5, 'Handgelenkkamera M4 (Daheng, Fisheye)', worldOf(wristCam), v3(-2.6, -0.8, 0.9)],
     [6, 'Arbeitsraum mit ArUco-Markern', W(...ws2r(WSW, 0), TZ), v3(1.6, -1.4, 0.4)],
     [7, 'Prüfposition', W(insp[0], insp[1], insp[2] - 10), v3(2.8, -1.2, 0.3)],
     [8, 'Ablagen GUT / SCHLECHT', W(bin('bin_good')[0] - 55, bin('bin_good')[1], TZ + 20), v3(-3.0, 0.6, 1.0)],
@@ -1112,6 +1115,175 @@ export function createCell(ctx) {
   const sayT = lookTexts[lookTexts.length - 1];
   let sayLast = ' ';
 
+  // ---------- Akt 6: M4 Behavior Cloning ----------
+  // Teil C liegt an PICK aus der Punktedatei der Anlage (data.m4, TCP im Basis-KS). 6.2: LARA fährt zur Startpose,
+  // dann eine Aufnahme-Episode mit echtem Rauschen (bc/noise.py, 15 Hz), dahinter der Fächer aller Episoden; danach
+  // legt sie das Teil zurück wie put_back. 6.8: Fahrt bis PRE_PLACE (Sollbahn), Übergabe an M2, M2 legt in die Prüfung
+  // und fährt zurück über Teil B – dort beginnt 7.4. Alles blendet mit dem Spielfeld (7.4) aus.
+  const m4 = data.m4;
+  const M4P = m4.points;
+  const partC = makePart();
+  const thetaC = wrap(M4P.PICK[5] - P.home[5] - rc.gripper_angle_offset_deg); // Umkehrung von graspPose
+  const restC = rpyMatrix(0, 0, thetaC * DEG).setPosition(M4P.PICK[0] / 1000, M4P.PICK[1] / 1000, (TZ + data.part.height_mm / 2) / 1000);
+  const relC = new THREE.Matrix4().copy(tcp(M4P.PICK)).invert().multiply(restC);
+  const fixC = placed(insp, relC);
+  // Orientierung entlang der Bahn: Start → PICK bis 150 mm über PICK, dann fest, ab 50 mm über PICK → PRE_PLACE
+  const ideal = m4.ideal.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+  const pi = m4.pick_index;
+  let dwellN = 1;
+  while (ideal[pi + dwellN].equals(ideal[pi])) dwellN++;
+  const nearest = (p, lo, hi) => {
+    let best = lo;
+    for (let i = lo; i < hi; i++) if (ideal[i].distanceTo(p) < ideal[best].distanceTo(p)) best = i;
+    return best;
+  };
+  const i150 = nearest(ideal[pi].clone().setZ(ideal[pi].z + 150), 0, pi);
+  const i50 = nearest(ideal[pi].clone().setZ(ideal[pi].z + 50), pi + dwellN, ideal.length);
+  const [rP, rE] = [M4P.PICK, M4P.PRE_PLACE].map((p) => new THREE.Quaternion().setFromRotationMatrix(poseMatrix(p)));
+  const sstep = (f) => f * f * (3 - 2 * f);
+  const rotAt = (i) => (i <= i50 ? rP : rP.clone().slerp(rE, sstep((i - i50) / (ideal.length - 1 - i50))));
+  // Startwerte aus den echten Gelenkwinkeln der Anlage; J6 der URDF ist gegenüber der Steuerung um 90° gedreht (wie Home)
+  const seedOf = (k) => m4.joints[k].map((v, i) => (v + (i === 5 ? 90 : 0)) * DEG);
+  // Startwert je Takt: bis PICK dessen Gelenkwinkel, danach nach Bahnlänge zu PRE_PLACE interpoliert
+  const arcI = [0];
+  for (let i = 1; i < ideal.length; i++) arcI[i] = arcI[i - 1] + ideal[i].distanceTo(ideal[i - 1]);
+  const lerpQ = (a, b, f) => a.map((v, k) => v + (b[k] - v) * f);
+  const seedAt = (i) => (i <= pi ? seedOf('PICK') : lerpQ(seedOf('PICK'), seedOf('PRE_PLACE'), (arcI[i] - arcI[pi]) / (arcI[arcI.length - 1] - arcI[pi])));
+  const toClear = plan([{ kind: 'ptp', b: M4P.CLEAR_FOV, seed: seedOf('CLEAR_FOV'), dur: 2.2 }], sim.q1);
+  /** Eine Fahrt wie pick_to_station: von CLEAR_FOV per PTP zum Anflug 150 mm über PICK (CLEAR_FOV liegt nahe der
+   *  J1-Singularität, kartesisch schleudert J1), ab dort die 15-Hz-Bahn. IK je Takt vom Gelenkwinkel der Anlage aus
+   *  (beim Laden), dazwischen linear in den Gelenken; t0 = Beginn der 15-Hz-Bahn. */
+  function track(path, qFrom) {
+    const one = new THREE.Vector3(1, 1, 1);
+    const at = (i) => new THREE.Matrix4().compose(v3(path[i][0] / 1000, path[i][1] / 1000, path[i][2] / 1000), rotAt(i), one);
+    const qs = path.slice(i150).map((_, j) => lara.ik(at(i150 + j), seedAt(i150 + j), { iterations: 120 }));
+    const jump = Math.max(...qs.slice(1).map((q, i) => Math.max(...q.map((v, k) => Math.abs(v - qs[i][k]))))) / DEG;
+    if (jump > 10) console.warn(`IK M4: Gelenksprung ${jump.toFixed(0)}° zwischen zwei Takten`);
+    const pre = plan([{ kind: 'ptp', b: [...path[i150], ...M4P.PICK.slice(3)], seed: qs[0], dur: 2.0 }], qFrom);
+    const dt = 1 / m4.rate_hz;
+    const t0 = pre.total;
+    const tPick = t0 + (pi - i150) * dt;
+    return {
+      t0, total: t0 + (qs.length - 1) * dt, q1: qs[qs.length - 1], tGrip: tPick + (dwellN / 2) * dt,
+      at(t) {
+        if (t < t0) return pre.at(t);
+        const f = clamp01((t - t0) / ((qs.length - 1) * dt)) * (qs.length - 1);
+        const i = Math.min(qs.length - 2, Math.floor(f));
+        const u = f - i;
+        return { q: qs[i].map((v, k) => v + (qs[i + 1][k] - v) * u), grip: clamp01((t - tPick) / (dwellN * dt)) };
+      },
+    };
+  }
+  const recEp = m4.episodes.reduce((a, e) => (e.scale > a.scale ? e : a));
+  const rec = track(recEp.path, toClear.q1);
+  const putSteps = [
+    { kind: 'ptp', b: up(M4P.PICK, 50), seed: seedOf('PICK'), dur: 1.8 },
+    { kind: 'lin', a: up(M4P.PICK, 50), b: M4P.PICK, dur: 0.9 },
+    { kind: 'wait', dur: 0.45, grip: 0 },
+    { kind: 'lin', a: M4P.PICK, b: up(M4P.PICK, 50), dur: 0.7 },
+    { kind: 'ptp', b: M4P.CLEAR_FOV, seed: seedOf('CLEAR_FOV'), dur: 1.8 },
+  ];
+  putSteps.startGrip = 1;
+  const putBack = plan(putSteps, rec.q1);
+  const evPut = events(putBack);
+  CELL.REC = rec.total + putBack.total;
+  const pol = track(m4.ideal, putBack.q1);
+  const handSteps = [
+    { kind: 'wait', dur: 0.8 }, // M2: reset() – Werkzeug, Override, init_program
+    { kind: 'ptp', b: up(insp, AH), dur: 1.4 },
+    ...down(insp, null, 0),
+    ...lift(insp, null),
+  ];
+  handSteps.startGrip = 1;
+  const hand = plan(handSteps, pol.q1);
+  const evHand = events(hand);
+  // 7.4 beginnt über Teil B (Ende von 4.6): die Rückfahrt läuft mit dem Aufbau des Spielfelds
+  const m4Back = plan([{ kind: 'ptp', b: up(gPB, AH), seed: demo.q1, dur: 1.8 }], hand.q1);
+  CELL.POL = pol.total;
+  CELL.HAND = hand.total;
+  CELL.M4BACK = m4Back.total;
+  {
+    const wp = (q, pose) => new THREE.Vector3().setFromMatrixPosition(lara.fk(q)).distanceTo(new THREE.Vector3().setFromMatrixPosition(tcp(pose)));
+    if (wp(rec.at(rec.tGrip).q, M4P.PICK) > 0.001) console.warn('IK M4: PICK nicht erreicht');
+    if (wp(pol.q1, M4P.PRE_PLACE) > 0.001) console.warn('IK M4: PRE_PLACE nicht erreicht');
+    // Zweig wie an der Anlage: gelöste Gelenke nahe an den gespeicherten (J1–J5, J6 hat den URDF-Versatz)
+    for (const [k, q] of [['CLEAR_FOV', toClear.q1], ['PICK', rec.at(rec.tGrip).q], ['PRE_PLACE', rec.q1], ['PRE_PLACE (Policy)', pol.q1]]) {
+      const d = Math.max(...q.slice(0, 5).map((v, i) => Math.abs(v - seedOf(k.split(' ')[0])[i]))) / DEG;
+      if (d > 15) console.warn(`IK M4: ${k} ${d.toFixed(0)}° neben der Stellung der Anlage`);
+    }
+    for (const [name, pl] of [['toClear', toClear], ['putBack', putBack], ['hand', hand], ['m4Back', m4Back]]) {
+      pl.segs.forEach((sg, i) => {
+        if (sg.b && wp(sg.q1, sg.b) > 0.001) console.warn(`IK ${name}[${i}]: ${(wp(sg.q1, sg.b) * 1000).toFixed(1)} mm Restfehler`);
+      });
+    }
+  }
+  const M4_FRONT = W(60, -500, 0); // Beschriftungen links vor dem Tisch, frei von Arm und Tischkante
+  // 6.2 Wegpunkte, Sollbahn, Fächer der Episoden
+  const wpCallouts = [
+    [1, 'CLEAR_FOV · Start, Kamera frei, dann PTP', M4P.CLEAR_FOV, v3(-2.2, -0.6, 0.8)],
+    [2, 'PICK · Greifer zu', M4P.PICK, v3(-1.6, -1.4, 0.2)],
+    [3, 'PRE_PLACE · Übergabe an M2', M4P.PRE_PLACE, v3(2.0, -0.8, 0.8)],
+  ].map(([n, label, p, off]) => callout(n, label, W(p[0], p[1], p[2]), off));
+  const wpCross = [M4P.CLEAR_FOV, M4P.PICK, M4P.PRE_PLACE].flatMap((p) => [[-1, 0, 0], [0, -1, 0], [0, 0, -1]].map((d) => {
+    const c = W(p[0], p[1], p[2]);
+    const a = c.clone().add(v3(...d).multiplyScalar(0.18));
+    const l = new InkLine([a, c.clone().multiplyScalar(2).sub(a)], { width: 1.6, hex: MODULE_COLOR.M4, progress: 0 });
+    scene.add(l.object);
+    return l;
+  }));
+  const pathLine = (pts, o) => {
+    const l = new InkLine(pts.map(([x, y, z]) => W(x, y, z)), { progress: 0, ...o });
+    scene.add(l.object);
+    return l;
+  };
+  // ab dem Anflug 150 mm über PICK; davor fährt die Anlage PTP
+  const idealLine = pathLine(m4.ideal.slice(i150), { width: 1.4, dashed: true, dash: 0.1, gap: 0.07, hex: T.inkSoft });
+  const fan = m4.episodes.map((e) => pathLine(e.path.slice(i150), { width: e === recEp ? 2.4 : 1.1, hex: MODULE_COLOR.M4 }));
+  const noiseLabel = label3d(
+    `${m4.episodes.length} Episoden, jede mit Rauschen`,
+    `Streuung ${f1(m4.noise.sigma_mm, 0)} mm · Trichter: 0 an Start, PICK und Übergabe · bis ${f1(m4.max_dev_mm, 0)} mm neben der Sollbahn`,
+    M4_FRONT, MODULE_COLOR.M4,
+  );
+  // 6.2 Karte rechts: vom Vorführen zur Policy
+  const CW = 4.9;
+  const chainG = bb(new THREE.Group());
+  const CHAIN = [
+    ['Vom Vorführen zur Policy', 'title', 0.24, T.ink, 0],
+    ['1  Wegpunkte teachen – Gamepad oder Touch-up', 'mono', 0.13, T.ink, 0.5],
+    ['2  Aufnahme: Bahn + Rauschen, 15 Hz,', 'mono', 0.13, MODULE_COLOR.M4, 0.3],
+    ['   Kamera oben + Handgelenkkamera', 'mono', 0.13, MODULE_COLOR.M4, 0.22],
+    ['3  Export: LeRobotDataset (lerobot 0.6.1)', 'mono', 0.13, T.ink, 0.3],
+    ['4  Training: Diffusion Policy, 89,5 M Param.', 'mono', 0.13, T.ink, 0.3],
+    ['5  Inferenz: die Policy fährt selbst, 15 Hz', 'mono', 0.13, MODULE_COLOR.M4, 0.3],
+    ['Das Rauschen bringt Abweichungen samt', 'sans', 0.15, T.inkSoft, 0.5],
+    ['Korrektur in die Daten – die Policy lernt,', 'sans', 0.15, T.inkSoft, 0.25],
+    ['wie man zur Bahn zurückfindet.', 'sans', 0.15, T.inkSoft, 0.25],
+  ];
+  let cy0 = -0.22;
+  const chainTexts = CHAIN.map(([str, font, size, hex, dy]) => {
+    cy0 -= dy;
+    const t = text(str, { font, size, hex, anchorX: 'left', anchorY: 'top', opacity: 0 });
+    t.position.set(-CW / 2 + 0.2, cy0, 0.01);
+    return t;
+  });
+  const CHH = -cy0 + 0.45;
+  chainTexts.forEach((t) => (t.position.y += CHH / 2));
+  const chainPlate = new THREE.Mesh(new THREE.PlaneGeometry(CW, CHH), new THREE.MeshBasicMaterial({ color: color(T.paper), transparent: true, depthWrite: false }));
+  chainPlate.userData.plate = true;
+  chainPlate.layers.enable(LAYER_SOLID);
+  const chainFrame = new InkLine([v3(-CW / 2, -CHH / 2), v3(CW / 2, -CHH / 2), v3(CW / 2, CHH / 2), v3(-CW / 2, CHH / 2)], { closed: true, width: 1.4, progress: 0 });
+  chainG.add(chainPlate, chainFrame.object, ...chainTexts);
+  onTop(chainG);
+  // 6.8 Policy an der Handgelenkkamera, Übergabe, Stand
+  const polG = bb(new THREE.Group());
+  const polT = text('M4 · Policy, 15 Hz', { font: 'monoMedium', size: 0.2, hex: MODULE_COLOR.M4, anchorX: 'left', anchorY: 'middle', opacity: 0 });
+  polT.position.x = 0.35;
+  polG.add(polT);
+  plated(polT);
+  onTop(polG);
+  const handLabel = label3d('ÜBERGABE an M2', 'PRE_PLACE · ~9 cm über der Prüfung · M2: reset(), dann ablegen', M4_FRONT, MODULE_COLOR.M4);
+  const vmLabel = label3d('In der Neura-VM getestet', 'Übergabe M2 → M4 → M2 läuft · mit trainiertem Modell an der Anlage noch offen · Bahn hier: Sollbahn', M4_FRONT, T.inkSoft);
+
   // ---------- update ----------
   const tmp = new THREE.Vector3();
   const qCur = { q: qHome, grip: 0 };
@@ -1121,6 +1293,14 @@ export function createCell(ctx) {
     if (S.unboard > 0) return back.at(S.unboard * back.total);
     if (S.game2 > 0) return game2.at(S.game2 * game2.total);
     if (S.game1 > 0) return game1.at(S.game1 * game1.total);
+    if (S.m4back > 0) return m4Back.at(S.m4back * m4Back.total);
+    if (S.m4hand > 0) return hand.at(S.m4hand * hand.total);
+    if (S.m4pol > 0) return pol.at(S.m4pol * pol.total);
+    if (S.m4rec > 0) {
+      const t = S.m4rec * CELL.REC;
+      return t < rec.total ? rec.at(t) : putBack.at(t - rec.total);
+    }
+    if (S.m4 > 0) return toClear.at(S.m4 * toClear.total);
     if (S.sim > 0) return sim.at(S.sim * sim.total);
     if (S.demo > 0) return demo.at(S.demo * demo.total);
     if (S.ik > 0) return toPre.at(S.ik * toPre.total);
@@ -1183,11 +1363,49 @@ export function createCell(ctx) {
     const restB = tablePose(shotB);
     if (S.cycle2 > 0) partPose(partB.matrix, tcpNow, S.cycle2 * cyc2.total, [{ t: -1, grip: 1 }, ...ev2], relB, [fixB, binB], restB);
     else partPose(partB.matrix, tcpNow, S.demo > 0 ? S.demo * demo.total : -1, evDemo, relB, [], restB);
-    // 7.4: Teil B verschwindet mit dem Spielfeld aus dem Greifer, zu Beginn von 7.5 wächst es zurück
-    const kB = clamp01(1 - S.game + S.unboard);
+    // Akt 6 / 7.4: Teil B verschwindet aus dem Greifer (M4 bzw. Spielfeld), zu Beginn von 7.5 wächst es zurück
+    const kB = clamp01(1 - Math.max(S.m4, S.game) + S.unboard);
     if (kB < 1) partB.matrix.multiply(new THREE.Matrix4().makeScale(Math.max(kB, 0.001), Math.max(kB, 0.001), Math.max(kB, 0.001)));
     partB.matrixWorldNeedsUpdate = true;
     partB.visible = S.partB > 0 && kB > 0.001;
+
+    // Akt 6: Teil C, Wegpunkte, Rauschbahnen, Übergabe (alles weg mit dem Spielfeld)
+    const k6 = 1 - S.game;
+    const kC = clamp01(S.m4 * 2) * k6;
+    partC.visible = kC > 0.001;
+    if (S.m4pol > 0) {
+      const ev = [{ t: pol.tGrip, grip: 1 }, ...evHand.map((e) => ({ ...e, t: e.t + pol.total }))];
+      partPose(partC.matrix, tcpNow, S.m4pol * pol.total + S.m4hand * hand.total, ev, relC, [fixC], restC);
+    } else {
+      const ev = [{ t: rec.tGrip, grip: 1 }, ...evPut.map((e) => ({ ...e, t: e.t + rec.total }))];
+      partPose(partC.matrix, tcpNow, S.m4rec > 0 ? S.m4rec * CELL.REC : -1, ev, relC, [restC], restC);
+    }
+    if (kC < 1) partC.matrix.multiply(new THREE.Matrix4().makeScale(Math.max(kC, 0.001), Math.max(kC, 0.001), Math.max(kC, 0.001)));
+    partC.matrixWorldNeedsUpdate = true;
+    const k62 = k6 * (1 - clamp01(S.m4pol * 4)); // 6.2-Zeichnung weicht der Policy-Fahrt
+    const wpV = clamp01(S.m4 * 2 - 0.6) * k62;
+    wpCallouts.forEach((c, i) => c.set(clamp01(wpV * 1.6 - i * 0.15) * (1 - S.m4chain))); // Karte rechts braucht den Platz
+    wpCross.forEach((l) => (l.progress = wpV));
+    idealLine.progress = clamp01(S.m4 * 2 - 1) * k6;
+    idealLine.opacity = 0.8;
+    const recT = clamp01((S.m4rec * CELL.REC - rec.t0) / (rec.total - rec.t0));
+    fan.forEach((l, i) => {
+      l.progress = l === fan[m4.episodes.indexOf(recEp)] ? recT : clamp01(recT * 1.15 - i * 0.015);
+      l.opacity = (l === fan[m4.episodes.indexOf(recEp)] ? 1 : 0.45) * k62;
+    });
+    noiseLabel.forEach((t) => (t.opacity = clamp01(recT * 3 - 1.5) * k62));
+    const chV = clamp01(S.m4chain * 3) * k62;
+    chainG.visible = chV > 0.001;
+    if (chainG.visible) screenCard(chainG, CHH, 0.5, 0.87 - (0.5 * CW) / CHH / 2);
+    chainPlate.material.opacity = chV;
+    chainFrame.progress = chV;
+    chainTexts.forEach((t, i) => (t.opacity = clamp01(S.m4chain * 3 - 0.4 - i * 0.12) * k62));
+    const polOn = S.m4pol > 0 && S.m4pol < 1 ? 1 : 0;
+    polG.position.copy(wristCam.getWorldPosition(tmp));
+    polT.opacity = polOn * k6;
+    const handV = clamp01((S.m4pol - 0.97) * 40) * (1 - clamp01((S.m4hand - 0.4) * 4)) * k6;
+    handLabel.forEach((t) => (t.opacity = handV));
+    vmLabel.forEach((t) => (t.opacity = clamp01(S.m4hand * 3 - 2) * k6));
 
     // 7.4 Spielfeld, Figuren, Würfel
     const kG = S.game * (1 - S.unboard);
@@ -1339,7 +1557,7 @@ export function createCell(ctx) {
     stopText.opacity = clamp01(S.outside * 2 - 1) * k44;
 
     // 4.5: Schatten springt beim Aufruf ans Ziel des Abschnitts; mit 7.5 wieder weg
-    const k45 = S.ghost * (1 - clamp01(S.cycle2 * 20)) * (1 - S.game);
+    const k45 = S.ghost * (1 - clamp01(S.cycle2 * 20)) * (1 - Math.max(S.m4, S.game));
     ghost.object.visible = k45 > 0.5;
     if (ghost.object.visible) {
       const ts = S.sim * sim.total;
@@ -1365,7 +1583,7 @@ export function createCell(ctx) {
 }
 
 // Zeiten des Bewegungsplans (beim Anlegen der Welt gesetzt, für Blitze und Tween-Dauer)
-export const CELL = { T1: 18, T2: 14, TD: 6, TP: 2.4, TS: 7, FIN: 10, G1: 8, G2: 16, BACK: 1.6, flash1: [], flash2: [] };
+export const CELL = { T1: 18, T2: 14, TD: 6, TP: 2.4, TS: 7, FIN: 10, G1: 8, G2: 16, BACK: 1.6, REC: 14, POL: 8.5, HAND: 5, M4BACK: 1.8, flash1: [], flash2: [] };
 
 // ---------- Kameras ----------
 const cam = (lx, ly, lz, px, py, pz, fov = 30) => ({ lx, ly, lz, px, py, pz, fov });
@@ -1390,6 +1608,10 @@ const C = {
   limits: cam(3.4, 0, 2.8, 4.5, -30, 20),
   sim: cam(-7.5, 0, 5.2, -6.5, -32, 11),
   game: cam(2.75, -1.25, 0.4, 3.3, -8.0, 10.5),
+  m4: cam(3.2, -0.4, 1.7, 1.9, -18.5, 11.5),
+  m4card: cam(5.0, -0.4, 1.7, 3.7, -18.5, 11.5), // Zelle nach links, Karte rechts
+  m4top: cam(2.9, -1.5, 0.8, 1.9, -14.5, 16.5), // steiler: Teil C auf der Prüfung nicht hinter dem Arm
+
   audience: (() => {
     const [cx, cy, cz] = SIGN.show;
     const [ax, ay, az] = SIGN.audience;
@@ -1494,9 +1716,29 @@ export const CELL_SCENES = [
     cams: [C.sim, C.sim],
   },
   {
+    id: '6.2', world: 'cell',
+    steps: [
+      (tl, S) => to(tl, S, { m4: 1, duration: 2.4, ease: 'power1.inOut' }, 0.4),
+      (tl, S) => tl.to(S, { m4rec: 1, duration: CELL.REC, ease: 'none' }, 0.2),
+      (tl, S) => to(tl, S, { m4chain: 1, duration: 1.6, ease: 'power1.out' }, 0.3),
+    ],
+    cams: [C.m4, C.m4, C.m4card],
+  },
+  {
+    id: '6.8', world: 'cell',
+    steps: [
+      (tl, S) => tl.to(S, { m4pol: 1, duration: CELL.POL, ease: 'none' }, 0.6),
+      (tl, S) => tl.to(S, { m4hand: 1, duration: CELL.HAND, ease: 'none' }, 0.2),
+    ],
+    cams: [C.m4, C.m4top],
+  },
+  {
     id: '7.4', world: 'cell',
     steps: [
-      (tl, S) => to(tl, S, { game: 1, duration: 2.4, ease: 'power1.inOut' }, 0.2),
+      (tl, S) => {
+        tl.to(S, { m4back: 1, duration: CELL.M4BACK, ease: 'none' }, 0);
+        to(tl, S, { game: 1, duration: 2.4, ease: 'power1.inOut' }, 0.2);
+      },
       (tl, S) => tl.to(S, { game1: 1, duration: CELL.G1, ease: 'none' }, 0.3),
       (tl, S) => tl.to(S, { game2: 1, duration: CELL.G2, ease: 'none' }, 0.3),
     ],

@@ -4,6 +4,26 @@ Neueste Einträge oben. Offenes steht in [06_offen.md](06_offen.md).
 
 ## Log
 
+### 2026-11-01 – Niklas (Präsentation M4)
+- **Akt 6 auf Behavior Cloning umgestellt und erweitert**, 44 von 45 Szenen gebaut (offen nur 7.2):
+  - 6.1: Nur PICK klappt auf M4 um.
+  - 6.2 Lernen mit Rauschen: echte Punkte und Gelenkwinkel der Anlage, Rauschbahnen aus `bc/noise.py`.
+  - 6.3 Rauschtrichter.
+  - 6.4 Diffusion Policy (animiert).
+  - 6.5 Policy fährt selbst (Simulation).
+  - 6.6 Das Zittern.
+  - 6.7 Takt und Sicherheit.
+  - 6.8 Übergabe M4 → M2.
+  - Die Szene „Zwei Python-Welten“ ist verworfen.
+- Nachgezogen:
+  - 1.2: Kameras.
+  - 1.5: Abgrenzung.
+  - 2.4/4.7: GUI-Screenshots mit M4-Reiter.
+  - 7.3: Stand 01.11.
+  - A.4: M4-Farbe.
+- `build_data.py` exportiert `data.m4`. Kontaktbogen ohne Konsolenfehler und ohne externe Requests,
+  `npm run build` läuft.
+
 ### 2026-10-30 – Niklas
 - **Thesis auf Code-Stand** (ARS `academic-paper`):
   - Kap. 08 (M4) aus Jeremys Unterlagen entworfen.

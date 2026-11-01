@@ -285,6 +285,105 @@ def export_lab() -> dict:
             "tool": {"before": before["robot"]["tool_name"], "after": after["robot"]["tool_name"]}}
 
 
+M4_DIR = CODE / "m4_behavior_cloning"
+M4_POINTS = "points_anlage_2026-10-26.json"  # Export aus der Steuerung (Anlage, Werkzeug ZimmerLWR50)
+M4_EPISODES = 10
+# Zittern an der Anlage, RMS über 5 Hz am Unterarm (Achse 5), m/s² – Labortag 16.10./19.10.
+# Quelle: m4_behavior_cloning/Dokumentation/Labortag-2026-10-16-Uebergabe.md §1, Zittern-an-der-Anlage.md §0
+M4_JITTER = [
+    {"name": "servo_j 60 Hz", "lo": 1.80, "hi": 2.0},
+    {"name": "servo_j ohne Geschw.", "lo": 0.83, "hi": 0.89},
+    {"name": "online (Steuerung interpoliert)", "lo": 0.20, "hi": 0.20},
+    {"name": "servo_j, Override 0,5", "lo": 0.19, "hi": 0.21, "chosen": True},
+    {"name": "Neura-Standardprogramm", "lo": 0.18, "hi": 0.18},
+]
+# Durchstich Aufzeichnung → Training → Policy fährt selbst (Simulation), Lauf „Sim, echte Uhr, asynchron, Limiter“
+# Quelle: m4_behavior_cloning/Berichte/2026-09-17_Durchstich_Policy.pdf (Seite 1 und 3); Abbildung thesis/figures/m4
+M4_SIM = {"date": "2026-09-17", "success": [10, 10], "grip_mm": [1.3, 2.2], "path_p95_mm": [3.3, 4.4],
+          "episodes": 50, "steps": 8000, "train_min": 32, "params_m": 89.5, "gpu": "RTX 5070 Ti",
+          "predict_ms": 77, "predict_ms_load": 120, "sync_success": [8, 10], "vm_episodes": 30}
+# Takt an der Anlage (Labortag 16.10.): servo_j-RPC median ~10 ms, p95 ~21 ms, 1–2 Hänger à ~210 ms je Lauf
+# Quelle: Dokumentation/Labortag-2026-10-16-Uebergabe.md §1 F1; Vorhersage aus dem Durchstich-Bericht
+M4_TIMING = {"cycle_ms": 1000 / 15, "servo_ms": 1000 / 60, "rpc_median_ms": 10, "rpc_p95_ms": 21,
+             "hang_ms": 210, "predict_ms": 77}
+
+
+def export_m4() -> dict:
+    """M4: geteachte Punkte der Anlage (TCP im Basis-KS, mm/°) und echte Rauschbahnen aus bc/noise.py.
+
+    Die Bahn folgt sequences/pick_to_station.json (CLEAR_FOV → 150 mm über PICK → 50 mm über PICK → PICK →
+    50 mm über PICK → PRE_PLACE), abgetastet mit 15 Hz bei Transit 0,15 m/s und Anflug 0,05 m/s. Das Rauschen
+    kommt aus Jeremys SmoothedOUProcess mit Trichter (0 an Start, PICK und PRE_PLACE) und Tischgrenze;
+    je Episode ein zufälliger Rauschfaktor wie bei der Aufnahme. Ohne IK, nur die TCP-Lage.
+    """
+    import math
+    sys.path.insert(0, str(M4_DIR))
+    from bc import config as bcc
+    from bc import noise
+
+    pts = json.loads((M4_DIR / "sequences" / M4_POINTS).read_text(encoding="utf-8"))["punkte"]
+    pose = lambda k: [round(v * 1000, 1) for v in pts[k]["cartesian"][:3]] + \
+        [round(math.degrees(a), 1) for a in pts[k]["cartesian"][3:]]
+    P = {k: pose(k) for k in ("CLEAR_FOV", "PICK", "PRE_PLACE")}
+    joints = {k: [round(math.degrees(a), 2) for a in pts[k]["joint"]] for k in P}  # Startwerte für die IK in der Zelle
+
+    pick = np.array(P["PICK"][:3]) / 1000
+    above = lambda dz: pick + [0, 0, dz]
+    legs = [(np.array(P["CLEAR_FOV"][:3]) / 1000, above(0.15), bcc.TRANSIT_SPEED_MS),
+            (above(0.15), above(0.05), bcc.TRANSIT_SPEED_MS),
+            (above(0.05), pick, bcc.APPROACH_SPEED_MS),
+            (pick, pick, None),  # Greifer schließt
+            (pick, above(0.05), bcc.APPROACH_SPEED_MS),
+            (above(0.05), np.array(P["PRE_PLACE"][:3]) / 1000, bcc.TRANSIT_SPEED_MS)]
+    rate = bcc.CONTROL_RATE_HZ
+    path, dwell = [], []
+    for a, b, v in legs:
+        n = bcc.GRIPPER_DWELL_STEPS if v is None else max(2, int(math.ceil(np.linalg.norm(b - a) / v * rate)))
+        for i in range(n):
+            path.append(a + (b - a) * (i / n))
+            dwell.append(v is None)
+    path.append(legs[-1][1])
+    dwell.append(False)
+    path = np.array(path)
+    arc = np.r_[0, np.cumsum(np.linalg.norm(np.diff(path, axis=0), axis=1))]
+    anchors = [0.0, arc[int(np.argmax(dwell))], arc[-1]]
+    dist = np.min([np.abs(arc - s) for s in anchors], axis=0)
+    scale = np.where(dwell, 0.0, noise.funnel_scale(dist))
+
+    rng = np.random.default_rng(4)
+    lim = noise.NoiseLimits()
+    episodes = []
+    for _ in range(M4_EPISODES):
+        k = rng.uniform(*bcc.NOISE_EPISODE_SCALE_RANGE)
+        ou = noise.SmoothedOUProcess(bcc.NOISE_TRANS_AMPLITUDE_M * k, bcc.NOISE_OU_TAU_S, bcc.NOISE_SMOOTH_TAU_S,
+                                     1 / rate, dims=3, rng=rng, lo=lim.lo, hi=lim.hi)
+        off = np.array([ou.step() * s for s in scale])
+        episodes.append({"scale": round(float(k), 2), "path": np.round((path + off) * 1000, 1).tolist()})
+    dev = max(float(np.max(np.linalg.norm(np.array(e["path"]) - path * 1000, axis=1))) for e in episodes)
+    print(f"  M4: {len(path)} Takte je Episode, {M4_EPISODES} Episoden, größte Abweichung {dev:.1f} mm")
+    # 6.3 Trichter: Abweichung je Episode in x und z über der Bahnlänge, Hülle = Grenze des Rauschprozesses × Trichter
+    offs = [np.array(e["path"]) - path * 1000 for e in episodes]
+    funnel = {"arc_mm": np.round(arc * 1000, 1).tolist(), "anchors_mm": [round(a * 1000, 1) for a in anchors],
+              "dx": [np.round(o[:, 0], 1).tolist() for o in offs], "dz": [np.round(o[:, 2], 1).tolist() for o in offs],
+              "hull_hi": np.round(scale * lim.hi[0] * 1000, 1).tolist(),
+              "hull_z_lo": np.round(scale * lim.lo[2] * 1000, 1).tolist(),
+              "limit_mm": {"xy": round(lim.hi[0] * 1000, 1), "z_down": round(lim.lo[2] * 1000, 1)},
+              "max_rejects": bcc.NOISE_MAX_REJECTS}
+    # 6.4 Policy-Aufbau aus Jeremys Config
+    policy = {"n_obs": bcc.POLICY_N_OBS_STEPS, "horizon": bcc.POLICY_HORIZON, "n_action": bcc.POLICY_N_ACTION_STEPS,
+              "inference_steps": bcc.POLICY_INFERENCE_STEPS, "image": [bcc.IMAGE_HEIGHT, bcc.IMAGE_WIDTH]}
+    # 6.5 Rollout-Abbildung aus dem Durchstich (unten abgeschnitten: dort beginnt im Original die Tabelle)
+    fig = cv2.imread(str(ROOT / "thesis" / "figures" / "m4" / "durchstich_sim_rollouts.png"))[:396]
+    (OUT_IMG / "m4").mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(OUT_IMG / "m4" / "durchstich_sim_rollouts.png"), fig)
+    sim = {**M4_SIM, "figure": {"url": "img/m4/durchstich_sim_rollouts.png", "w": fig.shape[1], "h": fig.shape[0]}}
+    return {"points": P, "joints": joints, "points_file": M4_POINTS, "rate_hz": rate, "ideal": np.round(path * 1000, 1).tolist(),
+            "pick_index": int(np.argmax(dwell)), "episodes": episodes, "max_dev_mm": round(dev, 1),
+            "noise": {"sigma_mm": bcc.NOISE_TRANS_AMPLITUDE_M * 1000, "tau_s": bcc.NOISE_OU_TAU_S,
+                      "funnel_mm": [bcc.FUNNEL_ZERO_DIST_M * 1000, bcc.FUNNEL_START_DIST_M * 1000]},
+            "funnel": funnel, "policy": policy, "sim": sim, "timing": M4_TIMING, "jitter": M4_JITTER}
+
+
 def export_tests() -> dict:
     """Anzahl der Tests je Datei (pytest --collect-only)."""
     import subprocess
@@ -309,7 +408,7 @@ def main() -> None:
     print("M2 robot_check …")
     m2 = {"check": export_m2_check()}
     data = {"part": PART, "config": export_config(cfg), "m1": m1, "m2": m2, "m3": m3, "logs": export_logs(),
-            "figures": copy_figures(), "tests": export_tests(), "lab": export_lab()}
+            "figures": copy_figures(), "tests": export_tests(), "lab": export_lab(), "m4": export_m4()}
     (OUT_DATA / "data.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"→ {OUT_DATA / 'data.json'}")
 

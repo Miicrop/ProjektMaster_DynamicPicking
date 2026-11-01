@@ -21,12 +21,7 @@
 
 ## 1. Code und Repo
 
-- [ ] **N** – Laborlaptop-Stand pushen. Öffnen und Schließen des Greifers funktioniert dort,
-  im Repo steht noch `gripper_enabled: false`.
-- [ ] **N** – Thesis- und Plan-Stand vom 30.10. committen.
-- [ ] **T** – Git-Hosting für das Team klären (GitHub oder GitLab der Hochschule).
   `resources/` bleibt draußen, weil es Passwort-Hashes enthält.
-- [ ] **P2** – GitHub-Repo mit den bisherigen Robotertests sichten. Es liegt noch nicht vor.
 
 ## 2. Labor: Kameras und Inbetriebnahme
 
@@ -85,7 +80,7 @@ Nach jeder Config-Änderung in der GUI speichern (Strg+S).
 ## 3. M4 und Rücksprache Jeremy
 
 - [ ] **J** – Kap. 08 der Thesis durchsehen, übernehmen oder umschreiben und die `\todo{Jeremy}`
-  füllen: Totzeit des Greifers, Override 0,5 mit dem Betreuer, Zwischenfazit.
+  füllen: Totzeit des Greifers, Zwischenfazit.
 - [ ] **J/N** – **Zykluszeit.** Im Ablauf startet `apps/infer.py` je Zyklus neu: torch und Modell
   laden, Kameras öffnen, verbinden. Das dauert geschätzt mehrere bis ~30 s, gemessen ist es nicht.
   Klären, ob ein Dauerlauf-Modus sinnvoll ist, der zwischen den Zyklen auf das Startsignal wartet.
@@ -154,13 +149,13 @@ Wie man weiterschreibt, steht in [../thesis/blueprint.md](../thesis/blueprint.md
 
 Das Konzept steht in [10_praesentation_konzept.md](10_praesentation_konzept.md).
 
-- [ ] **N** – Auf den M4-Stand bringen:
-  - **6.1:** M4 = Behavior Cloning, nur PICK klappt auf M4 um, PLACE_INSPECT bleibt bei M2.
-  - **1.2:** Kameras (zwei Daheng, eine USB).
-  - **2.4:** GUI mit sechs Reitern, neuer Screenshot mit `tools/gui_shot.py`.
-  - **Architektur:** zwei Python-Umgebungen.
-  - **7.1/7.3:** VM-Übergabetest.
-- [ ] **J** – Szene 6.2 füllen. Quellen: `code/m4_behavior_cloning/Berichte/`, `Dokumentation/`.
+- [ ] **J** – Akt 6 prüfen (6.1–6.8, Entwurf aus deiner Doku):
+  - Zahlen: Rauschen 15 mm, Trichter 20/150 mm, Tischgrenze 2 mm, 89,5 M Parameter, 16/8 Takte,
+    10 DDIM-Schritte, Durchstich 10/10, Zitterwerte (6.6), Takt und Schutzschichten (6.7).
+  - Stimmt die Darstellung der Diffusion Policy (6.4, Schema mit einem Gelenk)?
+  - Passen die ehrlichen Grenzen in 6.5 und die Aussage „mit Modell an der Anlage offen“ in 6.8?
+  - Welche (k)-Szenen (6.3, 6.6, 6.7) bleiben im Vortrag?
+  - Szenen in `presentation/abschluss/src/storyboard.js`, Konzept in [10_praesentation_konzept.md](10_praesentation_konzept.md).
 - [ ] **T** – Offene Szenen: 7.2 Messwerte (nach der Evaluation), 7.4 Ausblick (nach der
   Entscheidung zur Pflegerobotik).
 - [ ] **N** – Fotos vom Labor für 7.1, Stand in 7.3 vor dem Vortrag prüfen.
