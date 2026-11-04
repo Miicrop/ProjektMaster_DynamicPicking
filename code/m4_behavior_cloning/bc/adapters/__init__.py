@@ -436,7 +436,7 @@ def camera_configs(mode, uvc_device=None, specs=None):
     return apply_camera_specs(cfgs, specs)
 
 
-def start_cameras(mode, clock, seed=0, uvc_device=None, specs=None):
+def start_cameras(mode, clock, seed=0, uvc_device=None, specs=None, cfgs=None):
     """Oeffnet die Kameras eines (aufgeloesten) Modus und startet die Captures.
 
     Echte Kameras laufen im Hintergrund-Thread (ThreadedCapture), Platzhalter
@@ -452,7 +452,10 @@ def start_cameras(mode, clock, seed=0, uvc_device=None, specs=None):
     from ..clock import RealClock
     from .cam_sim import SimCamera
 
-    cfgs = camera_configs(mode, uvc_device=uvc_device, specs=specs)
+    # ``cfgs``: schon aufgeloest (apps/record.py legt die gespeicherten
+    # Kameraeinstellungen darauf, bc/camera_settings.py)
+    cfgs = list(cfgs) if cfgs is not None else camera_configs(
+        mode, uvc_device=uvc_device, specs=specs)
     if any(c.backend != "sim" for c in cfgs) and not isinstance(clock, RealClock):
         raise ValueError("Echte Kameras brauchen die Host-Uhr (RealClock), nicht %s"
                          % type(clock).__name__)

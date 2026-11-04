@@ -1025,7 +1025,7 @@ def _command_label():
     label = QLabel("")
     label.setWordWrap(True)
     label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-    label.setStyleSheet("font-family:Consolas; color:#333")
+    label.setStyleSheet("font-family:Consolas; color:palette(text)")
     return label
 
 

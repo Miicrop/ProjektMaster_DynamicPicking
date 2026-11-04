@@ -18,7 +18,7 @@ Oberflaeche ruft :func:`discover` deshalb in einem Arbeitsthread auf und
 haelt das Ergebnis in :class:`Inventory`.
 """
 
-from .. import config
+from .. import camera_settings, config
 from ..adapters import (
     CAMERA_BACKENDS,
     FPS_NATIVE,
@@ -154,8 +154,12 @@ def to_specs(assignment, fps=None):
             for slot in SLOTS if slot in assignment]
 
 
-def to_configs(assignment, fps=None):
-    """Zuordnung -> CameraConfig je Platz, in der Reihenfolge des Datensatzes."""
+def to_configs(assignment, fps=None, apply_saved=True):
+    """Zuordnung -> CameraConfig je Platz, in der Reihenfolge des Datensatzes.
+
+    ``apply_saved``: Belichtung/Gain aus dem Fenster "Kameraeinstellungen"
+    (bc/camera_settings.py) -- wie apps/record.py sie auch nimmt.
+    """
     configs = []
     for slot in SLOTS:
         if slot not in assignment:
@@ -164,6 +168,8 @@ def to_configs(assignment, fps=None):
         name, backend, device = parse_camera_spec(spec)
         configs.append(with_fps(camera_config_for(name, backend, device),
                                 split_camera_fps(spec)[1]))
+    if apply_saved:
+        configs = camera_settings.apply(configs)[0]
     return configs
 
 

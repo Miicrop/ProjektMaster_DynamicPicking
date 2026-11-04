@@ -48,6 +48,7 @@ import _bootstrap  # noqa: F401
 import numpy as np
 
 from bc import config, dataset, metrics
+from bc import camera_settings as camera_settings_module
 from bc.adapters import (
     CAMERA_MODES,
     camera_configs,
@@ -401,6 +402,10 @@ def main():
                                   specs=args.camera)
     except ValueError as exc:
         raise SystemExit("--camera: %s" % exc)
+    # Dieselbe Belichtung/Gain wie bei der Aufnahme (bc/camera_settings.py)
+    cam_cfgs, notes = camera_settings_module.apply(cam_cfgs)
+    for note in notes:
+        print("Kamera %s" % note)
     use_sim_cameras = all(c.backend == "sim" for c in cam_cfgs)
 
     info, policy = None, None
@@ -528,7 +533,7 @@ def main():
     try:
         captures, cam_cfgs = start_cameras(camera_mode, clock, seed=args.seed,
                                            uvc_device=args.uvc_device,
-                                           specs=args.camera)
+                                           specs=args.camera, cfgs=cam_cfgs)
     except Exception:
         robot.close()
         raise

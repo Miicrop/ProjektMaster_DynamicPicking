@@ -144,7 +144,9 @@ def record_argv(out, robot_kind="sim", episodes=1, sequence=None,
                 real_robot=False, servo_rate=None, transit_speed=None,
                 approach_speed=None, ptp_speed=None, no_gripper=False,
                 execution=None, put_back=True, probe=True, teach_after=False,
-                lagen=1, drehung=None, stop_file=None, regrip=None, margin=None):
+                lagen=1, drehung=None, stop_file=None, regrip=None, margin=None,
+                variants=True, variant_shift=None, variant_yaw=None,
+                coverage_roots=None, put_back_speed=None, final_new=False):
     """Kommandozeile fuer apps/record.py (ohne das Python-Programm)."""
     if not out:
         raise ValueError("Kein Zielordner angegeben.")
@@ -187,6 +189,27 @@ def record_argv(out, robot_kind="sim", episodes=1, sequence=None,
         argv.append("--nach-ende-teach")
     if sequence and put_back and regrip and regrip != config.PUT_BACK_REGRIP_DEFAULT:
         argv += ["--nachgreifen", str(regrip)]
+    if (sequence and put_back and put_back_speed is not None
+            and abs(float(put_back_speed) - config.PUT_BACK_APPROACH_SPEED_MS) > 1e-9):
+        argv += ["--ablage-tempo", "%g" % float(put_back_speed)]
+    # Schluss-Lage als neuer PICK (Anwender 2026-11-03) -- braucht Tischpunkte;
+    # ohne sie bleibt record.py beim geteachten PICK
+    if sequence and put_back and final_new:
+        argv += ["--schluss-lage", "neu"]
+    # Varianten (Anwender 2026-11-01) -- in record.py Standard, sobald
+    # Tischpunkte da sind; nur Abschalten und Abweichungen anhaengen
+    if sequence and put_back:
+        if not variants:
+            argv.append("--feste-lage")
+        else:
+            for flag, value, default in (
+                    ("--varianten-versatz", variant_shift, config.AUTO_VARIANT_SHIFT_M),
+                    ("--varianten-drehung", variant_yaw, config.AUTO_VARIANT_YAW_DEG)):
+                if value is not None and abs(float(value) - default) > 1e-9:
+                    argv += [flag, "%g" % float(value)]
+        # Abdeckung auch aus frueheren Tagen (Zielordner ist data_vm/<Datum>)
+        for root in coverage_roots or []:
+            argv += ["--abdeckung", str(root)]
     # Automatische Lagen (bc/auto_layout.py) -- nur mit Zuruecklegen
     if sequence and put_back and int(lagen) > 1:
         argv += ["--lagen", str(int(lagen))]
@@ -215,6 +238,16 @@ def record_argv(out, robot_kind="sim", episodes=1, sequence=None,
     if no_gripper:
         argv.append("--no-gripper")
     return argv
+
+
+#: "PICK uebernommen: x 312 mm, ... -- Sicherung: sequences/.../2026-11-03_PICK.json"
+_ADOPTED = re.compile(r"^PICK uebernommen:.*Sicherung:\s*(?P<path>.+?)\s*$")
+
+
+def adopted_pick_backup(line):
+    """Sicherungsdatei, wenn record.py die Schluss-Lage als PICK geschrieben hat."""
+    match = _ADOPTED.match((line or "").strip())
+    return match.group("path") if match else None
 
 
 #: "Naechster freier Block: B05" -- record.py am Ende (automatische Lagen
@@ -409,6 +442,46 @@ _SETTINGS = re.compile(r"^Lauf-Einstellungen:.*Seed\s+(?P<seed>\d+)")
 _TOTAL = re.compile(r"^\s*Episoden gesamt\s*:\s*(?P<total>\d+)")
 _USABLE = re.compile(r"^\s*davon verwendbar\s*:\s*(?P<usable>\d+)")
 _DISCARDED = re.compile(r"^\s*davon verworfen\s*:\s*(?P<discarded>\d+)")
+
+
+#: Bausteine eines Ergebnisses -> Erklaerung fuer den Tooltip in der
+#: Episodenliste (Anwender 2026-11-03: was heissen "ok", "Rausch-Rejects"?).
+#: Schluessel klein geschrieben, gesucht wird als Teilstring.
+OUTCOME_HINTS = (
+    ("nachträglich", "Bewertung nach der Fahrt geändert (Rechtsklick), steht in der "
+                     "meta.json der Episode."),
+    ("ok", "ok: Episode vollständig aufgezeichnet und gespeichert — Arm ist der Bahn "
+           "gefolgt, Kamerabilder innerhalb des Latenzbudgets. Ob der Griff gelungen "
+           "ist, sagt erst die Bewertung (unbewertet = zählt beim Export mit)."),
+    ("rausch-rejects", "Rausch-Rejects: so viele verrauschte Bahnen hat der Planer vor "
+                       "dieser verworfen und neu gezogen (Kollision mit Tisch/Sperrzone, "
+                       "Gelenkgrenze oder zu schnell). Kein Fehler — die gefahrene Bahn "
+                       "ist gültig. Viele Rejects (bis %d möglich) heißen: Rauschen nah "
+                       "an der Grenze." % config.NOISE_MAX_REJECTS),
+    ("verworfen", "VERWORFEN: Episode liegt im Ordner, geht aber nicht in den Export. "
+                  "Grund in Klammern."),
+    ("fehlgeschlagen", "FEHLGESCHLAGEN: als Fehlschlag markiert — wird beim Export "
+                       "ausgelassen, bleibt aber zur Auswertung im Ordner."),
+    ("erfolgreich", "erfolgreich: als gelungener Griff bewertet."),
+    ("schutzstopp", "schutzstopp: die Steuerung hat die Fahrt angehalten "
+                    "(Kollision, Grenze oder Not-Halt)."),
+    ("latenzbudget", "latenzbudget: zu viele Kamerabilder waren älter als erlaubt — "
+                     "Bild und Armstellung passen dann nicht zusammen."),
+    ("arm folgt nicht", "arm folgt nicht: der Arm blieb hinter dem Sollwert zurück "
+                        "(Override zu klein oder Steuerkanal weg)."),
+    ("unvollstaendig", "unvollständig: vor dem Ende der Bahn abgebrochen."),
+    ("trockenlauf", "Trockenlauf: Greifer hat nie geschaltet — nie im Datensatz."),
+    ("vom bedienenden", "Vom Bedienenden verworfen (Abfrage nach der Episode)."),
+)
+
+
+def outcome_hint(outcome):
+    """Tooltip zum Ergebnistext einer Episode (alle passenden Bausteine)."""
+    text = (outcome or "").lower()
+    lines = [hint for key, hint in OUTCOME_HINTS
+             if (key == "ok" and (text == "ok" or text.startswith("ok,")))
+             or (key != "ok" and key in text)]
+    return "\n\n".join(lines) or "Ergebnis laut apps/record.py."
 
 
 class Episode(object):

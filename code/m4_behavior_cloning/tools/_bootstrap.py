@@ -29,6 +29,7 @@ _NEURAPY_CANDIDATES = tuple(
 ) + (
     _REPO_ROOT / "Robot Controller",
     _REPO_ROOT / "code" / "m2_robot_control" / "vendor",
+    _REPO_ROOT / "m2_robot_control" / "vendor",   # als code/m4_behavior_cloning eingebaut
     _REPO_ROOT,
 )
 

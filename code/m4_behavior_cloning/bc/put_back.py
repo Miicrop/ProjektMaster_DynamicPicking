@@ -25,7 +25,8 @@ gefahren wird, die schon geplant und kollisionsgeprueft war. Abweichend:
   senkrecht beginnen (siehe ``bc/sequence.py`` zum Radius an PRE_GRASP).
 * das Segment hinunter zum Greifpunkt faehrt mit Endanflug-Tempo
   (``approach``), auch wenn es vorwaerts das Anheben war.
-* am Greifpunkt oeffnet der Greifer (Dwell wie beim Greifen).
+* am Greifpunkt oeffnet der Greifer (Dwell wie beim Greifen) -- um die
+  Ablage-Zugabe hoeher als gegriffen (``config.PUT_BACK_PLACE_OFFSET_M``).
 
 Der Ablauf muss dafuer genau EINEN Greiferwechsel haben (auf -> zu) und
 geschlossen enden -- so wie ``sequences/pick_to_station.json``.
@@ -61,8 +62,13 @@ def grasp_index(waypoints):
     return g
 
 
-def put_back_waypoints(waypoints):
-    """Vorwaertsbahn -> Rueckfahrt: Uebergabepunkt -> Greifpunkt (oeffnen) -> Start."""
+def put_back_waypoints(waypoints, place_offset=0.0, ik=None):
+    """Vorwaertsbahn -> Rueckfahrt: Uebergabepunkt -> Greifpunkt (oeffnen) -> Start.
+
+    ``place_offset``: Greifpunkt zum Ablegen so viel hoeher (m, Basis-z);
+    ``ik(pose, referenz)`` liefert dafuer die Gelenkstellung (Pflicht, wenn
+    ``place_offset`` nicht 0 ist).
+    """
     g = grasp_index(waypoints)
     n = len(waypoints)
     if any(wp.joints is None for wp in waypoints):
@@ -80,14 +86,20 @@ def put_back_waypoints(waypoints):
             # Segment k+1 -> k faehrt wie das Vorwaertssegment k -> k+1
             nxt = waypoints[k + 1]
             motion, approach = nxt.motion, nxt.approach
+        pose, joints = wp.pose_quat.copy(), wp.joints.copy()
+        if k == g and place_offset:
+            if ik is None:
+                raise PutBackError("Ablage-Zugabe braucht eine IK")
+            pose[2] += float(place_offset)
+            joints = np.asarray(ik(pose, wp.joints), dtype=float)
         back.append(
             Waypoint(
-                wp.pose_quat.copy(),
+                pose,
                 gripper_closed=k > g,  # am Greifpunkt auf, danach offen
                 approach=approach or k == g,
                 name=wp.name,
                 motion=motion,
-                joints=wp.joints.copy(),
+                joints=joints,
                 blend_m=0.0,
             )
         )
@@ -95,19 +107,30 @@ def put_back_waypoints(waypoints):
 
 
 def plan_put_back(kin, collision_model, waypoints, fk, collision_stride=1,
-                  regrip=config.PUT_BACK_REGRIP, **speeds):
+                  regrip=config.PUT_BACK_REGRIP, slow=True,
+                  place_offset=config.PUT_BACK_PLACE_OFFSET_M,
+                  slow_speed=config.PUT_BACK_APPROACH_SPEED_MS, **speeds):
     """Unverrauschter, kollisionsgepruefter Plan der Rueckfahrt.
 
     ``speeds``: ``transit_speed``, ``approach_speed``, ``ptp_joint_speed``
     wie bei der Aufzeichnung (bc/trajectory.py). Soll- und Ist-Bahn des
     Plans sind identisch -- er wird nur gefahren, nie gespeichert. Der
-    Abstieg zum Ablegen faehrt hoechstens ``config.PUT_BACK_APPROACH_SPEED_MS``;
-    ``regrip``: nach dem Oeffnen einmal zu und wieder auf (:func:`with_regrip`).
+    Abstieg zum Ablegen faehrt hoechstens ``slow_speed`` (m/s, Vorgabe
+    ``config.PUT_BACK_APPROACH_SPEED_MS``, ``record.py --ablage-tempo``)
+    (``slow``; ohne: Endanflug-Tempo der Aufnahme -- Varianten einer Gruppe,
+    Anwender 2026-11-01: mit vermessenem Tisch reicht das, langsam nur noch
+    beim Lagenwechsel);
+    ``regrip``: nach dem Oeffnen einmal zu und wieder auf (:func:`with_regrip`);
+    ``place_offset``: Ablage-Zugabe ueber der Greifhoehe (m).
     """
     speeds = dict(speeds)
-    speeds["approach_speed"] = min(float(speeds.get("approach_speed", config.APPROACH_SPEED_MS)),
-                                   config.PUT_BACK_APPROACH_SPEED_MS)
-    back = put_back_waypoints(waypoints)
+    if slow:
+        speeds["approach_speed"] = min(float(speeds.get("approach_speed", config.APPROACH_SPEED_MS)),
+                                       float(slow_speed))
+    try:
+        back = put_back_waypoints(waypoints, place_offset, ik=kin.ik)
+    except IKFailure as exc:
+        raise PutBackError("Ablage-Zugabe nicht erreichbar (%s)" % exc) from exc
     ideal = build_ideal_trajectory(back, fk=fk, **speeds)
     try:
         joints = kin.solve_path(ideal.poses_quat, back[0].joints, fixed_joints=ideal.joints)

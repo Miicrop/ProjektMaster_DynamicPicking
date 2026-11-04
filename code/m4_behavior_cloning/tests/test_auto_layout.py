@@ -36,8 +36,8 @@ SEQ = {
 }
 
 
-def _points(size=0.10):
-    """SimRobot-Punkte, Tischpunkte im Quadrat +-size um PICK, 8 mm darunter."""
+def _points(size=0.10, below=0.008):
+    """SimRobot-Punkte, Tischpunkte im Quadrat +-size um PICK, ``below`` darunter."""
     probe = SimRobot(clock=SimClock()).connect()
     points = _sim_points(probe)
     kin = Kinematics(probe)
@@ -46,7 +46,7 @@ def _points(size=0.10):
         pose = pick.copy()
         pose[0] += dx * size
         pose[1] += dy * size
-        pose[2] -= 0.007
+        pose[2] -= below  # beruehrt den Tisch, ``below`` unter PICK
         points["ID%d" % k] = kin.ik(pose, points["PICK"])
     return points, probe
 
@@ -198,6 +198,8 @@ def test_regrip_only_when_the_pose_changes(tmp_path):
     assert default - never == 2, log[-1500:]
     assert always - never == 4
     assert "Geschaetzte Dauer: ca." in log and "2 Fahrt(en) x 2 Lage(n)" in log
+    # vor Lage 2: neu geschaetzt aus der gemessenen Zeit der ersten
+    assert "Geschaetzte Dauer: noch ca." in log and "1 von 2 Lagen fertig" in log
 
 
 def test_duration_estimates_for_the_gui():
@@ -205,7 +207,10 @@ def test_duration_estimates_for_the_gui():
 
     one = recording.estimate_duration_s(3, 1, probe=True)
     ten = recording.estimate_duration_s(3, 10, probe=True)
-    assert 2 * 60 < one < 5 * 60 and 12 * 60 < ten < 18 * 60
+    assert 2 * 60 < one < 5 * 60 and 18 * 60 < ten < 28 * 60
+    # Anlage 2026-11-03: 99 Lagen x 3 Fahrten dauerten ~3 h 50 (angezeigt ~3 h)
+    run = recording.estimate_duration_s(3, 99, probe=True)
+    assert 3.5 * 3600 < run < 4.2 * 3600
     assert recording.format_duration(30) == "30 s"
     assert recording.format_duration(8 * 60) == "8 min"
     assert recording.format_duration(85 * 60) == "1 h 25 min"

@@ -102,7 +102,19 @@ class BackendBar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(controls, 0)
         layout.addWidget(self.banner, 1)
+        self._layout = layout
         self._sync()
+
+    def add_restart(self, handler):
+        """Knopf "Neu starten" rechts -- immer da, nicht nur nach Code-
+        Aenderungen (Anwender 2026-11-03). Nur im eigenen Fenster."""
+        button = QPushButton("Neu starten")
+        button.setToolTip("Oberfläche sauber schließen (Kameras, Verbindung) und neu "
+                          "starten. Gesperrt nur, solange eine Aufnahme, Fahrt oder "
+                          "Teach-Serie läuft.")
+        button.clicked.connect(handler)
+        self._layout.addWidget(button, 0)
+        return button
 
     def _sync_override(self, _status=None):
         if abs(self.override.value() - self.session.override) < 1e-12:
@@ -179,6 +191,7 @@ class MainWindow(QMainWindow):
         for tab in self.mode_tabs:
             if hasattr(tab, "set_restart_handler"):
                 tab.set_restart_handler(self.restart_gui)
+        self.bar.add_restart(self.restart_gui)
 
         central = QWidget()
         layout = QVBoxLayout(central)
@@ -229,11 +242,15 @@ class MainWindow(QMainWindow):
                 "Erst beenden:\n\n" + "\n".join("• " + b for b in blockers))
             return
         mode = self.tabs.currentWidget().mode or "systemcheck"
+        # Was beim Schliessen ohnehin sauber zugeht (Kameravorschau), sperrt
+        # nicht mehr -- es wird nur genannt (Anwender 2026-11-03)
+        closing = "".join("\n• %s — wird geschlossen" % c
+                          for c in reload_module.closable_reasons(self.mode_tabs))
         if QMessageBox.question(
                 self, "Oberfläche neu starten",
                 "Die Oberfläche wird geschlossen und neu gestartet. Die Verbindung "
                 "zur Steuerung wird dabei getrennt; ungespeicherte Änderungen am "
-                "Ablauf gehen verloren.\n\nNeu starten?",
+                "Ablauf gehen verloren.%s\n\nNeu starten?" % closing,
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return

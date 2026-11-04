@@ -120,7 +120,16 @@ GRIPPER_DWELL_STEPS = int(math.ceil(GRIPPER_DWELL_S * CONTROL_RATE_HZ))
 #: Objekt in den Tisch druecken, nicht zu hoch loslassen. Abgelegt wird
 #: deshalb exakt auf der Greifpose (PICK), der letzte Abstieg langsamer als
 #: der Endanflug der Aufnahme (wird nicht aufgezeichnet, Tempo frei) ...
-PUT_BACK_APPROACH_SPEED_MS = 0.02
+#: Anwender 2026-11-03: alle Ablagen bisher sauber (Varianten schon mit
+#: Endanflug-Tempo 0,05 m/s), das langsame Ablegen beim Lagenwechsel
+#: kostete nur Zeit -- von 0,02 auf das Endanflug-Tempo
+#: (``record.py --ablage-tempo``; kleiner = wieder langsamer).
+PUT_BACK_APPROACH_SPEED_MS = 0.05
+#: Ablage-Zugabe (Anlage 2026-11-02, B013-B037): beim Zuruecklegen so viel
+#: UEBER der Greifhoehe oeffnen. Die Tischhoehe stimmt nur auf einige
+#: Zehntel mm; lieber faellt das Objekt kurz, als dass es eingedrueckt wird
+#: (``record.py --ablage-zugabe``).
+PUT_BACK_PLACE_OFFSET_M = 0.0005
 #: ... und nach dem Oeffnen einmal "zu, auf" (Nachgreifen): der
 #: Parallelgreifer schiebt das Objekt dabei mittig zwischen die Backen --
 #: die Lage ist danach durch den Greifer bestimmt, nicht durch ein Rutschen
@@ -140,8 +149,13 @@ PUT_BACK_REGRIP_DEFAULT = "lagenwechsel"
 #: (Verbinden, Kameras, Referenzbilder) ~20 s, Umlegen an eine neue Lage
 #: einige s mehr (Nachgreifen, laengerer Weg). Wartezeit fuer Bewertungen
 #: ist NICHT enthalten.
-ESTIMATE_CYCLE_S = 25.0
-ESTIMATE_PLAN_LAGE_S = 12.0
+#: Nachgemessen Anlage 2026-11-03 (297 Fahrten, 99 Lagen, angezeigt ~3 h,
+#: gedauert ~3 h 50): Fahrt an eine Variante 31 s (Anfahren + Episode 11 s +
+#: Speichern 19 s, Ablegen 12 s), Lagenwechsel 53 s statt 12 s Ablegen --
+#: Planen der naechsten Lage samt Varianten und Umlegen mit Nachgreifen.
+#: Seit 2026-11-03 legt der Lagenwechsel schneller ab (--ablage-tempo).
+ESTIMATE_CYCLE_S = 31.0
+ESTIMATE_PLAN_LAGE_S = 36.0
 ESTIMATE_PROBE_S = 50.0
 ESTIMATE_START_S = 20.0
 ESTIMATE_TRANSFER_S = 5.0
@@ -429,14 +443,24 @@ APPROACH_MIN_DROP_M = 0.010
 APPROACH_MAX_LATERAL_M = 0.015
 
 #: Tischreferenz (bc/table.py, Anwender 2026-10-26): Punkte werden so weit
-#: UEBER dem Tisch geteacht (mittig ueber den ArUco-Markern) ...
-TABLE_POINT_OFFSET_M = 0.001
+#: UEBER dem Tisch geteacht (mittig ueber den ArUco-Markern) -- seit dem
+#: Neu-Teachen am 2026-11-02 (ID0-ID8) beruehrt der Greifer den Tisch: 0.
+#: Mit 1 mm laege der Tisch im Modell 1 mm zu tief, gegriffen und abgelegt
+#: wuerde 1 mm tiefer als ``pick_height`` ...
+TABLE_POINT_OFFSET_M = 0.0
 #: ... kein Wegpunkt und keine Werkzeugspitze darf naeher an die Ebene
 #: (PICK liegt ueblich 6-10 mm darueber) ...
 TABLE_MIN_CLEARANCE_M = 0.003
 #: ... die Punkte duerfen hoechstens so weit von einer Ebene abweichen
 #: (sonst ist einer falsch geteacht) ...
 TABLE_MAX_RESIDUAL_M = 0.003
+#: Gewoelbter Tisch (Anwender 2026-11-01, Bauch 1-2 mm vermutet): ab so vielen
+#: Tischpunkten wird zusaetzlich eine quadratische Flaeche angepasst (6
+#: Unbekannte; sinnvoll ist ein 3x3-Raster) ...
+TABLE_CURVED_MIN_POINTS = 6
+#: ... und nur genommen, wenn sie die Punkte um mindestens so viel besser
+#: trifft als die Ebene (groesste Abweichung) -- darunter ist es Teach-Streuung.
+TABLE_CURVED_MIN_GAIN_M = 0.0005
 #: Sperrzone um einen geteachten Punkt (``"table": {"keepout": [...]}``,
 #: Anwender 2026-10-26: Schraube im Tisch an Punkt IGNORE): Quadrat mit
 #: dieser halben Kantenlaenge um den Punkt (+-5 cm) ...
@@ -444,11 +468,30 @@ KEEPOUT_HALF_SIZE_M = 0.05
 #: ... darin muss die Werkzeugspitze mindestens so hoch ueber dem Tisch
 #: bleiben -- kein Greifen dort, und keine verrauschte Bahn taucht hinein.
 KEEPOUT_MIN_HEIGHT_M = 0.05
+#: ... und berechnete Lagen/Varianten halten das ganze Bauteil heraus
+#: (Anwender 2026-11-03): 60 mm lang, meist mittig gegriffen, je 5 mm Puffer
+#: -> bis 35 mm vom TCP in jede Richtung. Der Schraubenkopf misst nur ~7 mm,
+#: IGNORE liegt aber nicht genau mittig darueber -- deshalb zaehlt das ganze
+#: Quadrat, nicht der Kopf. Geteachte Punkte prueft nur der TCP (Hinweis).
+KEEPOUT_OBJECT_MARGIN_M = 0.035
 #: ... "Anfahren" eines Tischpunkts kommt von so weit senkrecht darueber.
 TABLE_APPROACH_ABOVE_M = 0.05
 #: Greifhoehe ueber dem Tisch fuer "PICK ausrichten", solange die
 #: Ablaufdatei keine eigene nennt (``"table": {"pick_height": ...}``).
 PICK_HEIGHT_DEFAULT_M = 0.008
+#: Korrektur an den Tischpunkten (bc/table.py): Abweichung der Punkte von
+#: der Flaeche dazwischen interpolieren -- ab so vielen Punkten.
+TABLE_LOCAL_CORRECTION = True
+TABLE_CORRECTION_MIN_POINTS = 4
+
+#: Episodenordner umbenennen (bc/dataset.rename_retrying): bei "Zugriff
+#: verweigert" (OneDrive, Virenscanner) so oft, so lange gewartet -- 10 s.
+DATASET_RENAME_TRIES = 40
+DATASET_RENAME_WAIT_S = 0.25
+#: Varianten und neue Lagen greifen/legen auf Hoehe des geteachten PICK ab
+#: (apps/record.grasp_height); weicht die um mehr als das von ``pick_height``
+#: ab, sagt die Aufnahme es an.
+GRASP_HEIGHT_NOTE_M = 0.0005
 
 #: Automatische Lagen (bc/auto_layout.py, Anwender 2026-10-26): gezogen wird
 #: so weit innerhalb der Tischpunkte (Objekt + Backen) ...
@@ -461,6 +504,21 @@ AUTO_YAW_RANGE_DEG = 45.0
 #: Tempo, Kollision), bevor der Lauf aufhoert.
 AUTO_SAMPLE_TRIES = 500
 AUTO_PLAN_TRIES = 8
+
+#: Kontrollierter Zufall (bc/auto_layout.py, Anwender 2026-11-01): Der Bereich
+#: der Tischpunkte wird in Felder dieser Kantenlaenge geteilt, die naechste
+#: Gruppe kommt ins bisher seltenste Feld ...
+AUTO_CELL_SIZE_M = 0.06
+#: ... und in den bisher seltensten von so vielen Abschnitten des Drehbereichs.
+AUTO_YAW_BINS = 6
+
+#: Varianten innerhalb einer Gruppe (``record.py``, Anwender 2026-11-01):
+#: nach jedem Griff wird das Objekt nicht an derselben Stelle, sondern so weit
+#: verschoben (halb bis ganz) ...
+AUTO_VARIANT_SHIFT_M = 0.015
+#: ... und so weit gedreht (halb bis ganz, Grad) abgelegt -- jede Fahrt ist eine
+#: eigene Lage, die Gruppe bleibt an ihrer Stelle.
+AUTO_VARIANT_YAW_DEG = 15.0
 
 #: Berechnete Punkte (``"above"``/``"dz"`` in der Ablaufdatei, Festlegung
 #: Anwender 2026-10-26: je Lage nur PICK teachen): die IK fuer den Punkt

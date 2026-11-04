@@ -129,7 +129,7 @@ class PlaceholderTab(ModeTab):
             for item in self.today:
                 label = QLabel(item)
                 label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-                label.setStyleSheet("font-family:Consolas; color:#333")
+                label.setStyleSheet("font-family:Consolas; color:palette(text)")
                 today_layout.addWidget(label)
             layout.addWidget(today_box)
 

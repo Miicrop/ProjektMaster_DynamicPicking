@@ -22,6 +22,25 @@ import numpy as np
 
 from . import config, geometry
 
+
+def rename_retrying(source, target, tries=None, wait_s=None):
+    """Ordner/Datei umbenennen, bei "Zugriff verweigert" kurz warten und erneut.
+
+    Windows verweigert das Umbenennen, solange ein anderes Programm eine Datei
+    darin offen hat -- OneDrive (Upload) oder der Virenscanner greifen sich
+    eine frisch geschriebene arrays.npz sofort (Anlage 2026-11-02: zweimal
+    ``PermissionError`` bei ``ep_*.partial -> ep_*``, Lauf abgebrochen).
+    """
+    tries = config.DATASET_RENAME_TRIES if tries is None else int(tries)
+    wait_s = config.DATASET_RENAME_WAIT_S if wait_s is None else float(wait_s)
+    for attempt in range(tries):
+        try:
+            return Path(source).rename(target)
+        except PermissionError:
+            if attempt == tries - 1:
+                raise
+            time.sleep(wait_s)
+
 # --------------------------------------------------------------------------
 # Schema (verbindlich, AP 0.10)
 # --------------------------------------------------------------------------
@@ -240,7 +259,7 @@ class DatasetWriter(object):
             if not path.is_dir() or path.name in known or ".verwaist_" in path.name:
                 continue
             target = path.with_name("%s.verwaist_%s" % (path.name, stamp))
-            path.rename(target)
+            rename_retrying(path, target)
             moved.append((path.name, target.name))
         return moved
 
@@ -280,7 +299,7 @@ class DatasetWriter(object):
         (partial / "meta.json").write_text(
             json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
         )
-        partial.rename(ep_dir)
+        rename_retrying(partial, ep_dir)
 
         self._index["episodes"].append(
             {"dir": ep_dir.name, "length": len(episode), "discarded": episode.discarded}

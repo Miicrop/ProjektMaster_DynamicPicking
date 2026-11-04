@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox,
 
 from . import _bootstrap
 from . import cameras as cameras_module
+from . import coverage_map as coverage_module
 from . import jogging as jogging_module
 from . import points as points_module
 from . import vocabulary as vocabulary_module
@@ -57,7 +58,7 @@ from ..sync import camera_rate_findings
 from .runner import ProcessRunner
 from .tab_base import ModeTab
 from .widgets import (BAD, GOOD, ImageView, LogView, NEUTRAL, WARN,
-                      CameraAssignmentView, block_wheel, find_data)
+                      CameraAssignmentView, CollapsibleSection, block_wheel, find_data)
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +66,19 @@ log = logging.getLogger(__name__)
 PREVIEW_INTERVAL_MS = 100
 #: Wie oft das Livebild einer laufenden Aufnahme von der Platte gelesen wird.
 LIVE_INTERVAL_MS = 250
+#: Aufgeklappte Kaesten der rechten Seite, Breite links waehrend der Aufnahme
+LAYOUT_FILE = "einstellungen/oberflaeche.local.json"
+#: Links waehrend einer Aufnahme (Anwender 2026-11-03: dann steht die rechte
+#: Seite im Vordergrund; beim Teachen bleibt die linke ganz sichtbar)
+LEFT_WIDTH_RECORDING = 380
+LEFT_MIN_WIDTH_TEACHING = 740
+
+COVERAGE_LEGEND = (
+    "Feld: Zahl = Fahrten, orange = noch leer, blau gestrichelt = nächste Lage\n"
+    "● grau = frühere Lagen, ● orange = dieser Lauf, Strich = Backenrichtung,\n"
+    "Linie = Varianten einer Lage, + = geteachter PICK\n"
+    "Rot schraffiert = Sperrzone, rot gestrichelt = so nah kommt der TCP neuer Lagen\n"
+    "Rechts: Fahrten je Drehabschnitt · Roboter unten")
 
 
 class RecordingTab(ModeTab):
@@ -106,6 +120,10 @@ class RecordingTab(ModeTab):
         #: Fuellen der Tabelle gelesen), Sperre gegen Rueckkopplung beim
         #: Uebertragen in die Ablauftabelle, laufendes "Anfahren".
         self._known_cache = []
+        #: Tischabdeckung (bc/gui/coverage_map.py): Bereich aus der Steuerung
+        #: (None = aus der juengsten Episode) und Start des laufenden Aufrufs
+        self._coverage_region = None
+        self._coverage_run_since = ""
         self._points_editing = False
         self._moving = False
         #: "Teachen" eines einzelnen Punkts: Name, solange die Serie nur auf
@@ -128,6 +146,10 @@ class RecordingTab(ModeTab):
         #: Grossansicht einer Kamera (Doppelklick): (Dialog, Kameraname)
         self._zoom = None
         self._live_names = []
+        #: Fenster "Kameraeinstellungen" (bc/gui/camera_dialog.py), sonst None
+        self._camera_dialog = None
+        #: record.py hat am Ende PICK neu gesetzt (--schluss-lage neu)
+        self._pick_adopted = False
 
         #: Tippbetrieb "Z hoch": laufender Vorgang und sein Zeitgeber.
         #: ``_jog_source``: "button" (Maus) oder "key" (F7 gehalten).
@@ -166,6 +188,10 @@ class RecordingTab(ModeTab):
         # Links so breit, dass die Punkte-Liste samt Knoepfen ganz sichtbar
         # ist (Anwender 2026-10-26: musste immer von Hand aufgezogen werden)
         splitter.setSizes([780, 620])
+        self.splitter = splitter
+        self._left_panel = left
+        #: Aufteilung vor der Aufnahme -- danach wieder so (_focus_output)
+        self._sizes_before_run = None
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.requirement_view)
@@ -191,7 +217,7 @@ class RecordingTab(ModeTab):
         area.setWidget(page)
 
         panel = QWidget()
-        panel.setMinimumWidth(740)
+        panel.setMinimumWidth(LEFT_MIN_WIDTH_TEACHING)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(area, 1)
@@ -657,8 +683,9 @@ class RecordingTab(ModeTab):
             if row["kind"] == points_module.COMPUTED:
                 kind, tip = "über %s" % row["above"], "berechnet, nicht teachen"
             elif row["kind"] == points_module.TABLE:
-                kind, tip = "Tisch", ("1 mm über dem Tisch teachen, mittig über einem "
-                                      "ArUco-Marker -- Tischebene und Untergrenze")
+                kind, tip = "Tisch", ("Greifer auf den Tisch setzen, mittig über einem "
+                                      "ArUco-Marker -- Tischebene und Untergrenze. "
+                                      "Am besten 3x3-Raster (ID0–ID8).")
             elif row["kind"] == points_module.KEEPOUT:
                 kind, tip = "Sperre", (
                     "Mitte einer Sperrzone (±mm in der Spalte daneben): dort wird nicht "
@@ -1739,7 +1766,10 @@ class RecordingTab(ModeTab):
         # genau eine Episode (recording.episode_advice, Labortag 2026-10-01).
         self.episodes.setValue(3)
         self.episodes.valueChanged.connect(self._update_command)
-        self.episodes.setToolTip("Fahrten derselben Lage, je mit neuem Rauschen")
+        self.episodes.setToolTip(
+            "Fahrten je Lage, je mit Rauschen. Mit Tischpunkten wird das Objekt nach "
+            "jedem Griff leicht verschoben und gedreht abgelegt (Variante) und dort "
+            "wieder gegriffen -- jede Fahrt eine eigene Pose. Empfohlen 2-3.")
         form.addRow("Fahrten je Lage", self.episodes)
 
         # Automatische Lagen (bc/auto_layout.py, Anwender 2026-10-26)
@@ -1748,10 +1778,13 @@ class RecordingTab(ModeTab):
         self.lagen.setValue(1)
         self.lagen.setToolTip(
             "Verschiedene Objektlagen in diesem Lauf. 1 = nur die geteachte. Ab 2 legt "
-            "der Arm das Objekt nach den Fahrten einer Lage selbst an eine neue, "
-            "zufällige Stelle im Bereich der Tischpunkte (außerhalb der Sperrzonen, "
-            "senkrecht, Greifhöhe über dem Tisch) und greift dort weiter. Zum Schluss "
-            "zurück an den geteachten PICK. Braucht Zurücklegen und die Tischpunkte.")
+            "der Arm das Objekt nach den Fahrten einer Lage selbst an eine neue Stelle "
+            "im Bereich der Tischpunkte (außerhalb der Sperrzonen, senkrecht, Greifhöhe "
+            "über dem Tisch) und greift dort weiter. Kontrollierter Zufall: in das "
+            "bisher seltenste Feld (ca. 6 x 6 cm) mit der bisher seltensten Drehung -- "
+            "mitgezählt werden die Episoden, die schon im Zielordner liegen. Zum "
+            "Schluss zurück an den geteachten PICK — oder an eine neue Lage, die PICK "
+            "wird (Haken weiter unten). Braucht Zurücklegen und die Tischpunkte.")
         self.lagen.valueChanged.connect(self._update_command)
         form.addRow("Lagen", self.lagen)
         self.drehung = block_wheel(QDoubleSpinBox())
@@ -1772,17 +1805,82 @@ class RecordingTab(ModeTab):
         self.margin.setValue(1e3 * config.AUTO_EDGE_MARGIN_M)
         self.margin.setToolTip(
             "Automatische Lagen: so viel Abstand hält die Greifposition zum Rand des "
-            "Bereichs der Tischpunkte (ID0–ID3) -- Platz für Objekt und Backen.")
+            "Bereichs der Tischpunkte -- Platz für Objekt und Backen.")
         self.margin.valueChanged.connect(self._update_command)
         form.addRow("Abstand zum Rand", self.margin)
+
+        # Varianten (Anwender 2026-11-01): nach jedem Griff leicht verschoben
+        # und gedreht ablegen statt dieselbe Pose mit neuem Rauschen zu fahren
+        self.variants = QCheckBox("Varianten: nach jedem Griff verschoben und gedreht ablegen")
+        self.variants.setChecked(True)
+        self.variants.setToolTip(
+            "An: Nach jedem Griff legt der Arm das Objekt um die Mitte der Lage leicht "
+            "verschoben und gedreht ab (abwechselnd links/rechts, Richtungen gleichmäßig "
+            "verteilt), die nächste Fahrt greift dort -- jede Fahrt eine eigene Pose. "
+            "Abgelegt wird dabei mit Endanflug-Tempo, langsam und mit Nachgreifen nur "
+            "beim Lagenwechsel. Braucht die Tischpunkte.\n\n"
+            "Aus: wie bis Oktober -- alle Fahrten einer Lage greifen dieselbe Pose, nur "
+            "das Rauschen ist neu (--feste-lage).")
+        self.variants.toggled.connect(self._variants_toggled)
+        form.addRow("", self.variants)
+        self.variant_shift = block_wheel(QDoubleSpinBox())
+        self.variant_shift.setRange(0.0, 50.0)
+        self.variant_shift.setDecimals(0)
+        self.variant_shift.setSingleStep(1.0)
+        self.variant_shift.setSuffix(" mm")
+        self.variant_shift.setValue(1e3 * config.AUTO_VARIANT_SHIFT_M)
+        self.variant_shift.setToolTip("Varianten: halb bis ganz so weit gegen die Mitte "
+                                      "der Lage verschoben")
+        self.variant_shift.valueChanged.connect(self._update_command)
+        form.addRow("Varianten-Versatz bis", self.variant_shift)
+        self.variant_yaw = block_wheel(QDoubleSpinBox())
+        self.variant_yaw.setRange(0.0, 45.0)
+        self.variant_yaw.setDecimals(0)
+        self.variant_yaw.setSingleStep(1.0)
+        self.variant_yaw.setSuffix(" °")
+        self.variant_yaw.setValue(config.AUTO_VARIANT_YAW_DEG)
+        self.variant_yaw.setToolTip("Varianten: halb bis ganz so weit gedreht, "
+                                    "abwechselnd links und rechts")
+        self.variant_yaw.valueChanged.connect(self._update_command)
+        form.addRow("Varianten-Drehung ±", self.variant_yaw)
+        self.coverage_all = QCheckBox("Abdeckung über alle Tage zählen")
+        self.coverage_all.setChecked(True)
+        self.coverage_all.setToolTip(
+            "Beim Verteilen der Lagen (seltenstes Feld, seltenste Drehung) auch die "
+            "Episoden früherer Tage im Datenordner mitzählen -- nur von derselben Art "
+            "Roboter (Anlage bzw. VM). Aus = nur der Zielordner dieses Laufs.\n\n"
+            "Die Grafik „Tischabdeckung“ zeigt dieselbe Zählung.")
+        self.coverage_all.toggled.connect(self._update_command)
+        form.addRow("", self.coverage_all)
         self.regrip = QCheckBox("Nachgreifen beim Lagenwechsel")
         self.regrip.setChecked(True)
         self.regrip.setToolTip(
             "Nach dem Ablegen an einer NEUEN Lage einmal zu und auf: der Greifer schiebt "
-            "das Objekt mittig zwischen die Backen. Bei Wiederholungen derselben Lage "
+            "das Objekt mittig zwischen die Backen. Beim Ablegen an einer Variante "
             "nicht nötig. Aus = nie nachgreifen.")
         self.regrip.toggled.connect(self._update_command)
         form.addRow("", self.regrip)
+        self.put_back_speed = block_wheel(QDoubleSpinBox())
+        self.put_back_speed.setRange(5.0, 100.0)
+        self.put_back_speed.setDecimals(0)
+        self.put_back_speed.setSingleStep(5.0)
+        self.put_back_speed.setSuffix(" mm/s")
+        self.put_back_speed.setValue(1e3 * config.PUT_BACK_APPROACH_SPEED_MS)
+        self.put_back_speed.setToolTip(
+            "Letzter Abstieg beim Ablegen an einer NEUEN Lage höchstens so schnell "
+            "(--ablage-tempo). Vorgabe = Endanflug-Tempo der Aufnahme; bis 2026-11-02 "
+            "waren es 20 mm/s. Varianten legen immer mit Endanflug-Tempo ab.")
+        self.put_back_speed.valueChanged.connect(self._update_command)
+        form.addRow("Ablegen beim Lagenwechsel", self.put_back_speed)
+        self.final_new = QCheckBox("Am Ende an neuer Lage ablegen und als PICK übernehmen")
+        self.final_new.setToolTip(
+            "Nach der letzten Lage nicht zurück an den geteachten PICK, sondern an eine "
+            "neue Lage (wie die automatischen) — die wird dann als PICK in die Steuerung "
+            "geschrieben (Sicherung wie beim Touch-up, rückgängig über „Touch-up "
+            "rückgängig“). Der nächste Lauf beginnt dort, ohne neu zu teachen, mit dem "
+            "nächsten freien Block (--schluss-lage neu).")
+        self.final_new.toggled.connect(self._update_command)
+        form.addRow("", self.final_new)
         self.duration_hint = _hint("")
         form.addRow("Dauer", self.duration_hint)
 
@@ -1794,8 +1892,9 @@ class RecordingTab(ModeTab):
         self.put_back.setToolTip(
             "Nach jeder Episode, auch der letzten, legt der Arm das Objekt am "
             "Greifpunkt ab und fährt an den Start — nicht aufgezeichnet, ohne "
-            "Rauschen. Mehrere Episoden fahren so dieselbe Lage mit neuem "
-            "Rauschen; der Rauschfaktor wird über die Fahrten gestaffelt. "
+            "Rauschen. Mit Tischpunkten legt er es dabei leicht verschoben und "
+            "gedreht ab (Variante), sonst an derselben Stelle; der Rauschfaktor "
+            "wird über die Fahrten gestaffelt. "
             "Nur mit Ablaufdatei. Aus = der Arm hält das Objekt am Ende an "
             "der Übergabe.")
         self.put_back.toggled.connect(self._put_back_toggled)
@@ -2083,41 +2182,106 @@ class RecordingTab(ModeTab):
     # -- Aufbau: Ausgabeseite ----------------------------------------------
 
     def _build_output(self):
+        """Rechte Seite (Anwender 2026-11-03): oben die drei Dinge, die waehrend
+        einer Aufnahme zaehlen -- Kamerabilder, Tischabdeckung, Fortschritt --,
+        darunter Kommandozeile und Ausgabe. Jeder Kasten laesst sich
+        zuklappen; der Zustand wird gemerkt (:data:`LAYOUT_FILE`)."""
         page = QWidget()
         layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 4, 0)
+        layout.setSpacing(4)
+        opened = _load_layout_state(self.workdir).get("offen", {})
+        self._sections = {}
+        self._output_layout = layout
 
-        # Bild und Zeile darunter als EIN Kasten: sonst nimmt sich die
-        # Bildflaeche (Expanding) den Platz der Zeile, und beide
-        # ueberlagern sich, sobald das Fenster knapp wird.
-        image_box = QGroupBox("Bild")
-        image_layout = QVBoxLayout(image_box)
+        def section(key, title, content, stretch, default=True):
+            box = CollapsibleSection(title, content, opened.get(key, default))
+            layout.addWidget(box, stretch if box.is_open() else 0)
+            box.toggled.connect(lambda _on, b=box, s=stretch: self._section_toggled(b, s))
+            self._sections[key] = box
+            return box
+
+        # -- Kamerabilder --
+        image_panel = QWidget()
+        image_layout = QVBoxLayout(image_panel)
+        image_layout.setContentsMargins(0, 0, 0, 0)
         self.image = ImageView("Vorschau aus — \"Vorschau starten\" öffnet die "
                                "zugeordneten Kameras")
-        # Klein genug, dass die ganze Spalte auch auf einem Laptopbildschirm
-        # passt: Reicht der Platz nicht, verteilt Qt ihn nicht, sondern legt
-        # die Widgets uebereinander. Mehr Platz nimmt sich die Bildflaeche
-        # ueber die Expanding-Groessenpolitik von selbst.
-        self.image.setMinimumHeight(120)
+        # Klein genug, dass Bild, Tischabdeckung und Fortschritt zusammen
+        # ohne Bildlauf passen (Anwender 2026-11-03: Vorschau darf kleiner sein)
+        self.image.setMinimumHeight(110)
         self.image.setToolTip("Doppelklick auf ein Kamerabild: groß anzeigen")
         self.image.double_clicked.connect(self._zoom_at)
         image_layout.addWidget(self.image, 1)
+        image_row = QHBoxLayout()
+        self.show_recorded = QCheckBox("Wie aufgezeichnet (%d×%d)"
+                                       % (config.IMAGE_WIDTH, config.IMAGE_HEIGHT))
+        self.show_recorded.setToolTip(
+            "Zeigt die Bilder so, wie sie im Datensatz landen: auf %d×%d verkleinert "
+            "(apps/record.py). Aus: volle Auflösung der Kamera."
+            % (config.IMAGE_WIDTH, config.IMAGE_HEIGHT))
+        self.show_crop = QCheckBox("Rahmen: Ausschnitt der Policy")
+        self.show_crop.setChecked(True)
+        self.show_crop.setToolTip(
+            "Grüner Rahmen: der Teil, den die Policy bei der Inferenz sieht (zentrierter "
+            "Ausschnitt %.0f %%, im Training zufällig verschoben). Was außerhalb liegt, "
+            "fehlt dem Modell zumindest zeitweise." % (100 * config.POLICY_CROP_RATIO))
+        self.btn_camera_settings = QPushButton("Kameraeinstellungen …")
+        self.btn_camera_settings.setToolTip(
+            "Belichtung und Gain der Daheng-Kameras einstellen, mit Bild in voller "
+            "Auflösung und wie aufgezeichnet. Braucht die offene Vorschau.")
+        self.btn_camera_settings.clicked.connect(self.open_camera_settings)
+        image_row.addWidget(self.show_recorded)
+        image_row.addWidget(self.show_crop)
+        image_row.addStretch(1)
+        image_row.addWidget(self.btn_camera_settings)
+        image_layout.addLayout(image_row)
         self.sources_line = _hint("")
         self.sources_line.setMinimumHeight(18)
         image_layout.addWidget(self.sources_line, 0)
-        layout.addWidget(image_box, 1)
+        section("bilder", "Kamerabilder", image_panel, 2)
 
-        command_box = QGroupBox("Kommandozeile")
-        command_layout = QVBoxLayout(command_box)
-        self.command = QLabel("")
-        self.command.setWordWrap(True)
-        self.command.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.command.setStyleSheet("font-family:Consolas; color:#333")
-        command_layout.addWidget(self.command)
-        layout.addWidget(command_box)
+        # -- Tischabdeckung --
+        coverage_panel = QWidget()
+        coverage_layout = QVBoxLayout(coverage_panel)
+        coverage_layout.setContentsMargins(0, 0, 0, 0)
+        self.coverage_map = coverage_module.CoverageMap()
+        self.coverage_map.setToolTip(COVERAGE_LEGEND + "\nDoppelklick: groß anzeigen")
+        self.coverage_map.double_clicked.connect(self._open_coverage_view)
+        coverage_layout.addWidget(self.coverage_map, 1)
+        self._coverage_view = None
+        row = QHBoxLayout()
+        self.coverage_info = _hint("")
+        self.coverage_info.setWordWrap(True)
+        row.addWidget(self.coverage_info, 1)
+        legend = QToolButton()
+        legend.setText("Legende")
+        legend.setToolTip(COVERAGE_LEGEND)
+        legend.clicked.connect(lambda: QMessageBox.information(
+            self, "Tischabdeckung — Legende", COVERAGE_LEGEND))
+        row.addWidget(legend)
+        rotate = QToolButton()
+        rotate.setText("↻ Drehen")
+        rotate.setToolTip("Ansicht um 90° drehen")
+        rotate.clicked.connect(self._rotate_coverage)
+        row.addWidget(rotate)
+        bigger = QToolButton()
+        bigger.setText("Groß")
+        bigger.setToolTip("Tischabdeckung in einem eigenen Fenster (auch: Doppelklick)")
+        bigger.clicked.connect(self._open_coverage_view)
+        row.addWidget(bigger)
+        reload_button = QToolButton()
+        reload_button.setText("Aktualisieren")
+        reload_button.setToolTip("Tischpunkte aus der Steuerung und Episoden neu lesen")
+        reload_button.clicked.connect(self._reload_coverage)
+        row.addWidget(reload_button)
+        coverage_layout.addLayout(row)
+        section("abdeckung", "Tischabdeckung", coverage_panel, 3)
 
-        progress_box = QGroupBox("Fortschritt")
-        progress_layout = QVBoxLayout(progress_box)
+        # -- Fortschritt --
+        progress_panel = QWidget()
+        progress_layout = QVBoxLayout(progress_panel)
+        progress_layout.setContentsMargins(0, 0, 0, 0)
         self.headline = QLabel("noch nichts gestartet")
         headline_font = QFont()
         headline_font.setBold(True)
@@ -2134,24 +2298,33 @@ class RecordingTab(ModeTab):
         self.episode_list = QTreeWidget()
         self.episode_list.setHeaderLabels(["Episode", "Ordner", "Schritte", "Ergebnis"])
         self.episode_list.setRootIsDecorated(False)
-        self.episode_list.setMaximumHeight(110)
+        self.episode_list.setMinimumHeight(80)
         for column, width in enumerate((70, 130, 80, 240)):
             self.episode_list.setColumnWidth(column, width)
         self.episode_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.episode_list.customContextMenuRequested.connect(self._episode_menu)
         self.episode_list.setToolTip(
-            "Episoden dieses Laufs. Rechtsklick: nachträglich als fehlgeschlagen "
-            "markieren, verwerfen oder wieder als erfolgreich werten — auch "
-            "während der Lauf weiterfährt.")
-        progress_layout.addWidget(self.episode_list)
-        layout.addWidget(progress_box)
+            "Episoden dieses Laufs. Maus über das Ergebnis: was es bedeutet. "
+            "Rechtsklick: nachträglich als fehlgeschlagen markieren, verwerfen oder "
+            "wieder als erfolgreich werten — auch während der Lauf weiterfährt.")
+        progress_layout.addWidget(self.episode_list, 1)
+        section("fortschritt", "Fortschritt", progress_panel, 2)
 
-        output_box = QGroupBox("Ausgabe")
-        output_layout = QVBoxLayout(output_box)
+        # -- Kommandozeile und Ausgabe: unten, zum Nachschlagen --
+        command_panel = QWidget()
+        command_layout = QVBoxLayout(command_panel)
+        command_layout.setContentsMargins(0, 0, 0, 0)
+        self.command = QLabel("")
+        self.command.setWordWrap(True)
+        self.command.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.command.setStyleSheet("font-family:Consolas; color:palette(text)")
+        command_layout.addWidget(self.command)
+        section("kommando", "Kommandozeile", command_panel, 0, default=False)
+
         self.output = LogView()
-        self.output.setMaximumHeight(110)
-        output_layout.addWidget(self.output)
-        layout.addWidget(output_box)
+        self.output.setMinimumHeight(60)
+        section("ausgabe", "Ausgabe", self.output, 1)
 
         # Auch die Ausgabeseite in einen Bildlauf: Reicht die Hoehe nicht,
         # verteilt Qt den Platz nicht, sondern legt Widgets uebereinander.
@@ -2163,6 +2336,40 @@ class RecordingTab(ModeTab):
         area.setFrameShape(QScrollArea.Shape.NoFrame)
         return area
 
+    def _section_toggled(self, box, stretch):
+        self._output_layout.setStretchFactor(box, stretch if box.is_open() else 0)
+        state = _load_layout_state(self.workdir)
+        state["offen"] = {key: b.is_open() for key, b in self._sections.items()}
+        _save_layout_state(self.workdir, state)
+
+    def _rotate_coverage(self):
+        self.coverage_map.rotate()
+        if self._coverage_view is not None:
+            self._coverage_view.map.rotate()
+
+    def _open_coverage_view(self):
+        """Grossansicht der Tischabdeckung (Anwender 2026-11-03: Doppelklick)."""
+        if self._coverage_view is not None:
+            self._coverage_view.raise_()
+            self._coverage_view.activateWindow()
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Tischabdeckung — groß (Doppelklick schließt)")
+        dialog.resize(1000, 800)
+        view = coverage_module.CoverageMap()
+        view.YAW_PANEL = 170
+        view.setToolTip(COVERAGE_LEGEND)
+        view.rotation = self.coverage_map.rotation
+        view.set_snapshot(self.coverage_map.snapshot, self.coverage_map.run_since)
+        view.double_clicked.connect(dialog.close)
+        box = QVBoxLayout(dialog)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.addWidget(view)
+        dialog.map = view
+        dialog.finished.connect(lambda _r: setattr(self, "_coverage_view", None))
+        self._coverage_view = dialog
+        dialog.show()
+
     # -- Aktualisieren ------------------------------------------------------
 
     def refresh(self):
@@ -2171,6 +2378,7 @@ class RecordingTab(ModeTab):
         self.cameras.refresh(
             backend_is_sim_robot=self.session.backend == session_module.BACKEND_SIM)
         self._suggest_target()
+        self._load_coverage_region()
         self._update_command()
 
     def _suggest_target(self):
@@ -2328,7 +2536,109 @@ class RecordingTab(ModeTab):
             drehung=self.drehung.value(),
             stop_file=self._stop_file,
             regrip="lagenwechsel" if self.regrip.isChecked() else "nie",
-            margin=self.margin.value() / 1e3)
+            put_back_speed=self.put_back_speed.value() / 1e3,
+            final_new=self.final_new.isChecked(),
+            margin=self.margin.value() / 1e3,
+            variants=self.variants.isChecked(),
+            variant_shift=self.variant_shift.value() / 1e3,
+            variant_yaw=self.variant_yaw.value(),
+            coverage_roots=self._coverage_extra_roots())
+
+    # -- Tischabdeckung (bc/gui/coverage_map.py, Anwender 2026-11-01) -------
+
+    def _variants_toggled(self, on):
+        self.variant_shift.setEnabled(on)
+        self.variant_yaw.setEnabled(on)
+        self._update_command()
+
+    def _out_path(self):
+        text = self.out.text().strip() if hasattr(self, "out") else ""
+        if not text:
+            return None
+        path = Path(text)
+        return path if path.is_absolute() else Path(self.workdir) / path
+
+    def _data_root(self):
+        """Datenordner aller Tage (data_vm / data_sim) -- oder None."""
+        root = Path(self.workdir) / recording_module.DATA_ROOTS.get(self._robot_kind(), "data_vm")
+        return root if root.is_dir() else None
+
+    def _coverage_extra_roots(self):
+        """``--abdeckung`` fuer record.py: der Datenordner, wenn angehakt."""
+        if not getattr(self, "coverage_all", None) or not self.coverage_all.isChecked():
+            return []
+        root = self._data_root()
+        out = self._out_path()
+        if root is None or (out is not None and out.resolve() == root.resolve()):
+            return []
+        return [recording_module.relative(root, self.workdir)]
+
+    def _coverage_in_simulation(self):
+        """Wie record.py filtert: Anlage nur mit Anlage, VM/Sim nur mit VM/Sim."""
+        if self._robot_kind() == "sim":
+            return True
+        if self.session.robot is None:
+            return None
+        return not self.session.status().is_real_plant
+
+    def _load_coverage_region(self):
+        """Bereich, Sperrzonen und PICK aus der Steuerung (wie "Ausrichten").
+        Ohne Verbindung oder waehrend eines Laufs: aus der juengsten Episode."""
+        self._coverage_region = None
+        robot = self.session.robot
+        if robot is None or self.process.running or not self._sequence_working:
+            return
+        try:
+            from ..sequence import parse_sequence, resolve_sequence
+            sequence = parse_sequence(recording_module.steps_to_data(
+                self._sequence_name, self._gripper_start, self.current_steps(),
+                self._table_cfg))
+            resolved = resolve_sequence(sequence, robot)
+            self._coverage_region = coverage_module.region_from_resolved(
+                resolved, sequence.pick_height)
+        except Exception as exc:  # Punkte fehlen, Verbindung, Ablauf ohne Tisch
+            log.debug("Tischabdeckung: Bereich nicht aus der Steuerung (%s)", exc)
+
+    def _schedule_coverage(self):
+        if not hasattr(self, "coverage_map"):
+            return
+        timer = getattr(self, "_coverage_timer", None)
+        if timer is None:
+            timer = self._coverage_timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(self._refresh_coverage)
+        timer.start(400)
+
+    def _refresh_coverage(self):
+        if not hasattr(self, "coverage_map"):
+            return
+        out = self._out_path()
+        roots = [out] if out is not None else []
+        if self.coverage_all.isChecked() and self._data_root() is not None:
+            roots.append(self._data_root())
+        t0 = time.perf_counter()
+        spots, latest = coverage_module.load_episodes(roots, self._coverage_in_simulation())
+        region = getattr(self, "_coverage_region", None)
+        if region is None and latest is not None:
+            region = coverage_module.region_from_meta(latest[1], latest[0])
+        snapshot = coverage_module.build_snapshot(
+            region, spots, margin=self.margin.value() / 1e3, yaw_range_deg=self.drehung.value())
+        self.coverage_map.set_snapshot(snapshot, getattr(self, "_coverage_run_since", ""))
+        if self._coverage_view is not None:
+            self._coverage_view.map.set_snapshot(snapshot, self.coverage_map.run_since)
+        if region is None:
+            self.coverage_info.setText("Kein Tischbereich: mit der Steuerung verbinden "
+                                       "(Ablauf mit Tischpunkten) oder Episoden im Zielordner.")
+        else:
+            self.coverage_info.setText(
+                "Bereich aus %s · %d Lage(n) aus %s in %.1f s gelesen"
+                % (region.source, len(spots),
+                   "Zielordner und allen Tagen" if len(roots) > 1 else "dem Zielordner",
+                   time.perf_counter() - t0))
+
+    def _reload_coverage(self):
+        self._load_coverage_region()
+        self._refresh_coverage()
 
     def _put_back_toggled(self, checked):
         # Ohne Zuruecklegen ist an der Anlage nur EINE Episode je Aufruf
@@ -2343,6 +2653,7 @@ class RecordingTab(ModeTab):
         except ValueError as exc:
             self.command.setText("Aufnahme: %s" % exc)
         self._update_duration()
+        self._schedule_coverage()
 
     def _update_duration(self):
         """Grobe Dauer fuer die aktuellen Einstellungen (Wunsch Anwender 2026-10-27)."""
@@ -2520,6 +2831,8 @@ class RecordingTab(ModeTab):
     def stop_preview(self):
         if self._preview_cancel is not None:
             self.cancel_preview_open()
+        if self._camera_dialog is not None:
+            self._camera_dialog.close()
         self.preview_timer.stop()
         captures, self._captures = self._captures, None
         if captures:
@@ -2556,9 +2869,19 @@ class RecordingTab(ModeTab):
                 fps = self._rates.update(capture.name, frame)
                 bits.append("%s: %s" % (
                     capture.name, "—" if fps is None else "%.1f fps" % fps))
-        board = preview_module.compose(frames, height=360)
+        shown = preview_module.display_frames(frames, self.show_recorded.isChecked(),
+                                              self.show_crop.isChecked())
+        board = preview_module.compose(shown, height=360)
         self.image.set_image(board)
-        self._feed_zoom(frames=frames)
+        self._feed_zoom(frames=shown)
+        if self._camera_dialog is not None:
+            self._camera_dialog.show_frames(frames)
+        for name, frame in frames.items():
+            if frame is not None and getattr(frame, "image", None) is not None \
+                    and preview_module.distorted_by_recording(frame.image.shape):
+                bits.append("%s: %d×%d wird beim Aufzeichnen auf %d×%d gestaucht"
+                            % (name, frame.image.shape[1], frame.image.shape[0],
+                               config.IMAGE_WIDTH, config.IMAGE_HEIGHT))
         # Schafft jede Kamera ihre Rate? (Anlage 2026-10-26: am Hub 23 statt
         # 61 fps -- und 20 % der Frames ueber Budget, ohne dass es auffiel)
         warnings = []
@@ -2581,6 +2904,31 @@ class RecordingTab(ModeTab):
             bits.append("⚠ " + " ⚠ ".join(warnings))
             self.sources_line.setStyleSheet("color:%s" % WARN)
         self.sources_line.setText("  ·  ".join(bits))
+
+    def open_camera_settings(self):
+        """Fenster fuer Belichtung und Gain (bc/gui/camera_dialog.py)."""
+        if not self._captures:
+            QMessageBox.information(
+                self, "Kameraeinstellungen",
+                "Erst \"Vorschau starten\" — eingestellt wird an der offenen Kamera, "
+                "mit Bild." if not self.process.running else
+                "Während der Aufnahme gehören die Kameras apps/record.py.")
+            return
+        if self._camera_dialog is not None:
+            self._camera_dialog.raise_()
+            self._camera_dialog.activateWindow()
+            return
+        from .camera_dialog import CameraSettingsDialog
+
+        dialog = CameraSettingsDialog(self._captures, self.runner, self.workdir, self)
+        dialog.finished.connect(lambda _r: setattr(self, "_camera_dialog", None))
+        dialog.applied.connect(self._camera_settings_applied)
+        self._camera_dialog = dialog
+        dialog.show()
+
+    def _camera_settings_applied(self, name, settings):
+        self._camera_settings[name] = settings
+        log.info("Kamera %s", describe_settings(name, settings))
 
     def _tick_live(self):
         """Livebild einer laufenden Aufnahme von der Platte lesen."""
@@ -2735,6 +3083,24 @@ class RecordingTab(ModeTab):
             QMessageBox.warning(self, "Start gescheitert", str(exc))
             return
         self._set_running(True)
+        self._focus_output(True)
+
+    def _focus_output(self, recording):
+        """Waehrend einer Aufnahme die rechte Seite in den Vordergrund
+        (Anwender 2026-11-03), danach zurueck auf die alte Aufteilung.
+
+        Links ist dann schmal, aber weiter da (Stopp, "Nach dieser Lage
+        beenden"); der Teiler laesst sich jederzeit ziehen.
+        """
+        if recording:
+            self._sizes_before_run = self.splitter.sizes()
+            total = sum(self._sizes_before_run)
+            self._left_panel.setMinimumWidth(0)
+            self.splitter.setSizes([LEFT_WIDTH_RECORDING, max(1, total - LEFT_WIDTH_RECORDING)])
+        elif self._sizes_before_run is not None:
+            self._left_panel.setMinimumWidth(LEFT_MIN_WIDTH_TEACHING)
+            self.splitter.setSizes(self._sizes_before_run)
+            self._sizes_before_run = None
 
     def _confirm_motion(self):
         status = self.session.status()
@@ -2792,9 +3158,20 @@ class RecordingTab(ModeTab):
 
     def _on_started(self, command):
         self.output.append_record("$ " + " ".join(command[1:]), logging.INFO)
+        # Lagen ab jetzt: "dieser Lauf" in der Tischabdeckung
+        from datetime import datetime
+        self._coverage_run_since = datetime.now().isoformat(timespec="seconds")
 
     def _on_line(self, text):
         self.output.append_line(text)
+
+        adopted = recording_module.adopted_pick_backup(text)
+        if adopted:
+            # record.py hat die Schluss-Lage als PICK geschrieben (--schluss-lage
+            # neu): ruecknehmbar wie ein Touch-up, und nach dem Lauf neue Lage
+            self._last_touchup = self.workdir / adopted
+            self._last_touchup_row = -1
+            self._pick_adopted = True
 
         estimate = recording_module.duration_estimate(text)
         if estimate:
@@ -2821,8 +3198,11 @@ class RecordingTab(ModeTab):
         if self._progress is None or not self._progress.feed(text):
             return
         before = self.episode_list.topLevelItemCount()
+        if len(self._progress.episodes) > before:
+            self._schedule_coverage()
         for episode in self._progress.episodes[before:]:
             item = QTreeWidgetItem(self.episode_list, episode.row())
+            item.setToolTip(3, recording_module.outcome_hint(episode.outcome))
             if episode.discarded:
                 for column in range(4):
                     item.setForeground(column, _brush(WARN))
@@ -2934,12 +3314,18 @@ class RecordingTab(ModeTab):
                 "fehler": "FEHLGESCHLAGEN (nachträglich)",
                 "verwerfen": "VERWORFEN (nachträglich)"}[label]
         item.setText(3, text)
+        item.setToolTip(3, recording_module.outcome_hint(text))
         for column in range(4):
             item.setForeground(column, _brush(GOOD if label == "erfolg" else WARN))
         self.output.append_record("%s -> %s" % (folder, text))
 
     def _on_finished(self, code, text):
         self._set_running(False)
+        self._focus_output(False)
+        if self._pick_adopted:
+            self._pick_adopted = False
+            self._block_used = True
+            self._on_new_pose()
         self.live_timer.stop()
         if self._live_path is not None:
             try:
@@ -2961,6 +3347,7 @@ class RecordingTab(ModeTab):
                                   logging.INFO if ok else logging.ERROR)
         self.image.setText("Vorschau aus — \"Vorschau starten\" öffnet die "
                            "zugeordneten Kameras")
+        self._schedule_coverage()
 
     def _set_running(self, running):
         if running:
@@ -2971,11 +3358,14 @@ class RecordingTab(ModeTab):
                        self.cameras, self.sequence, self.episodes, self.put_back,
                        self.probe, self.teach_after, self.point_table,
                        self.lagen, self.drehung, self.btn_add_keepout, self.regrip,
-                       self.margin,
+                       self.margin, self.variants, self.coverage_all,
+                       self.put_back_speed, self.final_new,
                        self.btn_teach_pick, self.btn_detail,
                        self.transit_speed, self.approach_speed, self.ptp_speed,
                        self.execution):
             widget.setEnabled(not running)
+        for widget in (self.variant_shift, self.variant_yaw):
+            widget.setEnabled(not running and self.variants.isChecked())
         self.btn_undo_touchup.setEnabled(not running and self._last_touchup is not None)
         self.btn_stop.setEnabled(running)
         self.btn_stop_after.setEnabled(running and self.lagen.value() > 1)
@@ -2987,12 +3377,16 @@ class RecordingTab(ModeTab):
             return "Aufnahme bzw. Teachen läuft"
         if self._moving:
             return "„Anfahren“ läuft"
-        if self._captures or self._preview_cancel is not None:
-            return "Kameravorschau ist offen"
         if self._series_watcher is not None:
             return "Teach-Serie läuft"
         if self._jogger is not None:
             return "„Z hoch“ ist aktiv"
+        return None
+
+    def closable_reason(self):
+        """Offene Vorschau sperrt den Neustart nicht -- shutdown() schliesst sie."""
+        if self._captures or self._preview_cancel is not None:
+            return "Kameravorschau ist offen"
         return None
 
     def shutdown(self):
@@ -3126,3 +3520,25 @@ def _brush(colour):
     from PySide6.QtGui import QBrush, QColor
 
     return QBrush(QColor(colour))
+
+
+def _load_layout_state(workdir):
+    """Gemerkte Anordnung (:data:`LAYOUT_FILE`); leer, wenn nicht lesbar."""
+    import json
+
+    try:
+        data = json.loads((Path(workdir) / LAYOUT_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_layout_state(workdir, state):
+    import json
+
+    path = Path(workdir) / LAYOUT_FILE
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+    except OSError as exc:
+        log.warning("Anordnung nicht gespeichert: %s", exc)

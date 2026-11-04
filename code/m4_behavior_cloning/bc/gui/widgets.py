@@ -10,20 +10,49 @@ absichtlich dieselben, damit die Einbindung als Reiter nicht auffaellt.
 import logging
 
 from PySide6.QtCore import QEvent, QObject, Qt, Signal, Slot
-from PySide6.QtGui import QFont, QImage, QPixmap
+from PySide6.QtGui import QFont, QImage, QPalette, QPixmap
 from PySide6.QtWidgets import (QComboBox, QFormLayout, QFrame, QGroupBox,
                                QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
-                               QSizePolicy, QVBoxLayout)
+                               QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 from . import cameras as cameras_module
 from . import requirements as requirements_module
 
 log = logging.getLogger(__name__)
 
-GOOD = "#2e7d32"
-BAD = "#c62828"
-WARN = "#e65100"
-NEUTRAL = "#616161"
+
+def system_dark():
+    """Dunkles Farbschema? Fusion folgt unter Windows der Systemeinstellung.
+
+    Gefragt wird beim Import -- die Reiter uebernehmen die Farben unten als
+    Werte, bevor es eine QApplication gibt. Deshalb zuerst die Qt-Auskunft,
+    sonst die Windows-Einstellung "App-Modus" (Anwender 2026-11-03: im
+    Dark Mode war die Schrift in Konsole und Ausgabe kaum lesbar).
+    """
+    try:
+        from PySide6.QtGui import QGuiApplication
+
+        if QGuiApplication.instance() is not None:
+            return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+    except Exception:
+        pass
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows"
+                            r"\CurrentVersion\Themes\Personalize") as key:
+            return winreg.QueryValueEx(key, "AppsUseLightTheme")[0] == 0
+    except Exception:
+        return False
+
+
+DARK = system_dark()
+GOOD = "#66bb6a" if DARK else "#2e7d32"
+BAD = "#ef5350" if DARK else "#c62828"
+WARN = "#ffa726" if DARK else "#e65100"
+NEUTRAL = "#a0a0a0" if DARK else "#616161"
+#: normale Schrift in Logs und Kommandozeilen (statt fest #333)
+TEXT = "#e0e0e0" if DARK else "#333333"
 
 
 class BackendBanner(QFrame):
@@ -195,7 +224,9 @@ class LogView(QPlainTextEdit):
 
     @Slot(str, int)
     def append_record(self, text, level=logging.INFO):
-        colour = BAD if level >= logging.ERROR else WARN if level >= logging.WARNING else "#333"
+        # Normale Zeilen in der Schriftfarbe des Schemas (hell/dunkel)
+        colour = (BAD if level >= logging.ERROR else WARN if level >= logging.WARNING
+                  else self.palette().color(QPalette.ColorRole.Text).name())
         escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         self.appendHtml('<span style="color:%s">%s</span>' % (colour, escaped or "&nbsp;"))
 
@@ -210,6 +241,63 @@ class LogView(QPlainTextEdit):
         else:
             level = logging.INFO
         self.append_record(text, level)
+
+
+class CollapsibleSection(QWidget):
+    """Kasten mit Kopfzeile zum Auf- und Zuklappen (Anwender 2026-11-03).
+
+    ``toggled(offen)``: der Besitzer passt daraufhin den Dehnfaktor im
+    Layout an -- ein zugeklappter Kasten soll keinen Platz behalten.
+    ``extra``: Widgets rechts in der Kopfzeile (bleiben auch zugeklappt da).
+    """
+
+    toggled = Signal(bool)
+
+    def __init__(self, title, content, opened=True, extra=(), parent=None):
+        super().__init__(parent)
+        self.content = content
+        self.header = QToolButton()
+        self.header.setText(title)
+        self.header.setCheckable(True)
+        self.header.setChecked(bool(opened))
+        self.header.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.header.setAutoRaise(True)
+        font = self.header.font()
+        font.setBold(True)
+        self.header.setFont(font)
+        self.header.toggled.connect(self.set_open)
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        head.addWidget(self.header)
+        head.addStretch(1)
+        for widget in extra:
+            head.addWidget(widget)
+        frame = QFrame()
+        frame.setFrameShape(QFrame.Shape.StyledPanel)
+        inner = QVBoxLayout(frame)
+        inner.setContentsMargins(6, 4, 6, 6)
+        inner.addWidget(content)
+        self.frame = frame
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(1)
+        layout.addLayout(head)
+        layout.addWidget(frame, 1)
+        self.set_open(bool(opened))
+
+    def is_open(self):
+        return self.header.isChecked()
+
+    def set_open(self, opened):
+        opened = bool(opened)
+        if self.header.isChecked() != opened:
+            self.header.setChecked(opened)      # ruft set_open erneut
+            return
+        self.header.setArrowType(Qt.ArrowType.DownArrow if opened else Qt.ArrowType.RightArrow)
+        self.frame.setVisible(opened)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred,
+                           QSizePolicy.Policy.Expanding if opened else QSizePolicy.Policy.Fixed)
+        self.toggled.emit(opened)
 
 
 class _LogEmitter(QObject):

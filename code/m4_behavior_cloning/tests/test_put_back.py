@@ -284,9 +284,39 @@ def test_put_back_places_slowly_and_regrips_on_the_spot():
     assert with_regrip(plain) is not plain
     no_open = with_regrip(type(plain)(**dict(vars(plain), gripper=np.zeros(len(plain)))))
     assert len(no_open) == len(plain)
-    # Abstieg zum Ablegen langsamer als mit Aufnahme-Tempo
+    # Abstieg zum Ablegen hoechstens slow_speed (record.py --ablage-tempo);
+    # Vorgabe seit 2026-11-03 = Endanflug-Tempo der Aufnahme
+    slow = plan_put_back(kin, workspace, wps, fk=robot.fk, regrip=False, slow_speed=0.02)
+    assert len(slow) > len(plain)
     fast = plan_put_back(kin, workspace, wps, fk=robot.fk, regrip=False,
                          approach_speed=config.APPROACH_SPEED_MS)
-    assert len(fast) == len(plain)  # Tempo wird auf PUT_BACK_APPROACH_SPEED_MS gedeckelt
-    assert config.PUT_BACK_APPROACH_SPEED_MS < config.APPROACH_SPEED_MS
+    assert len(fast) == len(plain)
+    assert config.PUT_BACK_APPROACH_SPEED_MS <= config.APPROACH_SPEED_MS
     assert joint_speed(regrip.joints_ideal, regrip.rate_hz)[0] <= config.PLAN_MAX_JOINT_SPEED_RADS
+
+
+def test_put_back_opens_above_the_grasp_height():
+    # Anlage 2026-11-02: Ablage-Zugabe -- lieber kurz fallen lassen als eindruecken
+    clock, robot, wps = _resolved()
+    kin = Kinematics(robot)
+    workspace = default_workspace(table_height_m=min(wp.pose_quat[2] for wp in wps) - 0.15)
+    g = grasp_index(wps)
+    back = put_back_waypoints(wps, place_offset=0.0005, ik=kin.ik)
+    at_pick = [wp for wp in back if wp.name == wps[g].name and not wp.gripper_closed][0]
+    assert np.isclose(at_pick.pose_quat[2] - wps[g].pose_quat[2], 0.0005)
+    assert np.allclose(robot.fk(at_pick.joints)[:3], at_pick.pose_quat[:3], atol=1e-4)
+    plain = plan_put_back(kin, workspace, wps, fk=robot.fk, regrip=False, place_offset=0.0)
+    raised = plan_put_back(kin, workspace, wps, fk=robot.fk, regrip=False, place_offset=0.0005)
+
+    def open_z(plan):
+        g_ = np.asarray(plan.gripper)
+        k = int(np.flatnonzero((g_[:-1] >= 0.5) & (g_[1:] < 0.5))[0]) + 1
+        return plan.poses_ideal[k][2]
+
+    assert np.isclose(open_z(raised) - open_z(plain), 0.0005, atol=5e-5)
+    try:
+        put_back_waypoints(wps, place_offset=0.0005)
+    except PutBackError:
+        pass
+    else:
+        raise AssertionError("Ablage-Zugabe ohne IK muss abgelehnt werden")

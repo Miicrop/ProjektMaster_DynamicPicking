@@ -23,8 +23,19 @@ AN DER ANLAGE (Nachlauf/Override neu messen, AP 0.6 Punkt 3) nur mit
 Ohne ``--move`` wird nur gelesen und gerechnet, der Roboter bewegt sich
 nicht (wie tools/check_ik.py). Erst ``--move`` fuehrt Bewegungen aus.
 
+``--os-version`` liest zusaetzlich die Ubuntu-Version der Steuerung. NeuraPy
+bietet dafuer keinen Aufruf an. Zwei Wege, kein Passwort noetig:
+
+  * Liegt ein SSH-Schluessel (BatchMode), liest das Skript ``/etc/os-release``
+    ueber SSH (Port 22, Benutzer ``hrg`` wie in Neuras install.sh) -- das ist
+    der genaue Punktstand. Einmalig einrichten: ``ssh-copy-id hrg@192.168.2.13``.
+  * Sonst liest es nur die SSH-Begruessungszeile (die der Dienst ohne
+    Anmeldung sendet) und leitet daraus das Ubuntu-Release ab -- ein Hinweis
+    (Haupt-Release), kein Punktstand.
+
 Ausfuehren (aus dem Ordner "Behavior Cloning"):
     python tools/check_sim_robot.py                 # nur lesen
+    python tools/check_sim_robot.py --os-version    # dazu Ubuntu-Version
     python tools/check_sim_robot.py --move          # inkl. Bewegungstests
     python tools/check_sim_robot.py --move --rate 60 --overrides 1.0,0.5
     python tools/check_sim_robot.py --move --servo-derivs zero --override 1.0
@@ -38,6 +49,11 @@ Nachlauf (Zeitversatz Soll -> Ist), Folgefehler und groesste Auslenkung.
 
 import argparse
 import math
+import re
+import shutil
+import socket
+import subprocess
+import sys
 import time
 
 import _bootstrap  # noqa: F401
@@ -158,6 +174,139 @@ def connect(report):
         show("get_diagnostics()", "nicht abfragbar: %s" % exc)
 
     return raw, in_sim
+
+
+#: Benutzer auf der Control-Box (Neuras install.sh: ``ssh hrg@192.168.2.13``).
+SSH_USER = "hrg"
+
+
+def parse_os_release(text):
+    """``/etc/os-release`` als dict, Anfuehrungszeichen entfernt."""
+    out = {}
+    for line in text.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and key and not key.startswith("#"):
+            out[key] = value.strip().strip('"').strip("'")
+    return out
+
+
+def read_os_release(host, user, timeout=8.0):
+    """Inhalt von ``/etc/os-release`` der Steuerung, oder (None, Grund).
+
+    Auf der Steuerung selbst (localhost unter Linux) direkt aus der Datei,
+    sonst per ``ssh`` ohne Passwortabfrage.
+    """
+    if host in ("127.0.0.1", "localhost", "::1") and sys.platform.startswith("linux"):
+        try:
+            with open("/etc/os-release") as handle:
+                return handle.read(), None
+        except OSError as exc:
+            return None, str(exc)
+    ssh = shutil.which("ssh")
+    if ssh is None:
+        return None, "kein ssh-Programm gefunden"
+    argv = [ssh, "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+            "-o", "StrictHostKeyChecking=accept-new",
+            "%s@%s" % (user, host), "cat /etc/os-release"]
+    try:
+        proc = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, timeout=timeout,
+                              universal_newlines=True)
+    except subprocess.TimeoutExpired:
+        return None, "Zeitueberschreitung nach %.0f s" % timeout
+    if proc.returncode != 0:
+        reason = (proc.stderr.strip().splitlines() or ["Rueckgabewert %d" % proc.returncode])[-1]
+        return None, reason
+    return proc.stdout, None
+
+
+#: OpenSSH-Version aus dem SSH-Banner -> Ubuntu-Release. Das Banner sendet der
+#: Dienst beim Verbinden von sich aus, ohne Anmeldung; wir nutzen es als
+#: Rueckfall, wenn /etc/os-release mangels Schluessel nicht lesbar ist. Die
+#: OpenSSH-Version ist an das Ubuntu-Release gebunden (Distributionspaket).
+_SSH_TO_UBUNTU = {
+    "7.2": "Ubuntu 16.04 (Xenial)",
+    "7.6": "Ubuntu 18.04 (Bionic)",
+    "8.2": "Ubuntu 20.04 (Focal)",
+    "8.9": "Ubuntu 22.04 (Jammy)",
+    "9.6": "Ubuntu 24.04 (Noble)",
+}
+_SSH_BANNER = re.compile(r"OpenSSH_(\d+\.\d+)", re.IGNORECASE)
+
+
+def read_ssh_banner(host, port=22, timeout=5.0):
+    """Begruessungszeile des SSH-Dienstes, oder (None, Grund).
+
+    Keine Anmeldung: der Server sendet das Banner selbst, bevor irgendetwas
+    authentifiziert wird. Wir lesen nur diese eine Zeile und trennen wieder.
+    """
+    try:
+        conn = socket.create_connection((host, port), timeout=timeout)
+    except OSError as exc:
+        return None, str(exc)
+    try:
+        conn.settimeout(timeout)
+        data = b""
+        while b"\n" not in data and len(data) < 256:
+            chunk = conn.recv(256 - len(data))
+            if not chunk:
+                break
+            data += chunk
+    except OSError as exc:
+        return None, str(exc)
+    finally:
+        conn.close()
+    line = data.decode("ascii", "replace").splitlines()
+    return (line[0], None) if line else (None, "leeres Banner")
+
+
+def ubuntu_from_ssh_banner(banner):
+    """(OpenSSH-Version, Ubuntu-Hinweis) aus dem Banner, Hinweis ggf. None."""
+    match = _SSH_BANNER.search(banner or "")
+    if not match:
+        return None, None
+    openssh = match.group(1)
+    return openssh, _SSH_TO_UBUNTU.get(openssh)
+
+
+def check_os(report, user=SSH_USER):
+    from neurapy.robot import SOCKET_ADDRESS
+
+    text, reason = read_os_release(SOCKET_ADDRESS, user)
+    if text is not None:
+        info = parse_os_release(text)
+        name = info.get("PRETTY_NAME") or "%s %s" % (info.get("NAME", "?"), info.get("VERSION", ""))
+        show("Betriebssystem (%s@%s)" % (user, SOCKET_ADDRESS), name)
+        show("VERSION_ID", info.get("VERSION_ID"))
+        report.add("ok", "Steuerung laeuft auf %s (/etc/os-release)." % name.strip())
+        return info
+
+    # Kein Schluessel/kein Login: aus dem SSH-Banner die Version ableiten. Das
+    # ist ein Hinweis (Haupt-Release), kein Punktstand wie in os-release.
+    banner, berr = read_ssh_banner(SOCKET_ADDRESS)
+    if banner is None:
+        report.add(
+            "warn",
+            "Ubuntu-Version nicht lesbar: os-release per SSH nicht erreichbar "
+            "(%s), SSH-Banner nicht erreichbar (%s)." % (reason, berr),
+        )
+        return None
+    show("SSH-Banner (%s:22)" % SOCKET_ADDRESS, banner)
+    openssh, hint = ubuntu_from_ssh_banner(banner)
+    if hint:
+        report.add(
+            "ok",
+            "Steuerung laeuft auf %s (aus OpenSSH %s abgeleitet; fuer den "
+            "genauen Punktstand SSH-Schluessel hinterlegen: ssh-copy-id %s@%s)."
+            % (hint, openssh, user, SOCKET_ADDRESS),
+        )
+        return {"PRETTY_NAME": hint, "_source": "ssh-banner", "_openssh": openssh}
+    report.add(
+        "warn",
+        "Ubuntu-Version nicht sicher ableitbar -- SSH-Banner '%s' nicht in der "
+        "Zuordnung. os-release per SSH war nicht lesbar (%s)." % (banner, reason),
+    )
+    return None
 
 
 # -- 1. Funktionsumfang ----------------------------------------------------
@@ -546,10 +695,16 @@ def main():
                         help="REALE Anlage freigeben (mit Bestaetigung, siehe Docstring)")
     parser.add_argument("--gripper", action="store_true",
                         help="an der Anlage auch den Greifer schalten")
+    parser.add_argument("--os-version", action="store_true",
+                        help="Ubuntu-Version der Steuerung per SSH lesen")
+    parser.add_argument("--ssh-user", default=SSH_USER,
+                        help="SSH-Benutzer auf der Steuerung (Vorgabe: %s)" % SSH_USER)
     args = parser.parse_args()
 
     report = Report()
     raw, in_sim = connect(report)
+    if args.os_version:
+        check_os(report, args.ssh_user)
     real = in_sim is not True
 
     move = args.move

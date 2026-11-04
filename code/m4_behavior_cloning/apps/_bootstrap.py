@@ -21,6 +21,7 @@ _NEURAPY_DIRS = [
     for p in (*(Path(d) for d in (os.environ.get("BC_NEURAPY_DIR"),) if d),
               _REPO_ROOT / "Robot Controller",
               _REPO_ROOT / "code" / "m2_robot_control" / "vendor",
+              _REPO_ROOT / "m2_robot_control" / "vendor",   # als code/m4_behavior_cloning eingebaut
               _REPO_ROOT)
     if (p / "neurapy" / "__init__.py").is_file()
 ]

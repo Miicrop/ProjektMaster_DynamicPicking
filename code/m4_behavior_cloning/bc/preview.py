@@ -161,3 +161,71 @@ def compose(frames, height=DEFAULT_HEIGHT, overlay=None):
         cv2.putText(board, str(overlay), (8, board.shape[0] - 7),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
     return board
+
+
+def as_recorded(image):
+    """Bild so, wie es im Datensatz landet (bc/recorder.py: Schemagroesse).
+
+    Fuer die Vorschau beim Einrichten (Anwender 2026-11-03): volle Kamera-
+    aufloesung taeuscht Details vor, die nach dem Verkleinern fehlen.
+    """
+    from .recorder import _to_schema_size
+
+    return _to_schema_size(image)
+
+
+def policy_crop_box(shape, ratio=None):
+    """(x0, y0, x1, y1) des zentrierten Policy-Ausschnitts in einem Bild ``shape``.
+
+    Bei der Inferenz schneidet lerobot zentriert ``ratio`` von Hoehe und
+    Breite aus (config.POLICY_CROP_RATIO), im Training an zufaelliger Stelle.
+    """
+    from . import config
+
+    ratio = config.POLICY_CROP_RATIO if ratio is None else float(ratio)
+    height, width = shape[:2]
+    crop_w, crop_h = int(round(width * ratio)), int(round(height * ratio))
+    x0, y0 = (width - crop_w) // 2, (height - crop_h) // 2
+    return x0, y0, x0 + crop_w - 1, y0 + crop_h - 1
+
+
+def mark_policy_crop(image, ratio=None):
+    """Kopie von ``image`` (RGB) mit gruenem Rahmen um den Policy-Ausschnitt."""
+    import cv2
+
+    marked = image.copy()
+    x0, y0, x1, y1 = policy_crop_box(marked.shape, ratio)
+    thickness = max(1, int(round(marked.shape[1] / 320.0)))
+    colour = (0, 220, 0) if marked.ndim == 3 else 255
+    cv2.rectangle(marked, (x0, y0), (x1, y1), colour, thickness)
+    return marked
+
+
+def distorted_by_recording(shape, tol=0.01):
+    """Wird ein Bild dieser Groesse beim Verkleinern gestaucht? (nicht 4:3)"""
+    from . import config
+
+    height, width = shape[:2]
+    return abs(width / float(height) - config.IMAGE_WIDTH / float(config.IMAGE_HEIGHT)) > tol
+
+
+def display_frames(frames, recorded=False, crop=True):
+    """Bilder fuer die Anzeige: wie aufgezeichnet und/oder mit Policy-Rahmen.
+
+    Neue Objekte (``image``, ``timestamp``) -- die Frames der Kameras und
+    damit die Episodendaten bleiben unveraendert.
+    """
+    from types import SimpleNamespace
+
+    shown = {}
+    for name, frame in frames.items():
+        image = getattr(frame, "image", None) if frame is not None else None
+        if image is None or not (recorded or crop):
+            shown[name] = frame
+            continue
+        if recorded:
+            image = as_recorded(image)
+        if crop:
+            image = mark_policy_crop(image)
+        shown[name] = SimpleNamespace(image=image, timestamp=getattr(frame, "timestamp", None))
+    return shown

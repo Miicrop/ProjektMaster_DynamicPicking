@@ -250,7 +250,7 @@ class OperationTab(ModeTab):
         self.command.setWordWrap(True)
         self.command.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.command.setStyleSheet("font-family:Consolas; color:#333")
+        self.command.setStyleSheet("font-family:Consolas; color:palette(text)")
         command_layout.addWidget(self.command)
         layout.addWidget(command_box)
 

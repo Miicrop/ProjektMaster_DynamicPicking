@@ -164,7 +164,14 @@ def scan_sources(sources, require_success=False):
             )
 
         for i, entry in enumerate(index["episodes"]):
-            meta = json.loads((root / entry["dir"] / "meta.json").read_text(encoding="utf-8"))
+            meta_path = root / entry["dir"] / "meta.json"
+            if not meta_path.is_file():
+                # Ordner von Hand geloescht (Anwender 2026-11-03: ep_00082,
+                # Standby). Der Indexeintrag bleibt -- sonst vergaebe ein
+                # weiterer Lauf in diesem Ordner eine schon belegte Nummer.
+                skipped["Ordner fehlt"] = skipped.get("Ordner fehlt", 0) + 1
+                continue
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
             if meta["discarded"]:
                 reason = "verworfen (%s)" % (meta["discard_reason"] or "unbekannt")
                 skipped[reason] = skipped.get(reason, 0) + 1

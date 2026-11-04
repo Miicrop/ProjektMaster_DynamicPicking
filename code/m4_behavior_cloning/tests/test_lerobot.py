@@ -86,6 +86,20 @@ def test_scan_selects_episodes_and_detects_tempo_conflicts(tmp_path):
     assert both["skipped"]["verworfen (schutzstopp)"] == 1
 
 
+def test_scan_skips_episode_folders_deleted_by_hand(tmp_path):
+    # Anlage 2026-11-03: ep_00082 (Standby) von Hand geloescht, Index blieb
+    import shutil
+
+    from bc import metrics
+
+    root = _record(tmp_path / "a", [_episode(), _episode(), _episode()])
+    shutil.rmtree(root / "ep_00001")
+    scan = lerobot_io.scan_sources([root])
+    assert len(scan["episodes"]) == 2 and scan["skipped"] == {"Ordner fehlt": 1}
+    summary = metrics.summarize(root)
+    assert summary["episodes_usable"] == 2 and summary["discard_reasons"] == {"Ordner fehlt": 1}
+
+
 def test_dry_run_episodes_never_reach_the_export(tmp_path):
     """Trockenlauf ohne Greifer: die Greiferbefehle stehen im Action-Vektor,
     haben aber nie stattgefunden. apps/record.py verwirft solche Episoden
