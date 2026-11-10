@@ -254,9 +254,11 @@ Policy trainieren, Live-Inferenz. Code und Doku liegen in `code/m4_behavior_clon
   wieder her (Tool, Geschwindigkeit), legt ab und macht wie gewohnt weiter (M3, Sortieren).
   Welches Modell: `m4.checkpoint` in den Einstellungen. Erreicht M4 den Übergabepunkt nicht, stoppt
   der Zyklus mit Fehler; NOT-STOPP bricht auch M4 ab.
-- **Eigene Umgebung (einmalig):** `code\setup_m4.bat` doppelklicken. Es legt
+- **Eigene Umgebung (einmalig):** `code\setup_m4.bat` doppelklicken. Es öffnet das Setup-Fenster:
+  jede Komponente mit Häkchen und Status, ohne Admin-Rechte. Es legt
   `code\m4_behavior_cloning\.venv` mit Python 3.12, torch und lerobot an (mit NVIDIA-Karte die
-  CUDA-Version, sonst CPU). Eigen, weil lerobot Python 3.12 braucht und sich torch/OpenCV nicht mit
+  CUDA-Version, sonst CPU). Treiber und Kamera-SDK prüft es nur und gibt dafür eine Checkliste
+  für den Laborbetreuer aus. Details: [code/setup/README.md](code/setup/README.md). Eigen, weil lerobot Python 3.12 braucht und sich torch/OpenCV nicht mit
   EasyOCR (M3) vertragen. Die GUI nimmt sie automatisch für alles mit torch. Fehlt sie, gehen
   Aufnahme und Systemcheck, Training und Inferenz nicht.
 - **Roboter und Kamera oben teilen sich M2 und M4 automatisch:** Wer den Roboter will, bekommt ihn,
