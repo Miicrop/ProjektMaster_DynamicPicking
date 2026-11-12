@@ -17,10 +17,12 @@ topdown_camera:
   # int = OpenCV device index, "daheng:<serial>" = Daheng camera (Galaxy SDK), other string = image file / glob
   # (replay, relative to code/). Find cameras and serials with: python -m common.camera
   # The top-down camera is a Daheng VEN-161 (1440x1080, width/height unused) - also the scene camera of M4.
-  source: daheng                # tbd: daheng:<serial>, required as soon as the wrist camera (M4) is plugged in too
-  exposure_us: null             # null = auto exposure (Daheng)
-  gain_db: null                 # null = auto gain (Daheng)
-  width: 1920
+  source: daheng:EBK24100634    # VEN-161-61U3C-M05 (serial required as soon as the wrist camera of M4 is plugged in too)
+  # Fixed (lab 2026-11-12, exposure sweep): auto exposure overexposes on the dark board (part saturated
+  # white, scratches/stains in the mask). 15000 us: board V 40, part V 190 / chroma 40, nothing saturated.
+  exposure_us: 15000            # null = auto exposure (Daheng)
+  gain_db: 0.0                  # null = auto gain (Daheng)
+  width: 1440                   # only used for OpenCV sources, Daheng always reads the full sensor
   height: 1080
   calibration_file: null        # tbd, e.g. config/topdown_intrinsics.yaml
 
@@ -51,6 +53,13 @@ part_topdown:
   min_area_mm2: 300
   max_area_mm2: 20000
   chamfer_min_frac: 0.08        # chamfer depth relative to short side to count as found
+  # Empirical: the detected centre drifts outward from the image centre (parallax of the 15 mm part
+  # top + uncalibrated lens). Fit from 21 pointing tests (lab 2026-11-12, logs/point_tests.csv, all
+  # without correction): offset = -scale * (pos - center_mm), residual rms 0.5 mm (x) / 1.2 mm (y).
+  # null = off. Replace by intrinsic calibration + height correction later.
+  position_correction:
+    center_mm: [227.0, 164.0]
+    scale: [0.037, 0.020]
 
 # 2D rigid transform workspace frame -> robot base frame (tbd, from teach-in of frame corners)
 workspace_to_robot:
@@ -69,7 +78,7 @@ robot:
   # in the lab). The robot backup still has 210 mm -> set offsetZ of the tool on the pendant to this value.
   tool_tcp_mm: [0.0, 0.0, 197.5]
   home_point: Home              # named point stored on the robot
-  override: 0.2                 # global speed override 0..1 (keep low while testing)
+  override: 0.8                 # global speed override 0..1 (keep low while testing)
   joint_speed_percent: 20
   linear_speed_mps: 0.10
   approach_speed_mps: 0.03      # final linear approach / retreat
@@ -78,12 +87,22 @@ robot:
   # approach_speed_mps (same way back up). >= approach_height_mm: whole way slow
   approach_slow_mm: 20
   grasp_height_mm: 5           # TCP height above table when grasping (depends on part / gripper)
+  # TCP height above the place poses when the gripper opens: the held part hangs grasp_height_mm below
+  # the TCP, plus clearance (lab 2026-11-12: 8 to be safe, check by hand, then lower to ~6)
+  place_height_mm: 1             # poses taught WITH the part sitting on the surface (lab 2026-11-12)
   # rz relative to home so that the jaws close across the short side of a part with theta = 0 (long
   # axis along base x): 90 deg + 23 deg gripper mounting angle (lab 2026-10-06: home +23 deg -> jaws close
-  # along base x, i.e. grip a part lying along base y / marker edge 0-3 as at the stations)
-  gripper_angle_offset_deg: 113.0
+  # along base x, i.e. grip a part lying along base y / marker edge 0-3 as at the stations).
+  # -67 = 113 - 180 (2026-11-12): part held the other way round -> chamfer/serial side towards the M3
+  # camera at the inspection pose, without turning the place poses (joint 6 wrap, see poses).
+  gripper_angle_offset_deg: -67.0
   grip_wait_s: 1.0
-  gripper_enabled: false         # false = move only, skip grasp/release (first tests); always off for the Neura VM
+  gripper_enabled: true          # false = move only, skip grasp/release (first tests); always off for the Neura VM
+  # Zimmer LWR50 on the control box digital outputs (wiring found by M4, lab 2026-10-23). enable must
+  # stay 1 - set on connect/reset, followed by a pulse on reset (clears the gripper error state).
+  # null = neurapy grasp()/release() instead.
+  gripper_io: {open: DO_0, close: DO_1, enable: DO_3, reset: DO_2}
+  gripper_reset_pulse_s: 1.0
   # Software workspace limits in robot base frame [mm]
   limits_mm:
     x: [100.0, 900.0]
@@ -101,15 +120,24 @@ robot:
   # 'robot_check teach' (place() opens the gripper exactly at the pose).
   poses:
     home: [420.0, 0.0, 237.0, 180.0, 0.0, 180.0]
-    inspection: [520.8, 199.6, 42.0, -180.0, -0.0, -157.0]
-    bin_good: [299.7, 185.4, 4.0, -180.0, -0.0, -157.0]
-    bin_bad: [297.7, 319.4, 3.0, -180.0, -0.0, -157.0]
+    # Place poses = fingertips (TCP) on the surface, taught WITHOUT a part. place() opens the gripper
+    # place_height_mm above them.
+    # rz -157: joint 6 near 0. rz 23 put joint 6 at 178 deg (wrap) -> no IK to the bins. The part is
+    # turned by 180 deg at the grasp instead (gripper_angle_offset_deg).
+    inspection: [517.9, 200.5, 48.1, 180.0, -0.0, -157.0]
+    bin_good: [299.7, 185.4, 9.0, -180.0, -0.0, -157.0]
+    bin_bad: [297.7, 319.4, 10.0, -180.0, -0.0, -157.0]
 
 # --- M3: inspection ----------------------------------------------------------
 inspection_camera:
-  source: 1
-  width: 3840
+  # Index 0 on the lab laptop (2026-11-12; index 1 = black built-in camera). Order can change when
+  # cameras are re-plugged -> check with: python -m common.camera (images in logs/cameras)
+  source: 0
+  width: 3840                   # lower resolutions crop the field of view on this camera
   height: 2160
+  # Fixed manual focus, autofocus off (null = camera setting). The camera opened in autofocus and
+  # was blurred on the part. Sweep 2026-11-12: sharpness peak at 90-95 (Logi Tune value 95).
+  focus: 90                     # steps of 5 on this camera
   calibration_file: null
 
 inspection:
@@ -118,6 +146,9 @@ inspection:
   part_saturation_min: 50
   part_value_min: 80
   face_brightness_frac: 0.85    # darker than this fraction of the face = hole / notch
+  # notch only: the face gets darker towards the right end at the station (uneven light, lab
+  # 2026-11-12) - with 0.85 the notch merged with that shade. Lower values shrink the hole -> separate.
+  notch_brightness_frac: 0.75
   face_saturation_delta: 40     # saturation differing more than this from the face = hole / notch
   # Feature regions relative to the part bounding box [x0, y0, x1, y1] (0..1)
   label_roi: [0.0, 0.0, 0.58, 1.0]

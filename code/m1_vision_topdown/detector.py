@@ -62,6 +62,17 @@ class TopDownResult:
         return out
 
 
+def correct_position(x_ws: float, y_ws: float, pc: dict[str, Any]) -> tuple[float, float]:
+    """Pull the detected centre towards `center_mm` by `scale` per axis (part_topdown.position_correction).
+    The part top lies above the table plane the image is rectified to (parallax) and the lens is not
+    calibrated, so the detected centre drifts outward from the image centre - linear in the distance."""
+    corr = pc.get("position_correction")
+    if not corr:
+        return x_ws, y_ws
+    (cx, cy), (kx, ky) = corr["center_mm"], corr["scale"]
+    return x_ws - kx * (x_ws - cx), y_ws - ky * (y_ws - cy)
+
+
 class TopDownPipeline:
     """Image in, part pose out. No camera access -> directly testable with image files."""
 
@@ -82,7 +93,7 @@ class TopDownPipeline:
         if trace is not None:
             trace.add("part_pose", draw_part_pose(rect, part))
 
-        x_ws, y_ws = ws.rect_to_mm(part.u, part.v)
+        x_ws, y_ws = correct_position(*ws.rect_to_mm(part.u, part.v), self.cfg["part_topdown"])
         period = 360.0 if part.chamfer_found else 180.0
         theta_ws = (-part.theta_img_deg) % period          # image y down -> workspace y up
 

@@ -29,6 +29,7 @@ def sim():
     cfg = copy.deepcopy(CFG)
     cfg["robot"]["grip_wait_s"] = 0.0
     cfg["robot"]["gripper_enabled"] = True       # independent of the lab switch in system.yaml
+    cfg["robot"]["gripper_io"] = None            # grasp()/release(); digital outputs: own test
     robot = NeuraRobot(cfg, client_factory=lambda host: load_neurapy_client("127.0.0.1", server.port))
     yield robot, server.fake
     server.shutdown()
@@ -142,9 +143,10 @@ def test_pick_and_place_sequence(sim):
     assert seq == [                                                 # home: already there, not sent
                    "release", "move_joint", *down, "grasp", *up,    # pick
                    "move_joint", *down, "release", *up]             # place
-    # ends above the inspection pose
+    # ends above the inspection pose (opened place_height_mm above it)
+    rc = CFG["robot"]
     assert fake.tcp[2] * 1000 == pytest.approx(
-        CFG["robot"]["poses"]["inspection"][2] + CFG["robot"]["approach_height_mm"])
+        rc["poses"]["inspection"][2] + rc["place_height_mm"] + rc["approach_height_mm"])
 
 
 def test_gripper_disabled_moves_without_gripper_commands(sim):
@@ -196,6 +198,23 @@ def test_gripper_method_uses_controller_when_enabled(sim):
     assert fake.gripper_closed
     robot.gripper(close=False)
     assert not fake.gripper_closed
+
+
+def test_gripper_via_digital_outputs(sim):
+    """Zimmer LWR50 on DO_x: enable + reset pulse on connect, then always the opposite output off first."""
+    robot, fake = sim
+    robot._rc["gripper_io"] = {"open": "DO_0", "close": "DO_1", "enable": "DO_3", "reset": "DO_2"}
+    robot._rc["gripper_reset_pulse_s"] = 0.0
+    robot.connect()
+    assert fake.outputs == {"DO_3": True, "DO_2": False}
+    robot.gripper(close=True)
+    assert fake.outputs == {"DO_3": True, "DO_2": False, "DO_0": False, "DO_1": True}
+    robot.gripper(close=False)
+    assert fake.outputs == {"DO_3": True, "DO_2": False, "DO_0": True, "DO_1": False}
+    sets = [(c[2]["io_name"], c[2]["target_value"]) for c in fake.calls if c[0] == "io"]
+    assert sets == [("DO_3", True), ("DO_2", True), ("DO_2", False),
+                    ("DO_0", False), ("DO_1", True), ("DO_1", False), ("DO_0", True)]
+    assert "grasp" not in names(fake) and "release" not in names(fake)
 
 
 def test_motion_without_connect_fails(sim):
@@ -302,3 +321,13 @@ def test_teach_stations_skip_and_quit(sim):
     robot.connect()
     steps = iter(["unknown", "s", "q"])
     assert _teach_stations(robot, robot._cfg, ["bin_good", "bin_bad"], ask=lambda _: next(steps)) == {}
+
+
+def test_place_opens_place_height_above_the_pose(sim):
+    """Poses are taught with the fingertips on the surface - the held part hangs below the TCP."""
+    robot, fake = sim
+    robot._rc["place_height_mm"] = 8.0
+    robot.connect()
+    pose = robot_target(CFG, "inspection")
+    robot.place(pose)
+    assert min(m[1] for m in _linear_moves(fake)) == pytest.approx(pose.z_mm + 8.0)

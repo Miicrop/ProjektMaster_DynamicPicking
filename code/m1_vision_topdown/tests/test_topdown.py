@@ -11,10 +11,12 @@ import yaml
 from common.config import load_config
 from common.interfaces import VisionError
 from m1_vision_topdown import TopDownPipeline
+from m1_vision_topdown.detector import correct_position
 from m1_vision_topdown.make_markers import marker_with_border
 from m1_vision_topdown.workspace import find_workspace_aruco
 
 CFG = load_config()
+CFG["part_topdown"]["position_correction"] = None   # synthetic scenes have no parallax; own test below
 DATA = Path(__file__).parent / "data"
 # real photos have their own workspace section (see data/workspace.yaml)
 PHOTO_CFG = copy.deepcopy(CFG)
@@ -78,6 +80,13 @@ def test_synthetic_pose(method, x, y, theta):
     assert r.x_ws_mm == pytest.approx(x, abs=2.0)
     assert r.y_ws_mm == pytest.approx(y, abs=2.0)
     assert _angle_err(r.theta_ws_deg, theta) < 2.0
+
+
+def test_position_correction_pulls_towards_centre():
+    pc = {"position_correction": {"center_mm": [200.0, 100.0], "scale": [0.04, 0.02]}}
+    assert correct_position(200.0, 100.0, pc) == pytest.approx((200.0, 100.0))   # centre stays
+    assert correct_position(300.0, 0.0, pc) == pytest.approx((296.0, 2.0))      # 4 % / 2 % inward
+    assert correct_position(300.0, 0.0, {"position_correction": None}) == (300.0, 0.0)
 
 
 def test_empty_workspace_raises():

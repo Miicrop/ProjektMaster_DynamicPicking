@@ -21,8 +21,8 @@
 
 ## 1. Code und Repo
 
-- [ ] **N** – Laborlaptop-Stand pushen. Öffnen und Schließen des Greifers funktioniert dort,
-  im Repo steht noch `gripper_enabled: false`.
+- [ ] **N** – Stand vom 12.11. committen: Config (Kamera, Belichtung, `gripper_io`,
+  `position_correction`), Greifer über Digitalausgänge, Kamera-Puffer, M1-Korrektur.
 - [ ] **N** – Thesis- und Plan-Stand vom 30.10. committen.
 - [ ] **T** – Git-Hosting für das Team klären (GitHub oder GitLab der Hochschule).
   `resources/` bleibt draußen, weil es Passwort-Hashes enthält.
@@ -36,33 +36,30 @@ Nach jeder Config-Änderung in der GUI speichern (Strg+S).
 
 **Mitnehmen:** Maßband, Lineal, Klebeband, Gut- und Schlechtteile, Netzteil, USB-Hub, LAN-Kabel.
 
-- [ ] **N** – **Kameras anbinden**
-  - Galaxy SDK (Daheng) auf dem Laborrechner installieren.
-  - `python -m common.camera` listet die Kameras mit Seriennummer.
-  - Seriennummer der Kamera oben eintragen: `topdown_camera.source: daheng:<Seriennummer>`.
+- [~] **N** – **Kameras anbinden.** Kamera oben (`EBK24100634`) und Seitenkamera (Index 1) sind
+  eingetragen (12.11.).
   - Seriennummer der Handgelenkkamera bei M4 eintragen.
-  - Seitenkamera: Index in `inspection_camera.source` eintragen.
   - USB-Bandbreite mit allen drei Kameras gleichzeitig prüfen.
-- [ ] **P1** – **M1 live.** Kamera oben fest montieren. Im Tab M1 mit „Live“ prüfen, ob alle
-  vier Marker erkannt werden und die Pose plausibel ist. Das Daheng-Bild hat 1440×1080 Pixel.
-  Danach eine feste Belichtung festlegen (`exposure_us`, derzeit Automatik).
+- [~] **P1** – **M1 live.** Marker, Erkennung und feste Belichtung (15000 µs) laufen (12.11.).
+  Die Belichtung bei anderem Licht prüfen (direkte Sonne).
 - [ ] **P3** – **M3 live.** Seitenkamera und Licht an der Prüfvorrichtung aufbauen. Im Tab M3 mit
   einem Teil prüfen, ob die ROIs passen und die OCR liest. Prüfen, ob an der Prüfstation eine
   Beleuchtung vorhanden ist oder gebraucht wird.
 - [~] **N** – **Kalibrierung Arbeitsbereich → Roboter.** Sie ist eingemessen
   (0,35°, [205,1, −319,7] mm). Der Restfehler (RMS) fehlt im Repo. Mit `robot_check calib`
   wiederholen, RMS und Ausgabe notieren. Ab 3 mm warnt das Werkzeug.
-- [ ] **N/P1** – **Zeigetest** `robot_check point` an 5–10 Stellen, an Rand- **und** Mittelpositionen:
-  - Versatz dx/dy notieren. Er landet in `logs/point_tests.csv`.
-  - Wächst der Versatz zum Rand hin, ist das Parallaxe (siehe M1) oder Objektivverzerrung.
-  - Greifwinkel prüfen: Bei einem schräg liegenden Teil müssen die Backen quer über der schmalen
-    Seite stehen.
-  - Ein grober Zeigetest sah bereits vielversprechend aus.
-- [ ] **P1** – **Parallaxe bewerten.** Wenn der Zeigetest einen lageabhängigen Versatz zeigt:
-  - Korrektur über die Bauteilhöhe, also die Oberseite statt der Tischebene entzerren,
-  - oder nur die Oberseite segmentieren.
-- [ ] **P1** – Intrinsische Kalibrierung der Kamera oben (Schachbrett/ChArUco), Ergebnis in
-  `config/`. `calibration_file` wird noch nicht verwendet.
+- [ ] **P1** – **Positionskorrektur ablösen.** Die lineare Korrektur ist nur empirisch angepasst.
+  Sauber wäre eine intrinsische Kalibrierung (Schachbrett/ChArUco, `calibration_file` wird noch nicht
+  verwendet) plus eine Höhenkorrektur, bei der die Oberseite statt der Tischebene entzerrt wird.
+  Danach `position_correction` auf `null` setzen und den Zeigetest wiederholen. Für die Thesis
+  (Kap. 05/06): Messdaten liegen in `logs/point_tests.csv`.
+- [ ] **P2** – Spielraum der Greiferbacken zum 40-mm-Teil prüfen: Selbst mit 0 mm Versatz ist es
+  teils knapp.
+- [ ] **P3** – **Maßstab der Bohrung.** M3 misst ein 10-mm-Teil mit 9,57–9,68 mm, das Verhältnis
+  Bohrung zu Teilhöhe ist 0,64 statt 0,667. Mit 2–3 bekannten Gutteilen je 3 Aufnahmen messen, dann
+  einen Korrekturfaktor eintragen. Die Toleranz nicht aufweiten.
+- [ ] **N** – `code/logs/point_tests.csv` (Zeigetests vom 12.11.) für die Thesis sichern. `logs/`
+  ist nicht im Repo.
 - [ ] **N** – **Werkzeuglast** von `ZimmerLWR50` am Pendant ablesen und mit dem Soll vergleichen:
   1,75 kg, Schwerpunkt z ≈ 81 mm (ANLEITUNG_NEURA Abschnitt 4).
 - [ ] **N** – Klären, ob der Wechsel in den Automatikmodus am Pendant bestätigt werden muss

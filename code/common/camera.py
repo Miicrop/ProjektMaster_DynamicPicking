@@ -27,7 +27,8 @@ from common.config import CODE_ROOT
 
 class OpenCVCamera:
     def __init__(self, device: int, width: int | None = None, height: int | None = None,
-                 flush_frames: int = 3):
+                 flush_frames: int = 2, focus: int | None = None):
+        """focus: fixed manual focus (autofocus off), None = leave the camera's setting."""
         backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
         self._cap = cv2.VideoCapture(device, backend)
         if not self._cap.isOpened():
@@ -35,11 +36,17 @@ class OpenCVCamera:
         if width and height:
             self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
             self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        if focus is not None:   # webcams (Logitech) start in autofocus and focus on the background
+            self._cap.read()    # start the stream first (verified in the lab only with this order)
+            self._cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+            self._cap.set(cv2.CAP_PROP_FOCUS, focus)
         self._flush = flush_frames
 
     def read(self) -> np.ndarray:
-        for _ in range(self._flush):  # drop buffered (old) frames
-            self._cap.grab()
+        # drop the buffered (old) frame: after a pause the first read returns the frame from back then
+        # (lab 2026-11-12: empty fixture in the M3 image). grab() alone does not drop it with DirectShow.
+        for _ in range(self._flush):
+            self._cap.read()
         ok, frame = self._cap.read()
         if not ok:
             raise RuntimeError("Camera read failed")
@@ -80,6 +87,10 @@ class DahengCamera:
         if self._cam is None:
             self._cam = self._open()
         try:
+            # Free-running camera, get_image() returns the OLDEST queued frame - after a pause that is
+            # an image from back then. Flush, then drop the frame that was already being exposed.
+            self._cam._cam.data_stream[0].flush_queue()
+            self._cam.read()
             rgb = self._cam.read().image
         except Exception as e:
             raise RuntimeError(f"Camera read failed (Daheng {self.serial or ''}): {e}") from e
@@ -130,7 +141,7 @@ def daheng_serial(source: Any) -> str | None:
 def open_camera(section: dict[str, Any]) -> OpenCVCamera | DahengCamera | FileCamera:
     src = section["source"]
     if isinstance(src, int):
-        return OpenCVCamera(src, section.get("width"), section.get("height"))
+        return OpenCVCamera(src, section.get("width"), section.get("height"), focus=section.get("focus"))
     serial = daheng_serial(src)
     if serial is not None:
         return DahengCamera(serial, section.get("exposure_us"), section.get("gain_db"))

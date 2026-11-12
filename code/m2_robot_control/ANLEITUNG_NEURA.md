@@ -203,6 +203,11 @@ Die Stationen liegen hinter der oberen Markerkante (Kamerasicht): `bin_bad` und 
 `place()` den Greifer. Der Prüfaufbau (3D-Druck) liegt 38 mm über der Platte; das ergibt sich
 beim Teachen automatisch aus der angefahrenen Höhe.
 
+**Ohne Teil teachen, Fingerspitzen auf die Fläche.** Beim Greifen hängt das Teil `grasp_height_mm`
+(5 mm) unter dem TCP. Deshalb öffnet `place()` den Greifer `robot.place_height_mm` **über** der
+geteachten Pose (5 mm Teil + Luft, derzeit 8). Ohne diesen Abstand würde das Teil in die Fläche
+gedrückt (Labor 12.11.). Wer mit gegriffenem Teil teacht, setzt `place_height_mm` auf etwa 1.
+
 **Empfohlen: geführtes Teachen (`teach`)**
 
 ```powershell

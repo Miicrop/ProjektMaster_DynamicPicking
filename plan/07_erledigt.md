@@ -4,6 +4,49 @@ Neueste Einträge oben. Offenes steht in [06_offen.md](06_offen.md).
 
 ## Log
 
+### 2026-11-12 – Niklas (Labor)
+- **Netzwerk:** Der Laptop braucht eine eigene IP im Netz des Roboters (z. B. 192.168.2.92/24),
+  nicht die .13 der Steuerung. Bei gleicher IP meldet Windows `Duplicate` und die Verbindung
+  läuft in den Timeout.
+- **Kamera oben angebunden:** Daheng VEN-161-61U3C-M05, Seriennummer `EBK24100634`, eingetragen in
+  `topdown_camera.source`. Seitenkamera auf Index 1. Galaxy Viewer und GUI dürfen die Daheng nicht
+  gleichzeitig offen haben (`The device has been open`).
+- **Feste Belichtung:** `exposure_us: 15000`, `gain_db: 0`. Die Automatik belichtete auf der dunklen
+  Platte viel zu lang: Das Teil war weiß übersteuert, Kratzer und Schlieren landeten in der Maske.
+  Ergebnis der Belichtungsreihe: Platte V 40, Teil V 190 und Chroma 40, nichts übersteuert.
+- **Veraltete Bilder behoben** (`common/camera.py`): Die Kamera läuft frei, und `get_image()` lieferte
+  den ältesten Frame aus dem Puffer. Deshalb zeigte die GUI nach einer Pause das alte Bild. Jetzt wird
+  der Puffer vor jedem Bild geleert. Die Kameraklasse von M4 ist unverändert.
+- **Greifer über Digitalausgänge in M2:** `robot.gripper_io` (DO_0 auf, DO_1 zu, DO_3 Enable, DO_2 Reset,
+  Belegung von M4). Beim Verbinden wird Enable gesetzt und ein Reset-Impuls gegeben. Im Labor musste der
+  Greifer trotzdem am Roboter selbst freigeschaltet werden.
+- **Zeigetest und Positionskorrektur M1:** 21 Zeigetests ohne Korrektur zeigten keinen festen
+  Versatz, sondern einen positionsabhängigen: Die erkannte Mitte wandert nach außen, links bis
+  +8 mm in x, in y ±3 mm. Ursache ist vermutlich die Parallaxe der 15 mm hohen Oberseite plus das
+  unkalibrierte Objektiv. Ein lineares Modell je Achse passt gut: x 3,7 % um 227 mm (Restfehler 0,5 mm),
+  y 2,0 % um 164 mm (Restfehler 1,2 mm). Eingetragen als `part_topdown.position_correction`. Mit der
+  Korrektur: 9 von 11 Kontrollmessungen 0 mm, zwei bei +1 bzw. +2 mm in y. In allen vier Ecken würde
+  der Greifer greifen, teils knapp, weil die Backen wenig Spielraum zum 40-mm-Teil haben.
+  Daten in `code/logs/point_tests.csv`.
+- **Ablegen:** Neuer Parameter `robot.place_height_mm`, die Höhe des Greifers über der Ablagepose
+  beim Öffnen. Die Posen sind mit aufsitzendem Teil geteacht, deshalb steht der Wert auf 1. Mit 8
+  fiel das Teil hörbar auf die Prüfstation.
+- **Orientierung an der Prüfstation:** Damit Fase und Seriennummer zur M3-Kamera zeigen, wird das Teil
+  um 180° gedreht gegriffen (`gripper_angle_offset_deg` 113 → −67). Die Stationen bleiben bei
+  rz −157°. Mit rz 23° an den Stationen stand Achse 6 bei 178°, und von dort gab es keine IK-Lösung zu
+  den Ablagen bzw. die Steuerung lieferte eine umgeklappte Lösung.
+- **M3 an der echten Kamera:**
+  - Die Seitenkamera ist Index 0, nicht 1 (1 ist eine schwarze Laptopkamera). Sie läuft mit 3840×2160,
+    darunter wird das Bild beschnitten.
+  - Fester Fokus `focus: 90`. Die Logitech-Kamera startete im Autofokus und war unscharf.
+  - Fehler behoben: Der Rahmen um das Teil wuchs bis zum Bildrand, weil OpenCV beim Schließen am Rand
+    alles als „Teil“ wertet. Die Bohrung wurde dadurch mit 6,7 statt 9,5 mm gemessen.
+  - Die Kerbe hat eine eigene Helligkeitsschwelle `notch_brightness_frac: 0.75`, weil die Fläche
+    zur Kerbe hin dunkler wird.
+  - Veraltete Bilder behoben: DirectShow liefert nach einer Pause beim ersten `read()` das alte
+    Bild, und `grab()` verwirft es nicht. Deshalb sah M3 im Zyklus die leere Vorrichtung.
+  - Die Bohrung misst 9,57–9,68 mm statt 10 mm, also genau an der Toleranzgrenze, siehe 06.
+
 ### 2026-10-30 – Niklas
 - **Thesis auf Code-Stand** (ARS `academic-paper`):
   - Kap. 08 (M4) aus Jeremys Unterlagen entworfen.
