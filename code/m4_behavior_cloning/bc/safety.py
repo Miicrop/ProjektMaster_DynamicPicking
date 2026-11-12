@@ -74,6 +74,59 @@ class Watchdog(object):
             self._thread = None
 
 
+class CameraStale(RuntimeError):
+    """Ein Kamerabild ist zu lange nicht mehr neu -- die Policy saehe ein Standbild."""
+
+
+class FrameAgeGuard(object):
+    """Erkennt eingefrorene Kamerabilder in der Inferenz (Anwender 2026-11-11).
+
+    ``capture.ThreadedCapture.latest()`` liefert bei einem Kamerafehler
+    stillschweigend weiter das letzte Bild. Der Recorder faengt das ueber das
+    Latenzbudget ab (Episode verworfen); die Inferenz wuerde dagegen auf einem
+    Standbild weiterfahren -- etwa dorthin, wo das Objekt im alten Bild lag.
+
+    Je Takt :meth:`check` mit den Frames (Name -> Frame oder None) und der
+    aktuellen Zeit derselben Uhr, mit der die Kameras stempeln. Ist ein Bild
+    ``max_age_s`` aelter, zaehlt der Takt als schlecht; nach ``max_steps``
+    schlechten Takten in Folge wirft er :class:`CameraStale`. Ein einzelnes
+    verspaetetes Bild bricht nichts ab.
+    """
+
+    def __init__(self, max_age_s=config.INFER_MAX_FRAME_AGE_S,
+                 max_steps=config.INFER_FRAME_AGE_STEPS):
+        if max_age_s <= 0 or int(max_steps) < 1:
+            raise ValueError("max_age_s > 0 und max_steps >= 1 noetig")
+        self.max_age_s = float(max_age_s)
+        self.max_steps = int(max_steps)
+        self.bad_steps = 0
+        self.worst_age_s = 0.0
+
+    def reset(self):
+        self.bad_steps = 0
+        self.worst_age_s = 0.0
+
+    def check(self, frames, now):
+        """Rueckgabe: groesstes Bildalter (s). Wirft CameraStale nach zu vielen Takten."""
+        ages = {}
+        for name, frame in frames.items():
+            ages[name] = float("inf") if frame is None else float(now) - float(frame.timestamp)
+        oldest = max(ages, key=ages.get) if ages else None
+        age = ages[oldest] if oldest is not None else 0.0
+        if age != float("inf"):
+            self.worst_age_s = max(self.worst_age_s, age)
+        if age > self.max_age_s:
+            self.bad_steps += 1
+            if self.bad_steps >= self.max_steps:
+                raise CameraStale(
+                    "kamera %s: neuestes Bild %s alt, %d Takte in Folge ueber %.0f ms"
+                    % (oldest, "nie geliefert" if age == float("inf") else "%.0f ms" % (1e3 * age),
+                       self.bad_steps, 1e3 * self.max_age_s))
+        else:
+            self.bad_steps = 0
+        return age
+
+
 def geofence_check(robot, collision_model):
     """Baut einen Watchdog-Check aus dem Kollisionsmodell (AP 4.2).
 
@@ -85,8 +138,27 @@ def geofence_check(robot, collision_model):
     def check():
         state = robot.read_state()
         violations = collision_model.check_positions(
-            robot.link_positions(state.joints)
+            collision_model.positions_for(robot, state.joints)
         )
         return violations or None
 
     return check
+
+
+class TargetRejected(RuntimeError):
+    """Ein Ziel der Policy wuerde ins Kollisionsmodell fuehren -- nicht gesendet."""
+
+
+def check_target(collision_model, robot, joints):
+    """Vorabpruefung eines Ziels VOR dem Senden (Inferenz, Analyse 2026-11-11).
+
+    Der Watchdog prueft die GEMESSENE Stellung, reagiert also erst, wenn der
+    Arm schon dort ist (bei 20 Hz plus ~0,1 s Stopp einige mm zu spaet). Hier
+    wird das Ziel selbst geprueft: ein verbotenes Ziel geht gar nicht erst
+    raus. Wirft :class:`TargetRejected` mit der ersten Verletzung.
+    """
+    violations = collision_model.check_positions(collision_model.positions_for(robot, joints))
+    if violations:
+        v = violations[0]
+        raise TargetRejected("kollision vorab: %s an %s (Rest %.0f mm)"
+                             % (v.frame, v.box, 1e3 * v.clearance))

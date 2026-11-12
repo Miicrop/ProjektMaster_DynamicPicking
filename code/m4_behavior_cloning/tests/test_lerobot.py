@@ -196,3 +196,17 @@ def test_scan_refuses_to_mix_execution_modes(tmp_path):
     b = _record(tmp_path / "b", [online])
     assert "execution/mode" in lerobot_io.scan_sources([a, b])["conflicts"]
     assert not lerobot_io.scan_sources([b])["conflicts"]
+
+
+def test_table_reference_takes_newest_recording():
+    from bc.lerobot_io import table_reference
+
+    alt = {"table": {"a": 0, "b": 0, "c": 0.0}, "table_points": {"ID0": {}, "ID1": {}},
+           "keepout": [{"name": "IGNORE", "center": [0.2, -0.1], "half_size": 0.015}],
+           "sequence_file": "a.json"}
+    neu = dict(alt, table={"a": 0, "b": 0, "c": 0.001})
+    ref = table_reference([("2026-11-09T10:00", neu), ("2026-11-02T10:00", alt)])
+    assert ref["table"]["c"] == 0.001 and ref["table_variants"] == 2
+    assert ref["table_spec"]["points"] == ["ID0", "ID1"]
+    assert ref["table_spec"]["keepout_sizes"] == {"IGNORE": 0.015}
+    assert table_reference([])["table"] is None

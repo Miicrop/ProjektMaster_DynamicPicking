@@ -59,7 +59,7 @@ import _bootstrap  # noqa: F401
 
 import numpy as np
 
-from bc import config, metrics, preview
+from bc import config, metrics, obstacles, preview
 from bc import execution as execution_module
 from bc import camera_settings as camera_settings_module, grip_heights
 from bc.servo import substeps_for
@@ -77,7 +77,7 @@ from bc.clock import RealClock, SimClock
 from bc.collision import default_workspace
 from bc.dataset import DatasetWriter
 from bc.kinematics import Kinematics
-from bc.noise import PlanRejected, generate_plan, joint_speed, solve_ideal
+from bc.noise import PlanRejected, generate_plan, joint_speed, sample_approach_offset, solve_ideal
 from bc.ports import MotionRefused, ServoLimitError
 from bc.auto_layout import (
     Coverage,
@@ -555,6 +555,8 @@ def plan_all(args, waypoints, robot, kin, scales, rng, table=None, keepouts=(),
         workspace.add_box(TableSurface(table))
         print("Kollisionsmodell: Werkzeugspitze mindestens %.1f mm ueber der Tischebene"
               % (1e3 * config.TABLE_MIN_CLEARANCE_M))
+    if getattr(args, "zelle", None) is not None:
+        workspace.add_obstacles(args.zelle)
     for zone in keepouts:
         workspace.add_box(KeepoutSurface(zone, table))
         print("Kollisionsmodell: Sperrzone %s +-%.0f mm, darin mindestens %.0f mm ueber dem Tisch"
@@ -579,8 +581,11 @@ def plan_all(args, waypoints, robot, kin, scales, rng, table=None, keepouts=(),
     plans = []
     for ep, scale in enumerate(scales):
         try:
+            offset = sample_approach_offset(rng, getattr(args, "anflug_anteil", 0.0),
+                                            getattr(args, "anflug_versatz", None))
             plans.append(generate_plan(kin, workspace, ideal, seed_joints, rng=rng,
-                                       noise_scale=scale, joints_ideal=joints_ideal))
+                                       noise_scale=scale, joints_ideal=joints_ideal,
+                                       approach_offset=offset))
         except PlanRejected as exc:
             print("Episode %d: Planung verworfen (%s)" % (ep, exc))
             plans.append(None)
@@ -944,6 +949,22 @@ def parse_args():
              "(Default %(default)g)",
     )
     parser.add_argument(
+        "--anflug-anteil", dest="anflug_anteil", type=float, default=config.APPROACH_OFFSET_SHARE,
+        help="Anteil der Episoden, die versetzt ueber dem Objekt ankommen und im Abstieg "
+             "zur Mitte korrigieren (0 = aus, Default %(default)g)",
+    )
+    parser.add_argument(
+        "--anflug-versatz", dest="anflug_versatz", default=None,
+        help="Betrag des Anflug-Versatzes in mm als 'min,max' (Default %g,%g)"
+             % tuple(1e3 * v for v in config.APPROACH_OFFSET_RANGE_M),
+    )
+    parser.add_argument(
+        "--hindernisse", choices=("auto", "an", "aus"), default="auto",
+        help="feste Hindernisse der Zelle (einstellungen/hindernisse.json: Kamerastange, "
+             "Teststation, Roboterbasis) beim Planen pruefen; auto = nur an der realen "
+             "Anlage (Default %(default)s)",
+    )
+    parser.add_argument(
         "--randabstand", type=float, default=config.AUTO_EDGE_MARGIN_M,
         help="automatische Lagen: so viel Abstand (m) zum Rand des Bereichs der "
              "Tischpunkte (Default %(default)g)",
@@ -1080,6 +1101,18 @@ def parse_args():
         parser.error("--lagen 1..500, --drehung 0..90, --randabstand 0..0.2")
     if not 0 <= args.varianten_versatz <= 0.05 or not 0 <= args.varianten_drehung <= 45:
         parser.error("--varianten-versatz 0..0.05, --varianten-drehung 0..45")
+    # Anflug-Versatz (bc/noise.py): mm auf der Kommandozeile, m im Code
+    if args.anflug_versatz is None:
+        args.anflug_versatz = config.APPROACH_OFFSET_RANGE_M
+    else:
+        try:
+            werte = [float(v) / 1000.0 for v in str(args.anflug_versatz).split(",")]
+        except ValueError:
+            parser.error("--anflug-versatz: 'min,max' in mm, z. B. 3,6")
+        args.anflug_versatz = (min(werte), max(werte))
+    if not 0 <= args.anflug_anteil <= 1 or not 0 <= min(args.anflug_versatz) \
+            or max(args.anflug_versatz) > 0.015:
+        parser.error("--anflug-anteil 0..1, --anflug-versatz 0..15 mm")
     if not 0.1 <= args.probefahrt_tempo <= 1.0:
         parser.error("--probefahrt-tempo 0.1..1")
     if args.seed is None:
@@ -1255,6 +1288,18 @@ def main():
             rate_hz=args.preview_hz or preview.DEFAULT_RATE_HZ)
         print("Livebild nach %s (%g Hz)"
               % (args.preview, args.preview_hz or preview.DEFAULT_RATE_HZ))
+
+    # Feste Hindernisse der Zelle (bc/obstacles.py): nur an der realen Anlage,
+    # die VM hat andere Koordinaten (kein Tool). In die Metadaten, damit der
+    # Export sie bis zur Inferenz durchreicht.
+    args.zelle = None
+    if obstacles.applies(robot_kind, robot_info.get("in_simulation"), args.hindernisse):
+        args.zelle = obstacles.load()
+        if args.zelle is None:
+            print("Hinweis: %s fehlt -- nur Kugelmodell und Tisch." % obstacles.OBSTACLES_FILE)
+        else:
+            print("Hindernisse: %s (%s)" % (args.zelle.describe(), obstacles.OBSTACLES_FILE))
+    robot_info["hindernisse"] = None if args.zelle is None else args.zelle.describe()
 
     mode = execution_module.resolve_mode(args.ausfuehrung, robot_kind,
                                          robot_info.get("in_simulation"))

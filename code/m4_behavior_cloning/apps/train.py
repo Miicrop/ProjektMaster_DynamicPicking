@@ -122,6 +122,31 @@ def latest_checkpoint(out):
     return ckpts[-1] if ckpts else None
 
 
+def stale_export_reason(dataset_root, sources, require_success=False):
+    """Warum ``<out>/dataset`` nicht (mehr) zu ``--data`` passt -- leer = passt.
+
+    Bisher wurde ein vorhandener Export immer wiederverwendet, auch wenn
+    ``--data`` inzwischen andere Ordner nannte oder neue Episoden dazukamen
+    (Analyse 2026-11-11, Befund 13). Verglichen werden die Quellordner und die
+    Zahl der Episoden, die ein Export jetzt auswaehlen wuerde (nur meta.json
+    lesen, kein lerobot).
+    """
+    path = Path(dataset_root) / "meta" / lerobot_io.EXPORT_INFO
+    if not path.is_file():
+        return "noch kein Export"
+    info = lerobot_io.read_export_info(dataset_root)
+    had = sorted(str(Path(s)) for s in info.get("sources") or [])
+    now = sorted(str(Path(s)) for s in sources)
+    if had != now:
+        return "andere Quellordner (vorher %d, jetzt %d)" % (len(had), len(now))
+    if bool(info.get("require_success")) != bool(require_success):
+        return "--require-success geaendert"
+    count = len(lerobot_io.scan_sources(sources, require_success=require_success)["episodes"])
+    if count != len(info.get("episodes") or []):
+        return "Episoden %d statt %d" % (count, len(info.get("episodes") or []))
+    return ""
+
+
 def split_episodes(n_episodes, fraction, seed, groups=None):
     """Episodenweise Aufteilung (nie Frames einer Episode auf beide Seiten).
 
@@ -169,9 +194,12 @@ def main(argv=None):
         from export import expand_sources
 
         dataset_root = out / "dataset"
-        if not (dataset_root / "meta" / lerobot_io.EXPORT_INFO).is_file():
+        sources = expand_sources(args.data)
+        reason = stale_export_reason(dataset_root, sources, args.require_success)
+        if reason:
+            print("Datensatz wird (neu) exportiert: %s" % reason)
             lerobot_io.export(
-                expand_sources(args.data), dataset_root,
+                sources, dataset_root,
                 require_success=args.require_success, overwrite=True,
             )
     else:
@@ -546,6 +574,7 @@ def build_policy_info(export_info, dataset_root, meta, policy_cfg, cameras, args
         "recording": {
             "robot": single_value(consistency, "robot"),
             "camera_backends": single_value(consistency, "cameras"),
+            "camera_settings": export_info.get("camera_settings"),
             "in_simulation": single_value(consistency, "in_simulation"),
             "override": single_value(consistency, "override"),
             "servo_rate_hz": single_value(consistency, "servo_rate_hz"),
@@ -565,6 +594,11 @@ def build_policy_info(export_info, dataset_root, meta, policy_cfg, cameras, args
         "start_gripper": export_info.get("start_gripper"),
         "end_gripper": export_info.get("end_gripper"),
         "ideal_z_min": export_info.get("ideal_z_min"),
+        # Kollisionsmodell der Inferenz (bc/obstacles.py, bc/table.py)
+        "tcp_envelope": export_info.get("tcp_envelope"),
+        "table": export_info.get("table"),
+        "table_spec": export_info.get("table_spec"),
+        "keepouts": export_info.get("keepouts") or [],
         # Referenz fuer die Bewertung einer Fahrt ohne Datensatz (bc.metrics)
         "reference": {
             "path": export_info.get("reference_path"),

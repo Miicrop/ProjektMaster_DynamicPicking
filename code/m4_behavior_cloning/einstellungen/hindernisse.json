@@ -1,0 +1,35 @@
+{
+  "_hinweis": [
+    "Feste Hindernisse der Zelle fuer M4 (bc/obstacles.py), Basis-KS der realen Anlage in m.",
+    "Gilt NUR an der realen Anlage und NUR fuer M4 (Aufnahme und Inferenz) -- M2 legt in der Station ab und muss dort tiefer fahren duerfen.",
+    "Stuetzpunkte: tool = Spitze der Greiferbacken (Tool ZimmerLWR50), wrist, elbow, camera = Wrist-Kamera (seitlich, auf Hoehe der Backenspitzen gerechnet).",
+    "Bestimmt 2026-11-11 aus den Punkten Test-DKamera, Test-DArm, Test-DStation (Steuerung) und den Massen des Anwenders. PROVISORISCH: Stange und Station sind grob geteacht; Station noch nicht festgeschraubt."
+  ],
+  "kamera_versatz_werkzeug_m": [0.0, 0.054, 0.0],
+  "hindernisse": [
+    {
+      "name": "Kamerastange",
+      "art": "quader",
+      "_quelle": "30 x 30 mm; Mitte = Kamera bei Test-DKamera + 24 mm Luft + 15 mm halbe Stange in Blickrichtung. Senkrecht, z unbegrenzt.",
+      "lo": [0.3934, -0.3986, null],
+      "hi": [0.4234, -0.3686, null],
+      "mindestabstand_m": {"camera": 0.018, "tool": 0.050, "wrist": 0.050, "elbow": 0.100},
+      "_abstaende_2026_11_11": "Test-DKamera: Kamera 21 mm, TCP 74 mm; ID5: TCP 65 mm (Greifergehaeuse laut Anwender 16-17 mm Luft)"
+    },
+    {
+      "name": "Teststation",
+      "art": "quader",
+      "_quelle": "230 (x) x 100 (y) x 70 mm, Mitte und Oberkante = TCP bei Test-DStation; +10 mm je Seite (nicht festgeschraubt), oben keine Zugabe.",
+      "lo": [0.4539, 0.1493, -0.05],
+      "hi": [0.7039, 0.2693, 0.0665],
+      "mindestabstand_m": {"tool": 0.012, "camera": 0.0, "wrist": 0.050, "elbow": 0.050},
+      "_abstaende_2026_11_11": "PRE_PLACE: TCP 69 mm ueber der Station. tool 12 mm = gegriffenes Objekt ragt ~8 mm unter die Backenspitzen + 4 mm. camera 0: der Kamerapunkt liegt rechnerisch auf Hoehe der Backenspitzen, das Objektiv real hoeher. Knappste Aufnahme (2026-11-09/ep_00223, Weg zu PRE_PLACE): TCP 16 mm ueber Stationshoehe, 26 mm neben der echten Kante -- Rest tool ~9 mm, camera ~15 mm."
+    },
+    {
+      "name": "Roboter (Basis, Glied 2)",
+      "art": "basis",
+      "_quelle": "Waagrechter Abstand zur Achse von Gelenk 1. Grenzpose Test-DArm: Kamera 24 mm vor Achse 2 (Kamera-Radius 109 mm, TCP-Radius 158 mm).",
+      "radius_min_m": {"camera": 0.105, "tool": 0.150}
+    }
+  ]
+}

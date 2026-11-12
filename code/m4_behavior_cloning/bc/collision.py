@@ -132,6 +132,31 @@ class CollisionModel(object):
         self.boxes = list(boxes)
         self.arm_points = list(arm_points)
         self.margin = margin
+        #: Versatz der Wrist-Kamera im Werkzeug-KS; gesetzt von add_obstacles.
+        #: Dann gibt es den Stuetzpunkt obstacles.CAMERA (aus der Werkzeugpose).
+        self.camera_offset = None
+
+    def add_obstacles(self, cell):
+        """Feste Hindernisse der Zelle (bc/obstacles.py) aufnehmen -- samt
+        Kamera-Stuetzpunkt, gegen den Stange und Basis geprueft werden."""
+        from .obstacles import CAMERA
+
+        for surface in cell.surfaces:
+            self.add_box(surface)
+        self.camera_offset = np.asarray(cell.camera_offset_tool, dtype=float)
+        if not any(p.frame == CAMERA for p in self.arm_points):
+            self.arm_points.append(ArmPoint(CAMERA, 0.0))
+        return self
+
+    def positions_for(self, robot, joints):
+        """Stuetzpunkte einer Gelenkstellung: ``robot.link_positions`` und,
+        falls Hindernisse geladen sind, die Kamera aus der Werkzeugpose."""
+        positions = dict(robot.link_positions(joints))
+        if self.camera_offset is not None:
+            from .obstacles import CAMERA, camera_point
+
+            positions[CAMERA] = camera_point(robot.fk(joints, frame="tool"), self.camera_offset)
+        return positions
 
     def add_box(self, box):
         self.boxes.append(box)
@@ -177,7 +202,7 @@ class CollisionModel(object):
         Beim NeuraPy-Adapter kostet das einen FK-Roundtrip je Stuetzpunkt
         (~2 ms, tools/log.txt), also rund 6 ms pro Konfiguration.
         """
-        return self.check_positions(robot.link_positions(joints), index=index)
+        return self.check_positions(self.positions_for(robot, joints), index=index)
 
     def check_path(self, robot, joint_path, stop_at_first=True, stride=1):
         """Prueft eine ganze Gelenkraum-Trajektorie.

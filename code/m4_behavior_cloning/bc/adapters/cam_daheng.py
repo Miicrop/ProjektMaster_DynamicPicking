@@ -330,6 +330,20 @@ class DahengCamera(CameraPort):
             "link_limit_bps": value(cam.DeviceLinkThroughputLimit),
             "link_throughput_bps": value(cam.DeviceLinkCurrentThroughput),
         }
+        # Weissabgleich (Analyse 2026-11-11): bisher nicht zurueckgelesen. Bei
+        # "Once" haengt er davon ab, was beim Oeffnen im Bild war -- die
+        # Ratios stehen deshalb je Episode in den Metadaten.
+        out["white_balance_auto"] = value(cam.BalanceWhiteAuto)
+        ratios = []
+        for channel in ("Red", "Green", "Blue"):
+            try:
+                entries = getattr(self._gx, "GxBalanceRatioSelectorEntry", None)
+                cam.BalanceRatioSelector.set(getattr(entries, channel.upper(), channel))
+                ratios.append(round(float(cam.BalanceRatio.get()), 3))
+            except Exception:
+                ratios = None
+                break
+        out["white_balance_ratios"] = ratios
         for key in ("exposure_us", "gain_db", "rate_set_fps", "rate_possible_fps"):
             if out[key] is not None:
                 out[key] = round(float(out[key]), 2)

@@ -670,6 +670,29 @@ FUNNEL_START_DIST_M = 0.15
 #: Bahnlaenge, unterhalb der das Rauschen vollstaendig auf 0 gedaempft ist.
 FUNNEL_ZERO_DIST_M = 0.02
 
+#: Gezielter Versatz im Anflug (bc/noise.py, Anwender 2026-11-11). Das Rauschen
+#: ist im senkrechten Abstieg auf PICK praktisch 0 (Trichter: ab ~5 cm unter
+#: 2 mm, ab ~3 cm unter 0,3 mm) -- die Policy saehe nie, was zu tun ist, wenn
+#: sie versetzt ueber dem Objekt ankommt. Deshalb faehrt ein Teil der Episoden
+#: mit einem festen seitlichen Versatz an PRE_PICK, der im Abstieg auf 0
+#: abklingt; das Label bleibt die ideale Bahn und zeigt damit zurueck zur Mitte.
+#: Anteil der Episoden mit Versatz (0 = aus) ...
+APPROACH_OFFSET_SHARE = 0.4
+#: ... Betrag (m), gleichverteilt, Richtung waagrecht gleichverteilt ...
+APPROACH_OFFSET_RANGE_M = (0.003, 0.006)
+#: ... Bahnlaenge bis zum Greifen: darunter 0 (Backenspitzen erreichen die
+#: Objektoberkante 14,9 mm ueber dem Tisch bei TCP ~7 mm ueber PICK, + Reserve),
+#: ab FULL voll (PRE_PICK 5 cm ueber PICK), ab HOLD wieder abklingend bis HOLD+RAMP.
+APPROACH_OFFSET_FREE_M = 0.020
+APPROACH_OFFSET_FULL_M = 0.050
+APPROACH_OFFSET_HOLD_M = 0.100
+APPROACH_OFFSET_RAMP_M = 0.050
+#: Pruefung jeder geplanten Bahn (Versatz UND Rauschen): auf den letzten
+#: APPROACH_OFFSET_FREE_M vor dem Greifen hoechstens so viel seitlich neben der
+#: Idealbahn, sonst neu ziehen. Spiel je Backe 2,5 mm (Objekt 39,7 +-0,1 mm,
+#: Backen 44,8 mm); 1 mm bleibt fuer Teach- und Ablagefehler.
+APPROACH_REST_MAX_M = 0.0015
+
 #: Maximale Zahl an Rejection-Sampling-Versuchen, bevor die Generierung
 #: einer verrauschten Trajektorie als fehlgeschlagen gilt.
 NOISE_MAX_REJECTS = 20
@@ -688,6 +711,26 @@ COLLISION_CHECK_FRAMES = ("tool", "wrist", "elbow")
 
 #: Pruefintervall des Geofence-Waechters (AP 4.2).
 SAFETY_CHECK_PERIOD_S = 0.05
+
+#: Eingefrorenes Kamerabild in der INFERENZ (safety.FrameAgeGuard, Anwender
+#: 2026-11-11): ist das neueste Bild einer Kamera aelter als dies ...
+INFER_MAX_FRAME_AGE_S = 0.100
+#: ... und zwar so viele 15-Hz-Takte in Folge, haelt die Fahrt an. Bei 60 fps
+#: ist ein Bild normal hoechstens ~17 ms alt (USB-Hub ~45 ms); 100 ms heisst
+#: rund 6 ausgebliebene Bilder. Worst Case bis Stillstand: Erkennung <= 0,23 s
+#: + Software-Stopp ~0,1 s -> ~5 cm im Transit (0,15 m/s), ~1,7 cm im Endanflug.
+#: Der Recorder braucht das nicht: dort verwirft das Latenzbudget die Episode.
+INFER_FRAME_AGE_STEPS = 2
+
+#: Huelle der Demonstrationen in der Inferenz (bc/obstacles.Envelope, Anwender
+#: 2026-11-11): die Werkzeugspitze bleibt im Quader um alle aufgezeichneten
+#: TCP-Positionen (ideal, gesendet, gemessen -- das Rauschen ist also schon
+#: drin) plus diesem Rand je Seite.
+INFER_ENVELOPE_MARGIN_M = 0.03
+#: Tisch in der Inferenz: live aus den Tischpunkten der Steuerung (Anwender
+#: 2026-11-11), die Aufnahme als Rueckfall. Weichen beide an den Tischpunkten
+#: um mehr als dies ab, gibt es einen Hinweis (Tisch verschoben/nachgeteacht).
+INFER_TABLE_WARN_M = 0.002
 
 # --------------------------------------------------------------------------
 # Kameras (AP 1.1)
@@ -756,7 +799,9 @@ WRIST_CAMERA = CameraConfig(
     fps=60.0,
 )
 
-#: Szenen-/Top-View-Kamera -- MODELL NOCH NICHT ENTSCHIEDEN.
+#: Szenen-/Top-View-Kamera. Im Betrieb die Draufsichtkamera der Gruppe (Daheng),
+#: je Lauf zugeordnet per ``--camera scene=daheng:<Seriennummer>`` (Oberflaeche,
+#: code/orchestrator/m4_grasper.py) -- diese Konfiguration gilt nur ohne Zuordnung.
 #:
 #: ACHTUNG: Diese Konfiguration ist ein PLATZHALTER und zeigt auf
 #: OpenCV-Index 0. Auf einem Laptop ist das die eingebaute Webcam --
