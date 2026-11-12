@@ -328,3 +328,46 @@ def test_joint_speed_reports_joint_and_step():
     speed, joint, step = joint_speed(q, 15.0)
     assert np.isclose(speed, 1.5) and joint == 1 and step == 2
     assert joint_speed(q[:1], 15.0) == (0.0, 0, 0)
+
+
+def test_approach_offset_profile_and_rest_check():
+    """Versatz im Anflug (Anwender 2026-11-11): an PRE_PICK voll, auf den
+    letzten APPROACH_OFFSET_FREE_M vor dem Greifen 0; jede Bahn muss dort
+    innerhalb APPROACH_REST_MAX_M der Idealbahn bleiben."""
+    import numpy as np
+
+    from bc import config
+    from bc.noise import (approach_offset_profile, approach_rest, distance_to_grasp,
+                          sample_approach_offset, sample_noisy_poses)
+    from bc.trajectory import Waypoint, build_ideal_trajectory
+
+    oben = np.array([0.4, 0.0, 0.20, 0.0, 1.0, 0.0, 0.0])
+    pick = np.array([0.4, 0.0, 0.01, 0.0, 1.0, 0.0, 0.0])
+    ideal = build_ideal_trajectory([Waypoint(oben), Waypoint(pick, gripper_closed=True, approach=True),
+                                    Waypoint(oben, gripper_closed=True)])
+    d = distance_to_grasp(ideal)
+    prof = approach_offset_profile(ideal)
+    assert np.all(prof[d <= config.APPROACH_OFFSET_FREE_M] == 0.0)
+    voll = (d >= config.APPROACH_OFFSET_FULL_M) & (d <= config.APPROACH_OFFSET_HOLD_M)
+    assert voll.any() and np.allclose(prof[voll], 1.0)
+    assert np.all(prof[~np.isfinite(d)] == 0.0)          # nach dem Greifen nichts
+
+    rng = np.random.default_rng(3)
+    versatz = np.array([0.005, 0.0, 0.0])
+    poses = sample_noisy_poses(ideal, rng, sigma_pos=0.0, sigma_rot=0.0, approach_offset=versatz)
+    seitlich = np.linalg.norm(poses[:, :2] - ideal.poses_quat[:, :2], axis=1)
+    assert np.isclose(seitlich[voll].max(), 0.005)
+    assert approach_rest(ideal, poses) <= config.APPROACH_REST_MAX_M
+    # zu viel Versatz bis unten -> die Pruefung schlaegt an
+    schief = ideal.poses_quat.copy()
+    schief[:, 0] += 0.002
+    assert approach_rest(ideal, schief) > config.APPROACH_REST_MAX_M
+
+    # Anteil 0 zieht nichts (Zufallsfolge des Rauschens bleibt gleich)
+    rng = np.random.default_rng(0)
+    assert sample_approach_offset(rng, share=0.0) is None
+    assert rng.random() == np.random.default_rng(0).random()
+    treffer = [sample_approach_offset(np.random.default_rng(k), share=0.4) for k in range(200)]
+    gezogen = [t for t in treffer if t is not None]
+    assert 50 < len(gezogen) < 110
+    assert all(0.003 - 1e-12 <= np.linalg.norm(t) <= 0.006 + 1e-12 and t[2] == 0 for t in gezogen)

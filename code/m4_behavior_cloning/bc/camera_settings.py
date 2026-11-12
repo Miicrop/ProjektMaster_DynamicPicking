@@ -98,3 +98,50 @@ def describe(values):
         bits.append("Gain %s" % ("Automatik" if values["gain_db"] is None
                                  else "%.1f dB" % values["gain_db"]))
     return ", ".join(bits)
+
+
+#: Was die Inferenz gegen die Aufnahme vergleicht (Analyse 2026-11-11) und ab
+#: welcher Abweichung sie es meldet. Nur ein Hinweis: die alten Aufnahmen haben
+#: den Weissabgleich je Sitzung neu gezogen, der Datensatz streut also ohnehin.
+COMPARE_TOLERANCE = {"exposure_us": 50.0, "gain_db": 0.5}
+COMPARE_MODES = ("exposure_auto", "gain_auto", "white_balance_auto")
+
+
+def collect(per_episode):
+    """Kameraeinstellungen vieler Episoden zusammenfassen (Export).
+
+    ``per_episode``: Liste der ``camera_settings`` aus den Episoden-Metadaten
+    ({Kamera: {Schluessel: Wert}}). Rueckgabe {Kamera: {Schluessel: [Werte]}}
+    mit den vorkommenden Werten der verglichenen Schluessel.
+    """
+    out = {}
+    for settings in per_episode:
+        for cam, values in (settings or {}).items():
+            slot = out.setdefault(cam, {})
+            for key in tuple(COMPARE_TOLERANCE) + COMPARE_MODES:
+                v = (values or {}).get(key)
+                if v is not None and v not in slot.setdefault(key, []):
+                    slot[key].append(v)
+    return out
+
+
+def compare(recorded, current):
+    """Abweichungen der Kameraeinstellungen jetzt gegen die Aufnahme (Textzeilen).
+
+    ``recorded`` wie :func:`collect`, ``current`` {Kamera: settings()}. Fehlt
+    eine Seite (aeltere Aufnahme, UVC-Kamera), wird nichts gemeldet.
+    """
+    lines = []
+    for cam, now in (current or {}).items():
+        seen = (recorded or {}).get(cam) or {}
+        for key, tol in COMPARE_TOLERANCE.items():
+            values, v = seen.get(key) or [], (now or {}).get(key)
+            if values and v is not None and min(abs(float(v) - float(w)) for w in values) > tol:
+                lines.append("Kamera %s: %s jetzt %s, in der Aufnahme %s"
+                             % (cam, key, v, ", ".join(str(w) for w in sorted(values))))
+        for key in COMPARE_MODES:
+            values, v = seen.get(key) or [], (now or {}).get(key)
+            if values and v is not None and v not in values:
+                lines.append("Kamera %s: %s jetzt %s, in der Aufnahme %s"
+                             % (cam, key, v, ", ".join(str(w) for w in values)))
+    return lines

@@ -34,6 +34,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import camera_settings as camera_settings_module
 from . import config, dataset
 
 #: Dateiname der Export-Metadaten neben lerobots eigenen in ``meta/``.
@@ -309,10 +310,22 @@ def export(
 
     records, starts, ends, grippers = [], [], [], []
     reference_path, z_min = None, float("inf")
+    tcp_lo, tcp_hi = None, None
+    tables = []  # (recorded_at, Metadaten) der Episoden mit Tischreferenz
+    camera_settings = []
     try:
         for k, (root, i, meta) in enumerate(scan["episodes"]):
             ep = dataset.load_episode(root, i)
             ep.validate(cameras)
+            # Huelle aller gefahrenen TCP-Positionen (ideal, gesendet, gemessen)
+            # -- die Inferenz bleibt darin (bc/obstacles.Envelope)
+            tcp = np.vstack([ep.arrays["aux.pose_ideal"][:, :3], ep.arrays["aux.pose_noisy"][:, :3],
+                             ep.arrays["observation.state"][:, 6:9]]).astype(float)
+            tcp_lo = tcp.min(axis=0) if tcp_lo is None else np.minimum(tcp_lo, tcp.min(axis=0))
+            tcp_hi = tcp.max(axis=0) if tcp_hi is None else np.maximum(tcp_hi, tcp.max(axis=0))
+            camera_settings.append(meta["metadata"].get("camera_settings"))
+            if meta["metadata"].get("table"):
+                tables.append((str(meta["metadata"].get("recorded_at") or ""), meta["metadata"]))
             starts.append(ep.arrays["observation.state"][0, :6])
             ends.append(ep.arrays["aux.joints_ideal"][-1])
             grippers.append(ep.arrays["observation.state"][[0, -1], 13])
@@ -383,12 +396,45 @@ def export(
         # Idealbahn (TCP xyz) der ersten Episode als Referenz fuer die
         # Bewertung einer Policy-Fahrt ohne Datensatz (bc.metrics).
         "reference_path": reference_path,
+        # Fuer das Kollisionsmodell der Inferenz (Analyse 2026-11-11): Huelle der
+        # TCP-Positionen, Tisch und Sperrzonen der juengsten Aufnahme samt den
+        # Punktnamen -- die Inferenz liest den Tisch live nach, das hier ist
+        # der Rueckfall.
+        "tcp_envelope": None if tcp_lo is None else {"lo": tcp_lo.tolist(), "hi": tcp_hi.tolist()},
+        **table_reference(tables),
+        # Belichtung, Gain, Weissabgleich der Aufnahmen -- die Inferenz vergleicht
+        "camera_settings": camera_settings_module.collect(camera_settings),
         "episodes": records,
     }
     (output / "meta" / EXPORT_INFO).write_text(
         json.dumps(info, indent=2, ensure_ascii=False, default=_json_default), encoding="utf-8"
     )
     return info
+
+
+def table_reference(tables):
+    """Tisch der juengsten Aufnahme mit Tischreferenz (Liste (Zeit, Metadaten)).
+
+    ``table_variants``: wie viele verschiedene Tischflaechen im Datensatz
+    stecken (nachgeteacht) -- nur zur Information.
+    """
+    if not tables:
+        return {"table": None, "table_spec": None, "keepouts": [], "table_variants": 0}
+    tables = sorted(tables, key=lambda t: t[0])
+    newest = tables[-1][1]
+    variants = {tuple(round(float(m["table"][k]), 4) for k in ("a", "b", "c")) for _, m in tables}
+    keepouts = list(newest.get("keepout") or [])
+    return {
+        "table": newest["table"],
+        "table_spec": {
+            "points": sorted(newest.get("table_points") or {}),
+            "keepout": [k["name"] for k in keepouts],
+            "keepout_sizes": {k["name"]: k.get("half_size") for k in keepouts},
+            "sequence_file": newest.get("sequence_file"),
+        },
+        "keepouts": keepouts,
+        "table_variants": len(variants),
+    }
 
 
 def episode_reference(ep):

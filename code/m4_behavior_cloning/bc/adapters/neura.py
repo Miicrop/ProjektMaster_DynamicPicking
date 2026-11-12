@@ -189,6 +189,11 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         self._local_fk_wanted = bool(local_fk)
         self._local_fk_active = False
         self._chain = None
+        #: Letzte PTP-Fahrt (move_to_joints)
+        self.last_move = None
+        #: Versatz Flansch -> Tool (4x4) und Stuetzpunkte je Kettenglied (_check_local_fk)
+        self._tool_offset = None
+        self._local_links = None
         #: Ergebnis des Vortests (Diagnose/Metadaten): dict mit Abweichung
         #: und Begruendung, oder None solange nicht verbunden.
         self.local_fk_check = None
@@ -361,49 +366,50 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
     def _check_local_fk(self):
         """Vortest: reproduziert die URDF-Kette die FK der Steuerung?
 
-        Nur wenn ja, rechnet ``read_state()` die Pose lokal (ein
+        Nur wenn ja, rechnet ``read_state()`` die Pose lokal (ein
         RPC-Roundtrip weniger je Takt, und kein Versatz mehr zwischen
         Roboter- und Bildzeitstempel). Weicht die Kette ab, bleibt die
         Steuerung massgeblich -- lieber langsam und richtig.
 
-        Abgelehnt wird ausserdem, wenn ein Tool hinterlegt ist: die Kette
-        in ``bc/data/lara5_candidate.urdf`` endet am Flansch und kennt
-        keinen Tool-Offset. Mit Tool waere die lokale Pose stillschweigend
-        um den Offset falsch -- genau der Fehler, den der Vortest in
-        ``has_tool_offset()`` fuer die Posen ohnehin schon abfaengt.
+        Tool-Offset (Analyse 2026-11-11): Die Kette endet am Flansch. Ist ein
+        Tool hinterlegt (Anlage: ``ZimmerLWR50``), wird der Versatz Flansch ->
+        Tool aus der ersten Probestellung bestimmt und an ALLEN Stellungen
+        gegengeprueft -- nur ein fester Versatz besteht das. Anlage
+        2026-11-11: reine Verschiebung 197,5 mm entlang der Flanschachse, an
+        5 Stellungen auf 0,0000 mm genau. Frueher wurde mit Tool abgelehnt; an
+        der Anlage lief die FK dadurch immer ueber die Steuerung.
+
+        Stuetzpunkte (``config.COLLISION_CHECK_FRAMES``) werden genauso
+        zugeordnet: je Name das Kettenglied, in dem der Punkt der Steuerung an
+        allen Stellungen fest liegt (Anlage: wrist = Gelenk 5, elbow = Punkt
+        in Glied 2). Gelingt das fuer alle, rechnet auch ``link_positions``
+        lokal -- der Geofence-Waechter braucht dann keine drei FK-Aufrufe je
+        Pruefung mehr (Befund 7 der Analyse 2026-11-11).
         """
         self._local_fk_active = False
+        self._local_links = None
+        self._tool_offset = None
         self.local_fk_check = None
         if not self._local_fk_wanted:
             self.local_fk_check = {"aktiv": False, "grund": "per Konfiguration aus"}
-            return
-        try:
-            if self.has_tool_offset():
-                self.local_fk_check = {
-                    "aktiv": False,
-                    "grund": "Tool %r hinterlegt -- die URDF-Kette kennt "
-                             "keinen Tool-Offset" % (self.tool_name,),
-                }
-                return
-        except Exception as exc:
-            self.local_fk_check = {
-                "aktiv": False,
-                "grund": "Tool-Vortest gescheitert (%s)" % exc,
-            }
             return
 
         try:
             from ..urdf import KinematicChain
 
             chain = KinematicChain.from_urdf(config.URDF_PATH)
+            proben = self._fk_probe_joints()
+            steuerung = [self.fk(q, frame="tool") for q in proben]
+            # Versatz Flansch -> Tool aus der ersten Stellung, gegengeprueft an allen
+            offset = (np.linalg.inv(chain.fk(np.asarray(proben[0], dtype=float)))
+                      @ _pose_matrix(steuerung[0]))
             pos_err = 0.0
             rot_err = 0.0
             schlechteste = None
-            for q in self._fk_probe_joints():
-                lokal = self._pose_from_chain(chain, q)
-                steuerung = self.fk(q, frame="tool")
-                dp = float(np.linalg.norm(lokal[:3] - steuerung[:3]))
-                dr = geometry.quat_angle_between(lokal[3:7], steuerung[3:7])
+            for q, ziel in zip(proben, steuerung):
+                lokal = self._pose_from_chain(chain, q, offset)
+                dp = float(np.linalg.norm(lokal[:3] - np.asarray(ziel[:3])))
+                dr = geometry.quat_angle_between(lokal[3:7], ziel[3:7])
                 if dp > pos_err or dr > rot_err:
                     schlechteste = list(q)
                 pos_err = max(pos_err, dp)
@@ -424,18 +430,50 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
             "pos_err_m": pos_err,
             "rot_err_rad": rot_err,
             "schlechteste_stellung": schlechteste,
-            "stellungen": len(PROBE_JOINTS),
+            "stellungen": len(proben),
             "urdf": str(config.URDF_PATH),
+            "tool": self.tool_name,
+            "tool_offset_m": [float(v) for v in offset[:3, 3]],
             "grund": "" if passt else (
-                "URDF-Kette weicht von der Steuerung ab (bis %.6f m, %.6f rad "
-                "ueber %d Stellungen) -- FK bleibt beim Controller. Das Modell "
-                "gehoert geprueft, bevor daraus geplant wird."
-                % (pos_err, rot_err, len(PROBE_JOINTS))
+                "URDF-Kette weicht von der Steuerung ab, auch mit festem "
+                "Tool-Versatz (bis %.6f m, %.6f rad ueber %d Stellungen) -- FK "
+                "bleibt beim Controller. Das Modell gehoert geprueft, bevor daraus "
+                "geplant wird." % (pos_err, rot_err, len(proben))
             ),
         }
-        if passt:
-            self._chain = chain
-            self._local_fk_active = True
+        if not passt:
+            return
+        self._chain = chain
+        self._tool_offset = offset
+        self._local_fk_active = True
+        try:
+            self._local_links = self._match_link_points(chain, proben)
+            self.local_fk_check["stuetzpunkte"] = {
+                name: {"glied": k, "punkt_m": [float(v) for v in punkt]}
+                for name, (k, punkt) in self._local_links.items()}
+        except Exception as exc:
+            self._local_links = None
+            self.local_fk_check["stuetzpunkte"] = "ueber die Steuerung (%s)" % exc
+
+    def _match_link_points(self, chain, proben):
+        """Je Stuetzpunkt (Name der Steuerung) das Kettenglied, in dem er fest liegt.
+
+        Rueckgabe {Name: (Index in chain.fk_frames, Punkt im Glied-KS)}. Wirft,
+        wenn ein Name in keinem Glied an allen Stellungen fest liegt.
+        """
+        frames = [chain.fk_frames(np.asarray(q, dtype=float)) for q in proben]
+        out = {}
+        for name in config.COLLISION_CHECK_FRAMES:
+            punkte = [np.asarray(self.fk(q, frame=name), dtype=float)[:3] for q in proben]
+            for k in range(len(frames[0])):
+                lokal = np.array([(np.linalg.inv(f[k][1]) @ np.append(p, 1.0))[:3]
+                                  for f, p in zip(frames, punkte)])
+                if float(np.max(np.ptp(lokal, axis=0))) <= config.LOCAL_FK_TOL_POS_M:
+                    out[name] = (k, lokal[0])
+                    break
+            else:
+                raise RobotError("Stuetzpunkt %r liegt in keinem Glied der URDF-Kette fest" % name)
+        return out
 
     def _fk_probe_joints(self):
         """Stellungen fuer den Vortest -- NICHTS WIRD BEWEGT.
@@ -452,9 +490,11 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         return [q[: self.dof] for q in proben if len(q) >= self.dof]
 
     @staticmethod
-    def _pose_from_chain(chain, joints):
-        """Kettenende (= Flansch = Tool ohne Tool-Offset) als [X,Y,Z,QW,QX,QY,QZ]."""
+    def _pose_from_chain(chain, joints, tool_offset=None):
+        """Kettenende (Flansch) mal Tool-Versatz als [X,Y,Z,QW,QX,QY,QZ]."""
         T = chain.fk(np.asarray(joints, dtype=float))
+        if tool_offset is not None:
+            T = T @ tool_offset
         quat = geometry.matrix_to_quat(T[:3, :3])
         return np.concatenate([T[:3, 3], quat])
 
@@ -667,7 +707,7 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         """
         joints, t_joints = self.get_joint_angles_ts()
         if self._local_fk_active:
-            tcp_quat = self._pose_from_chain(self._chain, joints)
+            tcp_quat = self._pose_from_chain(self._chain, joints, self._tool_offset)
         else:
             tcp_quat = self.fk(joints, frame="tool")
         return RobotState(
@@ -743,10 +783,17 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         return np.asarray(sol, dtype=float)
 
     def link_positions(self, joints):
-        """Stuetzpunkte via ``compute_forward_kinematics(target_frame=...)``.
+        """Stuetzpunkte des Arms (config.COLLISION_CHECK_FRAMES).
 
-        Kostet einen TCP-Roundtrip (~2 ms) je Frame, siehe tools/log.txt.
+        Lokal aus der URDF-Kette, wenn der Vortest beim Verbinden die Punkte
+        den Kettengliedern zuordnen konnte (:meth:`_match_link_points`), sonst
+        per ``compute_forward_kinematics(target_frame=...)`` -- dann ein
+        TCP-Roundtrip (~2 ms) je Frame, siehe tools/log.txt.
         """
+        if self._local_fk_active and self._local_links:
+            frames = self._chain.fk_frames(np.asarray(joints, dtype=float))
+            return {name: (frames[k][1] @ np.append(punkt, 1.0))[:3]
+                    for name, (k, punkt) in self._local_links.items()}
         out = {}
         for frame in config.COLLISION_CHECK_FRAMES:
             out[frame] = np.asarray(self.fk(joints, frame=frame)[:3], dtype=float)
@@ -1017,7 +1064,10 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         self._call_safe("stop_movelinear_online")
 
     def move_to_joints(self, joints):
-        """Blockierende PTP-Fahrt (``move_joint``) mit Zielkontrolle."""
+        """Blockierende PTP-Fahrt (``move_joint``) mit Zielkontrolle.
+
+        Rueckgabe {start_rad, moved_rad, rest_rad} (auch in ``last_move``).
+        """
         self._require_motion("move_to_joints")
         self._ensure_program()
         if self._servo_active:
@@ -1025,12 +1075,13 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         target = [float(v) for v in joints]
         if len(target) != self.dof:
             raise ValueError("move_to_joints erwartet %d Winkel" % self.dof)
+        start = np.asarray(self.get_joint_angles(), dtype=float)
         self._call(
             "move_joint",
             target_joint=[target],
             speed=config.RESET_JOINT_SPEED,
             acceleration=config.RESET_JOINT_ACCELERATION,
-            current_joint_angles=[float(v) for v in self.get_joint_angles()],
+            current_joint_angles=[float(v) for v in start],
         )
         reached = np.asarray(self.get_joint_angles(), dtype=float)
         err = float(np.max(np.abs(reached - np.asarray(target))))
@@ -1038,6 +1089,14 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
             raise RobotError(
                 "move_to_joints: Ziel nicht erreicht (Restfehler %.4f rad)" % err
             )
+        # Erfolg heisst "innerhalb START_POSE_TOL_RAD", nicht "gefahren": Anlage
+        # 2026-11-11 blieb eine PTP-Fahrt ueber 3,7 mrad einfach stehen und
+        # meldete trotzdem Erfolg. Fuer den Aufrufer: wie weit vorher, wie weit
+        # gefahren, wie viel Rest.
+        moved = float(np.max(np.abs(reached - start)))
+        self.last_move = {"start_rad": float(np.max(np.abs(start - np.asarray(target)))),
+                          "moved_rad": moved, "rest_rad": err}
+        return self.last_move
 
     def set_speed(self, joint_percent=None, linear_ms=None):
         """Setzt die globalen Geschwindigkeitsregler (AP 2.6)."""
@@ -1148,6 +1207,14 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         if self._stop_requested.is_set() and self._robot is not None:
             self._init_program()
         self._stop_requested.clear()
+
+
+def _pose_matrix(pose_quat):
+    """[X,Y,Z,QW,QX,QY,QZ] -> 4x4."""
+    T = np.eye(4)
+    T[:3, :3] = geometry.quat_to_matrix(pose_quat[3:7])
+    T[:3, 3] = np.asarray(pose_quat[:3], dtype=float)
+    return T
 
 
 def _split_timestamped(result):

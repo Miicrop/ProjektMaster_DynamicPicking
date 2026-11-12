@@ -47,7 +47,7 @@ import _bootstrap  # noqa: F401
 
 import numpy as np
 
-from bc import config, dataset, metrics
+from bc import config, dataset, metrics, obstacles
 from bc import camera_settings as camera_settings_module
 from bc.adapters import (
     CAMERA_MODES,
@@ -61,7 +61,8 @@ from bc.collision import default_workspace
 from bc.policy import ChunkEnsembler, ChunkExecutor, HoldPolicy, PredictionTooSlow, check_action
 from bc.ports import MotionRefused, RobotError
 from bc.recorder import _to_schema_size
-from bc.safety import Watchdog, geofence_check
+from bc.safety import (CameraStale, FrameAgeGuard, TargetRejected, Watchdog, check_target,
+                       geofence_check)
 from bc import execution as execution_module
 from bc.servo import ServoGuard, ServoInterpolator, TargetLimiter, substeps_for
 from bc.sync import Pacer
@@ -75,8 +76,12 @@ END_TOL_RAD = 0.02
 END_HOLD_STEPS = 5
 
 
-def build_observation(robot, captures):
-    """Baut die Beobachtung EXAKT wie der Recorder (AP 1.5.1)."""
+def build_observation(robot, captures, frames_out=None):
+    """Baut die Beobachtung EXAKT wie der Recorder (AP 1.5.1).
+
+    ``frames_out``: optionales dict, bekommt je Kamera den Original-Frame
+    (oder None) -- fuer die Pruefung auf eingefrorene Bilder (FrameAgeGuard).
+    """
     state = robot.read_state()
     obs = {
         "observation.state": dataset.build_state(
@@ -87,6 +92,8 @@ def build_observation(robot, captures):
     }
     for cap in captures:
         frame = cap.latest()
+        if frames_out is not None:
+            frames_out[cap.name] = frame
         obs["observation.images.%s" % cap.name] = (
             np.zeros((config.IMAGE_HEIGHT, config.IMAGE_WIDTH, 3), dtype=np.uint8)
             if frame is None
@@ -97,15 +104,21 @@ def build_observation(robot, captures):
 
 def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 end_joints=None, end_gripper=None, min_steps=0, threaded_watchdog=True,
-                progress=print, servo_rate_hz=config.SERVO_RATE_HZ, execution=None):
+                progress=print, servo_rate_hz=config.SERVO_RATE_HZ, execution=None,
+                frame_guard=None):
     """Eine Policy-Fahrt. Rueckgabe: Log-dict (Arrays je Takt + Zusammenfassung).
 
     Ende = Endstellung +-END_TOL_RAD UND (falls bekannt) Greiferzustand wie am
     Ende der Aufzeichnung, END_HOLD_STEPS Takte lang, fruehestens ab
     ``min_steps``. Stellung allein ist nicht eindeutig: dieselbe Stellung kann
     in einer Bahn mehrfach vorkommen (Befund 2026-09-17, Sim-Demo).
+
+    ``frame_guard``: safety.FrameAgeGuard (Default: Werte aus config) -- haelt
+    an, wenn ein Kamerabild einfriert (die Policy saehe ein Standbild).
     """
     executor.reset()
+    frame_guard = frame_guard or FrameAgeGuard()
+    frame_guard.reset()
     guard = getattr(robot, "servo_guard", None) or ServoGuard()
     watchdog = Watchdog(robot, [geofence_check(robot, workspace)], clock)
     if threaded_watchdog:
@@ -116,7 +129,13 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
     # Takt 0 VOR dem Aktivieren des Servo-Interface: die erste Vorhersage
     # (bei asynchroner Vorhersage wird auf sie gewartet) haelt so keinen
     # laufenden Servostrom an. Der Arm steht, die Beobachtung bleibt gueltig.
-    obs, state = build_observation(robot, captures)
+    frames = {}
+    obs, state = build_observation(robot, captures, frames)
+    try:
+        frame_guard.check(frames, clock.now())
+    except CameraStale:
+        watchdog.stop()
+        raise
     first = (obs, state, executor.next_action(obs))
     execution = execution or execution_module.describe(execution_module.SERVO_J)
     online = execution["mode"] == execution_module.ONLINE
@@ -151,7 +170,9 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 (obs, state, action), first = first, None
                 before = 0
             else:
-                obs, state = build_observation(robot, captures)
+                frames = {}
+                obs, state = build_observation(robot, captures, frames)
+                frame_guard.check(frames, clock.now())
                 action = executor.next_action(obs)
             predicted = executor.predictions > before
             check_action(action, state.joints, guard)
@@ -172,12 +193,15 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                     ziel = last_target
                 else:
                     ziel = limiter.limit((executor.lookahead(vorlauf) if vorlauf else action)[:6])
+                    check_target(workspace, robot, ziel)
                 if not robot.stop_requested:
                     pacer.tick()
                     robot.online_j(ziel, execution["vel"], execution["acc"])
                     last_target = ziel
             else:
-                for q, v, a in interp.window(limiter.limit(action[:6])):
+                ziel = limiter.limit(action[:6])
+                check_target(workspace, robot, ziel)
+                for q, v, a in interp.window(ziel):
                     if robot.stop_requested:
                         break
                     pacer.tick()
@@ -242,6 +266,9 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
     except PredictionTooSlow as exc:
         stop_reason = "vorhersage zu langsam: %s" % exc
         robot.emergency_stop()
+    except (CameraStale, TargetRejected) as exc:
+        stop_reason = str(exc)
+        robot.emergency_stop()
     finally:
         watchdog.stop()
         if online and not robot.stop_requested:
@@ -258,8 +285,62 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
     arrays["reached_end"] = stop_reason == "endstellung"
     arrays["guard_rejections"] = guard.rejections
     arrays["limiter_clamped"] = limiter.clamped
+    arrays["frame_age_max_s"] = frame_guard.worst_age_s
     arrays.update(execution_module.reach_summary(reach_waits))
     return arrays
+
+
+def add_recorded_workspace(workspace, info, robot, robot_kind, progress=print):
+    """Tisch, Sperrzonen und Huelle der Demonstrationen ins Kollisionsmodell.
+
+    Tisch und Sperrzonen live aus den Punkten der Steuerung (Namen aus der
+    Aufnahme, bc_policy.json ``table_spec``) -- verschiebt sich der Tisch,
+    wird nachgeteacht. Rueckfall: die Werte der juengsten Aufnahme. Aeltere
+    Policies ohne diese Eintraege fahren wie bisher (nur der grobe Tischquader).
+    Rueckgabe: Quelle des Tischs ("live", "aufnahme" oder None).
+    """
+    from bc.obstacles import Envelope
+    from bc.sequence import resolve_table
+    from bc.table import Keepout, KeepoutSurface, TablePlane, TableSurface
+
+    spec = info.get("table_spec") or None
+    recorded = TablePlane.from_dict(info["table"]) if info.get("table") else None
+    recorded_keepouts = [Keepout.from_dict(k) for k in info.get("keepouts") or []]
+    plane, keepouts, source = None, [], None
+    if spec and spec.get("points") and robot_kind == "neura":
+        try:
+            sizes = {k: v for k, v in (spec.get("keepout_sizes") or {}).items() if v is not None}
+            plane, points, keepouts, _, missing = resolve_table(
+                spec["points"], spec.get("keepout") or [], sizes, config.KEEPOUT_HALF_SIZE_M, robot)
+            if missing:
+                progress("Hinweis: Tisch-/Sperrpunkte fehlen in der Steuerung: %s" % ", ".join(missing))
+            if plane is not None:
+                source = "live"
+                if recorded is not None:
+                    xy = [p["pose_quat"][:2] for p in points.values()]
+                    diff = max(abs(plane.height_at(x, y) - recorded.height_at(x, y)) for x, y in xy)
+                    if diff > config.INFER_TABLE_WARN_M:
+                        progress("WARNUNG: Tisch live weicht %.1f mm von der Aufnahme ab -- "
+                                 "verschoben oder nachgeteacht? Es gilt der live gelesene."
+                                 % (1e3 * diff))
+        except Exception as exc:
+            progress("Hinweis: Tisch nicht live lesbar (%s) -- Werte der Aufnahme." % exc)
+            plane = None
+    if plane is None and recorded is not None:
+        plane, keepouts, source = recorded, recorded_keepouts, "aufnahme"
+    if plane is not None:
+        workspace.add_box(TableSurface(plane))
+        for zone in keepouts:
+            workspace.add_box(KeepoutSurface(zone, plane))
+        progress("Kollisionsmodell: Tisch %s (%s), Sperrzonen %s"
+                 % (source, plane.describe(), ", ".join(z.name for z in keepouts) or "keine"))
+    env = info.get("tcp_envelope")
+    if env:
+        margin = config.INFER_ENVELOPE_MARGIN_M
+        workspace.add_box(Envelope(np.asarray(env["lo"]) - margin, np.asarray(env["hi"]) + margin))
+        progress("Kollisionsmodell: Werkzeugspitze in der Huelle der Demonstrationen + %.0f mm"
+                 % (1e3 * margin))
+    return source
 
 
 def confirm_real_robot():
@@ -375,6 +456,9 @@ def parse_args():
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--table-z", type=float, default=None)
+    parser.add_argument("--hindernisse", choices=("auto", "an", "aus"), default="auto",
+                        help="feste Hindernisse der Zelle (einstellungen/hindernisse.json); "
+                             "auto = nur an der realen Anlage (Default %(default)s)")
     parser.add_argument("--no-start-move", action="store_true",
                         help="nicht vorher an die Startstellung fahren")
     parser.add_argument("--out", default=None,
@@ -538,6 +622,15 @@ def main():
         robot.close()
         raise
 
+    # Belichtung, Gain, Weissabgleich wie in der Aufnahme? Nur Hinweis (Analyse
+    # 2026-11-11): die Bildstatistik ist mitgelernt, Abweichungen erklaeren
+    # schlechte Fahrten, verbieten sie aber nicht.
+    now_settings = {cap.name: cap.camera.settings() for cap in captures
+                    if hasattr(getattr(cap, "camera", None), "settings")}
+    for line in camera_settings_module.compare(
+            (info.get("recording") or {}).get("camera_settings"), now_settings):
+        print("Hinweis: %s" % line)
+
     if args.table_z is not None:
         table_z = args.table_z
     elif info.get("ideal_z_min") is not None:
@@ -545,6 +638,14 @@ def main():
     else:
         table_z = float(robot.read_state().tcp_quat[2]) - 0.3
     workspace = default_workspace(table_height_m=table_z)
+    add_recorded_workspace(workspace, info, robot, robot_info["robot"])
+    if obstacles.applies(robot_info["robot"], robot_info.get("in_simulation"), args.hindernisse):
+        zelle = obstacles.load()
+        if zelle is None:
+            print("Hinweis: %s fehlt -- nur Kugelmodell und Tisch." % obstacles.OBSTACLES_FILE)
+        else:
+            workspace.add_obstacles(zelle)
+            print("Hindernisse: %s (%s)" % (zelle.describe(), obstacles.OBSTACLES_FILE))
     start = np.asarray(info["start_joints"]) if info.get("start_joints") else None
     end = np.asarray(info["end_joints"]) if info.get("end_joints") else None
     start_gripper, end_gripper = info.get("start_gripper"), info.get("end_gripper")
@@ -599,6 +700,13 @@ def main():
                        "gripper_cmd": np.append(log["gripper_cmd"], log["gripper_cmd"][-1] if len(log["gripper_cmd"]) else 0.0),
                        "reached_end": log["reached_end"]}
             summary = metrics.evaluate_rollout(rollout, info.get("reference") or {})
+            # Erfolg = Uebergabe (Anwender 2026-11-11): Endstellung erreicht und
+            # ruhig, Greifer wie am Ende der Aufnahme (bei pick_to_station: zu).
+            # Der Vergleich mit den Greifpunkten AUS DEM TRAINING passt nur bei
+            # fester Objektlage -- an einer neuen Lage waere ein richtiger Griff
+            # "kein Erfolg". Er bleibt als Information (success_reference).
+            summary["success_reference"] = summary["success"]
+            summary["success"] = bool(log["reached_end"])
             predict = log["predict_s"][np.isfinite(log["predict_s"])] if len(log["predict_s"]) else np.array([])
             delays = log["delay_steps"][np.isfinite(log["delay_steps"])] if len(log["delay_steps"]) else np.array([])
             summary.update(
@@ -626,7 +734,7 @@ def main():
                   "Overruns %d, gekappt %d"
                   % (ep, "ERFOLG" if summary["success"] else "kein Erfolg", summary["steps"],
                      _mm(summary.get("grasp_error_m")), _mm(summary.get("end_error_m")),
-                     _mm(summary.get("path_dev_p95_m")), log["stop_reason"],
+                     _mm(summary.get("path_dev_p95_m")), _one_field(log["stop_reason"]),
                      "%.1f" % summary["predict_ms_median"] if summary["predict_ms_median"] else "-",
                      summary["pacer_overruns"], summary["limiter_clamped_steps"]))
             for halt in log["reach_waits"]:
@@ -650,8 +758,14 @@ def main():
     }
     (out / "summary.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     if results:
-        print("\nErfolg %d/%d (Referenz: Greifpunkt und Uebergabepunkt je <= 10 mm) -> %s"
+        print("\nErfolg %d/%d (Uebergabepunkt erreicht, Greifer wie aufgezeichnet) -> %s"
               % (sum(r["success"] for r in results), len(results), out / "summary.json"))
+
+
+def _one_field(text):
+    """Abbruchgrund als EIN Feld der Ergebniszeile: die Oberflaeche und der
+    Orchestrator (bc/gui/operation.py) trennen die Felder an Kommas."""
+    return str(text).replace(",", ";")
 
 
 def _mm(value):

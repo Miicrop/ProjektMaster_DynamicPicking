@@ -134,6 +134,16 @@ class TablePlane:
                 1e3 * min(self.corr_dz), 1e3 * max(self.corr_dz))
         return text
 
+    @classmethod
+    def from_dict(cls, data):
+        """Gegenstueck zu :meth:`as_dict` (Metadaten einer Aufnahme / Policy)."""
+        keys = ("a", "b", "c", "residual_m", "count", "d", "e", "f", "x0", "y0",
+                "plane_residual_m", "bulge_m")
+        values = {k: data[k] for k in keys if k in data}
+        values["corr_xy"] = tuple(tuple(float(v) for v in xy) for xy in data.get("corr_xy") or ())
+        values["corr_dz"] = tuple(float(v) for v in data.get("corr_dz") or ())
+        return cls(**values)
+
     def as_dict(self):
         return {"a": self.a, "b": self.b, "c": self.c, "residual_m": self.residual_m,
                 "count": self.count, "tilt_deg": self.tilt_deg,
@@ -316,6 +326,13 @@ class Keepout:
     def blocks_object(self, position):
         """Ragte ein hier gegriffenes Bauteil ins Quadrat?"""
         return self.distance_xy(position) < self.object_margin
+
+    @classmethod
+    def from_dict(cls, data):
+        """Gegenstueck zu :meth:`as_dict`."""
+        return cls(data["name"], tuple(float(v) for v in data["center"]),
+                   **{k: float(data[k]) for k in ("half_size", "min_height", "object_margin")
+                      if k in data})
 
     def as_dict(self):
         return {"name": self.name, "center": [float(v) for v in self.center],
