@@ -30,6 +30,13 @@ Ausfuehren (aus dem Ordner "Behavior Cloning"):
     python apps/infer.py --sim --checkpoint checkpoints/sim/policy --episodes 5
     python apps/infer.py --robot neura --cameras sim --checkpoint checkpoints/vm/policy
     python apps/infer.py --sim --hold --steps 45        # Verdrahtung ohne Modell
+    python apps/infer.py --robot neura --checkpoint <policy> --replay data_vm/2026-11-11 --replay-episode 0,5,9
+
+``--replay``: statt der Kameras die Bilder einer Aufnahme einspielen (je Takt
+ein Bild, bc/adapters/cam_replay.py), vor jeder Fahrt an die Startstellung
+DIESER Episode, danach Vergleich der gefahrenen mit der aufgezeichneten Bahn
+(bc/replay.py). Nur Simulation/VM -- die Bilder zeigen nicht die Wirklichkeit.
+Offline ohne Roboter: apps/replay_check.py.
 
 SICHERHEIT: Am Neura nur mit is_robot_in_simulation() == True, die reale
 Anlage braucht --real-robot und eine Bestaetigung. Software-Stopp ersetzt
@@ -47,12 +54,14 @@ import _bootstrap  # noqa: F401
 
 import numpy as np
 
-from bc import config, dataset, metrics, obstacles
+from bc import config, dataset, metrics, obstacles, replay
 from bc import camera_settings as camera_settings_module
 from bc.adapters import (
     CAMERA_MODES,
+    SOFT_BACKENDS,
     camera_configs,
     open_robot,
+    replay_configs,
     resolve_camera_mode,
     start_cameras,
 )
@@ -357,7 +366,9 @@ def check_against_recording(info, args, robot_kind, cam_cfgs):
     camera_names = [c.name for c in cam_cfgs]
     backends = (info.get("recording") or {}).get("camera_backends")
     if backends:
-        now = {c.name: c.backend for c in cam_cfgs if c.name in info["cameras"]}
+        # Replay: die Bilder SIND die der Aufnahme, das Backend zaehlt nicht
+        now = {c.name: c.backend for c in cam_cfgs
+               if c.name in info["cameras"] and c.backend != "replay"}
         differ = {k: (backends.get(k), v) for k, v in now.items() if backends.get(k) != v}
         if differ:
             problems.append("Kamera-Backends Aufzeichnung/jetzt: %s (--cameras pruefen)" % differ)
@@ -427,6 +438,12 @@ def parse_args():
     parser.add_argument("--camera", action="append", default=None,
                         metavar="NAME=BACKEND[:GERAET][@FPS]",
                         help="einzelnen Kameraplatz abweichend besetzen, z. B. 'scene=uvc:1' oder 'wrist=sim'; mehrfach angebbar. Ergaenzt --cameras, das den Ausgangspunkt setzt (Geraete auflisten: tools/check_cameras.py --list)")
+    parser.add_argument("--replay", default=None, metavar="AUFNAHME",
+                        help="Bilder dieser Aufnahme (Ordner mit index.json) statt der Kameras "
+                             "einspielen; nur Simulation/VM (bc/replay.py)")
+    parser.add_argument("--replay-episode", default="0", metavar="LISTE",
+                        help="Episoden fuer --replay: '3', '0,4,7', '2-5' oder 'alle'; "
+                             "Fahrt i nimmt die i-te (Default %(default)s)")
     parser.add_argument("--real-robot", action="store_true")
     parser.add_argument("--override", type=float, default=None,
                         help="Neura-Override; Default und Pflichtwert: der der Aufzeichnung")
@@ -441,7 +458,8 @@ def parse_args():
                              "die der Aufzeichnung (bc_policy.json); --hold: auto")
     parser.add_argument("--realtime", action="store_true",
                         help="SimRobot mit echter Uhr (Latenz der Vorhersage wirkt wie an der Anlage)")
-    parser.add_argument("--episodes", type=int, default=1)
+    parser.add_argument("--episodes", type=int, default=None,
+                        help="Anzahl Fahrten (Default 1, mit --replay: eine je Episode)")
     parser.add_argument("--steps", "--max-steps", dest="max_steps", type=int, default=None,
                         help="Hoechstzahl Takte je Fahrt (Default 1.5 x laengste Episode)")
     parser.add_argument("--replan", type=int, default=None,
@@ -466,6 +484,19 @@ def parse_args():
     args = parser.parse_args()
     if not args.hold and not args.checkpoint:
         parser.error("--checkpoint fehlt (oder --hold fuer den Verdrahtungstest)")
+    args.replay_episodes = []
+    if args.replay:
+        if args.real_robot:
+            parser.error("--replay nicht mit --real-robot: die eingespielten Bilder zeigen "
+                         "nicht, was vor der Anlage liegt")
+        try:
+            args.replay_episodes = replay.parse_episodes(args.replay_episode, args.replay)
+        except (OSError, ValueError) as exc:
+            parser.error("--replay: %s" % exc)
+        if not args.replay_episodes:
+            parser.error("--replay-episode: keine Episode ausgewaehlt")
+    if args.episodes is None:
+        args.episodes = len(args.replay_episodes) or 1
     # Siehe apps/record.py: lieber hier scheitern als nach dem Bestromen.
     try:
         substeps_for(args.servo_rate)
@@ -486,11 +517,20 @@ def main():
                                   specs=args.camera)
     except ValueError as exc:
         raise SystemExit("--camera: %s" % exc)
+    if args.replay:
+        try:
+            cam_cfgs = replay_configs(args.replay, args.replay_episodes[0],
+                                      names=[c.name for c in cam_cfgs])
+            for ep_idx in args.replay_episodes:
+                replay.episode_dir(args.replay, ep_idx)
+        except (OSError, IndexError) as exc:
+            raise SystemExit("--replay: %s" % exc)
+        print("Replay: Bilder aus %s, Episoden %s" % (args.replay, args.replay_episodes))
     # Dieselbe Belichtung/Gain wie bei der Aufnahme (bc/camera_settings.py)
     cam_cfgs, notes = camera_settings_module.apply(cam_cfgs)
     for note in notes:
         print("Kamera %s" % note)
-    use_sim_cameras = all(c.backend == "sim" for c in cam_cfgs)
+    use_sim_cameras = all(c.backend in SOFT_BACKENDS for c in cam_cfgs)
 
     info, policy = None, None
     if args.hold:
@@ -515,6 +555,8 @@ def main():
         else:
             args.execution_mode = rec_exec.get("mode") or execution_module.SERVO_J
         problems = check_against_recording(info, args, robot_kind, cam_cfgs)
+        if args.replay:
+            problems += ["Replay: %s" % p for p in replay.check_compatible(args.replay, info)]
         if problems:
             raise SystemExit("Policy passt nicht zu dieser Ausfuehrung:\n  - " + "\n  - ".join(problems))
     if args.override is None:
@@ -683,13 +725,25 @@ def main():
             # Reset wie in der Aufzeichnung (AP 5.2): Greifer auf den Startzustand,
             # dann an die Startstellung -- sonst beginnt die Policy z. B. mit
             # geschlossenem Greifer und "glaubt", das Objekt schon zu halten.
-            if start_gripper is not None:
-                robot.gripper_command(start_gripper > config.GRIPPER_THRESHOLD)
-            if start is not None and not args.no_start_move:
-                away = float(np.max(np.abs(robot.read_state().joints - start)))
+            ep_start, ep_start_gripper, replay_arrays, replay_ep = start, start_gripper, None, None
+            if args.replay:
+                # Startstellung und Greifer DIESER Episode -- die Bilder beginnen dort
+                replay_ep = args.replay_episodes[ep % len(args.replay_episodes)]
+                replay_arrays = replay.load_arrays(args.replay, replay_ep)
+                for cap in captures:
+                    if hasattr(cap.camera, "select"):
+                        cap.camera.select(replay_ep)
+                ep_start = np.asarray(replay_arrays["observation.state"][0, :6], dtype=float)
+                ep_start_gripper = float(replay_arrays["observation.state"][0, 13])
+                print("Fahrt %d: Replay Episode %d (%d Takte)"
+                      % (ep, replay_ep, len(replay_arrays["observation.state"])))
+            if ep_start_gripper is not None:
+                robot.gripper_command(ep_start_gripper > config.GRIPPER_THRESHOLD)
+            if ep_start is not None and not args.no_start_move:
+                away = float(np.max(np.abs(robot.read_state().joints - ep_start)))
                 if away > config.START_POSE_TOL_RAD:
                     print("Fahrt %d: an die Startstellung (%.3f rad entfernt)" % (ep, away))
-                    robot.move_to_joints(start)
+                    robot.move_to_joints(ep_start)
             t0 = time.perf_counter()
             log = run_episode(robot, captures, executor, clock, max_steps, workspace,
                               end_joints=end, end_gripper=end_gripper, min_steps=min_steps,
@@ -727,6 +781,9 @@ def main():
                 wall_s=wall,
                 **robot_info,
             )
+            if replay_arrays is not None:
+                cmp = replay.compare_rollout(log, replay_arrays)
+                summary["replay"] = dict(root=str(args.replay), episode=replay_ep, **cmp)
             results.append(summary)
             np.savez_compressed(out / ("rollout_%03d.npz" % ep),
                                 **{k: v for k, v in log.items() if isinstance(v, np.ndarray)})
@@ -739,6 +796,8 @@ def main():
                      summary["pacer_overruns"], summary["limiter_clamped_steps"]))
             for halt in log["reach_waits"]:
                 print("   %s" % execution_module.reach_line(halt))
+            if "replay" in summary:
+                print("   %s" % replay.format_rollout_comparison(summary["replay"]))
     finally:
         if hasattr(executor, "close"):
             executor.close()

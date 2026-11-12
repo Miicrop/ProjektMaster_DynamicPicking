@@ -5,7 +5,7 @@ hier erst verzoegert beim Verbinden, damit sich alles ohne installierte
 SDKs importieren laesst.
 
 Kamera-Backends werden ueber :func:`open_camera` anhand von
-``CameraConfig.backend`` aufgeloest ("daheng" | "uvc" | "sim").
+``CameraConfig.backend`` aufgeloest ("daheng" | "uvc" | "sim" | "replay").
 
 Welches GERAET an welchem Platz haengt, ist davon getrennt: :func:`list_devices`
 sagt, was angeschlossen ist, und :func:`camera_config_for` baut daraus die
@@ -35,8 +35,12 @@ def open_camera(cfg):
         from .cam_sim import SimCamera
 
         return SimCamera(cfg)
+    if cfg.backend == "replay":
+        from .cam_replay import ReplayCamera
+
+        return ReplayCamera(cfg)
     raise CameraError(
-        "Unbekanntes Kamera-Backend '%s' (bekannt: daheng, uvc, sim)" % cfg.backend
+        "Unbekanntes Kamera-Backend '%s' (bekannt: daheng, uvc, sim, replay)" % cfg.backend
     )
 
 
@@ -46,6 +50,9 @@ def open_camera(cfg):
 
 #: Backends, die ein Geraet haben koennen. "sim" steht immer zur Verfuegung.
 CAMERA_BACKENDS = ("sim", "uvc", "daheng")
+
+#: Backends ohne Geraet: synchron gelesen, jede Uhr erlaubt.
+SOFT_BACKENDS = ("sim", "replay")
 
 #: Wie viele OpenCV-Indizes probeweise geoeffnet werden. Fuer UVC gibt es
 #: keine saubere Enumeration -- man muss aufmachen, um zu wissen, ob da was
@@ -456,7 +463,7 @@ def start_cameras(mode, clock, seed=0, uvc_device=None, specs=None, cfgs=None):
     # Kameraeinstellungen darauf, bc/camera_settings.py)
     cfgs = list(cfgs) if cfgs is not None else camera_configs(
         mode, uvc_device=uvc_device, specs=specs)
-    if any(c.backend != "sim" for c in cfgs) and not isinstance(clock, RealClock):
+    if any(c.backend not in SOFT_BACKENDS for c in cfgs) and not isinstance(clock, RealClock):
         raise ValueError("Echte Kameras brauchen die Host-Uhr (RealClock), nicht %s"
                          % type(clock).__name__)
     started = []
@@ -464,6 +471,11 @@ def start_cameras(mode, clock, seed=0, uvc_device=None, specs=None, cfgs=None):
         for cfg in cfgs:
             if cfg.backend == "sim":
                 cap = capture.DirectCapture(SimCamera(cfg, clock=clock, seed=seed, pattern="static"))
+            elif cfg.backend == "replay":
+                # synchron: genau ein aufgezeichnetes Bild je Regeltakt
+                from .cam_replay import ReplayCamera
+
+                cap = capture.DirectCapture(ReplayCamera(cfg, clock=clock))
             else:
                 cap = capture.ThreadedCapture(open_camera(cfg))
             cap.start()
@@ -479,6 +491,18 @@ def start_cameras(mode, clock, seed=0, uvc_device=None, specs=None, cfgs=None):
                 pass
         raise
     return started, cfgs
+
+
+def replay_configs(root, episode, names=None):
+    """Kameraplaetze mit den Bildern einer Aufnahme besetzen (bc/replay.py).
+
+    ``names``: Kameraplaetze (Default: die der Aufnahme).
+    """
+    from .. import replay
+
+    names = list(names) if names else list(replay.read_index(root)["cameras"])
+    return [config.CameraConfig(name=n, backend="replay", device=(str(root), int(episode)))
+            for n in names]
 
 
 def open_robot(kind="neura", **kwargs):
