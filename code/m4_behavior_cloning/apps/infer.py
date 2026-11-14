@@ -114,7 +114,7 @@ def build_observation(robot, captures, frames_out=None):
 def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 end_joints=None, end_gripper=None, min_steps=0, threaded_watchdog=True,
                 progress=print, servo_rate_hz=config.SERVO_RATE_HZ, execution=None,
-                frame_guard=None):
+                frame_guard=None, stop_at_grasp=False):
     """Eine Policy-Fahrt. Rueckgabe: Log-dict (Arrays je Takt + Zusammenfassung).
 
     Ende = Endstellung +-END_TOL_RAD UND (falls bekannt) Greiferzustand wie am
@@ -124,6 +124,10 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
 
     ``frame_guard``: safety.FrameAgeGuard (Default: Werte aus config) -- haelt
     an, wenn ein Kamerabild einfriert (die Policy saehe ein Standbild).
+
+    ``stop_at_grasp``: die Policy endet mit dem Schliessbefehl (stop_reason
+    "griff"); Anheben und Transport uebernimmt :func:`planned_transport`
+    (``--transport-geplant``, Versuchsreihe 2026-11-13, Variante C).
     """
     executor.reset()
     frame_guard = frame_guard or FrameAgeGuard()
@@ -238,6 +242,8 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 hold_end = step + int(execution.get("hold_dwell_steps",
                                                     config.GRIPPER_DWELL_STEPS))
                 pacer.start().tick()   # Wartezeit ist kein Rueckstand, naechster Takt in 1/15 s
+            # Der erste Greiferbefehl ist der Startzustand, kein Griff.
+            grasped = bool(gripper) and prev_gripper is not None and gripper != prev_gripper
             if gripper != prev_gripper:
                 robot.gripper_command(gripper)
                 prev_gripper = gripper
@@ -254,6 +260,9 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
             log["ensemble_count"].append(getattr(executor, "last_count", 1))
             log["halt_s"].append(wait_s)
 
+            if stop_at_grasp and grasped:
+                stop_reason = "griff"
+                break
             if end_joints is not None:
                 near = float(np.max(np.abs(np.asarray(state.joints) - end_joints))) < END_TOL_RAD
                 if end_gripper is not None:
@@ -297,6 +306,122 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
     arrays["frame_age_max_s"] = frame_guard.worst_age_s
     arrays.update(execution_module.reach_summary(reach_waits))
     return arrays
+
+
+#: Anheben nach dem Griff wie in pick_to_station (PICK -> PRE_PICK, 5 cm).
+TRANSPORT_LIFT_M = 0.05
+#: Ueberschleifen am Anhebepunkt wie in pick_to_station (PRE_PICK "blend": 0.04).
+TRANSPORT_LIFT_BLEND_M = 0.04
+
+
+def planned_transport(robot, workspace, station_joints, clock, servo_rate_hz=config.SERVO_RATE_HZ,
+                      planner=None, lift_m=TRANSPORT_LIFT_M, threaded_watchdog=True):
+    """Nach dem Griff der Policy: Dwell, senkrecht anheben, PTP zur Station.
+
+    Variante C der Versuchsreihe 2026-11-13: die Policy lernt nur Anflug und
+    Griff, der Rest ist fuer jede Objektlage gleich und wird wie in der
+    Aufnahme geplant (bc/trajectory.py, gleiche Tempi und Rampen) und als
+    servo_j-Strom gefahren. Jede Sollstellung geht vorab durch das
+    Kollisionsmodell, der Watchdog laeuft mit.
+
+    Posen kommen aus ``robot.fk`` (Frame der Steuerung), nicht aus
+    ``read_state``: die IK rechnet in diesem Frame.
+    Rueckgabe: Log-dict wie :func:`run_episode` (nur t/joints/tcp/action/
+    gripper_cmd) plus ``stop_reason`` und ``pacer_overruns``.
+    """
+    from bc.kinematics import IKFailure, Kinematics
+    from bc.trajectory import MOTION_LIN, MOTION_PTP, Waypoint, build_ideal_trajectory
+
+    planner = planner or {}
+    log = {k: [] for k in ("t", "joints", "tcp", "action", "gripper_cmd")}
+    out = {"stop_reason": None, "pacer_overruns": 0, "steps_planned": 0}
+    kin = Kinematics(robot)
+    q0 = np.asarray(robot.read_state().joints, dtype=float)
+    station_joints = np.asarray(station_joints, dtype=float)
+    try:
+        p0 = np.asarray(robot.fk(q0), dtype=float)
+        up = p0.copy()
+        up[2] += float(lift_m)
+        q_up = kin.ik(up, q0)
+        waypoints = [
+            Waypoint(p0, gripper_closed=True, name="GRIFF", joints=q0),
+            Waypoint(up, gripper_closed=True, name="ANHEBEN", motion=MOTION_LIN, joints=q_up,
+                     blend_m=TRANSPORT_LIFT_BLEND_M),
+            Waypoint(np.asarray(robot.fk(station_joints), dtype=float), gripper_closed=True,
+                     name="STATION", motion=MOTION_PTP, joints=station_joints),
+        ]
+        ideal = build_ideal_trajectory(
+            waypoints, fk=robot.fk,
+            transit_speed=planner.get("transit_speed_ms") or config.TRANSIT_SPEED_MS,
+            approach_speed=planner.get("approach_speed_ms") or config.APPROACH_SPEED_MS,
+            ptp_joint_speed=planner.get("ptp_joint_speed_rads") or config.PTP_JOINT_SPEED_RADS)
+        targets = kin.solve_path(ideal.poses_quat, q0, fixed_joints=ideal.joints)
+        for q in targets:
+            check_target(workspace, robot, q)
+    except (IKFailure, TargetRejected, ValueError) as exc:
+        out["stop_reason"] = "transport nicht planbar: %s" % exc
+        return {**{k: np.asarray(v, dtype=float) for k, v in log.items()}, **out}
+    out["steps_planned"] = len(targets)
+
+    watchdog = Watchdog(robot, [geofence_check(robot, workspace)], clock)
+    if threaded_watchdog:
+        watchdog.start()
+    interp = ServoInterpolator(servo_rate_hz=servo_rate_hz).reset(q0)
+    robot.activate_servo("position")
+    pacer = Pacer(clock, servo_rate_hz).start()
+    try:
+        # Dwell wie in der Aufnahme: stehen, bis der Greifer zu ist
+        for _ in range(config.GRIPPER_DWELL_STEPS * interp.substeps):
+            q, v, a = interp.hold()
+            pacer.tick()
+            robot.servo_j(q, v, a)
+        for q in targets:
+            if not threaded_watchdog and watchdog.run_once() is not None:
+                out["stop_reason"] = "geofence: %s" % watchdog.tripped
+                break
+            for qq, v, a in interp.window(q):
+                if robot.stop_requested:
+                    break
+                pacer.tick()
+                robot.servo_j(qq, v, a)
+            if robot.stop_requested:
+                out["stop_reason"] = "stopp: %s" % (watchdog.tripped or "angefordert")
+                break
+            state = robot.read_state()
+            log["t"].append(clock.now())
+            log["joints"].append(state.joints)
+            log["tcp"].append(np.asarray(state.tcp_quat, dtype=float))
+            log["action"].append(np.append(q, config.GRIPPER_CLOSED))
+            log["gripper_cmd"].append(1.0)
+        else:
+            out["stop_reason"] = "endstellung"
+    except RobotError as exc:
+        out["stop_reason"] = "abgelehnt im transport: %s" % exc
+        robot.emergency_stop()
+    finally:
+        watchdog.stop()
+        robot.deactivate_servo()
+    out["pacer_overruns"] = pacer.overruns
+    return {**{k: np.asarray(v, dtype=float) for k, v in log.items()}, **out}
+
+
+def merge_transport(log, transport, robot):
+    """Haengt die geplante Fahrt an das Log der Policy-Fahrt an."""
+    n = len(transport["t"])
+    for key in ("t", "joints", "tcp", "action", "gripper_cmd"):
+        if n:
+            log[key] = np.concatenate([log[key], transport[key]]) if len(log[key]) else transport[key]
+    for key, fill in (("predict_s", np.nan), ("delay_steps", np.nan), ("ensemble_spread", 0.0),
+                      ("ensemble_count", 0.0), ("halt_s", 0.0)):
+        log[key] = np.concatenate([log[key], np.full(n, fill)])
+    final = robot.read_state()
+    log["final_tcp"] = np.asarray(final.tcp_quat, dtype=float)
+    log["final_joints"] = np.asarray(final.joints, dtype=float)
+    log["stop_reason"] = transport["stop_reason"]
+    log["reached_end"] = transport["stop_reason"] == "endstellung"
+    log["pacer_overruns"] = int(log["pacer_overruns"]) + int(transport["pacer_overruns"])
+    log["policy_steps"] = int(len(log["t"]) - n)
+    return log
 
 
 def add_recorded_workspace(workspace, info, robot, robot_kind, progress=print):
@@ -479,6 +604,11 @@ def parse_args():
                              "auto = nur an der realen Anlage (Default %(default)s)")
     parser.add_argument("--no-start-move", action="store_true",
                         help="nicht vorher an die Startstellung fahren")
+    parser.add_argument("--transport-geplant", action="store_true",
+                        help="Policy nur bis zum Griff; danach Dwell, %.0f cm senkrecht anheben und "
+                             "PTP zur Endstellung aus bc_policy.json (Policies, die nur auf Anflug "
+                             "und Griff trainiert sind, tools/export_variante.py --abschneiden-nach)"
+                             % (100 * TRANSPORT_LIFT_M))
     parser.add_argument("--out", default=None,
                         help="Ordner fuer Fahrtprotokolle (Default: <checkpoint>/rollouts/<Zeit>)")
     args = parser.parse_args()
@@ -711,6 +841,12 @@ def main():
              else "Chunks gemittelt, neu alle %d Takte, decay %.2f" % (replan, decay),
              "asynchron" if asynchronous else "synchron", out))
 
+    if args.transport_geplant:
+        if execution["mode"] == execution_module.ONLINE or end is None:
+            raise SystemExit("--transport-geplant braucht servo_j und eine Endstellung in bc_policy.json")
+        print("Transport geplant: Policy bis zum Griff, dann %.0f cm anheben und PTP zur Endstellung"
+              % (100 * TRANSPORT_LIFT_M))
+
     results = []
     try:
         for ep in range(args.episodes):
@@ -748,7 +884,15 @@ def main():
             log = run_episode(robot, captures, executor, clock, max_steps, workspace,
                               end_joints=end, end_gripper=end_gripper, min_steps=min_steps,
                               threaded_watchdog=not isinstance(clock, SimClock),
-                              servo_rate_hz=args.servo_rate, execution=execution)
+                              servo_rate_hz=args.servo_rate, execution=execution,
+                              stop_at_grasp=args.transport_geplant)
+            if args.transport_geplant and log["stop_reason"] == "griff":
+                transport = planned_transport(robot, workspace, end, clock,
+                                              servo_rate_hz=args.servo_rate, planner=rec_planner,
+                                              threaded_watchdog=not isinstance(clock, SimClock))
+                print("Fahrt %d: Griff nach %d Takten, geplanter Transport %d Takte -> %s"
+                      % (ep, len(log["t"]), len(transport["t"]), transport["stop_reason"]))
+                log = merge_transport(log, transport, robot)
             wall = time.perf_counter() - t0
             rollout = {"tcp": np.vstack([log["tcp"], log["final_tcp"][None]]) if len(log["tcp"]) else log["final_tcp"][None],
                        "gripper_cmd": np.append(log["gripper_cmd"], log["gripper_cmd"][-1] if len(log["gripper_cmd"]) else 0.0),

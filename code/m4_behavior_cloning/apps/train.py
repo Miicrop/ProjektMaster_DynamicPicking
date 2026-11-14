@@ -88,6 +88,9 @@ def parse_args(argv=None):
     tr.add_argument("--eval-every", type=int, default=2000)
     tr.add_argument("--save-every", type=int, default=10000)
     tr.add_argument("--resume", action="store_true", help="am letzten Checkpoint in --out fortsetzen")
+    tr.add_argument("--licht-augment", action="store_true",
+                    help="Helligkeit/Kontrast/Saettigung/Farbton der Trainingsbilder zufaellig "
+                         "variieren (LICHT_AUGMENT); Geometrie und Validierung unveraendert")
 
     pol = parser.add_argument_group("Policy (Defaults: config.POLICY_*)")
     pol.add_argument("--horizon", type=int, default=config.POLICY_HORIZON)
@@ -106,6 +109,34 @@ def parse_args(argv=None):
     if bool(args.dataset) == bool(args.data):
         parser.error("genau eines von --dataset oder --data angeben")
     return args
+
+
+# Lichtrobustheit (Versuchsreihe Policy-Varianten, 2026-11-14): Die Aufnahmetage
+# unterscheiden sich vor allem im Licht (Tageslicht, Kamera-Gain auf Automatik;
+# Szenenhelligkeit 09.11. ~53, 11.11. ~104, 02./03.11. ~130 von 255). Nur
+# photometrische Aenderungen -- Lage und Ausschnitt der Kamera bleiben, denn die
+# Policy liest die Objektlage aus dem Bild. Je Kamera und Beispiel eigene
+# Zufallswerte, innerhalb des Beobachtungsstapels (n_obs_steps) dieselben.
+LICHT_AUGMENT = {
+    "brightness": (0.6, 1.5),
+    "contrast": (0.7, 1.3),
+    "saturation": (0.6, 1.4),
+    "hue": (-0.04, 0.04),
+}
+
+
+def licht_transforms(ranges=LICHT_AUGMENT):
+    """torchvision-v2-Transformation (lerobot ImageTransforms) fuer --licht-augment."""
+    from lerobot.transforms.transforms import ImageTransformConfig, ImageTransforms, ImageTransformsConfig
+
+    cfg = ImageTransformsConfig(
+        enable=True,
+        max_num_transforms=len(ranges),
+        random_order=True,
+        tfs={name: ImageTransformConfig(weight=1.0, type="ColorJitter", kwargs={name: tuple(rng)})
+             for name, rng in ranges.items()},
+    )
+    return ImageTransforms(cfg)
 
 
 def auto_workers(requested):
@@ -266,7 +297,10 @@ def main(argv=None):
     train_eps, val_eps = split_episodes(meta.total_episodes, args.val_fraction, args.seed,
                                         groups=repeat_groups)
     deltas = diffusion.delta_timestamps(policy_cfg, cameras)
-    train_ds = LeRobotDataset(repo_id, root=dataset_root, episodes=train_eps, delta_timestamps=deltas)
+    train_ds = LeRobotDataset(repo_id, root=dataset_root, episodes=train_eps, delta_timestamps=deltas,
+                              image_transforms=licht_transforms() if args.licht_augment else None)
+    if args.licht_augment:
+        print("Licht-Augmentierung: %s" % LICHT_AUGMENT)
     val_ds = (
         LeRobotDataset(repo_id, root=dataset_root, episodes=val_eps, delta_timestamps=deltas)
         if val_eps else None
