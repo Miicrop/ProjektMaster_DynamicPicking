@@ -91,6 +91,19 @@ def test_operation_tab_policy_test_controls(tmp_path):
         tab.probe.setCurrentIndex(tab.probe.findData("objekt"))
         argv = tab._argv()
         assert "--lage-bekannt" in argv and argv[argv.index("--probegriff") + 1] == "objekt"
+        assert "--pick-quelle" not in argv and "--dagger" not in argv
+        assert not tab.photo_point.isEnabled()
+        tab.pick_source.setCurrentIndex(tab.pick_source.findData("m1"))
+        assert tab.photo_point.isEnabled()
+        tab.photo_point.setText("FOTO")
+        tab.dagger_dir.setText("data/2026-11-17_dagger")
+        argv = tab._argv()
+        assert argv[argv.index("--pick-quelle") + 1] == "m1"
+        assert argv[argv.index("--foto-punkt") + 1] == "FOTO"
+        assert argv[argv.index("--dagger") + 1] == "data/2026-11-17_dagger"
+        tab.probe.setCurrentIndex(tab.probe.findData("tisch"))     # DAgger nur mit Probegriff
+        assert "--dagger" not in tab._argv()
+        tab.probe.setCurrentIndex(tab.probe.findData("objekt"))
         only = tab._argv(camera_check="nur")
         assert "--lage-bekannt" not in only
         assert only[only.index("--kamerapruefung") + 1] == "nur"

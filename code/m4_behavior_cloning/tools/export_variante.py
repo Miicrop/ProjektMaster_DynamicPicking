@@ -70,6 +70,10 @@ def parse_args():
                         help="Episode N Takte nach dem Schliessbefehl beenden")
     parser.add_argument("--eine-drehung", action="store_true",
                         help="nur Demos ohne 180-Grad-Drehung des Werkzeugs gegen das Objekt")
+    parser.add_argument("--dagger-gewicht", type=int, default=1, metavar="K",
+                        help="DAgger-Episoden (apps/infer.py --dagger, metadata mode 'dagger') "
+                             "K-mal in den Datensatz -- wenige Korrekturen neben vielen Demos "
+                             "haetten sonst kaum Gewicht (Default %(default)s)")
     add_export_arguments(parser)
     args = parser.parse_args()
     if not args.check and not args.out:
@@ -167,7 +171,12 @@ def main():
                     continue
                 if flip is None:
                     stats["Drehung nicht bestimmbar (behalten)"] += 1
-            kept.append((root, i, meta))
+            copies = 1
+            if (meta.get("metadata") or {}).get("mode") == "dagger":
+                stats["DAgger-Episoden"] += 1
+                copies = max(1, int(args.dagger_gewicht))
+                stats["DAgger-Kopien (Gewicht)"] += copies
+            kept.extend([(root, i, meta)] * copies)
         stats["behalten"] = len(kept)
         scan["episodes"] = kept
         return scan
@@ -188,6 +197,7 @@ def main():
         "pause_behalten": args.pause_behalten,
         "abschneiden_nach": args.abschneiden_nach,
         "eine_drehung": bool(args.eine_drehung),
+        "dagger_gewicht": int(args.dagger_gewicht),
     }
     print("Quellen: %s" % ", ".join(map(str, sources)))
     print("Regeln: %s" % rules)
