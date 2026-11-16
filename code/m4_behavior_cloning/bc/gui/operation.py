@@ -259,12 +259,15 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
                override=None, max_steps=None, replan=None, device="auto",
                realtime=False, hold=False, no_ensemble=False, out=None,
                real_robot=False, seed=None, known_pose=False, probe="tisch",
-               sequence=None, camera_check="an"):
+               sequence=None, camera_check="an", pick_source="steuerung",
+               photo_point=None, dagger_dir=None):
     """Kommandozeile fuer apps/infer.py (ohne das Python-Programm).
 
     ``known_pose``: Policy-Test mit bekannter Lage (``--lage-bekannt``,
     ``probe`` "tisch"/"objekt", ``sequence`` = Ablaufdatei oder None fuer die
     der Aufnahme). ``camera_check``: ``--kamerapruefung`` (an/warnen/aus/nur).
+    ``pick_source`` "steuerung"/"m1" (``--pick-quelle``, mit ``photo_point``
+    = ``--foto-punkt``), ``dagger_dir``: ``--dagger`` (nur Probegriff objekt).
 
     ``hold`` faehrt ohne Modell (HoldPolicy) -- der Verdrahtungstest, mit dem
     man Takt, Servo-Kette und Kameras prueft, bevor eine Policy dranhaengt.
@@ -298,6 +301,12 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
         argv += ["--lage-bekannt", "--probegriff", str(probe)]
         if sequence:
             argv += ["--ablauf", str(sequence)]
+        if pick_source and pick_source != "steuerung":
+            argv += ["--pick-quelle", str(pick_source)]
+            if photo_point:
+                argv += ["--foto-punkt", str(photo_point)]
+        if dagger_dir and probe == "objekt":
+            argv += ["--dagger", str(dagger_dir)]
     if camera_check and camera_check != "an":
         argv += ["--kamerapruefung", str(camera_check)]
     if out:

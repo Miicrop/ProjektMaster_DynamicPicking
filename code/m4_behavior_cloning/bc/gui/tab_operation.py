@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout
                                QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from . import _bootstrap
+from .. import config
 from . import cameras as cameras_module
 from . import operation as operation_module
 from . import pick_view as pick_view_module
@@ -248,6 +249,30 @@ class OperationTab(ModeTab):
         self.sequence.setPlaceholderText("aus dem Modell")
         self.sequence.textChanged.connect(self._update_command)
         form.addRow("Ablauf", self.sequence)
+        self.pick_source = block_wheel(QComboBox())
+        self.pick_source.addItem("PICK aus der Steuerung", "steuerung")
+        self.pick_source.addItem("PICK aus M1 (Lokalisierung)", "m1")
+        self.pick_source.setToolTip(
+            "M1: vor jeder Fahrt an die Fotostellung, die Objekterkennung der Gruppe "
+            "bestimmt Lage und Drehung aus dem Bild der Szenenkamera, PICK wird in der "
+            "Steuerung gesetzt (Sicherung wie Touch-up). Das Teil darf irgendwo im "
+            "Arbeitsbereich zwischen den Markern liegen (bc/lokalisierung.py).")
+        self.pick_source.currentIndexChanged.connect(self._on_pick_source_changed)
+        form.addRow("PICK", self.pick_source)
+        self.photo_point = QLineEdit(config.LOCALIZE_POINT)
+        self.photo_point.setToolTip(
+            "Steuerungspunkt, an dem der Arm aus dem Bild der Draufsichtkamera ist "
+            "(alle vier Marker und das Teil sichtbar). M2 lokalisiert an 'Home'.")
+        self.photo_point.textChanged.connect(self._update_command)
+        form.addRow("Fotostellung", self.photo_point)
+        self.dagger_dir = QLineEdit()
+        self.dagger_dir.setPlaceholderText("leer = nicht mitschreiben")
+        self.dagger_dir.setToolTip(
+            "Nur Probegriff mit Experte: jede Fahrt (Policy + Korrektur) mit Bildern als "
+            "Episode im Aufnahmeformat in diesen Ordner, z. B. data/2026-11-17_dagger. "
+            "Export: tools/export_variante.py --data <Demos> <Ordner> --dagger-gewicht 5.")
+        self.dagger_dir.textChanged.connect(self._update_command)
+        form.addRow("DAgger-Ordner", self.dagger_dir)
         layout.addLayout(form)
 
         row = QHBoxLayout()
@@ -286,9 +311,17 @@ class OperationTab(ModeTab):
         layout.addLayout(form)
         self.camera_ref_info = _hint("")
         layout.addWidget(self.camera_ref_info)
-        for widget in (self.probe, self.sequence):     # erst mit "Lage bekannt"
+        for widget in self._known_widgets():           # erst mit "Lage bekannt"
             widget.setEnabled(False)
         return box
+
+    def _known_widgets(self):
+        return (self.probe, self.sequence, self.pick_source, self.photo_point, self.dagger_dir)
+
+    def _on_pick_source_changed(self, *_):
+        self.photo_point.setEnabled(self.known.isChecked()
+                                    and self.pick_source.currentData() == "m1")
+        self._update_command()
 
     def _build_action_bar(self):
         """Pruefung und Knoepfe ausserhalb des Bildlaufs.
@@ -486,7 +519,10 @@ class OperationTab(ModeTab):
             known_pose=self.known.isChecked() and not only_check,
             probe=self.probe.currentData(),
             sequence=self.sequence.text().strip() or None,
-            camera_check=camera_check or self.camera_check.currentData())
+            camera_check=camera_check or self.camera_check.currentData(),
+            pick_source=self.pick_source.currentData(),
+            photo_point=self.photo_point.text().strip() or None,
+            dagger_dir=self.dagger_dir.text().strip() or None)
 
     def _update_command(self):
         status = self.session.status()
@@ -609,6 +645,11 @@ class OperationTab(ModeTab):
             lines.append("Fahrten: %d" % self.episodes.value())
             if self.known.isChecked():
                 lines.append("Policy-Test mit bekannter Lage, %s" % self.probe.currentText())
+                if self.pick_source.currentData() == "m1":
+                    lines.append("PICK aus M1: vor jeder Fahrt an die Fotostellung '%s'"
+                                 % (self.photo_point.text().strip() or config.LOCALIZE_POINT))
+                if self.dagger_dir.text().strip() and self.probe.currentData() == "objekt":
+                    lines.append("DAgger: Episoden nach %s" % self.dagger_dir.text().strip())
         if status.state == session_module.OFFLINE:
             lines += ["", "Es ist nichts verbunden — apps/infer.py verbindet "
                           "selbst. Welche Steuerung antwortet, steht erst dann fest."]
@@ -687,9 +728,9 @@ class OperationTab(ModeTab):
     # -- Policy-Test: PICK --------------------------------------------------
 
     def _on_known_toggled(self, checked):
-        for widget in (self.probe, self.sequence):
+        for widget in self._known_widgets():
             widget.setEnabled(checked)
-        self._update_command()
+        self._on_pick_source_changed()
 
     def _sequence_path(self):
         text = self.sequence.text().strip() or (self._described or {}).get("sequence_file")

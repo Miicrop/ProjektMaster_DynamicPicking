@@ -15,6 +15,8 @@ Ein physischer Not-Halt muss waehrend aller Laeufe in Reichweite sein.
 import threading
 import traceback
 
+import numpy as np
+
 from . import config
 
 
@@ -147,6 +149,62 @@ def geofence_check(robot, collision_model):
 
 class TargetRejected(RuntimeError):
     """Ein Ziel der Policy wuerde ins Kollisionsmodell fuehren -- nicht gesendet."""
+
+
+class ArmStalled(RuntimeError):
+    """Der Arm steht, das Ziel nicht -- Not-Aus am Handbediengeraet oder
+    toter Steuerkanal. Die Fahrt endet, statt weiter Ziele zu senden."""
+
+
+class StallGuard(object):
+    """Erkennt "Arm steht, Ziel nicht" (Anwender 2026-11-16).
+
+    Der Not-Aus am Handbediengeraet haelt den Arm an, ohne dass servo_j einen
+    Fehler meldet. Ohne diese Pruefung sendet die Fahrt weiter Ziele, die
+    Luecke zur Messung waechst, und nach dem Entriegeln laege ein altes Ziel
+    an. ``check`` je Takt mit der gemessenen Stellung und dem gesendeten Ziel;
+    wirft :class:`ArmStalled` nach ``steps`` Takten in Folge, in denen sich
+    die Messung um weniger als ``move_rad`` bewegt hat und das Ziel mehr als
+    ``gap_rad`` entfernt ist. Steht der Arm AM Ziel (Dwell, Zoegern der
+    Policy), loest nichts aus.
+    """
+
+    def __init__(self, move_rad=config.STALL_MOVE_RAD, gap_rad=config.STALL_GAP_RAD,
+                 steps=config.STALL_STEPS):
+        self.move_rad = float(move_rad)
+        self.gap_rad = float(gap_rad)
+        self.steps = int(steps)
+        self.reset()
+
+    def reset(self):
+        self._prev = None
+        self.count = 0
+        self.since = None      # erster Takt der laufenden Folge (Zaehler der Aufrufe)
+        self._calls = 0
+        return self
+
+    def check(self, measured, target):
+        """Rueckgabe: Takte in Folge "steht". Wirft ArmStalled an der Grenze."""
+        measured = np.asarray(measured, dtype=float)
+        target = np.asarray(target, dtype=float)[:len(measured)]
+        moved = (float("inf") if self._prev is None
+                 else float(np.max(np.abs(measured - self._prev))))
+        gap = float(np.max(np.abs(target - measured)))
+        self._prev = measured
+        if moved < self.move_rad and gap > self.gap_rad:
+            if self.count == 0:
+                self.since = self._calls
+            self.count += 1
+        else:
+            self.count, self.since = 0, None
+        self._calls += 1
+        if self.count >= self.steps:
+            raise ArmStalled(
+                "arm steht: %d Takte ohne Bewegung (< %.0e rad), Ziel %.3f rad entfernt "
+                "-- Not-Aus am Handbediengeraet oder Steuerkanal weg? Anlage pruefen, "
+                "Not-Aus erst nach dem Ende der Fahrt entriegeln"
+                % (self.count, self.move_rad, gap))
+        return self.count
 
 
 def check_target(collision_model, robot, joints):

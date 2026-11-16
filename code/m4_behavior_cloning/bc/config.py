@@ -460,6 +460,10 @@ PROBE_GAP_M = 0.003
 #: Policy-Test "Erfolg": Greifpunkt (bzw. vorhergesagter) hoechstens so weit
 #: waagrecht von PICK -- wie das Kriterium von metrics.evaluate_rollout.
 KNOWN_POSE_SUCCESS_XY_M = 0.010
+#: Violation-Stopp des Geofence-Waechters an der Probegriff-Ebene zaehlt als
+#: Probegriff-Stopp, wenn das Werkzeug hoechstens so tief darunter war
+#: (Anlage 2026-11-16: 3,1 und 3,9 mm; die Ebene liegt 3 mm ueber dem Objekt)
+PROBE_VIOLATION_MAX_M = 0.005
 #: Kamerapruefung vor der Inferenz (bc/camera_check.py): so lange nach dem
 #: Anfahren der Startstellung warten, bis die Bilder sicher frisch sind.
 CAMERA_CHECK_SETTLE_S = 0.5
@@ -740,6 +744,40 @@ COLLISION_CHECK_FRAMES = ("tool", "wrist", "elbow")
 
 #: Pruefintervall des Geofence-Waechters (AP 4.2).
 SAFETY_CHECK_PERIOD_S = 0.05
+
+#: "Arm steht, Ziel nicht" in der INFERENZ und den Planerfahrten danach
+#: (safety.StallGuard, Anwender 2026-11-16): Not-Aus am Handbediengeraet oder
+#: ein toter Steuerkanal. servo_j meldet dann weiter "in Ordnung", infer.py
+#: fuhr am 16.11. zweimal ~130 Takte gegen einen stehenden Arm bis max_steps
+#: (Luecke Ziel - Messung bis 0,26 rad). Ausloesen, wenn sich die Messung je
+#: Takt um weniger als STALL_MOVE_RAD bewegt UND das gesendete Ziel mehr als
+#: STALL_GAP_RAD entfernt ist, STALL_STEPS Takte in Folge (~0,35 s bei 15 Hz).
+#: Kalibriert an 1013 Rollouts (VM + Anlage bis 16.11.): beide Not-Aus-Fahrten
+#: >= 133 Takte, alle anderen < 3 Takte -- ausser drei VM-Fahrten, in denen
+#: der Arm ebenfalls 220-250 Takte stand (Haenger der VM-Software).
+STALL_MOVE_RAD = 1e-4
+STALL_GAP_RAD = 0.02
+STALL_STEPS = 5
+
+#: PICK aus der Lokalisierung der Gruppe (bc/lokalisierung.py, 2026-11-16):
+#: Steuerungspunkt, an dem der Arm aus dem Bild der Draufsichtkamera ist
+#: (M2 lokalisiert ebenfalls an "Home") ...
+LOCALIZE_POINT = "Home"
+#: ... und so lange nach dem Anhalten warten, bis das Bild sicher frisch ist
+LOCALIZE_SETTLE_S = 0.5
+#: Hoechstens so weit darf die M1-Lage vom zuletzt bekannten PICK abweichen,
+#: bevor nachgefragt wird (nur als Pruefung, wenn das Teil nicht bewegt wurde)
+LOCALIZE_WARN_M = 0.010
+
+#: DAgger (bc/dagger.py, 2026-11-16): Jeder Takt der Policy bekommt das Label
+#: des Planers ("zurueck auf die Idealbahn, dann weiter auf ihr").
+#: Groesster Schritt eines Korrektur-Labels je Takt (rad, je Gelenk) zusaetzlich
+#: zum Schritt der Idealbahn: die Rueckkehr auf die Bahn verteilt sich auf
+#: mehrere Takte statt eines Sprungs (Rauschaufnahmen: bis ~0,02 rad).
+DAGGER_EXTRA_STEP_RAD = 0.006
+#: Takte nach dem Schliessbefehl des Experten, die die DAgger-Episode noch
+#: enthaelt (Dwell; export_variante --abschneiden-nach kuerzt weiter)
+DAGGER_TAIL_STEPS = 10
 
 #: Eingefrorenes Kamerabild in der INFERENZ (safety.FrameAgeGuard, Anwender
 #: 2026-11-11): ist das neueste Bild einer Kamera aelter als dies ...

@@ -45,6 +45,7 @@ keinen Hardware-Not-Aus (AP 4.2).
 
 import argparse
 import json
+import re
 import sys
 import time
 from datetime import datetime
@@ -54,7 +55,7 @@ import _bootstrap  # noqa: F401
 
 import numpy as np
 
-from bc import config, dataset, known_pose, metrics, obstacles, replay
+from bc import config, dagger, dataset, known_pose, metrics, obstacles, replay
 from bc import camera_settings as camera_settings_module
 from bc.adapters import (
     CAMERA_MODES,
@@ -70,8 +71,8 @@ from bc.collision import default_workspace
 from bc.policy import ChunkEnsembler, ChunkExecutor, HoldPolicy, PredictionTooSlow, check_action
 from bc.ports import MotionRefused, RobotError
 from bc.recorder import _to_schema_size
-from bc.safety import (CameraStale, FrameAgeGuard, TargetRejected, Watchdog, check_target,
-                       geofence_check)
+from bc.safety import (ArmStalled, CameraStale, FrameAgeGuard, StallGuard, TargetRejected,
+                       Watchdog, check_target, geofence_check)
 from bc import execution as execution_module
 from bc.servo import ServoGuard, ServoInterpolator, TargetLimiter, substeps_for
 from bc.sync import Pacer
@@ -114,8 +115,11 @@ def build_observation(robot, captures, frames_out=None):
 def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 end_joints=None, end_gripper=None, min_steps=0, threaded_watchdog=True,
                 progress=print, servo_rate_hz=config.SERVO_RATE_HZ, execution=None,
-                frame_guard=None, stop_at_grasp=False, on_tick=None):
+                frame_guard=None, stop_at_grasp=False, on_tick=None, mitschrieb=None):
     """Eine Policy-Fahrt. Rueckgabe: Log-dict (Arrays je Takt + Zusammenfassung).
+
+    ``mitschrieb``: bc/dagger.Mitschrieb -- bekommt je Takt Beobachtung (mit
+    Bildern), gesendetes Ziel und Greifer (DAgger, ``--dagger``).
 
     ``on_tick``: optional ``f(state) -> str``, haengt Text an die
     Fortschrittszeile (``--lage-bekannt``: aktuelle Abweichung).
@@ -169,6 +173,8 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
         profile=execution_module.servo_profile(execution) or "linear",
     ).reset(state.joints)
     limiter = TargetLimiter().reset(state.joints)
+    # Arm steht, Ziel nicht (Not-Aus am Handbediengeraet, 16.11.) -> Ende
+    stall = StallGuard()
     robot.activate_servo("position")
     # nach der Aktivierung; online: ein Aufruf je Regeltakt
     pacer = Pacer(clock, config.CONTROL_RATE_HZ if online else servo_rate_hz).start()
@@ -267,6 +273,12 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
             log["ensemble_spread"].append(getattr(executor, "last_spread", 0.0))
             log["ensemble_count"].append(getattr(executor, "last_count", 1))
             log["halt_s"].append(wait_s)
+            if mitschrieb is not None:
+                mitschrieb.add(obs, state.joints if ziel is None else ziel, gripper,
+                               dagger.POLICY, policy_action=action)
+            # Messung vom Anfang des Takts gegen das gesendete Ziel
+            if ziel is not None:
+                stall.check(state.joints, ziel)
 
             if stop_at_grasp and grasped:
                 stop_reason = "griff"
@@ -303,6 +315,9 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
         robot.emergency_stop()
         probe_actions = _rest_of_prediction(executor)
     except CameraStale as exc:
+        stop_reason = str(exc)
+        robot.emergency_stop()
+    except ArmStalled as exc:
         stop_reason = str(exc)
         robot.emergency_stop()
     finally:
@@ -401,6 +416,7 @@ def planned_transport(robot, workspace, station_joints, clock, servo_rate_hz=con
     if threaded_watchdog:
         watchdog.start()
     interp = ServoInterpolator(servo_rate_hz=servo_rate_hz).reset(q0)
+    stall = StallGuard()
     robot.activate_servo("position")
     pacer = Pacer(clock, servo_rate_hz).start()
     try:
@@ -427,10 +443,14 @@ def planned_transport(robot, workspace, station_joints, clock, servo_rate_hz=con
             log["tcp"].append(np.asarray(state.tcp_quat, dtype=float))
             log["action"].append(np.append(q, config.GRIPPER_CLOSED))
             log["gripper_cmd"].append(1.0)
+            stall.check(state.joints, q)
         else:
             out["stop_reason"] = "endstellung"
     except RobotError as exc:
         out["stop_reason"] = "abgelehnt im transport: %s" % exc
+        robot.emergency_stop()
+    except ArmStalled as exc:
+        out["stop_reason"] = "im transport: %s" % exc
         robot.emergency_stop()
     finally:
         watchdog.stop()
@@ -585,10 +605,39 @@ def append_csv(path, columns, row):
         writer.writerow(row)
 
 
-def expected_test_stop(stop_reason):
-    """Endete die Policy wie beim Policy-Test vorgesehen (Griff oder Probegriff)?"""
+_VIOLATION = re.compile(r"Violation\(Schritt [^,]*, Frame '([^']*)', Quader '([^']*)', "
+                        r"Freiraum (-?[0-9.]+) m")
+
+
+def probe_violation(stop_reason, limit_m=None):
+    """Hielt der Geofence-Waechter am Probegriff-Quader (Tischebene, Werkzeug)?
+
+    Anlage 2026-11-16: Der Arm schwang 9-10 mm unter das letzte geprufte Ziel,
+    der Waechter (gemessene Stellung) hielt 3-4 mm unter der Probehoehe. Das
+    ist derselbe Probegriff-Stopp, nur spaeter erkannt. Gilt nur, wenn ALLE
+    Verletzungen das Werkzeug an der Tischebene betreffen und hoechstens
+    ``limit_m`` tief sind -- alles andere bleibt ein echter Stopp.
+    """
     text = str(stop_reason)
-    return text == "griff" or (text.startswith("kollision vorab") and "Tischebene" in text)
+    if not text.startswith("stopp: [Violation"):
+        return False
+    limit = config.PROBE_VIOLATION_MAX_M if limit_m is None else limit_m
+    found = _VIOLATION.findall(text)
+    return bool(found) and text.count("Violation(") == len(found) and all(
+        frame == "tool" and box == "Tischebene" and float(free) >= -limit
+        for frame, box, free in found)
+
+
+def expected_test_stop(stop_reason, probe=None):
+    """Endete die Policy wie beim Policy-Test vorgesehen (Griff oder Probegriff)?
+
+    ``probe="objekt"``: auch der Violation-Stopp am Probegriff-Quader
+    (:func:`probe_violation`) -- der Experte hebt dann zuerst senkrecht an.
+    """
+    text = str(stop_reason)
+    if text == "griff" or (text.startswith("kollision vorab") and "Tischebene" in text):
+        return True
+    return probe == "objekt" and probe_violation(text)
 
 
 def retreat_after_test(robot, workspace, log, start_joints, clock, args, planner=None):
@@ -672,13 +721,16 @@ def camera_check_before_run(robot, captures, info, start, start_gripper, args,
 
 
 def run_planned(robot, workspace, targets, gripper, clock, servo_rate_hz=config.SERVO_RATE_HZ,
-                threaded_watchdog=True):
+                threaded_watchdog=True, captures=None, mitschrieb=None):
     """Geplante Gelenkbahn als servo_j-Strom, Greifer je Takt wie geplant.
 
     ``targets`` (N, 6) aus kin.solve_path, ``gripper`` (N,) aus der Idealbahn
     (der Planer hat am Greiferwechsel den Dwell schon eingefuegt). Jedes Ziel
     ist vorab geprueft; der Watchdog laeuft mit. Rueckgabe: Log mit t/joints/
     tcp/gripper_cmd und ``stop_reason`` ("fertig" oder der Grund).
+
+    ``mitschrieb`` (mit ``captures``): je Takt die Beobachtung VOR dem Senden
+    und das Ziel dieses Takts (DAgger: Label des Experten).
     """
     log = {k: [] for k in ("t", "joints", "tcp", "gripper_cmd")}
     stop_reason = "fertig"
@@ -687,6 +739,7 @@ def run_planned(robot, workspace, targets, gripper, clock, servo_rate_hz=config.
     if threaded_watchdog:
         watchdog.start()
     interp = ServoInterpolator(servo_rate_hz=servo_rate_hz).reset(q0)
+    stall = StallGuard()
     robot.activate_servo("position")
     pacer = Pacer(clock, servo_rate_hz).start()
     closed = None
@@ -696,6 +749,9 @@ def run_planned(robot, workspace, targets, gripper, clock, servo_rate_hz=config.
                 stop_reason = "geofence: %s" % watchdog.tripped
                 break
             want = bool(g > config.GRIPPER_THRESHOLD)
+            if mitschrieb is not None and captures is not None:
+                obs, _ = build_observation(robot, captures)
+                mitschrieb.add(obs, q, float(want), dagger.EXPERT)
             if want != closed:
                 robot.gripper_command(want)
                 closed = want
@@ -712,8 +768,12 @@ def run_planned(robot, workspace, targets, gripper, clock, servo_rate_hz=config.
             log["joints"].append(state.joints)
             log["tcp"].append(np.asarray(state.tcp_quat, dtype=float))
             log["gripper_cmd"].append(float(want))
+            stall.check(state.joints, q)
     except RobotError as exc:
         stop_reason = "abgelehnt: %s" % exc
+        robot.emergency_stop()
+    except ArmStalled as exc:
+        stop_reason = str(exc)
         robot.emergency_stop()
     finally:
         watchdog.stop()
@@ -743,7 +803,7 @@ def _write_pick(robot, joints, pick_state):
 
 
 def expert_after_probe(robot, workspace, known, reference_pick, start_joints, clock, args,
-                       planner, rng, pick_state):
+                       planner, rng, pick_state, captures=None, mitschrieb=None):
     """Experte nach dem Probegriff: korrigieren, greifen, neu ablegen, PICK nachfuehren.
 
     Rueckgabe dict: ``correction`` (bc/known_pose.correction), ``result``
@@ -806,8 +866,10 @@ def expert_after_probe(robot, workspace, known, reference_pick, start_joints, cl
     pose, xy, turn, place, ideal, targets = plan
     log = run_planned(robot, workspace, targets, ideal.gripper, clock,
                       servo_rate_hz=args.servo_rate,
-                      threaded_watchdog=not isinstance(clock, SimClock))
+                      threaded_watchdog=not isinstance(clock, SimClock),
+                      captures=captures, mitschrieb=mitschrieb)
     out["log"] = log
+    out["ideal_poses"] = np.asarray(ideal.poses_quat, dtype=float)
     out["placed_xy"] = xy
     if log["stop_reason"] != "fertig":
         out["result"] = "abgebrochen: %s" % log["stop_reason"]
@@ -829,6 +891,100 @@ def expert_after_probe(robot, workspace, known, reference_pick, start_joints, cl
                      "nachgefuehrt (Sicherung %s)" % (1e3 * xy[0], 1e3 * xy[1], turn,
                                                      Path(backup).name))
     return out
+
+
+def make_localizer():
+    """M1-Lokalisierung der Gruppe (bc/lokalisierung.py) -- in Tests ersetzbar."""
+    from bc import lokalisierung
+    return lokalisierung.M1Localizer()
+
+
+def localize_pick(robot, captures, localizer, known, args, info, planner, pick_state, clock):
+    """Fotostellung, M1 lokalisiert, PICK in der Steuerung setzen, Lage neu laden.
+
+    Rueckgabe ``(protokoll, known)``. Der Vergleich gegen den bisherigen PICK
+    (geteacht oder vom Experten nachgefuehrt) steht im Protokoll -- liegt das
+    Teil seit dem Umlegen unveraendert, ist das die Genauigkeit von M1.
+    """
+    from bc import lokalisierung
+    from bc.kinematics import Kinematics
+
+    scene = next((c for c in captures if c.name == "scene"), None)
+    if scene is None:
+        raise lokalisierung.LocalizationError("keine Szenenkamera -- M1 braucht ihr Bild")
+    joints, _ = robot.get_point(args.foto_punkt)
+    joints = np.asarray(joints, dtype=float)
+    if float(np.max(np.abs(robot.read_state().joints - joints))) > config.START_POSE_TOL_RAD:
+        print("Lokalisierung: an die Fotostellung '%s'" % args.foto_punkt)
+        robot.move_to_joints(joints)
+    loc = localizer.locate(lokalisierung.full_frame(scene, clock=clock))
+    print("Lokalisierung: %s" % loc.describe())
+    before = np.asarray(known.pick, dtype=float).copy()
+    pose = lokalisierung.pick_pose(loc, before, known.table)
+    try:
+        seed = np.asarray(robot.get_point("PICK")[0], dtype=float)
+    except KeyError:
+        seed = robot.read_state().joints
+    q = Kinematics(robot).ik(pose, seed)
+    backup = _write_pick(robot, q, pick_state)
+    known = load_known_pose(args, info, robot, planner)
+    diff = lokalisierung.compare(known.pick, before, known.table)
+    print("Lokalisierung: PICK gesetzt (Sicherung %s), gegen den bisherigen PICK dx %.1f dy %.1f "
+          "mm, Drehung %.1f Grad" % (Path(backup).name, 1e3 * diff["dx_m"], 1e3 * diff["dy_m"],
+                                     diff["yaw_deg"]))
+    if diff["xy_m"] > config.LOCALIZE_WARN_M:
+        print("   Hinweis: mehr als %.0f mm -- Teil von Hand bewegt? Sonst M1-Kalibrierung pruefen."
+              % (1e3 * config.LOCALIZE_WARN_M))
+    record = dict(loc.as_dict(), pick=[float(v) for v in known.pick],
+                  gegen_vorher=diff, foto_punkt=args.foto_punkt)
+    return record, known
+
+
+def write_dagger_episode(writer, rec, known, ideal_q, expert, log, lage, meta, ep, lokal=None):
+    """Policy + Experte einer Fahrt als Episode schreiben (bc/dagger.py).
+
+    Nicht geschrieben: Not-Aus (Arm steht) und Fahrten ohne Policy-Takte.
+    Erfolg = der Experte hat gegriffen und neu abgelegt.
+    """
+    reason = str(log["stop_reason"])
+    if reason.startswith("arm steht"):
+        print("   DAgger: nicht geschrieben (Arm stand -- Not-Aus)")
+        return {"geschrieben": False, "grund": "arm steht"}
+    if not rec.count(dagger.POLICY):
+        print("   DAgger: nicht geschrieben (keine Policy-Takte)")
+        return {"geschrieben": False, "grund": "keine Takte"}
+    expert = expert or {}
+    expert_log = expert.get("log")
+    grasped = bool(expert.get("new_pick") is not None and expert_log is not None
+                   and expert_log["stop_reason"] == "fertig")
+    episode_meta = dict(meta or {})
+    stamp = datetime.now().isoformat(timespec="seconds")
+    episode_meta.update({
+        "recorded_at": stamp,
+        "episode_index": int(ep),
+        # Kopien beim Gewichten (export_variante --dagger-gewicht) bleiben so
+        # auf derselben Seite der Train/Val-Aufteilung (apps/train.py)
+        "repeat_group": "dagger/%s/%d" % (stamp, int(ep)),
+        "stop_reason": reason,
+        "points": {"PICK": {"pose_quat": [float(v) for v in known.pick]}},
+        "dagger": {"lage": (lage or {}).get("summary"), "experte": {
+            k: expert.get(k) for k in ("correction", "result", "new_pick", "placed_xy")},
+            "lokalisierung": lokal},
+    })
+    try:
+        episode, info = dagger.build_episode(rec, known.ideal, ideal_q,
+                                             expert_ideal_poses=expert.get("ideal_poses"),
+                                             metadata=episode_meta,
+                                             success=True if grasped else None)
+        index = writer.append(episode)
+    except Exception as exc:     # ein Schreibfehler darf die Reihe nicht stoppen
+        print("   DAgger: NICHT geschrieben (%s)" % exc)
+        return {"geschrieben": False, "grund": str(exc)}
+    print("   DAgger: Episode %d (Policy %d + Experte %d Takte, Abstand zur Idealbahn median "
+          "%.1f / max %.1f mm)%s" % (index, info["policy_steps"], info["expert_steps"],
+                                     info["label_offset_mm_median"], info["label_offset_mm_max"],
+                                     "" if grasped else " -- Experte hat nicht gegriffen"))
+    return dict(info, geschrieben=True, index=int(index), ordner=str(writer.root))
 
 
 def build_workspace(table_z, info, robot, robot_info, args, known=None, table_clearance=None,
@@ -1000,6 +1156,22 @@ def parse_args():
                              "ueber dem Tisch), 'objekt' = Stopp %.0f mm ueber der Objektoberkante, "
                              "ohne Kontakt (Default %%(default)s)"
                              % (1e3 * config.TABLE_MIN_CLEARANCE_M, 1e3 * config.PROBE_GAP_M))
+    parser.add_argument("--pick-quelle", dest="pick_quelle", choices=("steuerung", "m1"),
+                        default="steuerung",
+                        help="mit --lage-bekannt: woher PICK kommt. 'steuerung' = geteachter Punkt "
+                             "(bzw. vom Experten nachgefuehrt), 'm1' = vor jeder Fahrt aus der "
+                             "Objekterkennung der Gruppe (bc/lokalisierung.py): Arm an die "
+                             "Fotostellung, M1 lokalisiert, PICK wird gesetzt (Sicherung wie "
+                             "Touch-up). Default %(default)s")
+    parser.add_argument("--foto-punkt", dest="foto_punkt", default=config.LOCALIZE_POINT,
+                        metavar="PUNKT",
+                        help="mit --pick-quelle m1: Steuerungspunkt, an dem der Arm aus dem Bild "
+                             "der Draufsichtkamera ist (Default %(default)s, wie M2)")
+    parser.add_argument("--dagger", default=None, metavar="ORDNER",
+                        help="mit --lage-bekannt --probegriff objekt: jede Fahrt (Policy + "
+                             "Experte) mit Bildern als Episode im Aufnahmeformat nach ORDNER "
+                             "schreiben, Labels vom Planer (bc/dagger.py). Export wie jede "
+                             "Aufnahme, z. B. tools/export_variante.py --dagger-gewicht")
     parser.add_argument("--kamerapruefung", choices=("an", "warnen", "aus", "nur"), default="an",
                         help="vor der ersten Fahrt in der Startstellung die Kameras gegen die "
                              "Aufnahme des Modells pruefen (bc/camera_check.py): 'an' = bei "
@@ -1013,6 +1185,11 @@ def parse_args():
                      "andere Lage")
     if args.lage_bekannt and args.transport_geplant:
         parser.error("--lage-bekannt endet selbst mit dem Griff -- ohne --transport-geplant")
+    if args.dagger and not (args.lage_bekannt and args.probegriff == "objekt"):
+        parser.error("--dagger braucht --lage-bekannt --probegriff objekt (der Experte "
+                     "uebernimmt nach dem Probegriff)")
+    if args.pick_quelle != "steuerung" and not args.lage_bekannt:
+        parser.error("--pick-quelle gilt nur mit --lage-bekannt")
     if not args.hold and not args.checkpoint:
         parser.error("--checkpoint fehlt (oder --hold fuer den Verdrahtungstest)")
     args.replay_episodes = []
@@ -1229,7 +1406,7 @@ def main():
     # Experte nach dem Probegriff (bc/known_pose.py): normaler Tischabstand,
     # er greift ja am Objekt -- der erhoehte gilt nur fuer die Policy
     expert_workspace = None
-    if known is not None and args.probegriff == "objekt" and args.episodes > 1:
+    if known is not None and args.probegriff == "objekt" and (args.episodes > 1 or args.dagger):
         expert_workspace = build_workspace(table_z, info, robot, robot_info, args, known,
                                            None, progress=lambda *_: None)
     start = np.asarray(info["start_joints"]) if info.get("start_joints") else None
@@ -1280,6 +1457,35 @@ def main():
     reference_pick = None if known is None else known.pick.copy()
     pick_state = {}
 
+    # PICK aus der Lokalisierung der Gruppe (bc/lokalisierung.py)
+    localizer = None
+    if args.pick_quelle == "m1" and args.episodes:
+        try:
+            localizer = make_localizer()
+        except Exception as exc:
+            if hasattr(executor, "close"):
+                executor.close()
+            for cap in captures:
+                cap.stop()
+            robot.close()
+            raise SystemExit("--pick-quelle m1: %s" % exc)
+        print("PICK-Quelle: M1-Lokalisierung, Fotostellung '%s'" % args.foto_punkt)
+
+    # DAgger: Policy + Experte mit Bildern mitschreiben (bc/dagger.py)
+    dagger_writer, mitschrieb, dagger_meta = None, None, None
+    if args.dagger and args.episodes:
+        dagger_cams = list(info.get("cameras") or [c.name for c in cam_cfgs])
+        dagger_writer = dataset.DatasetWriter(Path(args.dagger), camera_names=dagger_cams)
+        mitschrieb = dagger.Mitschrieb(dagger_cams)
+        dagger_meta = dagger.recording_metadata(
+            info, robot_info, {c.name: c.backend for c in cam_cfgs if c.name in dagger_cams},
+            camera_settings=now_settings or None,
+            sequence_file=args.ablauf or (info.get("table_spec") or {}).get("sequence_file"),
+            extra={"checkpoint": None if args.hold else str(checkpoint),
+                   "pick_source": args.pick_quelle})
+        print("DAgger: Episoden nach %s (bisher %d)"
+              % (args.dagger, len(dagger_writer._index["episodes"])))
+
     results = []
     try:
         for ep in range(args.episodes):
@@ -1306,6 +1512,30 @@ def main():
                 ep_start_gripper = float(replay_arrays["observation.state"][0, 13])
                 print("Fahrt %d: Replay Episode %d (%d Takte)"
                       % (ep, replay_ep, len(replay_arrays["observation.state"])))
+            lokal = None
+            if localizer is not None:
+                try:
+                    lokal, known = localize_pick(robot, captures, localizer, known, args, info,
+                                                 rec_planner, pick_state, clock)
+                except Exception as exc:
+                    print("Fahrt %d: Lokalisierung gescheitert -- %s" % (ep, exc))
+                    if not pick_state.get("used_xy"):
+                        print("Beendet: ohne Lage keine Fahrt (Teil, Marker und Fotostellung "
+                              "pruefen).")
+                        break
+                    # Der Experte hat das Teil selbst abgelegt -- sein PICK ist bekannt
+                    # (z. B. ausserhalb des M1-Bereichs zwischen den Markern abgelegt)
+                    print("   weiter mit dem PICK des Experten (Teil von ihm abgelegt)")
+                    lokal = {"fehler": str(exc), "pick_quelle": "experte"}
+            ideal_q = None
+            if mitschrieb is not None:
+                mitschrieb.reset()
+                try:
+                    ideal_q = dagger.ideal_joints(robot, known.ideal, ep_start if ep_start is not None
+                                                  else robot.read_state().joints)
+                except Exception as exc:
+                    print("Hinweis: DAgger-Idealbahn nicht loesbar (%s) -- Fahrt ohne Mitschrieb"
+                          % exc)
             if ep_start_gripper is not None:
                 robot.gripper_command(ep_start_gripper > config.GRIPPER_THRESHOLD)
             if ep_start is not None and not args.no_start_move:
@@ -1319,7 +1549,8 @@ def main():
                               threaded_watchdog=not isinstance(clock, SimClock),
                               servo_rate_hz=args.servo_rate, execution=execution,
                               stop_at_grasp=args.transport_geplant or known is not None,
-                              on_tick=None if known is None else _deviation_text(known))
+                              on_tick=None if known is None else _deviation_text(known),
+                              mitschrieb=mitschrieb if ideal_q is not None else None)
             lage = None
             if known is not None:
                 lage = evaluate_known(log, known, robot, args.probegriff)
@@ -1348,7 +1579,7 @@ def main():
                 s = lage["summary"]
                 at = s["at_grasp"] or s["predicted"] or s["at_stop"] or {}
                 summary["grasp_error_m"] = at.get("xy_m")
-                summary["success"] = bool(expected_test_stop(log["stop_reason"])
+                summary["success"] = bool(expected_test_stop(log["stop_reason"], args.probegriff)
                                           and at.get("xy_m") is not None
                                           and at["xy_m"] <= config.KNOWN_POSE_SUCCESS_XY_M)
             predict = log["predict_s"][np.isfinite(log["predict_s"])] if len(log["predict_s"]) else np.array([])
@@ -1376,6 +1607,8 @@ def main():
                 summary["replay"] = dict(root=str(args.replay), episode=replay_ep, **cmp)
             if lage is not None:
                 summary["lage"] = lage["summary"]
+            if lokal is not None:
+                summary["lokalisierung"] = lokal
             results.append(summary)
             arrays_out = {k: v for k, v in log.items() if isinstance(v, np.ndarray)}
             if lage is not None:
@@ -1398,8 +1631,12 @@ def main():
                 print(known_pose.result_line(lage["summary"]))
                 expert, stop_here = None, False
                 if args.probegriff == "objekt":
-                    if not (expected_test_stop(log["stop_reason"])
-                            or log["stop_reason"] == "max_steps"):
+                    if str(log["stop_reason"]).startswith("arm steht"):
+                        # Not-Aus: nie automatisch weiterfahren, auch kein Experte
+                        retreat = ("keiner -- Arm steht (Not-Aus am Handbediengeraet?), "
+                                   "Anlage pruefen")
+                    elif not (expected_test_stop(log["stop_reason"], "objekt")
+                              or log["stop_reason"] == "max_steps"):
                         retreat = ("keiner -- Stopp nicht vom Test (%s), Arbeitsraum pruefen"
                                    % log["stop_reason"])
                     elif expert_workspace is None:
@@ -1407,9 +1644,13 @@ def main():
                                    "Spiel pruefen" % (1e3 * config.PROBE_GAP_M))
                     else:
                         back_to = ep_start if ep_start is not None else np.asarray(log["joints"][0])
-                        expert = expert_after_probe(robot, expert_workspace, known, reference_pick,
-                                                    back_to, clock, args, rec_planner, rng,
-                                                    pick_state)
+                        if probe_violation(log["stop_reason"]):
+                            print("   Violation-Stopp an der Probegriff-Ebene: Experte hebt "
+                                  "zuerst senkrecht an")
+                        expert = expert_after_probe(
+                            robot, expert_workspace, known, reference_pick, back_to, clock, args,
+                            rec_planner, rng, pick_state, captures=captures,
+                            mitschrieb=mitschrieb if ideal_q is not None else None)
                         print(known_pose.correction_line(expert["correction"]))
                         retreat = expert["result"]
                         summary["experte"] = {k: expert.get(k) for k in
@@ -1432,6 +1673,10 @@ def main():
                            known_pose.csv_row(ep, log["stop_reason"], lage["summary"],
                                               None if expert is None else expert["correction"],
                                               retreat))
+                if dagger_writer is not None and ideal_q is not None:
+                    summary["dagger"] = write_dagger_episode(
+                        dagger_writer, mitschrieb, known, ideal_q, expert, log, lage,
+                        dagger_meta, ep, lokal)
                 if stop_here:
                     print("Beendet: Experte konnte nicht umlegen -- Objekt und PICK pruefen.")
                     break

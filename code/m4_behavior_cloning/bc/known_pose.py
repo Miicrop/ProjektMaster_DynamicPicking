@@ -60,6 +60,9 @@ class KnownPose:
     #: Tischpunkte (Posen) und Sperrzonen -- fuer neue Lagen beim Umlegen
     region: list = None
     keepouts: list = None
+    #: Idealbahn bis zum Greifen (bc/trajectory.IdealTrajectory, gekuerzt) --
+    #: Quelle der DAgger-Labels (bc/dagger.py); None bei aelteren Aufrufern
+    ideal: object = None
 
     @property
     def pick_yaw_deg(self):
@@ -75,13 +78,30 @@ class KnownPose:
                    self.pick_yaw_deg, self.source))
 
 
-def approach_path(ideal):
-    """TCP-Positionen der Idealbahn bis zum ersten Schliessen des Greifers."""
+def approach_end(ideal, tail=0):
+    """Index hinter dem ersten Schliessen der Idealbahn (+ ``tail`` Takte)."""
     poses = np.asarray(ideal.poses_quat, dtype=float)
     grip = np.asarray(ideal.gripper, dtype=float) > config.GRIPPER_THRESHOLD
     closing = np.flatnonzero(grip[1:] & ~grip[:-1])
     end = int(closing[0]) + 2 if closing.size else len(poses)
-    return poses[:end, :3]
+    return min(len(poses), end + int(tail))
+
+
+def approach_path(ideal):
+    """TCP-Positionen der Idealbahn bis zum ersten Schliessen des Greifers."""
+    return np.asarray(ideal.poses_quat, dtype=float)[:approach_end(ideal), :3]
+
+
+def approach_ideal(ideal, tail=config.DAGGER_TAIL_STEPS):
+    """Idealbahn bis kurz nach dem Schliessen (Kopie, fuer DAgger-Labels)."""
+    from dataclasses import replace
+
+    end = approach_end(ideal, tail)
+    return replace(ideal, poses_quat=np.asarray(ideal.poses_quat)[:end],
+                   gripper=np.asarray(ideal.gripper)[:end],
+                   dwell_mask=np.asarray(ideal.dwell_mask)[:end],
+                   dist_to_anchor=np.asarray(ideal.dist_to_anchor)[:end],
+                   joints=None if ideal.joints is None else np.asarray(ideal.joints)[:end])
 
 
 def from_resolved(resolved, ideal, source="Steuerung"):
@@ -94,7 +114,8 @@ def from_resolved(resolved, ideal, source="Steuerung"):
     pick = np.asarray(resolved.points["PICK"]["pose_quat"], dtype=float)
     region = [np.asarray(p["pose_quat"], dtype=float) for p in resolved.table_points.values()]
     return KnownPose(pick, resolved.table, approach_path(ideal), source,
-                     region=region, keepouts=list(resolved.keepouts or []))
+                     region=region, keepouts=list(resolved.keepouts or []),
+                     ideal=approach_ideal(ideal))
 
 
 def load(sequence_path, robot, planner=None):
@@ -236,7 +257,11 @@ def correction(known, stop_pose):
     stop_pose = np.asarray(stop_pose, dtype=float)
     grasp, flipped = flip_closer(known.pick, stop_pose, known.table)
     above = grasp.copy()
-    above[2] = stop_pose[2]          # gleiche Hoehe wie beim Stopp: nur xy und Drehung
+    # gleiche Hoehe wie beim Stopp: nur xy und Drehung -- aber nie unter der
+    # Probehoehe (Violation-Stopp, 16.11.: der Arm schwang 3-4 mm darunter,
+    # waagrecht korrigiert haette eine Backe das Teil schieben koennen)
+    probe_z = known.pick[2] + config.PROBE_OBJECT_TOP_ABOVE_PICK_M + config.PROBE_GAP_M
+    above[2] = max(stop_pose[2], probe_z)
     info = {"dx_m": float(grasp[0] - stop_pose[0]), "dy_m": float(grasp[1] - stop_pose[1]),
             "xy_m": float(np.hypot(grasp[0] - stop_pose[0], grasp[1] - stop_pose[1])),
             "yaw_deg": -_yaw_err(stop_pose, known),
@@ -306,8 +331,17 @@ def expert_waypoints(stop_pose, stop_joints, above, grasp, place, start_joints, 
 
     place_down = np.asarray(place, dtype=float).copy()
     place_down[2] += config.PUT_BACK_PLACE_OFFSET_M
-    return [
-        Waypoint(stop_pose, gripper_closed=bool(gripper_closed), name="STOPP", joints=stop_joints),
+    stop_pose = np.asarray(stop_pose, dtype=float)
+    above = np.asarray(above, dtype=float)
+    start = [Waypoint(stop_pose, gripper_closed=bool(gripper_closed), name="STOPP",
+                      joints=stop_joints)]
+    if above[2] > stop_pose[2] + 0.0005:
+        # erst senkrecht auf die Korrekturhoehe, dann waagrecht (Violation-Stopp)
+        free = stop_pose.copy()
+        free[2] = above[2]
+        start.append(Waypoint(free, gripper_closed=False, name="FREI", motion=MOTION_LIN,
+                              approach=True))
+    return start + [
         Waypoint(above, gripper_closed=False, name="KORREKTUR", motion=MOTION_LIN, approach=True),
         Waypoint(grasp, gripper_closed=True, name="GRIFF", motion=MOTION_LIN, approach=True),
         Waypoint(up(grasp), gripper_closed=True, name="ANHEBEN", motion=MOTION_LIN,

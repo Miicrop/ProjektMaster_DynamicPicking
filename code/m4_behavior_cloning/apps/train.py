@@ -88,6 +88,11 @@ def parse_args(argv=None):
     tr.add_argument("--eval-every", type=int, default=2000)
     tr.add_argument("--save-every", type=int, default=10000)
     tr.add_argument("--resume", action="store_true", help="am letzten Checkpoint in --out fortsetzen")
+    tr.add_argument("--init-from", dest="init_from", default=None, metavar="POLICY",
+                    help="Gewichte einer fertigen Policy als Startpunkt (z. B. "
+                         "checkpoints/var_C2/policy) -- Nachtrainieren mit DAgger-Daten. "
+                         "Gleiche Kameras/Architektur noetig; Optimierer und Schritt beginnen neu, "
+                         "Normierung aus dem neuen Datensatz")
     tr.add_argument("--licht-augment", action="store_true",
                     help="Helligkeit/Kontrast/Saettigung/Farbton der Trainingsbilder zufaellig "
                          "variieren (LICHT_AUGMENT); Geometrie und Validierung unveraendert")
@@ -314,6 +319,17 @@ def main(argv=None):
         raise SystemExit("--resume: kein Checkpoint unter %s/checkpoints" % out)
 
     policy = DiffusionPolicy(policy_cfg)
+    if args.init_from and resume_from is None:
+        from safetensors.torch import load_file
+
+        weights = Path(args.init_from) / "model.safetensors"
+        if not weights.is_file():
+            raise SystemExit("--init-from: %s fehlt" % weights)
+        missing, unexpected = policy.load_state_dict(load_file(str(weights)), strict=False)
+        if missing or unexpected:
+            raise SystemExit("--init-from: Architektur passt nicht (fehlend %d, ueberzaehlig %d: %s)"
+                             % (len(missing), len(unexpected), (missing or unexpected)[:3]))
+        print("Startgewichte aus %s" % weights)
     preprocessor, postprocessor = make_pre_post_processors(policy_cfg, dataset_stats=meta.stats)
     policy.to(device)
     if args.compile:
