@@ -67,6 +67,30 @@ def reversed_plan(plan):
     )
 
 
+def placement_plans(forward, factor=config.PROBE_SPEED_FACTOR):
+    """Langsam vom Start an den Greifpunkt und zurueck, Greifer offen.
+
+    Fuer den selbst gesuchten ersten PICK (Anwender 2026-11-09): Der Arm faehrt
+    die ideale Bahn nur bis zum Schliessen des Greifers, dort wird das Teil von
+    Hand eingelegt. Rueckgabe ``(hin, zurueck)``, Geometrie wie die Aufnahme.
+    """
+    closed = np.flatnonzero(np.asarray(forward.gripper) >= 0.5 * config.GRIPPER_CLOSED)
+    if closed.size == 0:
+        raise ValueError("Die Bahn schliesst den Greifer nie -- kein Greifpunkt zum Einlegen")
+    end = int(closed[0]) + 1
+    part = TrajectoryPlan(
+        joints_ideal=forward.joints_ideal[:end],
+        joints_noisy=forward.joints_ideal[:end],
+        poses_ideal=forward.poses_ideal[:end],
+        poses_noisy=forward.poses_ideal[:end],
+        gripper=np.full(end, config.GRIPPER_OPEN),
+        dwell_mask=np.asarray(forward.dwell_mask)[:end],
+        rate_hz=forward.rate_hz,
+    )
+    hin = slowed_plan(part, factor)
+    return hin, reversed_plan(hin)
+
+
 def probe_plans(forward, back=None, factor=config.PROBE_SPEED_FACTOR):
     """(hin, zurueck) der Probefahrt.
 

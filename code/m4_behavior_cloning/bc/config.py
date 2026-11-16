@@ -519,6 +519,23 @@ AUTO_VARIANT_SHIFT_M = 0.015
 #: ... und so weit gedreht (halb bis ganz, Grad) abgelegt -- jede Fahrt ist eine
 #: eigene Lage, die Gruppe bleibt an ihrer Stelle.
 AUTO_VARIANT_YAW_DEG = 15.0
+#: Kameraschutz (Anlage 2026-11-09, ep_00208-210): Steht der Greifer am Rand so
+#: gedreht, dass die Wrist-Kamera nach aussen zeigt, ragt sie ueber den Tisch
+#: hinaus -- in Feld 1/5 Richtung Roboter, in Feld 3/1 Richtung Kamerastange.
+#: Diese Felder (Spalte/Zeile wie im Tooltip der Tischabdeckung) nehmen deshalb
+#: nur Drehungen, bei denen die Kamera nicht weiter hinausragt als erlaubt.
+CAMERA_GUARD_FIELDS = ((1, 5), (3, 1))
+#: Lage der Kamera im Werkzeug-KS (x, y) in m. Richtung +y aus den Posen von
+#: ep_00208-210 abgeleitet (dort zeigte sie nach aussen). Abstand laut Anwender
+#: 2-4 cm (2026-11-10), hier die obere Grenze.
+CAMERA_OFFSET_TOOL_M = (0.0, 0.04)
+#: So weit (m) darf der Kamerapunkt ueber die Huelle der Tischpunkte hinausragen.
+#: Mit 4 cm / 2 cm waere am 2026-11-09 keine Pose gesperrt worden (alle Laeufe
+#: ohne Kollision, schlimmste ep_00209 mit 6 mm) -- gesperrt wird nur, was
+#: deutlich weiter hinausgeht als bisher gefahren.
+CAMERA_EDGE_ALLOWANCE_M = 0.02
+#: Versuche je Feld, eine Drehung ohne Ueberstand zu finden
+CAMERA_GUARD_TURN_TRIES = 24
 
 #: Berechnete Punkte (``"above"``/``"dz"`` in der Ablaufdatei, Festlegung
 #: Anwender 2026-10-26: je Lage nur PICK teachen): die IK fuer den Punkt

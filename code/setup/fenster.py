@@ -8,6 +8,7 @@ macht kern.py in einem eigenen Thread; das Fenster zeigt das Log live.
 import os
 import queue
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
@@ -64,6 +65,7 @@ class SetupFenster(object):
         self._oben()
         self._liste()
         self._knoepfe()
+        self._fortschritt()
         self._log()
         self.w.after(100, self._queue_leeren)
         self.neu_pruefen()
@@ -187,6 +189,46 @@ class SetupFenster(object):
         b = ttk.Button(rechts, text="Umgebung loeschen", command=self.umgebung_loeschen)
         b.pack(side="right", padx=(0, 12))
         self.b_aktion.append(b)
+
+    def _fortschritt(self):
+        f = ttk.Frame(self.w, padding=(10, 2, 10, 4))
+        f.pack(fill="x")
+        f.columnconfigure(0, weight=1)
+        self.v_prozent = tk.DoubleVar(value=0.0)
+        ttk.Progressbar(f, variable=self.v_prozent, maximum=100.0, mode="determinate"
+                        ).grid(row=0, column=0, sticky="ew")
+        self.l_prozent = ttk.Label(f, text="", width=6, anchor="e")
+        self.l_prozent.grid(row=0, column=1, padx=(6, 0))
+        self.l_schritt = ttk.Label(f, text="", foreground="#6b6b6b")
+        self.l_schritt.grid(row=1, column=0, columnspan=2, sticky="w")
+        Tooltip(self.l_prozent, "Nach Downloadgroesse gewichtet: PyTorch (2,5 GB) zaehlt "
+                                "viel mehr als ein 10-MB-Paket. Innerhalb eines Schritts "
+                                "steht der Balken, bis der Schritt fertig ist.")
+        self._start = None
+        self._schritt_text = ""
+        self._phase = ""
+
+    def _zeige_fortschritt(self):
+        if self._start is None:
+            return
+        sek = int(time.time() - self._start)
+        teile = [self._schritt_text, "%d:%02d min" % (sek // 60, sek % 60)]
+        if self._phase:
+            teile.insert(1, self._phase)
+        self.l_schritt.configure(text="   ".join(t for t in teile if t))
+
+    def _pip_phase(self, zeile):
+        """pip-Ausgabe -> kurze Angabe, woran der laufende Schritt gerade ist."""
+        z = zeile.strip()
+        for anfang, name in (("Collecting ", "sammelt"), ("Downloading ", "laedt"),
+                             ("Using cached ", "aus Cache"), ("Processing ", "verarbeitet")):
+            if z.startswith(anfang):
+                ding = z[len(anfang):].split(" ")[0].rsplit("/", 1)[-1]
+                groesse = z[z.rfind("("):] if z.endswith(")") else ""
+                self._phase = " ".join(t for t in (name, ding[:60], groesse) if t)
+                return
+        if z.startswith("Installing collected packages"):
+            self._phase = "installiert (entpacken, kann dauern)"
 
     def _log(self):
         f = ttk.Frame(self.w, padding=(10, 0, 10, 10))
@@ -344,7 +386,13 @@ class SetupFenster(object):
 
     def _ausfuehren(self, schritte):
         self._sperren(True)
-        self.lauf = kern.Lauf(lambda text: self.q.put(("log", text)))
+        self._start = time.time()
+        self._phase = ""
+        self.v_prozent.set(0.0)
+        self.l_prozent.configure(text="0 %")
+        self.lauf = kern.Lauf(lambda text: self.q.put(("log", text)),
+                              fortschritt=lambda anteil, text: self.q.put(("fortschritt", (anteil, text))),
+                              build=self.ziel.build)
         lauf = self.lauf
 
         def arbeit():
@@ -375,10 +423,21 @@ class SetupFenster(object):
                 art, wert = self.q.get_nowait()
                 if art == "log":
                     self._schreibe(wert)
+                    self._pip_phase(wert)
+                elif art == "fortschritt":
+                    anteil, text = wert
+                    self.v_prozent.set(100.0 * anteil)
+                    self.l_prozent.configure(text="%d %%" % int(100 * anteil))
+                    self._schritt_text, self._phase = text, ""
                 elif art == "befunde":
                     self._zeige_befunde(*wert)
                 elif art == "fertig":
                     ok, lauf = wert
+                    self._zeige_fortschritt()
+                    self._start = None
+                    if not ok:
+                        self.l_schritt.configure(text="Abgebrochen / mit Fehlern -- "
+                                                 + self.l_schritt.cget("text"))
                     self.test_ergebnisse.update(lauf.ergebnisse)
                     self.lauf = None
                     self._sperren(False)
@@ -389,6 +448,7 @@ class SetupFenster(object):
                         messagebox.showwarning("M4 Setup", "Mit Fehlern beendet.\n\nLog: %s" % lauf.log_datei)
         except queue.Empty:
             pass
+        self._zeige_fortschritt()
         self.w.after(100, self._queue_leeren)
 
 

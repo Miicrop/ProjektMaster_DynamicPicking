@@ -754,15 +754,50 @@ def umgebung_loeschen(ziel, log):
 # Ausfuehren
 # --------------------------------------------------------------------------
 
+#: Gewicht eines Schritts ohne Download (venv anlegen, kopieren, Tests ...),
+#: in "MB-Aequivalenten" wie die Groessenangaben der Komponenten.
+GEWICHT_OHNE_DOWNLOAD = 30.0
+
+
+def groesse_mb(text, build="gpu"):
+    """'2,5 GB / 250 MB' -> 2560 (GPU) bzw. 250 (CPU); '40 MB' -> 40; sonst None.
+
+    Zwei Angaben mit '/' stehen fuer GPU / CPU (nur bei torch)."""
+    teile = [t for t in (text or "").split("/") if t.strip()]
+    if not teile:
+        return None
+    teil = teile[1] if (build == "cpu" and len(teile) > 1) else teile[0]
+    m = re.search(r"([\d.,]+)\s*(GB|MB)", teil, re.I)
+    if not m:
+        return None
+    wert = float(m.group(1).replace(",", "."))
+    return wert * 1024 if m.group(2).upper() == "GB" else wert
+
+
+def schritt_gewicht(schritt, build="gpu"):
+    """Anteil eines Schritts am Gesamtbalken: pip-Installationen nach Downloadgroesse
+    der Komponente (torch zaehlt viel mehr als pygame), alles andere pauschal."""
+    cmd = schritt.cmd or []
+    if "install" in cmd and "uninstall" not in cmd and schritt.kid in ALLE:
+        mb = groesse_mb(komponente(schritt.kid).get("groesse", ""), build)
+        if mb:
+            return max(mb, GEWICHT_OHNE_DOWNLOAD)
+    return GEWICHT_OHNE_DOWNLOAD
+
+
 class Lauf(object):
     """Fuehrt Schritte nacheinander aus und schreibt alles in eine Logdatei.
 
     ausgabe(text) bekommt jede Zeile (Fenster oder Konsole). abbrechen() ist
-    aus einem anderen Thread erlaubt.
+    aus einem anderen Thread erlaubt. fortschritt(anteil, text) -- optional --
+    bekommt vor jedem Schritt den erledigten Anteil (0..1, nach Downloadgroesse
+    gewichtet) und den Schritttext, am Ende (1.0, "Fertig").
     """
 
-    def __init__(self, ausgabe=print):
+    def __init__(self, ausgabe=print, fortschritt=None, build="gpu"):
         self.ausgabe = ausgabe
+        self.fortschritt = fortschritt
+        self.build = build
         self._abbruch = False
         self._prozess = None
         LOG_DIR.mkdir(exist_ok=True)
@@ -787,11 +822,16 @@ class Lauf(object):
     def __call__(self, schritte):
         """True, wenn alle Pflichtschritte geklappt haben."""
         alles_ok = True
+        gewichte = [schritt_gewicht(s, self.build) for s in schritte]
+        summe = sum(gewichte) or 1.0
+        erledigt = 0.0
         try:
             for i, s in enumerate(schritte, 1):
                 if self._abbruch:
                     self.zeile("Abgebrochen.")
                     return False
+                self._melde(erledigt / summe, "[%d/%d] %s" % (i, len(schritte), s.text))
+                erledigt += gewichte[i - 1]
                 self.zeile("")
                 self.zeile("[%d/%d] %s" % (i, len(schritte), s.text))
                 self.zeile("> " + s.als_text())
@@ -808,9 +848,18 @@ class Lauf(object):
                     self.zeile("Warnung: Schritt mit Fehlern beendet, es geht weiter.")
             self.zeile("")
             self.zeile("Fertig. Log: %s" % self.log_datei)
+            self._melde(1.0, "Fertig")
             return alles_ok
         finally:
             self._log.close()
+
+    def _melde(self, anteil, text):
+        if self.fortschritt is None:
+            return
+        try:
+            self.fortschritt(anteil, text)
+        except Exception:              # Anzeige darf den Lauf nie stoppen
+            pass
 
     def _ein_schritt(self, s):
         if s.funktion is not None:

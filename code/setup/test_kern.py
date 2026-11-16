@@ -277,6 +277,34 @@ class TestLauf(MitTempZiel):
             self.assertEqual(lauf.ergebnisse["selbsttest"].status, kern.WARNUNG)
 
 
+class TestFortschritt(MitTempZiel):
+    def test_groesse_mb(self):
+        self.assertEqual(kern.groesse_mb("2,5 GB / 250 MB"), 2560)
+        self.assertEqual(kern.groesse_mb("2,5 GB / 250 MB", "cpu"), 250)
+        self.assertEqual(kern.groesse_mb("40 MB"), 40)
+        self.assertIsNone(kern.groesse_mb(""))
+
+    def test_torch_zaehlt_mehr_als_pygame(self):
+        torch = kern.Schritt("torch", "t", ["python", "-m", "pip", "install", "torch"])
+        pygame = kern.Schritt("gamepad", "g", ["python", "-m", "pip", "install", "pygame"])
+        weg = kern.Schritt("torch", "t", ["python", "-m", "pip", "uninstall", "-y", "torch"])
+        self.assertGreater(kern.schritt_gewicht(torch), 10 * kern.schritt_gewicht(pygame))
+        self.assertEqual(kern.schritt_gewicht(weg), kern.GEWICHT_OHNE_DOWNLOAD)
+
+    def test_meldet_steigend_bis_100(self):
+        with mock.patch.object(kern, "LOG_DIR", Path(self.tmp.name) / "logs"):
+            meldungen = []
+            lauf = kern.Lauf(lambda t: None, fortschritt=lambda a, t: meldungen.append((a, t)))
+            s = [kern.Schritt("a", "eins", [sys.executable, "-c", "pass"]),
+                 kern.Schritt("b", "zwei", [sys.executable, "-c", "pass"])]
+            self.assertTrue(lauf(s))
+            anteile = [a for a, _ in meldungen]
+            self.assertEqual(anteile, sorted(anteile))
+            self.assertEqual(anteile[0], 0.0)
+            self.assertEqual(meldungen[-1], (1.0, "Fertig"))
+            self.assertIn("[2/2] zwei", [t for _, t in meldungen])
+
+
 class TestCheckliste(MitTempZiel):
     def test_enthaelt_admin_punkte(self):
         b = self.befunde(nvidia=kern.ADMIN, vcredist=kern.OK, galaxy_sdk=kern.ADMIN)

@@ -212,6 +212,16 @@ class ImageView(QLabel):
         self.double_clicked.emit(min(1.0, max(0.0, x)))
 
 
+#: Bekannte, harmlose Warnungen fremder Werkzeuge -- im Log normal statt
+#: orange, damit Orange weiter "hinschauen" heisst. Grossgeschrieben.
+HARMLESS_WARNINGS = (
+    # SVT-AV1 (Videokodierung beim Export): lerobot verlangt Preset 12, die
+    # mitgelieferte SVT-Version kennt nur bis 10 und nimmt das schnellste,
+    # das sie hat. Videoqualitaet regelt der CRF, nicht das Preset.
+    "SVT[WARN]: PRESET M",
+)
+
+
 class LogView(QPlainTextEdit):
     """Laufende Ausgabe -- Logsaetze der GUI und Zeilen der Unterprozesse."""
 
@@ -236,6 +246,8 @@ class LogView(QPlainTextEdit):
         upper = text.upper()
         if "FAIL" in upper or "FEHLER" in upper or "TRACEBACK" in upper:
             level = logging.ERROR
+        elif any(harmless in upper for harmless in HARMLESS_WARNINGS):
+            level = logging.INFO
         elif upper.startswith("!!") or "WARN" in upper:
             level = logging.WARNING
         else:

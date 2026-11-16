@@ -146,7 +146,8 @@ def record_argv(out, robot_kind="sim", episodes=1, sequence=None,
                 execution=None, put_back=True, probe=True, teach_after=False,
                 lagen=1, drehung=None, stop_file=None, regrip=None, margin=None,
                 variants=True, variant_shift=None, variant_yaw=None,
-                coverage_roots=None, put_back_speed=None, final_new=False):
+                coverage_roots=None, put_back_speed=None, final_new=False,
+                start_lage="geteacht", camera_guard=True):
     """Kommandozeile fuer apps/record.py (ohne das Python-Programm)."""
     if not out:
         raise ValueError("Kein Zielordner angegeben.")
@@ -196,6 +197,10 @@ def record_argv(out, robot_kind="sim", episodes=1, sequence=None,
     # ohne sie bleibt record.py beim geteachten PICK
     if sequence and put_back and final_new:
         argv += ["--schluss-lage", "neu"]
+    if sequence and put_back and start_lage == "auto":
+        argv += ["--start-lage", "auto"]
+    if not camera_guard:
+        argv.append("--ohne-kameraschutz")
     # Varianten (Anwender 2026-11-01) -- in record.py Standard, sobald
     # Tischpunkte da sind; nur Abschalten und Abweichungen anhaengen
     if sequence and put_back:
@@ -424,6 +429,55 @@ PROBE_ANSWERS = {"weiter": "j", "abbrechen": "n"}
 def probe_question(line):
     """Bittet diese Zeile nach der Probefahrt um Freigabe?"""
     return bool(_PROBE.match((line or "").strip()))
+
+
+#: Selbst gesuchter erster PICK (record.run_placement); Antworten wie PROBE_ANSWERS
+_PLACE = re.compile(r"^LAGEVORSCHLAG\s+x\s+(?P<x>-?\d+)\s+y\s+(?P<y>-?\d+)\s+"
+                    r"Drehung\s+(?P<yaw>-?\d+)")
+_INSERT = re.compile(r"^EINLEGEN\s+bereit")
+#: Grund eines vorzeitigen Endes (record.end_run)
+_RUN_END = re.compile(r"^LAUF_ENDE:\s*(?P<text>.+?)\s*$")
+
+
+def place_question(line):
+    """Lagevorschlag von record.py: (x mm, y mm, Drehung Grad), sonst None."""
+    match = _PLACE.match((line or "").strip())
+    return (int(match["x"]), int(match["y"]), int(match["yaw"])) if match else None
+
+
+def insert_question(line):
+    """Steht der Arm offen an der Lage und wartet auf das eingelegte Teil?"""
+    return bool(_INSERT.match((line or "").strip()))
+
+
+def run_end_reason(line):
+    """Grund aus der Zeile "LAUF_ENDE: ...", sonst None."""
+    match = _RUN_END.match((line or "").strip())
+    return match["text"] if match else None
+
+
+#: Einstellungen der letzten Aufnahme (lokal, nicht im Repository)
+RUN_SETTINGS_FILE = "einstellungen/aufnahme.local.json"
+
+
+def load_run_settings(workdir):
+    """Gemerkte Einstellungen; leer, wenn es keine gibt oder die Datei kaputt ist."""
+    try:
+        data = json.loads((Path(workdir) / RUN_SETTINGS_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_run_settings(workdir, values):
+    """Einstellungen merken. Rueckgabe False, wenn nicht schreibbar."""
+    path = Path(workdir) / RUN_SETTINGS_FILE
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(values, indent=2, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        return False
+    return True
 
 
 #: "  Takt   90 von 129  Versatz   0 ms  ausserhalb Budget 0"

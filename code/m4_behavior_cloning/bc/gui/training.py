@@ -26,6 +26,7 @@ Abweichungen von ``bc/config.py`` werden benannt statt versteckt.
 
 import json
 import re
+import time
 from pathlib import Path
 
 from .. import config
@@ -648,6 +649,89 @@ class TrainingProgress(object):
         if self.gpu_mem_gb is not None:
             bits.append("belegt %.1f GB" % self.gpu_mem_gb)
         return "  ·  ".join(bits)
+
+
+#: "Episoden fuer den Export: 30 (davon unbewertet: 2)" -- bc.lerobot_io.format_scan
+_EXPORT_TOTAL = re.compile(r"^Episoden fuer den Export:\s+(?P<total>\d+)")
+#: "  Episode 3/30 exportiert (block_a, 312 Schritte)"
+_EXPORT_DONE = re.compile(r"^Episode\s+(?P<k>\d+)/(?P<n>\d+)\s+exportiert")
+#: "    Episode 3/30: 50 %" -- Zwischenstand innerhalb einer Episode
+_EXPORT_PART = re.compile(r"^Episode\s+(?P<k>\d+)/(?P<n>\d+):\s+(?P<pct>\d+)\s*%")
+_EXPORT_FINAL = "Datensatz wird abgeschlossen"
+
+
+class ExportProgress(object):
+    """Liest die Ausgabe von apps/export.py mit (wie TrainingProgress).
+
+    Der Balken zaehlt Episoden, mit Viertel-Schritten innerhalb einer
+    Episode; das Abschliessen des Datensatzes (Metadaten, letzte Videos)
+    haelt ihn bei 99 %, die 100 % setzt erst das Prozessende.
+    """
+
+    def __init__(self, clock=time.monotonic):
+        self._clock = clock
+        self._started = clock()
+        self.total = None
+        self.done = 0.0          # Episoden, gebrochen (2.5 = Mitte der dritten)
+        self.finishing = False
+
+    def feed(self, line):
+        line = (line or "").strip()
+        if not line:
+            return False
+        match = _EXPORT_TOTAL.match(line)
+        if match:
+            self.total = int(match.group("total"))
+            return True
+        match = _EXPORT_DONE.match(line)
+        if match:
+            self.total = int(match.group("n"))
+            self.done = float(match.group("k"))
+            return True
+        match = _EXPORT_PART.match(line)
+        if match:
+            self.total = int(match.group("n"))
+            self.done = int(match.group("k")) - 1 + int(match.group("pct")) / 100.0
+            return True
+        if line.startswith(_EXPORT_FINAL):
+            self.finishing = True
+            return True
+        return False
+
+    @property
+    def percent(self):
+        if self.finishing:
+            return 99
+        if not self.total:
+            return None
+        return max(0, min(99, int(100.0 * self.done / self.total)))
+
+    @property
+    def eta_min(self):
+        """Restzeit linear hochgerechnet; None, solange zu wenig gelaufen ist."""
+        if not self.total or self.done < 0.25 or self.finishing:
+            return None
+        elapsed = self._clock() - self._started
+        return elapsed * (self.total - self.done) / self.done / 60.0
+
+    def headline(self):
+        if self.finishing:
+            return "Export: Datensatz wird abgeschlossen"
+        if not self.total:
+            return "Export läuft — Quellen werden geprüft"
+        bits = ["Export: Episode %d von %d" % (min(self.total, int(self.done) + 1), self.total)]
+        eta = self.eta_min
+        if eta is not None:
+            bits.append("Rest ~%d min" % max(1, int(round(eta))) if eta >= 1 else "Rest < 1 min")
+        return "  ·  ".join(bits)
+
+    def dataset_line(self):
+        if not self.total:
+            return ""
+        return "%d von %d Episoden kodiert" % (int(self.done), self.total)
+
+    def hardware_line(self):
+        return ""
 
 
 def _maybe_float(text):

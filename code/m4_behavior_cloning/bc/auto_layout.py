@@ -184,7 +184,8 @@ class Coverage(object):
 
     def __init__(self, region_points, base_yaw_deg, keepouts=(), margin=config.AUTO_EDGE_MARGIN_M,
                  yaw_range_deg=config.AUTO_YAW_RANGE_DEG, cell_size=config.AUTO_CELL_SIZE_M,
-                 yaw_bins=config.AUTO_YAW_BINS, rng=None):
+                 yaw_bins=config.AUTO_YAW_BINS, rng=None, camera_guard=False):
+        self.camera_guard = bool(camera_guard)
         self.hull = convex_hull([p[:2] for p in region_points])
         if len(self.hull) < 3:
             raise ValueError("Automatische Lagen brauchen mindestens drei Tischpunkte als Bereich")
@@ -223,6 +224,24 @@ class Coverage(object):
     def inner_distance(self, xy):
         """Abstand zum naechsten Rand der Huelle (negativ = ausserhalb)."""
         return inner_distance(self.hull, xy)
+
+    # -- Kameraschutz (config.CAMERA_GUARD_FIELDS) ------------------------------
+    def field_of(self, xy):
+        """Feld (Spalte, Zeile) ab 1 wie im Tooltip -- Lagen am Rand ins naechste."""
+        i = int(np.floor((float(xy[0]) - self.x_lo) / self.cw))
+        j = int(np.floor((float(xy[1]) - self.y_lo) / self.ch))
+        return min(self.nx - 1, max(0, i)) + 1, min(self.ny - 1, max(0, j)) + 1
+
+    def camera_overhang(self, pose):
+        """So weit (m) ragt der Kamerapunkt dieser Greifpose ueber die Huelle."""
+        offset = np.array([config.CAMERA_OFFSET_TOOL_M[0], config.CAMERA_OFFSET_TOOL_M[1], 0.0])
+        point = np.asarray(pose[:2], dtype=float) + geometry.quat_rotate(pose[3:], offset)[:2]
+        return max(0.0, -inner_distance(self.hull, point))
+
+    def camera_blocked(self, pose):
+        """Kaeme die Kamera an dieser Pose einem Hindernis am Rand zu nah?"""
+        return (self.camera_guard and self.field_of(pose[:2]) in config.CAMERA_GUARD_FIELDS
+                and self.camera_overhang(pose) > config.CAMERA_EDGE_ALLOWANCE_M)
 
     def _cell_points(self, i, j, n=5):
         fx = (np.arange(n) + 0.5) / n
@@ -303,6 +322,15 @@ class Coverage(object):
         k = cands[int(self.rng.integers(len(cands)))]
         width = 2 * self.yaw_range / self.yaw_bins
         return float(-self.yaw_range + (k + self.rng.uniform()) * width)
+
+    def any_turn(self):
+        """Drehung gegen die Bezugslage (Grad), gleichverteilt im ganzen Bereich."""
+        return float(self.rng.uniform(-self.yaw_range, self.yaw_range)) if self.yaw_range > 0 else 0.0
+
+    def turn_candidates(self):
+        """Drehungen zum Durchprobieren: erst die seltensten Abschnitte, dann alle."""
+        tries = int(config.CAMERA_GUARD_TURN_TRIES)
+        return [self.next_turn() if k < tries // 2 else self.any_turn() for k in range(tries)]
 
 
 def episode_metas(roots):

@@ -188,6 +188,19 @@ def apply_touch_up(robot, plan, backup_dir, now=None):
     return backup, record
 
 
+def update_backup_target(backup, joints):
+    """Neuen Sollstand in eine Sicherung eintragen (mehrere Schreibvorgaenge je Lauf).
+
+    Ein Lauf schreibt PICK nach jedem Ablegen, sichert aber nur einmal: die
+    Sicherung haelt den Stand VOR dem Lauf, "new_joints" den zuletzt
+    geschriebenen -- sonst hielte die Ruecknahme den Punkt fuer fremd geaendert.
+    """
+    path = Path(backup)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["new_joints"] = [float(v) for v in joints]
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+
+
 def undo_touch_up(robot, backup, force=False):
     """Sicherung zurueckspielen. Rueckgabe: Text fuer die Anzeige.
 

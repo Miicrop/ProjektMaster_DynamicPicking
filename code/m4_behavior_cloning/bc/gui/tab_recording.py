@@ -72,6 +72,8 @@ LAYOUT_FILE = "einstellungen/oberflaeche.local.json"
 #: Seite im Vordergrund; beim Teachen bleibt die linke ganz sichtbar)
 LEFT_WIDTH_RECORDING = 380
 LEFT_MIN_WIDTH_TEACHING = 740
+#: Kennung der Anordnung in LAYOUT_FILE (zwei Spalten seit 2026-11-09)
+LAYOUT_VERSION = 2
 
 COVERAGE_LEGEND = (
     "Feld: Zahl = Fahrten, orange = noch leer, blau gestrichelt = nächste Lage\n"
@@ -150,6 +152,8 @@ class RecordingTab(ModeTab):
         self._camera_dialog = None
         #: record.py hat am Ende PICK neu gesetzt (--schluss-lage neu)
         self._pick_adopted = False
+        #: Grund eines vorzeitigen Endes (Zeile "LAUF_ENDE: ..." von record.py)
+        self._end_reason = None
 
         #: Tippbetrieb "Z hoch": laufender Vorgang und sein Zeitgeber.
         #: ``_jog_source``: "button" (Maus) oder "key" (F7 gehalten).
@@ -196,6 +200,11 @@ class RecordingTab(ModeTab):
         layout = QVBoxLayout(self)
         layout.addWidget(self.requirement_view)
         layout.addWidget(splitter, 1)
+
+        #: Voreinstellungen fuer "Auf Standard zuruecksetzen" -- vor dem Laden
+        self._setting_defaults = {key: _widget_value(widget)
+                                  for key, widget in self._run_setting_widgets().items()}
+        self._restore_settings()
 
         session.add_listener(self._on_session_status)
         self.refresh()
@@ -1881,6 +1890,27 @@ class RecordingTab(ModeTab):
             "nächsten freien Block (--schluss-lage neu).")
         self.final_new.toggled.connect(self._update_command)
         form.addRow("", self.final_new)
+        self.first_lage = block_wheel(QComboBox())
+        self.first_lage.addItem("Geteachter PICK (wie gewohnt)", "geteacht")
+        self.first_lage.addItem("Neue Lage suchen und vorschlagen", "auto")
+        self.first_lage.setToolTip(
+            "Womit der Lauf beginnt. Neue Lage: Die Aufnahme sucht eine Stelle im bisher "
+            "seltensten Feld und schlägt sie vor. Nach deiner Freigabe fährt der Arm langsam "
+            "mit offenem Greifer dorthin, du legst das Teil von Hand ein und bestätigst. "
+            "Die Stelle wird dann als PICK gespeichert.\n\nPICK muss trotzdem einmal "
+            "geteacht sein (Orientierung und Greifhöhe). Braucht Zurücklegen und die "
+            "Tischpunkte.")
+        self.first_lage.currentIndexChanged.connect(self._update_command)
+        form.addRow("Erste Lage", self.first_lage)
+        self.camera_guard = QCheckBox("Kameraschutz an kritischen Randfeldern")
+        self.camera_guard.setChecked(True)
+        self.camera_guard.setToolTip(
+            "In den Feldern %s keine Drehungen wählen, bei denen die Wrist-Kamera deutlich "
+            "weiter über den Tisch hinausragt als bisher gefahren (Roboter bzw. Kamerastange). Gilt für neue Lagen "
+            "und Varianten, nicht für einen von Hand geteachten PICK."
+            % ", ".join("%d/%d" % field for field in config.CAMERA_GUARD_FIELDS))
+        self.camera_guard.toggled.connect(self._update_command)
+        form.addRow("", self.camera_guard)
         self.duration_hint = _hint("")
         form.addRow("Dauer", self.duration_hint)
 
@@ -2081,7 +2111,74 @@ class RecordingTab(ModeTab):
 
         self.episode_hint = _hint("")
         layout.addWidget(self.episode_hint)
+
+        self.btn_reset_settings = QPushButton("Einstellungen auf Standard zurücksetzen")
+        self.btn_reset_settings.setToolTip(
+            "Setzt die Einstellungen dieses Kastens und das Livebild auf die Voreinstellung. "
+            "Die Einstellungen der letzten Aufnahme werden sonst beim Start gespeichert und "
+            "beim nächsten Öffnen wieder geladen. Block, Objekt, Beleuchtung, Kamerapose und "
+            "Ziel bleiben unberührt.")
+        self.btn_reset_settings.clicked.connect(self.reset_settings)
+        layout.addWidget(self.btn_reset_settings)
         return box
+
+    # -- Einstellungen der letzten Aufnahme (Anwender 2026-11-09) ------------
+
+    def _run_setting_widgets(self):
+        """Was "Auf Standard" zuruecksetzt. Bewusst nicht dabei: Override
+        (Tempo des Arms soll nicht unbemerkt aus einer Datei kommen),
+        Trockenlauf (verwirft jede Episode) und Ziel (je Tag neu)."""
+        return {"episodes": self.episodes, "lagen": self.lagen, "drehung": self.drehung,
+                "margin": self.margin, "variants": self.variants,
+                "variant_shift": self.variant_shift, "variant_yaw": self.variant_yaw,
+                "coverage_all": self.coverage_all, "regrip": self.regrip,
+                "put_back_speed": self.put_back_speed, "final_new": self.final_new,
+                "first_lage": self.first_lage, "camera_guard": self.camera_guard,
+                "put_back": self.put_back, "probe": self.probe,
+                "teach_after": self.teach_after, "noise_scale": self.noise_scale,
+                "noise_fixed": self.noise_fixed, "servo_rate": self.servo_rate,
+                "transit_speed": self.transit_speed, "approach_speed": self.approach_speed,
+                "ptp_speed": self.ptp_speed, "execution": self.execution,
+                "ask_label": self.ask_label, "live": self.live_during_recording}
+
+    def _metadata_widgets(self):
+        return {"block": self.block, "object_note": self.object_note, "light": self.light,
+                "camera_pose": self.camera_pose}
+
+    def _apply_settings(self, widgets, values):
+        """Werte setzen, ohne dass Nebenwirkungen der Signale dazwischenfunken."""
+        for key, widget in widgets.items():
+            if key in values:
+                widget.blockSignals(True)
+                _set_widget_value(widget, values[key])
+                widget.blockSignals(False)
+        self.variant_shift.setEnabled(self.variants.isChecked())
+        self.variant_yaw.setEnabled(self.variants.isChecked())
+
+    def _restore_settings(self):
+        saved = recording_module.load_run_settings(self.workdir)
+        self._apply_settings(self._run_setting_widgets(), saved)
+        self._apply_settings(self._metadata_widgets(), saved)
+        self._block_used = bool(saved.get("block_benutzt"))
+        self._next_free_block = saved.get("naechster_block") or None
+
+    def _save_settings(self):
+        values = {key: _widget_value(widget) for key, widget in self._run_setting_widgets().items()}
+        values.update({key: _widget_value(widget)
+                       for key, widget in self._metadata_widgets().items()})
+        values.update(block_benutzt=self._block_used, naechster_block=self._next_free_block)
+        if not recording_module.save_run_settings(self.workdir, values):
+            log.warning("Einstellungen der Aufnahme nicht gespeichert")
+
+    def reset_settings(self):
+        if not self.confirm("Einstellungen zurücksetzen",
+                            "Alle Einstellungen der Aufnahme auf die Voreinstellung setzen?\n\n"
+                            "Block, Objekt, Beleuchtung, Kamerapose und Ziel bleiben."):
+            return
+        self._apply_settings(self._run_setting_widgets(), self._setting_defaults)
+        self._save_settings()
+        self._update_command()
+        self.output.append_record("Einstellungen der Aufnahme auf Standard zurückgesetzt.")
 
     def _build_metadata_box(self):
         """Metadaten je Aufruf (AP 5.2).
@@ -2182,22 +2279,39 @@ class RecordingTab(ModeTab):
     # -- Aufbau: Ausgabeseite ----------------------------------------------
 
     def _build_output(self):
-        """Rechte Seite (Anwender 2026-11-03): oben die drei Dinge, die waehrend
-        einer Aufnahme zaehlen -- Kamerabilder, Tischabdeckung, Fortschritt --,
-        darunter Kommandozeile und Ausgabe. Jeder Kasten laesst sich
-        zuklappen; der Zustand wird gemerkt (:data:`LAYOUT_FILE`)."""
+        """Rechte Seite in zwei Spalten (Anwender 2026-11-09: untereinander war
+        immer nur eines von Kamera, Tischabdeckung und Fortschritt zu sehen):
+        links Kamerabilder und Fortschritt, rechts Tischabdeckung und Ausgabe.
+        Ist die Seite schmal (beim Teachen), stehen die Spalten untereinander.
+        Jeder Kasten laesst sich zuklappen; der Zustand wird gemerkt
+        (:data:`LAYOUT_FILE`)."""
         page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 4, 0)
-        layout.setSpacing(4)
-        opened = _load_layout_state(self.workdir).get("offen", {})
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(0, 0, 4, 0)
+        columns = _OutputColumns()
+        outer.addWidget(columns, 1)
+        column_layouts = []
+        for _index in range(2):
+            holder = QWidget()
+            column = QVBoxLayout(holder)
+            column.setContentsMargins(0, 0, 0, 0)
+            column.setSpacing(4)
+            columns.addWidget(holder)
+            column_layouts.append(column)
+        left_column, right_column = column_layouts
+        columns.setStretchFactor(0, 1)
+        columns.setStretchFactor(1, 1)
+        state = _load_layout_state(self.workdir)
+        # Der Stand von vorher galt der alten Anordnung (dort war die
+        # Tischabdeckung oft aus Platzmangel zugeklappt): einmal alles auf.
+        opened = state.get("offen", {}) if state.get("anordnung") == LAYOUT_VERSION else {}
         self._sections = {}
-        self._output_layout = layout
 
-        def section(key, title, content, stretch, default=True):
+        def section(key, title, content, stretch, default=True, column=left_column):
             box = CollapsibleSection(title, content, opened.get(key, default))
-            layout.addWidget(box, stretch if box.is_open() else 0)
-            box.toggled.connect(lambda _on, b=box, s=stretch: self._section_toggled(b, s))
+            column.addWidget(box, stretch if box.is_open() else 0)
+            box.toggled.connect(
+                lambda _on, b=box, s=stretch, c=column: self._section_toggled(b, s, c))
             self._sections[key] = box
             return box
 
@@ -2214,19 +2328,18 @@ class RecordingTab(ModeTab):
         self.image.double_clicked.connect(self._zoom_at)
         image_layout.addWidget(self.image, 1)
         image_row = QHBoxLayout()
-        self.show_recorded = QCheckBox("Wie aufgezeichnet (%d×%d)"
-                                       % (config.IMAGE_WIDTH, config.IMAGE_HEIGHT))
+        self.show_recorded = QCheckBox("Wie aufgezeichnet")
         self.show_recorded.setToolTip(
             "Zeigt die Bilder so, wie sie im Datensatz landen: auf %d×%d verkleinert "
             "(apps/record.py). Aus: volle Auflösung der Kamera."
             % (config.IMAGE_WIDTH, config.IMAGE_HEIGHT))
-        self.show_crop = QCheckBox("Rahmen: Ausschnitt der Policy")
+        self.show_crop = QCheckBox("Policy-Rahmen")
         self.show_crop.setChecked(True)
         self.show_crop.setToolTip(
             "Grüner Rahmen: der Teil, den die Policy bei der Inferenz sieht (zentrierter "
             "Ausschnitt %.0f %%, im Training zufällig verschoben). Was außerhalb liegt, "
             "fehlt dem Modell zumindest zeitweise." % (100 * config.POLICY_CROP_RATIO))
-        self.btn_camera_settings = QPushButton("Kameraeinstellungen …")
+        self.btn_camera_settings = QPushButton("Kamera …")
         self.btn_camera_settings.setToolTip(
             "Belichtung und Gain der Daheng-Kameras einstellen, mit Bild in voller "
             "Auflösung und wie aufgezeichnet. Braucht die offene Vorschau.")
@@ -2271,12 +2384,12 @@ class RecordingTab(ModeTab):
         bigger.clicked.connect(self._open_coverage_view)
         row.addWidget(bigger)
         reload_button = QToolButton()
-        reload_button.setText("Aktualisieren")
+        reload_button.setText("Neu laden")
         reload_button.setToolTip("Tischpunkte aus der Steuerung und Episoden neu lesen")
         reload_button.clicked.connect(self._reload_coverage)
         row.addWidget(reload_button)
         coverage_layout.addLayout(row)
-        section("abdeckung", "Tischabdeckung", coverage_panel, 3)
+        section("abdeckung", "Tischabdeckung", coverage_panel, 3, column=right_column)
 
         # -- Fortschritt --
         progress_panel = QWidget()
@@ -2286,6 +2399,7 @@ class RecordingTab(ModeTab):
         headline_font = QFont()
         headline_font.setBold(True)
         self.headline.setFont(headline_font)
+        self.headline.setWordWrap(True)   # langer Abbruchgrund: nicht breiter als die Spalte
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.detail_line = _hint("")
@@ -2320,11 +2434,12 @@ class RecordingTab(ModeTab):
             Qt.TextInteractionFlag.TextSelectableByMouse)
         self.command.setStyleSheet("font-family:Consolas; color:palette(text)")
         command_layout.addWidget(self.command)
-        section("kommando", "Kommandozeile", command_panel, 0, default=False)
+        section("kommando", "Kommandozeile", command_panel, 0, default=False,
+                column=right_column)
 
         self.output = LogView()
         self.output.setMinimumHeight(60)
-        section("ausgabe", "Ausgabe", self.output, 1)
+        section("ausgabe", "Ausgabe", self.output, 2, column=right_column)
 
         # Auch die Ausgabeseite in einen Bildlauf: Reicht die Hoehe nicht,
         # verteilt Qt den Platz nicht, sondern legt Widgets uebereinander.
@@ -2336,10 +2451,11 @@ class RecordingTab(ModeTab):
         area.setFrameShape(QScrollArea.Shape.NoFrame)
         return area
 
-    def _section_toggled(self, box, stretch):
-        self._output_layout.setStretchFactor(box, stretch if box.is_open() else 0)
+    def _section_toggled(self, box, stretch, column):
+        column.setStretchFactor(box, stretch if box.is_open() else 0)
         state = _load_layout_state(self.workdir)
         state["offen"] = {key: b.is_open() for key, b in self._sections.items()}
+        state["anordnung"] = LAYOUT_VERSION
         _save_layout_state(self.workdir, state)
 
     def _rotate_coverage(self):
@@ -2542,7 +2658,9 @@ class RecordingTab(ModeTab):
             variants=self.variants.isChecked(),
             variant_shift=self.variant_shift.value() / 1e3,
             variant_yaw=self.variant_yaw.value(),
-            coverage_roots=self._coverage_extra_roots())
+            coverage_roots=self._coverage_extra_roots(),
+            start_lage=self.first_lage.currentData(),
+            camera_guard=self.camera_guard.isChecked())
 
     # -- Tischabdeckung (bc/gui/coverage_map.py, Anwender 2026-11-01) -------
 
@@ -3036,6 +3154,8 @@ class RecordingTab(ModeTab):
 
         self._remember_metadata()
         self._block_used = True
+        self._save_settings()
+        self._end_reason = None
         self._labels_off = False
         self.estimate_line.setText("")
         self._live_names = [s for s in cameras_module.SLOTS if s in assignment]
@@ -3077,7 +3197,8 @@ class RecordingTab(ModeTab):
             self.process.start(
                 argv,
                 stdin_text="ANLAGE\n" if status.is_real_plant else None,
-                keep_stdin=self.ask_label.isChecked() or self.probe.isChecked())
+                keep_stdin=(self.ask_label.isChecked() or self.probe.isChecked()
+                            or self.first_lage.currentData() == "auto"))
         except Exception as exc:
             self.live_timer.stop()
             QMessageBox.warning(self, "Start gescheitert", str(exc))
@@ -3132,6 +3253,9 @@ class RecordingTab(ModeTab):
             lines += ["", "TROCKENLAUF: Der Greifer schaltet NICHT, die Bahn wird "
                           "trotzdem vollständig gefahren. Kein Werkstück einlegen.",
                       "Jede Episode wird verworfen und ist nicht exportierbar."]
+        if self.first_lage.currentData() == "auto":
+            lines += ["", "Erste Lage: wird gesucht und vorgeschlagen. Vor der Fahrt und beim "
+                          "Einlegen fragt die Oberfläche noch einmal nach."]
         lines += ["", "Arbeitsraum frei? Not-Aus in Reichweite?"]
         return self.confirm("Roboter bewegt sich", "\n".join(lines))
 
@@ -3184,6 +3308,18 @@ class RecordingTab(ModeTab):
             if self.lagen.value() > 1:
                 self._next_free_block = free
 
+        reason = recording_module.run_end_reason(text)
+        if reason:
+            self._end_reason = reason
+
+        proposal = recording_module.place_question(text)
+        if proposal is not None:
+            self._ask_place(*proposal)
+            return
+        if recording_module.insert_question(text):
+            self._ask_insert()
+            return
+
         if recording_module.probe_question(text):
             # Probefahrt fertig, record.py wartet auf die Freigabe.
             self._ask_probe()
@@ -3213,6 +3349,47 @@ class RecordingTab(ModeTab):
         percent = self._progress.percent
         if percent is not None:
             self.progress_bar.setValue(percent)
+
+    def _answer_box(self, title, text, details, go_text, icon=QMessageBox.Icon.Warning):
+        """Sicherheitsabfrage an record.py beantworten; Standardknopf "Abbrechen"."""
+        box = QMessageBox(self)
+        box.setWindowTitle(title)
+        box.setIcon(icon)
+        box.setText(text)
+        box.setInformativeText(details)
+        go = box.addButton(go_text, QMessageBox.ButtonRole.AcceptRole)
+        cancel = box.addButton("Abbrechen", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(cancel)
+        box.exec()
+        answer = "weiter" if box.clickedButton() is go else "abbrechen"
+        if not self.process.send(recording_module.PROBE_ANSWERS[answer]):
+            log.warning("Antwort konnte nicht gesendet werden -- laeuft der Prozess noch?")
+
+    def _ask_place(self, x_mm, y_mm, yaw_deg):
+        """Lagevorschlag: Fahrt dorthin freigeben (record.run_placement)."""
+        self._answer_box(
+            "Neue Lage anfahren?",
+            "Vorschlag für die erste Lage: x %d mm, y %d mm, Drehung %d°." % (x_mm, y_mm, yaw_deg),
+            "Der Arm fährt mit %.0f %% Tempo und offenem Greifer an diese Stelle, direkt über "
+            "den Tisch.\n\nAchtung, Kollisionsgefahr: Die Stelle wurde berechnet und noch nie "
+            "angefahren.\n• Not-Aus muss griffbereit sein.\n• Arbeitsraum frei halten, nicht "
+            "hineingreifen, solange der Arm fährt.\n• Fahrt beobachten, besonders Kamera und "
+            "Kabel, und bei Gefahr sofort stoppen."
+            % (100 * config.PROBE_SPEED_FACTOR),
+            "Anfahren")
+
+    def _ask_insert(self):
+        """Der Arm steht offen an der Lage: Teil von Hand einlegen."""
+        QApplication.beep()
+        self._answer_box(
+            "Teil einlegen",
+            "Der Arm steht an der neuen Lage, der Greifer ist offen.",
+            "1. Prüfen, dass der Arm steht und die Stelle frei von Kollisionen ist.\n"
+            "2. Teil von Hand mittig zwischen die Backen auf den Tisch legen.\n"
+            "3. Hände aus dem Arbeitsraum nehmen, Not-Aus griffbereit halten.\n\n"
+            "„Eingelegt, weiter“ fährt den Arm sofort zurück und speichert die Stelle als PICK.\n"
+            "„Abbrechen“ beendet den Lauf, der Arm bleibt hier stehen und PICK bleibt, wie er ist.",
+            "Eingelegt, weiter")
 
     def _ask_probe(self):
         """Freigabe nach der Probefahrt (bc/probe.py) an record.py schicken.
@@ -3334,17 +3511,36 @@ class RecordingTab(ModeTab):
                 pass
             self._live_path = None
         ok = code == 0
+        reason, self._end_reason = self._end_reason, None
         if self._progress is None:
             self.headline.setText("Teachen beendet" if ok else
                                   "Beendet (Rückgabewert %d)" % code)
+        elif ok and reason:
+            self.headline.setText("Vorzeitig beendet — %s" % reason)
         elif ok:
             self.headline.setText(self._progress.headline())
             self.progress_bar.setValue(100)
         else:
-            self.headline.setText("Abgebrochen (Rückgabewert %d)" % code)
-        self.headline.setStyleSheet("color:%s; font-weight:bold" % (GOOD if ok else BAD))
+            self.headline.setText("Abgebrochen (Rückgabewert %d) — Grund im Laufprotokoll "
+                                  "im Zielordner" % code)
+        colour = BAD if not ok else WARN if reason else GOOD
+        self.headline.setStyleSheet("color:%s; font-weight:bold" % colour)
         self.output.append_record("-> beendet, Rückgabewert %d" % code,
                                   logging.INFO if ok else logging.ERROR)
+        if self._progress is not None:
+            self._save_settings()   # gemerkt: naechster freier Block
+        if self._progress is not None and (reason or not ok):
+            # Nicht blockierend: Das Fenster soll den Lauf nicht festhalten,
+            # und der Grund steht auch in der Kopfzeile.
+            notice = QMessageBox(QMessageBox.Icon.Warning, "Aufnahme vorzeitig beendet",
+                                 reason or "Der Lauf endete mit Rückgabewert %d." % code,
+                                 QMessageBox.StandardButton.Ok, self)
+            notice.setInformativeText(
+                "PICK steht auf der zuletzt abgelegten Lage. Liegt das Teil dort, kann "
+                "direkt neu gestartet werden. Hält der Greifer es noch oder liegt es "
+                "woanders: erst prüfen und richtig hinlegen. Die volle Ausgabe steht "
+                "im Zielordner in laufprotokoll_*.txt.")
+            notice.open()
         self.image.setText("Vorschau aus — \"Vorschau starten\" öffnet die "
                            "zugeordneten Kameras")
         self._schedule_coverage()
@@ -3359,7 +3555,8 @@ class RecordingTab(ModeTab):
                        self.probe, self.teach_after, self.point_table,
                        self.lagen, self.drehung, self.btn_add_keepout, self.regrip,
                        self.margin, self.variants, self.coverage_all,
-                       self.put_back_speed, self.final_new,
+                       self.put_back_speed, self.final_new, self.first_lage,
+                       self.camera_guard, self.btn_reset_settings,
                        self.btn_teach_pick, self.btn_detail,
                        self.transit_speed, self.approach_speed, self.ptp_speed,
                        self.execution):
@@ -3507,6 +3704,55 @@ def _open_captures(configs, cancel=None):
                 pass
         raise
     return started
+
+
+class _OutputColumns(QSplitter):
+    """Zwei Spalten nebeneinander, bei schmaler Seite untereinander."""
+
+    #: Darunter (Breite in Pixeln) stehen die Spalten untereinander
+    MIN_SIDE_BY_SIDE = 760
+
+    def __init__(self, parent=None):
+        super().__init__(Qt.Orientation.Horizontal, parent)
+        self.setChildrenCollapsible(False)
+
+    def resizeEvent(self, event):
+        wanted = (Qt.Orientation.Horizontal if event.size().width() >= self.MIN_SIDE_BY_SIDE
+                  else Qt.Orientation.Vertical)
+        if self.orientation() != wanted:
+            self.setOrientation(wanted)
+            # Die alten Masse gelten fuer die andere Richtung: wieder halbe-halbe
+            self.setSizes([1, 1])
+        super().resizeEvent(event)
+
+
+def _widget_value(widget):
+    """Wert eines Eingabefelds als JSON-faehiger Wert."""
+    if isinstance(widget, QCheckBox):
+        return widget.isChecked()
+    if isinstance(widget, QComboBox):
+        return widget.currentText() if widget.isEditable() else widget.currentData()
+    if isinstance(widget, QLineEdit):
+        return widget.text()
+    return widget.value()
+
+
+def _set_widget_value(widget, value):
+    """Gemerkten Wert setzen; unbrauchbare Werte (alte Datei) bleiben aussen vor."""
+    try:
+        if isinstance(widget, QCheckBox):
+            widget.setChecked(bool(value))
+        elif isinstance(widget, QComboBox):
+            if widget.isEditable():
+                widget.setCurrentText(str(value or ""))
+            elif find_data(widget, value) >= 0:
+                widget.setCurrentIndex(find_data(widget, value))
+        elif isinstance(widget, QLineEdit):
+            widget.setText(str(value or ""))
+        else:
+            widget.setValue(value)
+    except (TypeError, ValueError):
+        log.warning("Gemerkter Wert %r passt nicht zum Feld", value)
 
 
 def _hint(text):

@@ -52,6 +52,7 @@ import argparse
 import json
 import sys
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -87,7 +88,7 @@ from bc.auto_layout import (
     variant_offsets,
 )
 from bc.gui.recording import next_block
-from bc.probe import probe_plans
+from bc.probe import placement_plans, probe_plans
 from bc.put_back import (
     PutBackError,
     grasp_index,
@@ -135,6 +136,59 @@ LABEL_ANSWERS = {
 #: "j" auf stdin). Die Bedienoberflaeche erkennt sie wie LABEL_PROMPT
 #: (gui/recording.PROBE_PROMPT).
 PROBE_PROMPT = "PROBEFAHRT"
+
+#: Selbst gesuchter erster PICK (--start-lage auto): Vorschlag anfahren? Und,
+#: wenn der Arm dort steht: Teil eingelegt? (gui/recording.py erkennt beide)
+PLACE_PROMPT = "LAGEVORSCHLAG"
+INSERT_PROMPT = "EINLEGEN"
+
+#: Warum der Lauf vorzeitig endete; die Schlusszeile "LAUF_ENDE: ..." zeigt die
+#: Oberflaeche an (Anwender 2026-11-09: Lauf endete ohne erkennbaren Grund).
+_RUN_END = {"reason": ""}
+
+
+def end_run(text):
+    """Grund ausgeben und als Grund des vorzeitigen Endes merken."""
+    print(text)
+    _RUN_END["reason"] = _RUN_END["reason"] or " ".join(str(text).split())
+
+
+class _Tee(object):
+    """Ausgabe zusaetzlich in die Protokolldatei des Laufs."""
+
+    def __init__(self, stream, log):
+        self.stream = stream
+        self.log = log
+
+    def write(self, text):
+        written = self.stream.write(text)
+        try:
+            self.log.write(text)
+        except (OSError, ValueError):
+            pass  # volle Platte o. ae. darf keinen Lauf beenden
+        return written
+
+    def flush(self):
+        self.stream.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+
+def open_run_log(out):
+    """Ausgabe des Laufs nach ``<out>/laufprotokoll_<Zeit>.txt`` -- auch Tracebacks.
+
+    Bisher stand sie nur im Fenster der Oberflaeche und war nach dem naechsten
+    Start weg; der Grund eines Abbruchs liess sich nicht mehr klaeren.
+    """
+    folder = Path(out)
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / ("laufprotokoll_%s.txt" % datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    log = open(path, "a", encoding="utf-8", buffering=1)
+    sys.stdout = _Tee(sys.stdout, log)
+    sys.stderr = _Tee(sys.stderr, log)
+    print("Laufprotokoll: %s" % path)
+    return log
 
 
 def ask_label(episode_index, steps):
@@ -318,10 +372,15 @@ def next_auto_lage(args, sequence, robot, kin, rng, start, coverage, scales, ind
             cell = coverage.next_cell(tried)
             tried.append(cell)
             xy = coverage.point_in(cell)
-            turn = coverage.next_turn()
-            pose = place_pose(upright, base.table, xy, turn, height)
+            for turn in coverage.turn_candidates():
+                pose = place_pose(upright, base.table, xy, turn, height)
+                if not coverage.camera_blocked(pose):
+                    break
+            else:
+                raise ValueError("Kameraschutz: in Feld %d/%d keine Drehung ohne Ueberstand"
+                                 % coverage.field_of(xy))
             lage = plan_at(args, sequence, robot, kin, rng, base, pose, scales, index,
-                           next_block(block) if block else None, "automatisch")
+                           block, "automatisch")
             print("Lage %d: x %.0f mm, y %.0f mm, Drehung %+.0f Grad gegen die geteachte"
                   % (index + 1, 1e3 * pose[0], 1e3 * pose[1], turn))
             return lage
@@ -410,6 +469,8 @@ def plan_variants(args, sequence, robot, kin, rng, start, centre, coverage, draw
                 if not coverage.allowed(xy, margin=margin):
                     raise ValueError("ausserhalb des Bereichs oder Bauteil in einer Sperrzone")
                 pose = place_pose(upright, table, xy, turn, height)
+                if coverage.camera_blocked(pose):
+                    raise ValueError("Kameraschutz: Kamera ragte zu weit ueber den Rand")
                 lage = plan_at(args, sequence, robot, kin, rng, base, pose, scales,
                                centre["index"], centre["block"], "variante", variant=k,
                                slow_put_back=False)
@@ -435,7 +496,8 @@ def make_coverage(args, sequence, resolved, rng, in_simulation=None):
                          sequence.pick_height)
     coverage = Coverage([p["pose_quat"] for p in resolved.table_points.values()],
                         yaw_deg(upright, resolved.table), resolved.keepouts,
-                        margin=args.randabstand, yaw_range_deg=args.drehung, rng=rng)
+                        margin=args.randabstand, yaw_range_deg=args.drehung, rng=rng,
+                        camera_guard=not args.ohne_kameraschutz)
     found, files, seconds = load_coverage([args.out] + list(args.abdeckung), in_simulation)
     for xy, yaw in found:
         coverage.add(xy, yaw)
@@ -706,34 +768,75 @@ def object_layout(resolved):
             "object_yaw_deg": round(yaw_deg(pose, resolved.table), 1)}
 
 
-def adopt_pick(robot, lage):
-    """Schluss-Lage als PICK in die Steuerung (``--schluss-lage neu``).
+def adopt_pick(robot, lage, state):
+    """Abgelegte Lage als PICK in die Steuerung -- nach JEDEM Ablegen.
 
-    Anwender 2026-11-03: Objekt am Ende nicht zurueck an den geteachten PICK,
-    sondern an eine neue Lage -- und die als PICK uebernehmen, damit der
-    naechste Lauf ohne Teachen dort weitermacht. Geschrieben wird wie beim
-    Touch-up (bc/touchup.py): alter Punkt zuerst als Datei gesichert, gleiche
-    ID. Scheitert es, liegt das Objekt trotzdem an der neuen Lage -- dann
-    vor dem naechsten Lauf PICK teachen.
+    Anwender 2026-11-09 (vorher nur am Laufende, ``--schluss-lage neu``): Bricht
+    ein Lauf ab, steht PICK dort, wo das Objekt zuletzt abgelegt wurde; der
+    naechste Lauf macht ohne Teachen weiter. Der erste Schreibvorgang sichert
+    den Punkt wie beim Touch-up (bc/touchup.py), die weiteren schreiben nur noch
+    (``state["backup"]``, eine Sicherung je Lauf = Stand vor dem Lauf).
+    Scheitert es, liegt das Objekt trotzdem an der neuen Lage.
     """
     from bc import touchup
 
     pick = lage["resolved"].points["PICK"]
     pose = pick["pose_quat"]
-    plan = {"name": "PICK", "joints": [float(v) for v in pick["joints"]],
-            "problems": [], "warnings": [],
-            "tool": getattr(robot, "tool_name", None),
-            "in_simulation": getattr(robot, "in_simulation", None)}
+    joints = [float(v) for v in pick["joints"]]
     try:
-        backup, _record = touchup.apply_touch_up(robot, plan, config.TOUCHUP_BACKUP_ROOT)
+        if state.get("backup") is None:
+            plan = {"name": "PICK", "joints": joints, "problems": [], "warnings": [],
+                    "tool": getattr(robot, "tool_name", None),
+                    "in_simulation": getattr(robot, "in_simulation", None)}
+            state["backup"], _record = touchup.apply_touch_up(
+                robot, plan, config.TOUCHUP_BACKUP_ROOT)
+        else:
+            robot.store_point("PICK", joints)
+            touchup.update_backup_target(state["backup"], joints)
     except Exception as exc:
         print("!! PICK NICHT uebernommen (%s: %s) -- das Objekt liegt bei x %.0f mm, "
               "y %.0f mm; vor dem naechsten Lauf PICK teachen."
               % (type(exc).__name__, exc, 1e3 * pose[0], 1e3 * pose[1]))
         return None
     print("PICK uebernommen: x %.0f mm, y %.0f mm, Backen %.0f Grad -- Sicherung: %s"
-          % (1e3 * pose[0], 1e3 * pose[1], lage.get("yaw_deg") or 0.0, backup))
-    return backup
+          % (1e3 * pose[0], 1e3 * pose[1], lage.get("yaw_deg") or 0.0, state["backup"]))
+    return state["backup"]
+
+
+def run_placement(lage, robot, recorder, factor):
+    """Selbst gesuchten PICK anfahren und das Teil von Hand einlegen lassen.
+
+    Zwei Freigaben: vor der Fahrt und, wenn der Arm mit offenem Greifer steht,
+    nach dem Einlegen. Ohne beide endet der Aufruf, PICK bleibt unveraendert.
+    """
+    forward = next(p for p in lage["plans"] if p is not None)
+    hin, zurueck = placement_plans(forward, factor)
+    pose = lage["resolved"].points["PICK"]["pose_quat"]
+    print("%s x %.0f y %.0f Drehung %.0f -- anfahren? [j]a / [n]ein"
+          % (PLACE_PROMPT, 1e3 * pose[0], 1e3 * pose[1], lage.get("yaw_deg") or 0.0))
+    if ask("", "").strip().lower()[:1] != "j":
+        raise SystemExit("Lagevorschlag nicht freigegeben -- nichts bewegt, PICK unveraendert.")
+
+    def drive(plan, name):
+        try:
+            result = recorder.record(plan, metadata={"probe": True})
+        except RuntimeError as exc:
+            raise SystemExit("Fahrt zum Einlegen (%s) abgebrochen: %s" % (name, exc))
+        if result.discarded:
+            raise SystemExit("Fahrt zum Einlegen (%s) abgebrochen (%s) -- Arbeitsraum und "
+                             "Punkte pruefen." % (name, result.discard_reason))
+
+    print("Lagevorschlag freigegeben: Fahrt mit %.0f %% Tempo, Greifer offen." % (100 * factor))
+    start = hin.joints_noisy[0]
+    if float(np.max(np.abs(robot.read_state().joints - start))) > config.START_POSE_TOL_RAD:
+        robot.move_to_joints(start)
+    drive(hin, "hin")
+    print("%s bereit -- Teil eingelegt, weiter? [j]a / [n]ein" % INSERT_PROMPT)
+    if ask("", "").strip().lower()[:1] != "j":
+        raise SystemExit("Einlegen nicht bestaetigt -- der Arm steht offen an der Lage, PICK "
+                         "unveraendert. Ueber \"Anfahren\" oder den Teach-Modus wegfahren.")
+    drive(zurueck, "zurueck")
+    print("Teil eingelegt, Arm wieder am Start.")
 
 
 def switch_to_teach(robot):
@@ -772,19 +875,19 @@ def put_back(episode, plan, put_back_recorder, table=None, log_root=None, label=
     """
     md = episode.metadata
     if md.get("recorded_steps") != md.get("planned_steps"):
-        print("Zuruecklegen entfaellt: Episode nicht vollstaendig gefahren (%s) -- "
-              "Wiederholungen beendet, Objekt von Hand pruefen." % episode.discard_reason)
+        end_run("Zuruecklegen entfaellt: Episode nicht vollstaendig gefahren (%s) -- "
+                "Wiederholungen beendet, Objekt von Hand pruefen." % episode.discard_reason)
         return False
     if episode.success is False:
-        print("Zuruecklegen entfaellt: Episode als fehlgeschlagen bewertet -- "
-              "Wiederholungen beendet, Objekt neu hinlegen.")
+        end_run("Zuruecklegen entfaellt: Episode als fehlgeschlagen bewertet -- "
+                "Wiederholungen beendet, Objekt neu hinlegen.")
         return False
     print("Zuruecklegen: %d Schritte (%.1f s), nicht aufgezeichnet"
           % (len(plan), len(plan) / plan.rate_hz))
     try:
         result = put_back_recorder.record(plan, metadata={"put_back": True})
     except RuntimeError as exc:  # RobotError, oder Stopp vor dem ersten Takt
-        print("Zuruecklegen abgebrochen: %s -- Wiederholungen beendet." % exc)
+        end_run("Zuruecklegen abgebrochen: %s -- Wiederholungen beendet." % exc)
         return False
     # Ohne Kameras gibt es kein Latenzbudget -- verworfen heisst hier immer:
     # Stopp, Abbruch oder der Arm ist nicht gefolgt.
@@ -796,8 +899,8 @@ def put_back(episode, plan, put_back_recorder, table=None, log_root=None, label=
     grip_heights.append_log(log_root, events, episode=label, fahrt="zuruecklegen",
                             abgebrochen=bool(result.discarded))
     if result.discarded:
-        print("Zuruecklegen abgebrochen (%s) -- Wiederholungen beendet, "
-              "Objekt und Arm von Hand pruefen." % result.discard_reason)
+        end_run("Zuruecklegen abgebrochen (%s) -- Wiederholungen beendet, "
+                "Objekt und Arm von Hand pruefen." % result.discard_reason)
         return False
     return True
 
@@ -1013,6 +1116,17 @@ def parse_args():
              "beginnt dort, ohne neu zu teachen (Anwender 2026-11-03)",
     )
     parser.add_argument(
+        "--start-lage", dest="start_lage", choices=("geteacht", "auto"), default="geteacht",
+        help="erste Lage: der geteachte PICK (Standard) oder 'auto' -- eine neue Lage wird "
+             "gesucht und vorgeschlagen, der Arm faehrt sie langsam an, das Teil wird von "
+             "Hand eingelegt und bestaetigt (Anwender 2026-11-09)",
+    )
+    parser.add_argument(
+        "--ohne-kameraschutz", dest="ohne_kameraschutz", action="store_true",
+        help="in den Feldern von config.CAMERA_GUARD_FIELDS auch Drehungen zulassen, bei "
+             "denen die Wrist-Kamera ueber den Rand ragt",
+    )
+    parser.add_argument(
         "--ablage-zugabe", type=float, default=config.PUT_BACK_PLACE_OFFSET_M,
         help="beim Zuruecklegen so viel (m) ueber der Greifhoehe oeffnen -- lieber kurz "
              "fallen lassen als eindruecken (Default %(default)g)",
@@ -1124,6 +1238,21 @@ def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(line_buffering=True)  # Fortschritt auch in Logdateien
     args = parse_args()
+    _RUN_END["reason"] = ""
+    streams = sys.stdout, sys.stderr
+    log = open_run_log(args.out)
+    try:
+        run(args)
+    except BaseException:
+        # Nur in die Datei: den Text selbst gibt der Interpreter gleich aus
+        log.write(traceback.format_exc())
+        raise
+    finally:
+        sys.stdout, sys.stderr = streams
+        log.close()
+
+
+def run(args):
     robot_kind = args.robot or ("sim" if args.sim else "neura")
     use_sim_robot = robot_kind == "sim"
     # Gegen den SimRobot gibt es nichts, woran der Arm stossen koennte.
@@ -1428,6 +1557,7 @@ def main():
     aborted = False
     used_xy = []
     coverage = None
+    pick_state = {"backup": None}
     try:
         # 1.-3. EINMAL je Lage (plan_all): Punkte, Plausibilitaet, ideale
         # Bahn, verrauschte Bahnen, Rueckfahrt.
@@ -1478,7 +1608,8 @@ def main():
         # Tisch (Hoehe an der neuen Stelle) und den Bereich der Tischpunkte
         want_variation = args.zuruecklegen and args.episodes > 1 and not args.feste_lage
         if args.zuruecklegen and resolved is not None and resolved.table is not None \
-                and (args.lagen > 1 or want_variation or args.schluss_lage == "neu"):
+                and (args.lagen > 1 or want_variation or args.schluss_lage == "neu"
+                     or args.start_lage == "auto"):
             try:
                 coverage = make_coverage(args, sequence, resolved, rng,
                                          robot_info.get("in_simulation"))
@@ -1486,6 +1617,9 @@ def main():
                 if args.lagen > 1:
                     raise SystemExit("Automatische Lagen nicht moeglich: %s" % exc)
                 print("Varianten AUS: %s" % exc)
+        if args.start_lage == "auto" and coverage is None:
+            raise SystemExit("Selbst gesuchter PICK (--start-lage auto) braucht Ablaufdatei, "
+                             "Zuruecklegen und die Tischpunkte.")
         layout["variation"] = want_variation and coverage is not None
         if want_variation and not layout["variation"] and coverage is None \
                 and (resolved is None or resolved.table is None):
@@ -1506,15 +1640,30 @@ def main():
                   "%.3f m/s und Nachgreifen" % (args.episodes, 1e3 * args.varianten_versatz,
                                                args.varianten_drehung, args.ablage_tempo))
         t_plan = time.perf_counter()
-        start = plan_lage(args, waypoints, resolved, robot, kin,
-                          draw_scales(True, 1 if layout["variation"] else None), rng,
-                          index=0, block=args.block, source="geteacht")
+        first_scales = draw_scales(True, 1 if layout["variation"] else None)
+        # Bezug fuer neue Lagen und Varianten bleibt immer der geteachte PICK
+        # (Orientierung, Greifhoehe, IK-Startwert) -- auch beim Selbstsuchen.
+        reference = {"resolved": resolved}
+        if args.start_lage == "auto":
+            start = next_auto_lage(args, sequence, robot, kin, rng, reference, coverage,
+                                   first_scales, 0, args.block)
+            if start is None:
+                raise SystemExit("Keine erreichbare Lage gefunden -- PICK von Hand teachen.")
+            start["source"] = "vorgeschlagen"
+        else:
+            start = plan_lage(args, waypoints, resolved, robot, kin, first_scales, rng,
+                              index=0, block=args.block, source="geteacht")
         group = [start]
         if layout["variation"] and any(p is not None for p in start["plans"]):
-            group += plan_variants(args, sequence, robot, kin, rng, start, start, coverage,
+            group += plan_variants(args, sequence, robot, kin, rng, reference, start, coverage,
                                    lambda n: draw_scales(False, n), args.episodes - 1)
         resolved_start = resolved
         print(duration_line(args, start, time.perf_counter() - t_plan, group))
+
+        if args.start_lage == "auto":
+            run_placement(start, robot, put_back_recorder, args.probefahrt_tempo)
+            if adopt_pick(robot, start, pick_state):
+                resolved_start = resolve_points(sequence, robot, use_sim_robot)
 
         # Probefahrt: langsam, ohne Rauschen, Greifer offen (bc/probe.py)
         if args.probefahrt and any(p is not None for p in start["plans"]):
@@ -1525,6 +1674,10 @@ def main():
         t_lagen = time.perf_counter()
         while group and not aborted:
             centre = group[0]
+            if centre["block"]:
+                # Schon hier: Bei einem Absturz fehlte sonst die Schlusszeile,
+                # und der naechste Lauf nahm einen bereits benutzten Block.
+                print("Naechster freier Block: %s" % next_block(centre["block"]))
             if centre["index"] > 0:
                 print(remaining_line(args, centre["index"], time.perf_counter() - t_lagen))
             # Fahrten der Lage: mit Varianten je eine eigene Lage (Plan 0),
@@ -1595,9 +1748,9 @@ def main():
                     if (ep > 0 or lage["index"] > 0) and not same_points(
                             resolve_points(sequence, robot, use_sim_robot).points,
                             resolved_start.points):
-                        print("Punkte in der Steuerung haben sich seit dem Start geaendert "
-                              "(Touch-up?) -- Lauf beendet. Neu starten, dann wird mit den "
-                              "neuen Punkten geplant.")
+                        end_run("Punkte in der Steuerung haben sich seit dem Start geaendert "
+                                "(Touch-up?) -- Lauf beendet. Neu starten, dann wird mit den "
+                                "neuen Punkten geplant.")
                         aborted = True
                         break
                     meta.update(
@@ -1645,9 +1798,9 @@ def main():
                     # Der Schutz im Adapter hat einen Sollwert abgelehnt -- der
                     # Arm steht irgendwo am Anfang der Bahn, das Objekt liegt
                     # (noch) am Greifpunkt. Nichts ablegen, Lauf beenden.
-                    print("Episode %d abgebrochen: %s\n   Der Planer haette das abfangen "
-                          "muessen -- Ausgabe 'Gelenktempo' oben pruefen. Arm und Objekt "
-                          "von Hand pruefen." % (ep, exc))
+                    end_run("Episode %d abgebrochen: %s\n   Der Planer haette das abfangen "
+                            "muessen -- Ausgabe 'Gelenktempo' oben pruefen. Arm und Objekt "
+                            "von Hand pruefen." % (ep, exc))
                     aborted = True
                     break
                 if getattr(robot, "gripper_log", None) is not None:
@@ -1724,24 +1877,27 @@ def main():
                 if args.zuruecklegen:
                     back = lage["back_plan"]
                     final_lage = None
+                    placed = lage    # wo das Objekt nach diesem Ablegen liegt
                     if ep == valid[-1]:
                         next_lage = None
                         if centre["index"] + 1 < args.lagen and not stop_requested(args):
                             next_lage = next_auto_lage(
-                                args, sequence, robot, kin, rng, start, coverage,
+                                args, sequence, robot, kin, rng, reference, coverage,
                                 draw_scales(False, 1 if layout["variation"] else None),
-                                centre["index"] + 1, centre["block"])
+                                centre["index"] + 1,
+                                next_block(centre["block"]) if centre["block"] else None)
                         elif args.schluss_lage == "neu" and coverage is not None:
                             # Schluss: an eine neue Lage, die wird PICK (adopt_pick)
                             print("Schluss-Lage wird gesucht (wird danach PICK) ...")
                             final_lage = next_auto_lage(
-                                args, sequence, robot, kin, rng, start, coverage,
-                                draw_scales(False, 1), centre["index"] + 1, centre["block"])
+                                args, sequence, robot, kin, rng, reference, coverage,
+                                draw_scales(False, 1), centre["index"] + 1,
+                                next_block(centre["block"]) if centre["block"] else None)
                         if next_lage is not None:
                             next_group = [next_lage]
                             if layout["variation"]:
                                 next_group += plan_variants(
-                                    args, sequence, robot, kin, rng, start, next_lage,
+                                    args, sequence, robot, kin, rng, reference, next_lage,
                                     coverage, lambda n: draw_scales(False, n),
                                     args.episodes - 1)
                         if stop_requested(args):
@@ -1749,6 +1905,7 @@ def main():
                         target = next_lage or final_lage or start
                         back = (target["back_plan"] if target is lage
                                 else target["regrip_plan"])
+                        placed = target
                         if target is not lage:
                             print("Umlegen: Objekt an %s"
                                   % ("Lage %d" % (next_lage["index"] + 1) if next_lage
@@ -1757,6 +1914,7 @@ def main():
                     elif layout["variation"]:
                         following = slots[min(k for k in valid if k > ep)][0]
                         back = following["back_plan"]
+                        placed = following
                         print("Ablegen: Variante %d von Lage %d"
                               % (following["variant"], centre["index"] + 1))
                     if not put_back(episode, back, put_back_recorder,
@@ -1765,8 +1923,11 @@ def main():
                         aborted = True
                         next_group = None
                         break
-                    if final_lage is not None:
-                        adopt_pick(robot, final_lage)
+                    # Objekt liegt jetzt dort: PICK nachziehen, damit ein
+                    # Abbruch ohne neues Teachen weitergehen kann. Der eigene
+                    # Schreibvorgang gilt nicht als fremde Aenderung.
+                    if placed is not lage and adopt_pick(robot, placed, pick_state):
+                        resolved_start = resolve_points(sequence, robot, use_sim_robot)
             if next_group:
                 used_xy.append(next_group[0]["xy"])
             group = next_group
@@ -1785,6 +1946,8 @@ def main():
             last = next_block(last)
         print("Naechster freier Block: %s" % next_block(last))
 
+    if _RUN_END["reason"]:
+        print("LAUF_ENDE: %s" % _RUN_END["reason"])
     print()
     if recorded:
         print(metrics.format_summary(metrics.summarize(args.out)))

@@ -157,7 +157,8 @@ def main(argv=None):
             print("Nichts geaendert.")
             return 1
     kern.speichere_einstellungen(ziel)
-    ok = kern.Lauf(print)(schritte)
+    ok = kern.Lauf(print, build=ziel.build,
+                   fortschritt=lambda anteil, _t: print("\n--- %d %% erledigt ---" % int(100 * anteil)))(schritte)
     return 0 if ok else 1
 
 

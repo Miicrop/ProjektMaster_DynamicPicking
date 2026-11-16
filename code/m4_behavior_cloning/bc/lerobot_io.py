@@ -330,10 +330,16 @@ def export(
             ends.append(ep.arrays["aux.joints_ideal"][-1])
             grippers.append(ep.arrays["observation.state"][[0, -1], 13])
             task = _task_of(meta)
+            total = len(scan["episodes"])
+            # Viertel-Meldungen: die GUI rechnet daraus einen Balken, der
+            # auch bei wenigen, langen Episoden nicht nur in Spruengen geht.
+            quarters = {len(ep) * q // 4: q * 25 for q in (1, 2, 3)}
             for t in range(len(ep)):
                 frame = {key: ep.arrays[key][t] for key in feats}
                 frame["task"] = task
                 lr.add_frame(frame)
+                if t in quarters and len(ep) >= 8:
+                    progress("    Episode %d/%d: %d %%" % (k + 1, total, quarters[t]))
             lr.save_episode()
             ref = episode_reference(ep)
             if reference_path is None:
@@ -357,6 +363,7 @@ def export(
             )
             progress("  Episode %d/%d exportiert (%s, %d Schritte)"
                      % (k + 1, len(scan["episodes"]), root.name, len(ep)))
+        progress("Datensatz wird abgeschlossen (Metadaten, Videos) ...")
     finally:
         lr.finalize()
 
