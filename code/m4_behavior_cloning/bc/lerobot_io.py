@@ -34,6 +34,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import camera_check
 from . import camera_settings as camera_settings_module
 from . import config, dataset
 
@@ -313,6 +314,8 @@ def export(
     tcp_lo, tcp_hi = None, None
     tables = []  # (recorded_at, Metadaten) der Episoden mit Tischreferenz
     camera_settings = []
+    # Erstes Bild (Startstellung) je Kamera -- Referenz der Kamerapruefung
+    first_frames = {name: [] for name in cameras}
     try:
         for k, (root, i, meta) in enumerate(scan["episodes"]):
             ep = dataset.load_episode(root, i)
@@ -324,6 +327,11 @@ def export(
             tcp_lo = tcp.min(axis=0) if tcp_lo is None else np.minimum(tcp_lo, tcp.min(axis=0))
             tcp_hi = tcp.max(axis=0) if tcp_hi is None else np.maximum(tcp_hi, tcp.max(axis=0))
             camera_settings.append(meta["metadata"].get("camera_settings"))
+            every = max(1, len(scan["episodes"]) // camera_check.MAX_EPISODES)
+            for name in (cameras if k % every == 0 else ()):
+                frames = ep.arrays.get("observation.images.%s" % name)
+                if frames is not None and len(frames):
+                    first_frames[name].append(np.asarray(frames[0]))
             if meta["metadata"].get("table"):
                 tables.append((str(meta["metadata"].get("recorded_at") or ""), meta["metadata"]))
             starts.append(ep.arrays["observation.state"][0, :6])
@@ -411,12 +419,23 @@ def export(
         **table_reference(tables),
         # Belichtung, Gain, Weissabgleich der Aufnahmen -- die Inferenz vergleicht
         "camera_settings": camera_settings_module.collect(camera_settings),
+        # Bildstatistik und Bezugsbild der Startstellung (bc/camera_check.py)
+        "camera_reference": _camera_reference(first_frames),
         "episodes": records,
     }
     (output / "meta" / EXPORT_INFO).write_text(
         json.dumps(info, indent=2, ensure_ascii=False, default=_json_default), encoding="utf-8"
     )
     return info
+
+
+def _camera_reference(first_frames):
+    """Referenz der Kamerapruefung; ein Fehler darf den Export nie stoppen."""
+    try:
+        return camera_check.build_reference(first_frames) or None
+    except Exception as exc:   # noqa: BLE001
+        print("Hinweis: keine Kamerareferenz (%s)" % exc)
+        return None
 
 
 def table_reference(tables):

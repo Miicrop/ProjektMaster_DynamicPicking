@@ -451,6 +451,18 @@ TABLE_POINT_OFFSET_M = 0.0
 #: ... kein Wegpunkt und keine Werkzeugspitze darf naeher an die Ebene
 #: (PICK liegt ueblich 6-10 mm darueber) ...
 TABLE_MIN_CLEARANCE_M = 0.003
+#: Probegriff "objekt" (bc/known_pose.py, Anwender 2026-11-16): Die Backenspitzen
+#: erreichen die Objektoberkante (14,9 mm ueber dem Tisch), wenn der TCP so weit
+#: ueber PICK steht (Werte wie APPROACH_OFFSET_FREE_M) ...
+PROBE_OBJECT_TOP_ABOVE_PICK_M = 0.007
+#: ... und sollen so weit darueber anhalten.
+PROBE_GAP_M = 0.003
+#: Policy-Test "Erfolg": Greifpunkt (bzw. vorhergesagter) hoechstens so weit
+#: waagrecht von PICK -- wie das Kriterium von metrics.evaluate_rollout.
+KNOWN_POSE_SUCCESS_XY_M = 0.010
+#: Kamerapruefung vor der Inferenz (bc/camera_check.py): so lange nach dem
+#: Anfahren der Startstellung warten, bis die Bilder sicher frisch sind.
+CAMERA_CHECK_SETTLE_S = 0.5
 #: ... die Punkte duerfen hoechstens so weit von einer Ebene abweichen
 #: (sonst ist einer falsch geteacht) ...
 TABLE_MAX_RESIDUAL_M = 0.003

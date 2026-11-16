@@ -144,6 +144,8 @@ def test_export_train_save_load_predict(tmp_path):
     assert info["lerobot_version"] == config.LEROBOT_VERSION
     assert info["codebase_version"].startswith("v3")
     assert len(info["episodes"]) == 2 and info["episodes"][0]["grasp_tcp"] is not None
+    # Kamerapruefung: Referenz je Kamera aus dem ersten Bild jeder Episode
+    assert info["camera_reference"]["wrist"]["episodes"] == 2
     assert lerobot_io.read_export_info(out)["schema_version"] == config.SCHEMA_VERSION
 
     # Mini-Policy auf der CPU: Features, Zeitversaetze, ein Lernschritt

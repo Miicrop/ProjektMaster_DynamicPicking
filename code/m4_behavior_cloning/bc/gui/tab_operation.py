@@ -7,6 +7,10 @@ Aufbau des Reiters:
     2. Kameras   Welches Geraet auf welchem Platz. Muss zur Aufzeichnung
                  passen -- die Pruefung darunter sagt das VORHER.
     3. Fahrt     Fahrten, Takte, Neuvorhersage, Geraet, Echtzeit.
+    4. Test      Policy-Test mit bekannter Lage (PICK aus der Steuerung, je
+                 Takt die Abweichung; Probegriff 3 mm ueber Tisch oder ueber
+                 dem Objekt) mit Draufsicht auf den aktuellen PICK, und die
+                 Kamerapruefung gegen die Aufnahme des Modells.
 
 Die Ampel oben im Fenster gilt auch hier: Rot heisst reale Anlage. Der
 Stoppknopf beendet den Unterprozess -- ein SOFTWARE-Stopp, der keinen
@@ -31,6 +35,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout
 from . import _bootstrap
 from . import cameras as cameras_module
 from . import operation as operation_module
+from . import pick_view as pick_view_module
 from . import session as session_module
 from . import training as training_module
 from .runner import ProcessRunner
@@ -56,6 +61,7 @@ class OperationTab(ModeTab):
         self._described = None
         self._problems = []
         self._out_dir = None
+        self._pick_state = None
 
         left = self._build_controls()
         right = self._build_output()
@@ -83,6 +89,7 @@ class OperationTab(ModeTab):
         column.addWidget(self._build_model_box())
         column.addWidget(self._build_camera_box())
         column.addWidget(self._build_run_box())
+        column.addWidget(self._build_test_box())
         column.addStretch(1)
 
         area = QScrollArea()
@@ -206,6 +213,83 @@ class OperationTab(ModeTab):
 
         return box
 
+    def _build_test_box(self):
+        """Policy-Test mit bekannter Lage und Kamerapruefung (Anwender 2026-11-16)."""
+        box = QGroupBox("4. Policy-Test und Kameras")
+        layout = QVBoxLayout(box)
+
+        self.known = QCheckBox("Lage bekannt (Policy-Test gegen PICK)")
+        self.known.setToolTip(
+            "PICK und Tisch live aus der Steuerung, Idealbahn aus der Ablaufdatei der "
+            "Aufnahme. Je Takt Abweichung zur Bahn, zu PICK und Höhe über dem Tisch; "
+            "am Griff bzw. Stopp die Lage gegen PICK. Die Policy endet mit dem Griff, "
+            "danach Greifer auf, anheben, zurück zum Start. Ergebnis zusätzlich in "
+            "policy_test.csv im Protokollordner.")
+        self.known.toggled.connect(self._on_known_toggled)
+        layout.addWidget(self.known)
+
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self.probe = block_wheel(QComboBox())
+        self.probe.addItem("Echter Griff (3 mm über Tisch)", "tisch")
+        self.probe.addItem("Probegriff (3 mm über Objekt)", "objekt")
+        self.probe.setToolTip(
+            "Probegriff: der Geofence hält die Werkzeugspitze 3 mm über der "
+            "Objektoberkante. Beim Stopp wird der Rest der Vorhersage gespeichert — "
+            "daraus der Greifpunkt, an dem die Policy gegriffen hätte.\n"
+            "1 Fahrt: der Arm bleibt über dem Objekt stehen (Spiel prüfen).\n"
+            "Mehrere Fahrten: der Experte korrigiert auf derselben Höhe xy und "
+            "Drehung auf PICK, senkt ab, greift, legt das Objekt an eine neue Lage "
+            "und führt PICK nach (Korrektur in policy_test.csv, Bahn in "
+            "experte_XXX.npz).")
+        self.probe.currentIndexChanged.connect(self._update_command)
+        form.addRow("Ende", self.probe)
+        self.sequence = QLineEdit()
+        self.sequence.setPlaceholderText("aus dem Modell")
+        self.sequence.textChanged.connect(self._update_command)
+        form.addRow("Ablauf", self.sequence)
+        layout.addLayout(form)
+
+        row = QHBoxLayout()
+        self.pick_view = pick_view_module.PickView()
+        row.addWidget(self.pick_view, 1)
+        side = QVBoxLayout()
+        self.btn_read_pick = QPushButton("PICK lesen")
+        self.btn_read_pick.setToolTip(
+            "PICK und Tischpunkte (ID0–ID8) aus der verbundenen Steuerung lesen.")
+        self.btn_read_pick.clicked.connect(self.read_pick)
+        side.addWidget(self.btn_read_pick)
+        side.addStretch(1)
+        row.addLayout(side)
+        layout.addLayout(row)
+        self.pick_info = _hint(pick_view_module.state_text(None))
+        layout.addWidget(self.pick_info)
+        self.pick_warnings = QLabel("")
+        self.pick_warnings.setWordWrap(True)
+        layout.addWidget(self.pick_warnings)
+
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self.camera_check = block_wheel(QComboBox())
+        self.camera_check.addItem("prüfen, bei Abweichung nicht fahren", "an")
+        self.camera_check.addItem("prüfen, nur warnen", "warnen")
+        self.camera_check.addItem("aus", "aus")
+        self.camera_check.setToolTip(
+            "In der Startstellung: Helligkeit, Farbe, Sättigung und Kameralage gegen "
+            "die ersten Bilder der Trainingsepisoden (bc/camera_check.py). Ohne "
+            "Antwort auf die Rückfrage fährt apps/infer.py bei Abweichung nicht.")
+        self.camera_check.currentIndexChanged.connect(self._update_command)
+        form.addRow("Kameraprüfung", self.camera_check)
+        for combo in (self.probe, self.camera_check):   # Spalte nicht breiter machen
+            combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(16)
+        layout.addLayout(form)
+        self.camera_ref_info = _hint("")
+        layout.addWidget(self.camera_ref_info)
+        for widget in (self.probe, self.sequence):     # erst mit "Lage bekannt"
+            widget.setEnabled(False)
+        return box
+
     def _build_action_bar(self):
         """Pruefung und Knoepfe ausserhalb des Bildlaufs.
 
@@ -232,7 +316,13 @@ class OperationTab(ModeTab):
             "QPushButton:enabled{background:%s; color:white; font-weight:bold}" % BAD)
         self.btn_start.clicked.connect(self.start_inference)
         self.btn_stop.clicked.connect(self.stop)
+        self.btn_camera_check = QPushButton("Kameras prüfen")
+        self.btn_camera_check.setToolTip(
+            "Nur die Kameraprüfung: Arm in die Startstellung, Bilder gegen die "
+            "Aufnahme des Modells vergleichen, nicht fahren.")
+        self.btn_camera_check.clicked.connect(self.start_camera_check)
         layout.addWidget(self.btn_start)
+        layout.addWidget(self.btn_camera_check)
         layout.addWidget(self.btn_stop)
         layout.addStretch(1)
         outer.addWidget(row)
@@ -268,14 +358,20 @@ class OperationTab(ModeTab):
         progress_layout.addWidget(self.progress_bar)
         progress_layout.addWidget(self.detail_line)
         progress_layout.addWidget(self.totals_line)
+        self.camera_line = QLabel("")
+        self.camera_line.setWordWrap(True)
+        progress_layout.addWidget(self.camera_line)
 
         self.rollouts = QTreeWidget()
         self.rollouts.setHeaderLabels(
             ["Fahrt", "Ergebnis", "Takte", "Greifpunkt", "Ende", "Bahn p95",
-             "Vorhersage", "Überläufe", "Abbruchgrund"])
+             "Vorhersage", "Überläufe", "Abbruchgrund",
+             "Lage xy", "Lage dz", "Drehung", "Tisch min", "Vorh. Griff xy",
+             "Korrektur xy / Drehung"])
         self.rollouts.setRootIsDecorated(False)
         self.rollouts.setMaximumHeight(170)
-        for column, width in enumerate((55, 90, 60, 85, 70, 80, 85, 75, 130)):
+        for column, width in enumerate((55, 90, 60, 85, 70, 80, 85, 75, 130,
+                                        75, 75, 65, 75, 90, 140)):
             self.rollouts.setColumnWidth(column, width)
         progress_layout.addWidget(self.rollouts)
         layout.addWidget(progress_box)
@@ -338,6 +434,13 @@ class OperationTab(ModeTab):
             return
         self._described = operation_module.describe_policy(path)
         self.model_info.setText(operation_module.policy_summary(self._described))
+        seq = self._described.get("sequence_file")
+        self.sequence.setPlaceholderText(
+            "aus dem Modell: %s" % seq if seq else "Modell nennt keinen — Datei angeben")
+        self.camera_ref_info.setText(
+            "Kamerareferenz im Modell vorhanden." if self._described.get("camera_reference")
+            else "Modell ohne Kamerareferenz — nachtragen mit "
+                 "tools/kamera_referenz.py --checkpoint <Modell>; bis dahin nur Hinweis.")
         # Vorbelegung aus dem Modell -- die Werte der Aufzeichnung sind die,
         # die passen muessen. Wer abweichen will, tut das bewusst; die
         # Vorabpruefung sagt es dann.
@@ -361,25 +464,35 @@ class OperationTab(ModeTab):
     def _assignment(self):
         return self.cameras.assignment()
 
+    def _argv(self, camera_check=None):
+        """Kommandozeile aus den Feldern; ``camera_check="nur"``: nur pruefen."""
+        status = self.session.status()
+        only_check = camera_check == "nur"
+        return operation_module.infer_argv(
+            self.checkpoint.currentData(),
+            robot_kind=self._robot_kind(),
+            episodes=self.episodes.value(),
+            camera_specs=cameras_module.to_specs(self._assignment(), self.cameras.fps()),
+            override=(self.session.override
+                      if self._robot_kind() == "neura" else None),
+            max_steps=self.max_steps.value() or None,
+            replan=self.replan.value() or None,
+            device=self.device.currentData(),
+            realtime=self.realtime.isChecked(),
+            hold=self.hold.isChecked(),
+            no_ensemble=self.no_ensemble.isChecked(),
+            out=self.out.text().strip() or None,
+            real_robot=status.is_real_plant,
+            known_pose=self.known.isChecked() and not only_check,
+            probe=self.probe.currentData(),
+            sequence=self.sequence.text().strip() or None,
+            camera_check=camera_check or self.camera_check.currentData())
+
     def _update_command(self):
         status = self.session.status()
         assignment = self._assignment()
         try:
-            argv = operation_module.infer_argv(
-                self.checkpoint.currentData(),
-                robot_kind=self._robot_kind(),
-                episodes=self.episodes.value(),
-                camera_specs=cameras_module.to_specs(assignment, self.cameras.fps()),
-                override=(self.session.override
-                          if self._robot_kind() == "neura" else None),
-                max_steps=self.max_steps.value() or None,
-                replan=self.replan.value() or None,
-                device=self.device.currentData(),
-                realtime=self.realtime.isChecked(),
-                hold=self.hold.isChecked(),
-                no_ensemble=self.no_ensemble.isChecked(),
-                out=self.out.text().strip() or None,
-                real_robot=status.is_real_plant)
+            argv = self._argv()
             self.command.setText(training_module.command_line(argv))
         except ValueError as exc:
             self.command.setText("Betrieb: %s" % exc)
@@ -409,7 +522,13 @@ class OperationTab(ModeTab):
 
     # -- Starten ------------------------------------------------------------
 
-    def start_inference(self):
+    def start_camera_check(self):
+        """Nur die Kamerapruefung: Startstellung anfahren, vergleichen, nicht fahren."""
+        self.start_inference(camera_check="nur")
+
+    def start_inference(self, camera_check=None):
+        if camera_check is not None and not isinstance(camera_check, str):
+            camera_check = None          # clicked(bool) von Qt
         if self.process.running:
             QMessageBox.information(self, "Läuft bereits",
                                     "Es läuft schon eine Fahrt.")
@@ -443,11 +562,20 @@ class OperationTab(ModeTab):
                 + "\n\nTrotzdem starten?"):
             return
 
-        if not self._confirm_motion():
+        if self.known.isChecked() and camera_check != "nur" and self._pick_state is not None \
+                and self._pick_state.warnings and not self.confirm(
+                    "PICK prüfen",
+                    "Der zuletzt gelesene PICK passt vielleicht nicht zur Lage:\n\n"
+                    + "\n".join("  - " + w for w in self._pick_state.warnings)
+                    + "\n\nTrotzdem fahren?"):
+            return
+
+        if not self._confirm_motion(only_check=camera_check == "nur"):
             return
 
         self._progress = operation_module.RolloutProgress(
-            total_episodes=self.episodes.value())
+            total_episodes=None if camera_check == "nur" else self.episodes.value())
+        self.camera_line.setText("")
         self.rollouts.clear()
         self.output.clear()
         self.totals_line.setText("")
@@ -457,21 +585,7 @@ class OperationTab(ModeTab):
         self.headline.setStyleSheet("font-weight:bold")
 
         status = self.session.status()
-        argv = operation_module.infer_argv(
-            self.checkpoint.currentData(),
-            robot_kind=self._robot_kind(),
-            episodes=self.episodes.value(),
-            camera_specs=cameras_module.to_specs(assignment, self.cameras.fps()),
-            override=(self.session.override
-                      if self._robot_kind() == "neura" else None),
-            max_steps=self.max_steps.value() or None,
-            replan=self.replan.value() or None,
-            device=self.device.currentData(),
-            realtime=self.realtime.isChecked(),
-            hold=self.hold.isChecked(),
-            no_ensemble=self.no_ensemble.isChecked(),
-            out=self.out.text().strip() or None,
-            real_robot=status.is_real_plant)
+        argv = self._argv(camera_check=camera_check)
         try:
             # apps/infer.py fragt bei --real-robot nach dem Freigabewort und
             # nach einem Stopp vor jeder weiteren Fahrt. Die Rueckfragen hat
@@ -484,13 +598,17 @@ class OperationTab(ModeTab):
             return
         self._set_running(True)
 
-    def _confirm_motion(self):
+    def _confirm_motion(self, only_check=False):
         """Rueckfrage vor jeder Bewegung -- die Antwort der Steuerung zaehlt."""
         status = self.session.status()
-        lines = ["Die Policy bewegt den Roboter.", ""]
+        lines = (["Kameraprüfung: der Arm fährt in die Startstellung, die Policy fährt "
+                  "nicht.", ""] if only_check else ["Die Policy bewegt den Roboter.", ""])
         lines.append("Backend laut Steuerung: %s" % status.text)
         lines.append("Kameras: %s" % cameras_module.describe(self._assignment()))
-        lines.append("Fahrten: %d" % self.episodes.value())
+        if not only_check:
+            lines.append("Fahrten: %d" % self.episodes.value())
+            if self.known.isChecked():
+                lines.append("Policy-Test mit bekannter Lage, %s" % self.probe.currentText())
         if status.state == session_module.OFFLINE:
             lines += ["", "Es ist nichts verbunden — apps/infer.py verbindet "
                           "selbst. Welche Steuerung antwortet, steht erst dann fest."]
@@ -523,6 +641,16 @@ class OperationTab(ModeTab):
             item.setForeground(1, QBrush(QColor(GOOD if rollout.success else WARN)))
             self.rollouts.addTopLevelItem(item)
             self.rollouts.scrollToItem(item)
+        # Die Lage-Zeile kommt nach der Ergebniszeile: Spalten nachtragen
+        if self._progress.rollouts and self.rollouts.topLevelItemCount():
+            last = self.rollouts.topLevelItem(self.rollouts.topLevelItemCount() - 1)
+            for column, text in enumerate(self._progress.rollouts[-1].row()):
+                last.setText(column, text)
+        text, level = operation_module.camera_check_summary(self._progress)
+        if text:
+            self.camera_line.setText(text)
+            self.camera_line.setStyleSheet("color:%s" % (
+                GOOD if level == "ok" else WARN if level == "warnung" else NEUTRAL))
         self.headline.setText(self._progress.headline())
         self.detail_line.setText(self._progress.detail_line())
         self.totals_line.setText(self._progress.totals_line())
@@ -551,9 +679,56 @@ class OperationTab(ModeTab):
 
     def _set_running(self, running):
         for widget in (self.btn_start, self.btn_rescan, self.checkpoint,
-                       self.hold, self.episodes, self.cameras):
+                       self.hold, self.episodes, self.cameras, self.btn_camera_check,
+                       self.btn_read_pick, self.known):
             widget.setEnabled(not running)
         self.btn_stop.setEnabled(running)
+
+    # -- Policy-Test: PICK --------------------------------------------------
+
+    def _on_known_toggled(self, checked):
+        for widget in (self.probe, self.sequence):
+            widget.setEnabled(checked)
+        self._update_command()
+
+    def _sequence_path(self):
+        text = self.sequence.text().strip() or (self._described or {}).get("sequence_file")
+        if not text:
+            return None
+        path = Path(text)
+        return path if path.is_absolute() else self.workdir / path
+
+    def read_pick(self):
+        """PICK und Tischpunkte aus der verbundenen Steuerung lesen."""
+        robot = self.session.robot
+        if robot is None:
+            QMessageBox.information(self, "Nicht verbunden",
+                                    "Erst oben mit der Steuerung verbinden.")
+            return
+        path = self._sequence_path()
+        if path is None:
+            QMessageBox.information(self, "Kein Ablauf",
+                                    "Modell wählen oder eine Ablaufdatei angeben.")
+            return
+        recordings = training_module.load_locations(self.workdir).get("recordings") or []
+        data_root = self.workdir / recordings[0] if recordings else None
+        try:
+            state = pick_view_module.read_pick_state(robot, path, data_root=data_root)
+        except Exception as exc:
+            QMessageBox.warning(self, "PICK nicht lesbar", "%s: %s" % (type(exc).__name__, exc))
+            return
+        self.set_pick_state(state)
+
+    def set_pick_state(self, state):
+        self._pick_state = state
+        self.pick_view.set_state(state)
+        self.pick_info.setText(pick_view_module.state_text(state))
+        if state is not None and state.warnings:
+            self.pick_warnings.setText("\n".join("! " + w for w in state.warnings))
+            self.pick_warnings.setStyleSheet("color:%s" % WARN)
+        else:
+            self.pick_warnings.setText("PICK passt zum Tisch." if state is not None else "")
+            self.pick_warnings.setStyleSheet("color:%s" % GOOD)
 
     # -- Lebenszyklus -------------------------------------------------------
 

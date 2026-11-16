@@ -54,7 +54,7 @@ import _bootstrap  # noqa: F401
 
 import numpy as np
 
-from bc import config, dataset, metrics, obstacles, replay
+from bc import config, dataset, known_pose, metrics, obstacles, replay
 from bc import camera_settings as camera_settings_module
 from bc.adapters import (
     CAMERA_MODES,
@@ -114,8 +114,15 @@ def build_observation(robot, captures, frames_out=None):
 def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 end_joints=None, end_gripper=None, min_steps=0, threaded_watchdog=True,
                 progress=print, servo_rate_hz=config.SERVO_RATE_HZ, execution=None,
-                frame_guard=None, stop_at_grasp=False):
+                frame_guard=None, stop_at_grasp=False, on_tick=None):
     """Eine Policy-Fahrt. Rueckgabe: Log-dict (Arrays je Takt + Zusammenfassung).
+
+    ``on_tick``: optional ``f(state) -> str``, haengt Text an die
+    Fortschrittszeile (``--lage-bekannt``: aktuelle Abweichung).
+
+    Lehnt das Kollisionsmodell ein Ziel ab, steht der Rest der Vorhersage ab
+    diesem Takt in ``probe_actions`` (K, 7) -- beim Probegriff "objekt" der
+    Weg, den die Policy noch gefahren waere (bc/known_pose.predicted_grasp).
 
     Ende = Endstellung +-END_TOL_RAD UND (falls bekannt) Greiferzustand wie am
     Ende der Aufzeichnung, END_HOLD_STEPS Takte lang, fruehestens ab
@@ -166,6 +173,7 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
     # nach der Aktivierung; online: ein Aufruf je Regeltakt
     pacer = Pacer(clock, config.CONTROL_RATE_HZ if online else servo_rate_hz).start()
     stop_reason, at_end, prev_gripper = None, 0, None
+    probe_actions = None
     try:
         if not online:
             q, v, a = interp.hold()
@@ -273,9 +281,15 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                     stop_reason = "endstellung"
                     break
             if progress and step % 15 == 0:
-                progress("  Takt %4d  Spread %.4f rad  Vorhersage %s"
+                extra = ""
+                if on_tick is not None:
+                    try:
+                        extra = on_tick(state) or ""
+                    except Exception as exc:   # Anzeige darf die Fahrt nie stoppen
+                        extra = "  (Abweichung nicht berechenbar: %s)" % exc
+                progress("  Takt %4d  Spread %.4f rad  Vorhersage %s%s"
                          % (step, log["ensemble_spread"][-1],
-                            "-" if predict_s is None else "%.1f ms" % (1e3 * predict_s)))
+                            "-" if predict_s is None else "%.1f ms" % (1e3 * predict_s), extra))
         else:
             stop_reason = "max_steps"
     except RobotError as exc:
@@ -284,7 +298,11 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
     except PredictionTooSlow as exc:
         stop_reason = "vorhersage zu langsam: %s" % exc
         robot.emergency_stop()
-    except (CameraStale, TargetRejected) as exc:
+    except TargetRejected as exc:
+        stop_reason = str(exc)
+        robot.emergency_stop()
+        probe_actions = _rest_of_prediction(executor)
+    except CameraStale as exc:
         stop_reason = str(exc)
         robot.emergency_stop()
     finally:
@@ -305,7 +323,23 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
     arrays["limiter_clamped"] = limiter.clamped
     arrays["frame_age_max_s"] = frame_guard.worst_age_s
     arrays.update(execution_module.reach_summary(reach_waits))
+    if probe_actions is not None:
+        arrays["probe_actions"] = probe_actions
     return arrays
+
+
+def _rest_of_prediction(executor, horizon=config.POLICY_HORIZON):
+    """Die gemittelten Ziele ab dem zuletzt gelieferten Takt (K, 7) oder None."""
+    if not hasattr(executor, "lookahead"):
+        return None
+    try:
+        rest = [np.asarray(executor.lookahead(k), dtype=float) for k in range(horizon)]
+    except Exception:
+        return None
+    # lookahead haelt am Chunkende den letzten Schritt -- Wiederholungen weg
+    while len(rest) > 1 and np.array_equal(rest[-1], rest[-2]):
+        rest.pop()
+    return np.vstack(rest) if rest else None
 
 
 #: Anheben nach dem Griff wie in pick_to_station (PICK -> PRE_PICK, 5 cm).
@@ -424,8 +458,13 @@ def merge_transport(log, transport, robot):
     return log
 
 
-def add_recorded_workspace(workspace, info, robot, robot_kind, progress=print):
+def add_recorded_workspace(workspace, info, robot, robot_kind, progress=print,
+                           table_clearance=None):
     """Tisch, Sperrzonen und Huelle der Demonstrationen ins Kollisionsmodell.
+
+    ``table_clearance``: Mindestabstand der Werkzeugspitze zur Tischebene (m),
+    Default config.TABLE_MIN_CLEARANCE_M -- groesser beim Probegriff "objekt"
+    (bc/known_pose.probe_clearance).
 
     Tisch und Sperrzonen live aus den Punkten der Steuerung (Namen aus der
     Aufnahme, bc_policy.json ``table_spec``) -- verschiebt sich der Tisch,
@@ -463,11 +502,13 @@ def add_recorded_workspace(workspace, info, robot, robot_kind, progress=print):
     if plane is None and recorded is not None:
         plane, keepouts, source = recorded, recorded_keepouts, "aufnahme"
     if plane is not None:
-        workspace.add_box(TableSurface(plane))
+        clearance_m = config.TABLE_MIN_CLEARANCE_M if table_clearance is None else table_clearance
+        workspace.add_box(TableSurface(plane, min_clearance=clearance_m))
         for zone in keepouts:
             workspace.add_box(KeepoutSurface(zone, plane))
-        progress("Kollisionsmodell: Tisch %s (%s), Sperrzonen %s"
-                 % (source, plane.describe(), ", ".join(z.name for z in keepouts) or "keine"))
+        progress("Kollisionsmodell: Tisch %s (%s), Sperrzonen %s, Werkzeugspitze >= %.1f mm"
+                 % (source, plane.describe(), ", ".join(z.name for z in keepouts) or "keine",
+                    1e3 * clearance_m))
     env = info.get("tcp_envelope")
     if env:
         margin = config.INFER_ENVELOPE_MARGIN_M
@@ -475,6 +516,343 @@ def add_recorded_workspace(workspace, info, robot, robot_kind, progress=print):
         progress("Kollisionsmodell: Werkzeugspitze in der Huelle der Demonstrationen + %.0f mm"
                  % (1e3 * margin))
     return source
+
+
+#: Ordner "Behavior Cloning" (relative Ablaufdateien aus bc_policy.json)
+M4_ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_known_pose(args, info, robot, planner=None):
+    """Bekannte Lage fuer ``--lage-bekannt`` (bc/known_pose.py)."""
+    path = args.ablauf or (info.get("table_spec") or {}).get("sequence_file")
+    if not path:
+        raise SystemExit("--lage-bekannt: keine Ablaufdatei -- bc_policy.json nennt keine "
+                         "(table_spec.sequence_file), bitte mit --ablauf angeben")
+    path = Path(path)
+    if not path.is_absolute() and not path.exists():
+        path = M4_ROOT / path
+    try:
+        known, resolved = known_pose.load(path, robot, planner)
+    except (OSError, ValueError) as exc:
+        raise SystemExit("--lage-bekannt: %s (%s)" % (exc, path))
+    if resolved.table_missing:
+        print("Hinweis: Tischpunkte fehlen in der Steuerung: %s" % ", ".join(resolved.table_missing))
+    print("Ablauf: %s, Tisch aus %d Punkt(en): %s"
+          % (path, len(resolved.table_points), ", ".join(sorted(resolved.table_points))))
+    return known
+
+
+def _deviation_text(known):
+    """Fortschrittszeile: Abweichung im aktuellen Takt (``run_episode(on_tick=...)``)."""
+    def text(state):
+        rows = known_pose.track(np.asarray(state.tcp_quat, dtype=float)[None], known)
+        return ("  Abweichung Bahn %.1f mm  PICK xy %.1f mm  ueber Tisch %.1f mm"
+                % (1e3 * rows["path_dev"][0], 1e3 * rows["xy_pick"][0], 1e3 * rows["table"][0]))
+    return text
+
+
+def evaluate_known(log, known, robot, probe):
+    """Kennzahlen je Takt und Zusammenfassung einer Fahrt mit bekannter Lage.
+
+    Am Griff zaehlt der Takt NACH dem Schliessbefehl (dort hat der Arm das
+    Ziel erreicht, mit dem der Befehl gesendet wurde -- wie metrics).
+    """
+    tcp = log["tcp"]
+    tcp = np.vstack([tcp, log["final_tcp"][None]]) if len(tcp) else log["final_tcp"][None]
+    rows = known_pose.track(tcp, known)
+    grip = np.asarray(log["gripper_cmd"], dtype=float) > config.GRIPPER_THRESHOLD
+    closing = np.flatnonzero(grip[1:] & ~grip[:-1]) + 1
+    grasp_step = min(int(closing[0]) + 1, len(tcp) - 1) if closing.size else None
+    predicted = None
+    if log.get("probe_actions") is not None:
+        try:
+            predicted = known_pose.predicted_grasp(log["probe_actions"], robot.fk, known)
+        except Exception as exc:   # FK nach dem Stopp nicht verfuegbar o. ae.
+            print("   Hinweis: vorhergesagter Greifpunkt nicht berechenbar (%s)" % exc)
+    summary = known_pose.summarize(rows, known, grasp_step=grasp_step, predicted=predicted,
+                                   probe=probe)
+    return {"rows": rows, "summary": summary}
+
+
+def append_csv(path, columns, row):
+    """Eine Zeile an ``path`` anhaengen (Kopfzeile beim ersten Mal). Trenner ';'."""
+    import csv
+    new = not Path(path).exists()
+    with open(path, "a", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle, delimiter=";")
+        if new:
+            writer.writerow(columns)
+        writer.writerow(row)
+
+
+def expected_test_stop(stop_reason):
+    """Endete die Policy wie beim Policy-Test vorgesehen (Griff oder Probegriff)?"""
+    text = str(stop_reason)
+    return text == "griff" or (text.startswith("kollision vorab") and "Tischebene" in text)
+
+
+def retreat_after_test(robot, workspace, log, start_joints, clock, args, planner=None):
+    """Nach dem Policy-Test: Greifer auf, senkrecht anheben, zurueck zum Start.
+
+    Nur nach dem vorgesehenen Ende (Griff, Probegriff am Tisch-Geofence) --
+    nach jedem anderen Stopp bleibt der Arm stehen, wie bisher. Der
+    Probegriff-Stopp ist ein Software-Stopp an einem erlaubten Ziel; er wird
+    quittiert (``clear_stop``), der Rueckzug ist geplant und vorab geprueft.
+    Rueckgabe: Text fuer Protokoll und Oberflaeche.
+    """
+    if not expected_test_stop(log["stop_reason"]):
+        return "keiner -- Stopp nicht vom Test (%s), Arbeitsraum pruefen" % log["stop_reason"]
+    if start_joints is None:
+        return "keiner -- keine Startstellung in bc_policy.json"
+    robot.clear_stop()
+    if robot.read_state().gripper_closed:
+        robot.gripper_command(False)   # oeffnet waehrend des Dwells vor dem Anheben
+    result = planned_transport(robot, workspace, start_joints, clock,
+                               servo_rate_hz=args.servo_rate, planner=planner,
+                               threaded_watchdog=not isinstance(clock, SimClock))
+    return "am Start" if result["stop_reason"] == "endstellung" else result["stop_reason"]
+
+
+def camera_check_before_run(robot, captures, info, start, start_gripper, args,
+                            use_sim_cameras, out):
+    """Kameras in der Startstellung gegen die Aufnahme pruefen (bc/camera_check.py).
+
+    Rueckgabe False = nicht fahren (Abweichung, ``--kamerapruefung an`` und
+    keine Freigabe). Ohne Referenz im Checkpoint oder mit Platzhalter-/Replay-
+    Kameras: nur ein Hinweis, gefahren wird wie bisher.
+    """
+    from bc import camera_check
+
+    reference = info.get(camera_check.REFERENCE_KEY)
+    if use_sim_cameras or args.replay:
+        print("KAMERAPRUEFUNG: uebersprungen (Platzhalter- oder Replay-Bilder)")
+        return True
+    if not reference:
+        print("KAMERAPRUEFUNG: keine Referenz im Checkpoint -- nachtragen mit "
+              "tools/kamera_referenz.py --checkpoint <policy>")
+        return True
+    # Startstellung wie die Referenzbilder (erstes Bild jeder Episode)
+    if start_gripper is not None:
+        robot.gripper_command(start_gripper > config.GRIPPER_THRESHOLD)
+    if start is not None and not args.no_start_move:
+        away = float(np.max(np.abs(robot.read_state().joints - start)))
+        if away > config.START_POSE_TOL_RAD:
+            print("Kamerapruefung: an die Startstellung (%.3f rad entfernt)" % away)
+            robot.move_to_joints(start)
+    time.sleep(config.CAMERA_CHECK_SETTLE_S)    # frische Bilder nach dem Anhalten
+    frames = {}
+    for cap in captures:
+        frame = cap.latest()
+        frames[cap.name] = None if frame is None else _to_schema_size(frame.image)
+    results = camera_check.compare(reference, frames)
+    for line in camera_check.format_lines(results):
+        print(line)
+    try:
+        import cv2
+        for name, image in frames.items():
+            if image is not None:
+                ref = camera_check.decode_image(reference[name]["image_png_b64"]) \
+                    if name in reference else np.zeros_like(image)
+                # Bilder liegen als RGB vor, cv2 schreibt BGR
+                cv2.imwrite(str(Path(out) / ("kamerapruefung_%s.png" % name)),
+                            np.ascontiguousarray(np.hstack([ref, image])[..., ::-1]))
+    except Exception as exc:   # Bild ist nur Beiwerk
+        print("Hinweis: Pruefbilder nicht gespeichert (%s)" % exc)
+    warn = any(r["level"] == camera_check.WARN for r in results)
+    print("KAMERAPRUEFUNG gesamt: %s (Bilder: Training links, jetzt rechts, in %s)"
+          % ("WARNUNG" if warn else "OK", out))
+    if not warn or args.kamerapruefung in ("warnen", "nur"):
+        return True
+    answer = ask("Kameras weichen von der Aufnahme ab -- trotzdem fahren? [j/N] ", "n")
+    if answer.strip().lower() != "j":
+        print("Nicht gefahren: Kamerapruefung mit Abweichung (Licht, Belichtung, Kameralage "
+              "pruefen oder --kamerapruefung warnen).")
+        return False
+    return True
+
+
+def run_planned(robot, workspace, targets, gripper, clock, servo_rate_hz=config.SERVO_RATE_HZ,
+                threaded_watchdog=True):
+    """Geplante Gelenkbahn als servo_j-Strom, Greifer je Takt wie geplant.
+
+    ``targets`` (N, 6) aus kin.solve_path, ``gripper`` (N,) aus der Idealbahn
+    (der Planer hat am Greiferwechsel den Dwell schon eingefuegt). Jedes Ziel
+    ist vorab geprueft; der Watchdog laeuft mit. Rueckgabe: Log mit t/joints/
+    tcp/gripper_cmd und ``stop_reason`` ("fertig" oder der Grund).
+    """
+    log = {k: [] for k in ("t", "joints", "tcp", "gripper_cmd")}
+    stop_reason = "fertig"
+    q0 = np.asarray(robot.read_state().joints, dtype=float)
+    watchdog = Watchdog(robot, [geofence_check(robot, workspace)], clock)
+    if threaded_watchdog:
+        watchdog.start()
+    interp = ServoInterpolator(servo_rate_hz=servo_rate_hz).reset(q0)
+    robot.activate_servo("position")
+    pacer = Pacer(clock, servo_rate_hz).start()
+    closed = None
+    try:
+        for q, g in zip(targets, gripper):
+            if not threaded_watchdog and watchdog.run_once() is not None:
+                stop_reason = "geofence: %s" % watchdog.tripped
+                break
+            want = bool(g > config.GRIPPER_THRESHOLD)
+            if want != closed:
+                robot.gripper_command(want)
+                closed = want
+            for qq, v, a in interp.window(q):
+                if robot.stop_requested:
+                    break
+                pacer.tick()
+                robot.servo_j(qq, v, a)
+            if robot.stop_requested:
+                stop_reason = "stopp: %s" % (watchdog.tripped or "angefordert")
+                break
+            state = robot.read_state()
+            log["t"].append(clock.now())
+            log["joints"].append(state.joints)
+            log["tcp"].append(np.asarray(state.tcp_quat, dtype=float))
+            log["gripper_cmd"].append(float(want))
+    except RobotError as exc:
+        stop_reason = "abgelehnt: %s" % exc
+        robot.emergency_stop()
+    finally:
+        watchdog.stop()
+        robot.deactivate_servo()
+    out = {k: np.asarray(v, dtype=float) for k, v in log.items()}
+    out["stop_reason"] = stop_reason
+    return out
+
+
+def _write_pick(robot, joints, pick_state):
+    """PICK in der Steuerung auf ``joints`` setzen. Erste Aenderung je Lauf mit
+    Sicherung wie beim Touch-up, danach nur schreiben (Stand vor dem Lauf
+    bleibt in der Sicherung, wie apps/record.py adopt_pick)."""
+    from bc import touchup
+
+    joints = [float(v) for v in joints]
+    if pick_state.get("backup") is None:
+        plan = {"name": "PICK", "joints": joints, "problems": [], "warnings": [],
+                "tool": getattr(robot, "tool_name", None),
+                "in_simulation": getattr(robot, "in_simulation", None)}
+        pick_state["backup"], _record = touchup.apply_touch_up(robot, plan,
+                                                               config.TOUCHUP_BACKUP_ROOT)
+    else:
+        robot.store_point("PICK", joints)
+        touchup.update_backup_target(pick_state["backup"], joints)
+    return pick_state["backup"]
+
+
+def expert_after_probe(robot, workspace, known, reference_pick, start_joints, clock, args,
+                       planner, rng, pick_state):
+    """Experte nach dem Probegriff: korrigieren, greifen, neu ablegen, PICK nachfuehren.
+
+    Rueckgabe dict: ``correction`` (bc/known_pose.correction), ``result``
+    (Text), ``log`` (gefahrene Bahn, fuer DAgger), ``new_pick`` (Pose) und
+    ``placed_xy`` -- oder ohne ``log``, wenn nichts planbar war (dann steht
+    der Arm noch am Stopp).
+    """
+    from bc.auto_layout import rotated_about
+    from bc.kinematics import IKFailure, Kinematics
+    from bc.trajectory import build_ideal_trajectory
+
+    planner = planner or {}
+    if robot.stop_requested:
+        robot.clear_stop()
+    state = robot.read_state()
+    if state.gripper_closed:
+        robot.gripper_command(False)       # Policy hat in der Luft geschlossen
+    kin = Kinematics(robot)
+    q0 = np.asarray(state.joints, dtype=float)
+    p0 = np.asarray(robot.fk(q0), dtype=float)
+    above, grasp, info = known_pose.correction(known, p0)
+    lift = TRANSPORT_LIFT_M
+    up_grasp = grasp.copy()
+    up_grasp[2] += lift
+    out = {"correction": info, "result": None}
+    try:
+        lift_joints = kin.ik(up_grasp, q0)
+    except IKFailure as exc:
+        out["result"] = "Greifpunkt nicht erreichbar (%s)" % exc
+        return out
+    start_pose = np.asarray(robot.fk(start_joints), dtype=float)
+    speeds = dict(transit_speed=planner.get("transit_speed_ms") or config.TRANSIT_SPEED_MS,
+                  approach_speed=planner.get("approach_speed_ms") or config.APPROACH_SPEED_MS,
+                  ptp_joint_speed=planner.get("ptp_joint_speed_rads") or config.PTP_JOINT_SPEED_RADS)
+    plan, last_error = None, "keine freie Lage"
+    for pose, xy, turn in known_pose.new_place_pose(known, reference_pick, rng,
+                                                    used_xy=pick_state.get("used_xy", ())):
+        # in derselben Orientierung ablegen, wie gegriffen wurde
+        place = (rotated_about(pose, known.table.normal_at(pose[0], pose[1]), np.pi)
+                 if info["flipped"] else pose)
+        up_place = place.copy()
+        up_place[2] += lift
+        try:
+            place_above_joints = kin.ik(up_place, lift_joints)
+            waypoints = known_pose.expert_waypoints(
+                p0, q0, above, grasp, place, start_joints, lift, lift_joints,
+                place_above_joints, start_pose)
+            ideal = build_ideal_trajectory(waypoints, fk=robot.fk, **speeds)
+            targets = kin.solve_path(ideal.poses_quat, q0, fixed_joints=ideal.joints)
+            for q in targets:
+                check_target(workspace, robot, q)
+        except (IKFailure, TargetRejected, ValueError) as exc:
+            last_error = str(exc)
+            continue
+        plan = (pose, xy, turn, place, ideal, targets)
+        break
+    if plan is None:
+        out["result"] = "keine Ablage planbar (%s) -- Arm steht am Stopp" % last_error
+        return out
+    pose, xy, turn, place, ideal, targets = plan
+    log = run_planned(robot, workspace, targets, ideal.gripper, clock,
+                      servo_rate_hz=args.servo_rate,
+                      threaded_watchdog=not isinstance(clock, SimClock))
+    out["log"] = log
+    out["placed_xy"] = xy
+    if log["stop_reason"] != "fertig":
+        out["result"] = "abgebrochen: %s" % log["stop_reason"]
+        return out
+    # PICK = Greifpose der neuen Lage (wie die Aufnahme sie greifen wuerde)
+    opened = np.flatnonzero(np.diff((np.asarray(ideal.gripper) > config.GRIPPER_THRESHOLD)
+                                    .astype(int)) < 0)
+    seed = targets[int(opened[0]) + 1] if opened.size else targets[-1]
+    try:
+        joints = kin.ik(pose, seed)
+        backup = _write_pick(robot, joints, pick_state)
+    except Exception as exc:     # Objekt liegt trotzdem dort
+        out["result"] = ("abgelegt bei x %.0f y %.0f mm, PICK NICHT nachgefuehrt (%s) -- "
+                         "vor der naechsten Fahrt teachen" % (1e3 * xy[0], 1e3 * xy[1], exc))
+        return out
+    pick_state.setdefault("used_xy", []).append(xy)
+    out["new_pick"] = [float(v) for v in pose]
+    out["result"] = ("gegriffen, abgelegt bei x %.0f y %.0f mm (Drehung %+.0f Grad), PICK "
+                     "nachgefuehrt (Sicherung %s)" % (1e3 * xy[0], 1e3 * xy[1], turn,
+                                                     Path(backup).name))
+    return out
+
+
+def build_workspace(table_z, info, robot, robot_info, args, known=None, table_clearance=None,
+                    progress=print):
+    """Kollisionsmodell der Fahrt: Tischquader, Tisch/Sperrzonen/Huelle aus der
+    Aufnahme (live), ohne Tischdaten der Tisch der bekannten Lage, Hindernisse."""
+    workspace = default_workspace(table_height_m=table_z)
+    table_source = add_recorded_workspace(workspace, info, robot, robot_info["robot"],
+                                          progress=progress, table_clearance=table_clearance)
+    if known is not None and table_source is None:
+        # Policy ohne Tischdaten: der Tisch der bekannten Lage schuetzt trotzdem
+        from bc.table import TableSurface
+        clearance_m = config.TABLE_MIN_CLEARANCE_M if table_clearance is None else table_clearance
+        workspace.add_box(TableSurface(known.table, min_clearance=clearance_m))
+        progress("Kollisionsmodell: Tisch aus dem Ablauf (%s), Werkzeugspitze >= %.1f mm"
+                 % (known.table.describe(), 1e3 * clearance_m))
+    if obstacles.applies(robot_info["robot"], robot_info.get("in_simulation"), args.hindernisse):
+        zelle = obstacles.load()
+        if zelle is None:
+            progress("Hinweis: %s fehlt -- nur Kugelmodell und Tisch." % obstacles.OBSTACLES_FILE)
+        else:
+            workspace.add_obstacles(zelle)
+            progress("Hindernisse: %s (%s)" % (zelle.describe(), obstacles.OBSTACLES_FILE))
+    return workspace
 
 
 def confirm_real_robot():
@@ -609,9 +987,32 @@ def parse_args():
                              "PTP zur Endstellung aus bc_policy.json (Policies, die nur auf Anflug "
                              "und Griff trainiert sind, tools/export_variante.py --abschneiden-nach)"
                              % (100 * TRANSPORT_LIFT_M))
+    parser.add_argument("--lage-bekannt", dest="lage_bekannt", action="store_true",
+                        help="Policy-Test mit bekannter Lage (bc/known_pose.py): PICK und Tisch "
+                             "live aus der Steuerung, Idealbahn aus der Ablaufdatei; je Takt die "
+                             "Abweichung, am Griff/Stopp die Lage gegen PICK. Die Policy endet mit "
+                             "dem Griff, danach Greifer auf, anheben, zurueck zum Start.")
+    parser.add_argument("--ablauf", default=None, metavar="DATEI",
+                        help="Ablaufdatei fuer --lage-bekannt (Default: die der Aufnahme aus "
+                             "bc_policy.json table_spec.sequence_file)")
+    parser.add_argument("--probegriff", choices=known_pose.PROBE_MODES, default="tisch",
+                        help="mit --lage-bekannt: 'tisch' = echter Griff (Werkzeugspitze >= %.0f mm "
+                             "ueber dem Tisch), 'objekt' = Stopp %.0f mm ueber der Objektoberkante, "
+                             "ohne Kontakt (Default %%(default)s)"
+                             % (1e3 * config.TABLE_MIN_CLEARANCE_M, 1e3 * config.PROBE_GAP_M))
+    parser.add_argument("--kamerapruefung", choices=("an", "warnen", "aus", "nur"), default="an",
+                        help="vor der ersten Fahrt in der Startstellung die Kameras gegen die "
+                             "Aufnahme des Modells pruefen (bc/camera_check.py): 'an' = bei "
+                             "Abweichung nachfragen (ohne Antwort: nicht fahren), 'warnen' = nur "
+                             "anzeigen, 'nur' = pruefen und nicht fahren (Default %(default)s)")
     parser.add_argument("--out", default=None,
                         help="Ordner fuer Fahrtprotokolle (Default: <checkpoint>/rollouts/<Zeit>)")
     args = parser.parse_args()
+    if args.lage_bekannt and args.replay:
+        parser.error("--lage-bekannt nicht mit --replay: die eingespielten Bilder zeigen eine "
+                     "andere Lage")
+    if args.lage_bekannt and args.transport_geplant:
+        parser.error("--lage-bekannt endet selbst mit dem Griff -- ohne --transport-geplant")
     if not args.hold and not args.checkpoint:
         parser.error("--checkpoint fehlt (oder --hold fuer den Verdrahtungstest)")
     args.replay_episodes = []
@@ -809,15 +1210,28 @@ def main():
         table_z = float(info["ideal_z_min"]) - 0.15  # Regel wie apps/record.py
     else:
         table_z = float(robot.read_state().tcp_quat[2]) - 0.3
-    workspace = default_workspace(table_height_m=table_z)
-    add_recorded_workspace(workspace, info, robot, robot_info["robot"])
-    if obstacles.applies(robot_info["robot"], robot_info.get("in_simulation"), args.hindernisse):
-        zelle = obstacles.load()
-        if zelle is None:
-            print("Hinweis: %s fehlt -- nur Kugelmodell und Tisch." % obstacles.OBSTACLES_FILE)
-        else:
-            workspace.add_obstacles(zelle)
-            print("Hindernisse: %s (%s)" % (zelle.describe(), obstacles.OBSTACLES_FILE))
+    known, table_clearance = None, None
+    if args.lage_bekannt:
+        try:
+            known = load_known_pose(args, info, robot, rec_planner)
+        except Exception:
+            for cap in captures:
+                cap.stop()
+            robot.close()
+            raise
+        table_clearance = known_pose.probe_clearance(args.probegriff, known)
+        print("Lage bekannt: %s" % known.describe())
+        print("Probegriff %s: Werkzeugspitze bleibt >= %.1f mm ueber dem Tisch%s"
+              % (args.probegriff, 1e3 * table_clearance,
+                 " (%.1f mm ueber der Objektoberkante)" % (1e3 * config.PROBE_GAP_M)
+                 if args.probegriff == "objekt" else " -- echter Griff"))
+    workspace = build_workspace(table_z, info, robot, robot_info, args, known, table_clearance)
+    # Experte nach dem Probegriff (bc/known_pose.py): normaler Tischabstand,
+    # er greift ja am Objekt -- der erhoehte gilt nur fuer die Policy
+    expert_workspace = None
+    if known is not None and args.probegriff == "objekt" and args.episodes > 1:
+        expert_workspace = build_workspace(table_z, info, robot, robot_info, args, known,
+                                           None, progress=lambda *_: None)
     start = np.asarray(info["start_joints"]) if info.get("start_joints") else None
     end = np.asarray(info["end_joints"]) if info.get("end_joints") else None
     start_gripper, end_gripper = info.get("start_gripper"), info.get("end_gripper")
@@ -846,6 +1260,25 @@ def main():
             raise SystemExit("--transport-geplant braucht servo_j und eine Endstellung in bc_policy.json")
         print("Transport geplant: Policy bis zum Griff, dann %.0f cm anheben und PTP zur Endstellung"
               % (100 * TRANSPORT_LIFT_M))
+
+    if args.kamerapruefung != "aus":
+        try:
+            go = camera_check_before_run(robot, captures, info, start, start_gripper, args,
+                                         use_sim_cameras, out)
+        except Exception:
+            if hasattr(executor, "close"):
+                executor.close()
+            for cap in captures:
+                cap.stop()
+            robot.close()
+            raise
+        if not go or args.kamerapruefung == "nur":
+            args.episodes = 0      # Kameras pruefen, nicht fahren (Abschluss wie immer)
+
+    # Umlegen durch den Experten (Probegriff "objekt", mehrere Fahrten)
+    rng = np.random.default_rng(args.seed)
+    reference_pick = None if known is None else known.pick.copy()
+    pick_state = {}
 
     results = []
     try:
@@ -885,7 +1318,11 @@ def main():
                               end_joints=end, end_gripper=end_gripper, min_steps=min_steps,
                               threaded_watchdog=not isinstance(clock, SimClock),
                               servo_rate_hz=args.servo_rate, execution=execution,
-                              stop_at_grasp=args.transport_geplant)
+                              stop_at_grasp=args.transport_geplant or known is not None,
+                              on_tick=None if known is None else _deviation_text(known))
+            lage = None
+            if known is not None:
+                lage = evaluate_known(log, known, robot, args.probegriff)
             if args.transport_geplant and log["stop_reason"] == "griff":
                 transport = planned_transport(robot, workspace, end, clock,
                                               servo_rate_hz=args.servo_rate, planner=rec_planner,
@@ -905,6 +1342,15 @@ def main():
             # "kein Erfolg". Er bleibt als Information (success_reference).
             summary["success_reference"] = summary["success"]
             summary["success"] = bool(log["reached_end"])
+            if lage is not None:
+                # Policy-Test: Greifpunkt gegen die BEKANNTE Lage (am Griff, beim
+                # Probegriff vorhergesagt); Erfolg = vorgesehenes Ende und <= 10 mm
+                s = lage["summary"]
+                at = s["at_grasp"] or s["predicted"] or s["at_stop"] or {}
+                summary["grasp_error_m"] = at.get("xy_m")
+                summary["success"] = bool(expected_test_stop(log["stop_reason"])
+                                          and at.get("xy_m") is not None
+                                          and at["xy_m"] <= config.KNOWN_POSE_SUCCESS_XY_M)
             predict = log["predict_s"][np.isfinite(log["predict_s"])] if len(log["predict_s"]) else np.array([])
             delays = log["delay_steps"][np.isfinite(log["delay_steps"])] if len(log["delay_steps"]) else np.array([])
             summary.update(
@@ -928,9 +1374,15 @@ def main():
             if replay_arrays is not None:
                 cmp = replay.compare_rollout(log, replay_arrays)
                 summary["replay"] = dict(root=str(args.replay), episode=replay_ep, **cmp)
+            if lage is not None:
+                summary["lage"] = lage["summary"]
             results.append(summary)
-            np.savez_compressed(out / ("rollout_%03d.npz" % ep),
-                                **{k: v for k, v in log.items() if isinstance(v, np.ndarray)})
+            arrays_out = {k: v for k, v in log.items() if isinstance(v, np.ndarray)}
+            if lage is not None:
+                # je Takt (gemessen, wie log["tcp"] plus Schlusszustand)
+                arrays_out.update({"lage_" + k: v for k, v in lage["rows"].items()})
+                arrays_out["lage_pick"] = np.asarray(known.pick, dtype=float)
+            np.savez_compressed(out / ("rollout_%03d.npz" % ep), **arrays_out)
             print("Fahrt %d: %s -- %d Takte, Greifpunkt %s, Ende %s, Bahn p95 %s, %s, Vorhersage %s ms, "
                   "Overruns %d, gekappt %d"
                   % (ep, "ERFOLG" if summary["success"] else "kein Erfolg", summary["steps"],
@@ -942,6 +1394,50 @@ def main():
                 print("   %s" % execution_module.reach_line(halt))
             if "replay" in summary:
                 print("   %s" % replay.format_rollout_comparison(summary["replay"]))
+            if lage is not None:
+                print(known_pose.result_line(lage["summary"]))
+                expert, stop_here = None, False
+                if args.probegriff == "objekt":
+                    if not (expected_test_stop(log["stop_reason"])
+                            or log["stop_reason"] == "max_steps"):
+                        retreat = ("keiner -- Stopp nicht vom Test (%s), Arbeitsraum pruefen"
+                                   % log["stop_reason"])
+                    elif expert_workspace is None:
+                        retreat = ("stehen geblieben -- Werkzeug %.0f mm ueber dem Objekt, "
+                                   "Spiel pruefen" % (1e3 * config.PROBE_GAP_M))
+                    else:
+                        back_to = ep_start if ep_start is not None else np.asarray(log["joints"][0])
+                        expert = expert_after_probe(robot, expert_workspace, known, reference_pick,
+                                                    back_to, clock, args, rec_planner, rng,
+                                                    pick_state)
+                        print(known_pose.correction_line(expert["correction"]))
+                        retreat = expert["result"]
+                        summary["experte"] = {k: expert.get(k) for k in
+                                              ("correction", "result", "new_pick", "placed_xy")}
+                        if expert.get("log") is not None:
+                            np.savez_compressed(
+                                out / ("experte_%03d.npz" % ep),
+                                **{k: v for k, v in expert["log"].items()
+                                   if isinstance(v, np.ndarray)})
+                        stop_here = expert.get("new_pick") is None
+                else:
+                    retreat = retreat_after_test(robot, workspace, log, ep_start, clock, args,
+                                                 rec_planner)
+                    if lage["summary"]["at_grasp"] is not None:
+                        print("   Hinweis: Objekt wurde gegriffen und wieder abgelegt -- Lage kann "
+                              "sich verschoben haben, PICK vor der naechsten Fahrt pruefen.")
+                print("   Danach: %s" % retreat)
+                summary["rueckzug"] = retreat
+                append_csv(out / "policy_test.csv", known_pose.CSV_COLUMNS,
+                           known_pose.csv_row(ep, log["stop_reason"], lage["summary"],
+                                              None if expert is None else expert["correction"],
+                                              retreat))
+                if stop_here:
+                    print("Beendet: Experte konnte nicht umlegen -- Objekt und PICK pruefen.")
+                    break
+                if expert is not None and ep + 1 < args.episodes:
+                    known = load_known_pose(args, info, robot, rec_planner)   # neuer PICK
+                    print("Lage bekannt: %s" % known.describe())
     finally:
         if hasattr(executor, "close"):
             executor.close()

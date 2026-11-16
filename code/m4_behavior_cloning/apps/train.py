@@ -633,6 +633,8 @@ def build_policy_info(export_info, dataset_root, meta, policy_cfg, cameras, args
         "table": export_info.get("table"),
         "table_spec": export_info.get("table_spec"),
         "keepouts": export_info.get("keepouts") or [],
+        # Kamerapruefung vor der Inferenz (bc/camera_check.py)
+        "camera_reference": export_info.get("camera_reference"),
         # Referenz fuer die Bewertung einer Fahrt ohne Datensatz (bc.metrics)
         "reference": {
             "path": export_info.get("reference_path"),
