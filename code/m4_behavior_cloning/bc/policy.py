@@ -196,12 +196,16 @@ class ChunkExecutor(object):
         self._chunk = None
         self._cursor = 0
         self.predictions = 0
+        self.history = []
+        self._steps = 0
 
     def reset(self):
         self.policy.reset()
         self._chunk = None
         self._cursor = 0
         self.predictions = 0
+        self.history = []
+        self._steps = 0
 
     def next_action(self, observation):
         """Liefert die naechste Einzel-Action (ACTION_DIM,)."""
@@ -209,9 +213,11 @@ class ChunkExecutor(object):
         if self._chunk is None or self._cursor >= min(self.n_execute, len(self._chunk)):
             self._chunk = _validate_chunk(self.policy.predict(observation))
             self.predictions += 1
+            self.history.append((self._steps, np.array(self._chunk, dtype=float)))
             self._cursor = 0
         action = self._chunk[self._cursor]
         self._cursor += 1
+        self._steps += 1
         return action
 
     def lookahead(self, k):
@@ -223,6 +229,13 @@ class ChunkExecutor(object):
         if self._chunk is None:
             raise RuntimeError("lookahead vor der ersten Action")
         return self._chunk[min(self._cursor - 1 + int(k), len(self._chunk) - 1)]
+
+    def active_chunks(self):
+        """Live-Ansicht (bc/live.py): Rest des Chunks ab der zuletzt gelieferten
+        Action, als Liste mit einem Eintrag ``(Takt der Vorhersage, Rest)``."""
+        if self._chunk is None or self._cursor < 1:
+            return []
+        return [(self.predictions, np.asarray(self._chunk[self._cursor - 1:]))]
 
 
 class ChunkEnsembler(object):
@@ -279,6 +292,9 @@ class ChunkEnsembler(object):
         self.last_count = 0
         self.last_predict_s = None
         self.last_delay_steps = 0
+        #: jede rohe Vorhersage (Takt der Beobachtung, Chunk) -- fuer die
+        #: Auswertung, ob die Policy zwischen Modi springt (Rollout-npz)
+        self.history = []
 
     def reset(self):
         if self._predictor is not None and self._predictor.busy:
@@ -299,6 +315,7 @@ class ChunkEnsembler(object):
                 % (len(chunk), self.replan_steps)
             )
         self._chunks.append((step, chunk))
+        self.history.append((int(step), np.array(chunk, dtype=float)))
         self.predictions += 1
         self.last_predict_s = seconds
         self.last_delay_steps = self._step - step
@@ -372,6 +389,15 @@ class ChunkEnsembler(object):
         ages = np.array([self._step - 1 - s for s, _ in chunks], dtype=float)
         weights = np.exp(-self.decay * ages)
         return (weights[:, None] * actions).sum(axis=0) / weights.sum()
+
+    def active_chunks(self):
+        """Live-Ansicht (bc/live.py): je gemittelter Vorhersage ``(Takt der
+        Beobachtung, Rest ab der zuletzt gelieferten Action)`` -- genau die
+        Chunks, aus denen das Mittel dieses Takts stammt."""
+        if self._step == 0:
+            return []
+        now = self._step - 1
+        return [(s, np.asarray(c[now - s:])) for s, c in self._chunks if s <= now < s + len(c)]
 
 
 def check_action(action, measured_joints, guard):

@@ -93,7 +93,7 @@ def test_probe_violation_of_the_plant_counts_as_probe_stop():
     assert infer.probe_violation(VIOLATION_16_11)
     assert infer.expected_test_stop(VIOLATION_16_11, "objekt")
     assert not infer.expected_test_stop(VIOLATION_16_11)           # echter Griff: nein
-    deep = VIOLATION_16_11.replace("-0.0031", "-0.0080")
+    deep = VIOLATION_16_11.replace("-0.0031", "-0.0150")
     assert not infer.probe_violation(deep)
     other = VIOLATION_16_11.replace("'Tischebene'", "'Sperrzone IGNORE'")
     assert not infer.probe_violation(other)

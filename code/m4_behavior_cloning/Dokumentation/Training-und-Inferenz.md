@@ -281,3 +281,22 @@ aussagekräftig.
   Kandidaten: an Durchfahrpunkten nicht anhalten (Überschleifen/Rampen), längere
   Chunks offen ausführen, mehr Daten. Beim Greifer-Dwell besteht dieselbe
   Mehrdeutigkeit (Sim: 2/10 Fahrten schlossen nicht, Wartezeiten schwanken).
+
+## Live-Ansicht und Probegriff-Abstand (2026-11-17)
+
+* **Probegriff-Abstand** einstellbar: GUI-Feld „Abstand über Objekt" bzw.
+  `apps/infer.py --probe-abstand MM`, Standard 25 mm (`config.PROBE_GAP_M`).
+  Grund: an der Anlage lief der Arm nach dem abgelehnten Ziel bis 7,5 mm unter
+  die Ebene nach (Nachlauf ≈ Abstiegstempo × 50 ms). Zusätzlich prüft
+  `bc/safety.check_target` jedes Ziel um einen Takt verlängert. Unter 10 mm
+  fragt die GUI nach. Standard für „Lage bekannt" ist jetzt der Probegriff.
+* **Live-Ansicht** (`bc/live.py`, Fenster `bc/gui/live_window.py`): öffnet sich
+  beim Start einer Fahrt. Kamerabilder, Draufsicht mit PICK (grün), TCP mit Spur
+  (blau), jede gerade gemittelte Vorhersage (orange dünn) und ihr Mittel, das
+  gefahren wird (orange dick), Verlauf des Drehfehlers. Pfeile mit zwei Spitzen:
+  die Drehung zählt modulo 180°. Pfeile im Szenenbild über die ArUco-Abbildung
+  von M1; da der Arm in der Startstellung einen Marker verdeckt, wird die
+  Abbildung nach jeder M1-Lokalisierung in `einstellungen/live_szene.local.json`
+  gespeichert und sonst von dort genommen. Abschalten: `--keine-live-ansicht`.
+* **Rohe Vorhersagen** stehen im Rollout (`pred_step`, `pred_chunk`) -- damit
+  lässt sich nachträglich prüfen, ob die Policy zwischen Drehungen springt.

@@ -207,16 +207,29 @@ class StallGuard(object):
         return self.count
 
 
-def check_target(collision_model, robot, joints):
+def check_target(collision_model, robot, joints, previous=None, lookahead=0.0):
     """Vorabpruefung eines Ziels VOR dem Senden (Inferenz, Analyse 2026-11-11).
 
     Der Watchdog prueft die GEMESSENE Stellung, reagiert also erst, wenn der
     Arm schon dort ist (bei 20 Hz plus ~0,1 s Stopp einige mm zu spaet). Hier
     wird das Ziel selbst geprueft: ein verbotenes Ziel geht gar nicht erst
     raus. Wirft :class:`TargetRejected` mit der ersten Verletzung.
+
+    ``previous`` + ``lookahead`` (Anlage 2026-11-17): zusaetzlich das um
+    ``lookahead`` Takte linear verlaengerte Ziel ``joints + lookahead *
+    (joints - previous)`` pruefen. Nach einem abgelehnten Ziel laeuft der Arm
+    noch nach (gemessen bis 7,5 mm bei 150 mm/s, ~50 ms) -- so wird schon
+    abgelehnt, solange der Nachlauf bei der aktuellen Geschwindigkeit noch
+    vor der Grenze endet.
     """
-    violations = collision_model.check_positions(collision_model.positions_for(robot, joints))
-    if violations:
-        v = violations[0]
-        raise TargetRejected("kollision vorab: %s an %s (Rest %.0f mm)"
-                             % (v.frame, v.box, 1e3 * v.clearance))
+    joints = np.asarray(joints, dtype=float)
+    candidates = [("", joints)]
+    if previous is not None and lookahead > 0:
+        ahead = joints + float(lookahead) * (joints - np.asarray(previous, dtype=float)[:len(joints)])
+        candidates.append((" (Nachlauf)", ahead))
+    for tag, q in candidates:
+        violations = collision_model.check_positions(collision_model.positions_for(robot, q))
+        if violations:
+            v = violations[0]
+            raise TargetRejected("kollision vorab%s: %s an %s (Rest %.0f mm)"
+                                 % (tag, v.frame, v.box, 1e3 * v.clearance))

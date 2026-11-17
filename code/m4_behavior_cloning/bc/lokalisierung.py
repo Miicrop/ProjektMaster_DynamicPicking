@@ -55,10 +55,13 @@ class Localization:
     size_mm: tuple = ()
     method: str = ""
     extra: dict = field(default_factory=dict)
+    #: mit Fase: Greiferdrehung nach M2-Konvention 0..360 (sonst None)
+    gripper_yaw360_deg: float = None
 
     def as_dict(self):
         return {"x_m": self.x_m, "y_m": self.y_m, "theta_deg": self.theta_deg,
                 "gripper_yaw_deg": self.gripper_yaw_deg, "chamfer": self.chamfer,
+                "gripper_yaw360_deg": self.gripper_yaw360_deg,
                 "size_mm": list(self.size_mm), "method": self.method, **self.extra}
 
     def describe(self):
@@ -108,18 +111,19 @@ class M1Localizer(object):
             raise LocalizationError("M1: %s%s" % (text, hint))
         self.last_result = result
         pose = result.pose
-        yaw = gripper_yaw_deg(self.cfg, ObjectPose(pose.x_mm, pose.y_mm, pose.z_mm,
-                                                   pose.theta_deg, pose.confidence))
+        obj = ObjectPose(pose.x_mm, pose.y_mm, pose.z_mm, pose.theta_deg, pose.confidence)
+        yaw = gripper_yaw_deg(self.cfg, obj)
+        yaw360 = gripper_yaw_deg(self.cfg, obj, full=True) if result.part.chamfer_found else None
         px = result.workspace.px_per_mm
         return Localization(
             x_m=pose.x_mm / 1000.0, y_m=pose.y_mm / 1000.0, theta_deg=float(pose.theta_deg),
             gripper_yaw_deg=yaw, chamfer=bool(result.part.chamfer_found),
             size_mm=(result.part.length_px / px, result.part.width_px / px),
-            method=str(result.workspace.method),
+            method=str(result.workspace.method), gripper_yaw360_deg=yaw360,
             extra={"x_ws_mm": float(result.x_ws_mm), "y_ws_mm": float(result.y_ws_mm)})
 
 
-def gripper_yaw_deg(cfg, object_pose):
+def gripper_yaw_deg(cfg, object_pose, full=False):
     """Greiferdrehung (Werkzeug-x-Achse, Grad 0..180) wie M2 greifen wuerde.
 
     ``m2_robot_control.robot.as_target`` setzt rx/ry der Home-Pose (Werkzeug
@@ -135,7 +139,7 @@ def gripper_yaw_deg(cfg, object_pose):
         rc = cfg["robot"]
         rz = (float(rc["poses"]["home"][5]) + float(object_pose.theta_deg)
               + float(rc["gripper_angle_offset_deg"]))
-    return rz % 180.0
+    return rz % (360.0 if full else 180.0)
 
 
 def pick_pose(loc, template_pick, plane, height_m=None):
@@ -157,8 +161,23 @@ def pick_pose(loc, template_pick, plane, height_m=None):
     pose = align_pose(pose, plane, height)
     turn = math.radians((loc.gripper_yaw_deg - yaw_deg(pose, plane) + 90.0) % 180.0 - 90.0)
     pose = rotated_about(pose, plane.normal_at(pose[0], pose[1]), turn)
-    pose, _ = flip_closer(pose, template, plane)
-    return pose
+    target = chamfer_yaw_deg(loc)
+    if target is None:
+        pose, _ = flip_closer(pose, template, plane)
+        return pose
+    # Fase erkannt und Versatz abgeglichen: Richtung eindeutig, kein Umklappen
+    from .live import yaw360
+    turn = math.radians((target - yaw360(pose, plane) + 180.0) % 360.0 - 180.0)
+    return rotated_about(pose, plane.normal_at(pose[0], pose[1]), turn)
+
+
+def chamfer_yaw_deg(loc, offset_deg="config"):
+    """Werkzeug-x-Richtung (0..360) aus der Fase, oder None (keine Fase /
+    Versatz nicht abgeglichen, config.LOCALIZE_CHAMFER_OFFSET_DEG)."""
+    offset = config.LOCALIZE_CHAMFER_OFFSET_DEG if offset_deg == "config" else offset_deg
+    if loc.gripper_yaw360_deg is None or offset is None:
+        return None
+    return float((loc.gripper_yaw360_deg + float(offset)) % 360.0)
 
 
 def compare(pose_a, pose_b, plane=None):

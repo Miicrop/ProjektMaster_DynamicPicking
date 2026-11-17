@@ -63,6 +63,13 @@ class KnownPose:
     #: Idealbahn bis zum Greifen (bc/trajectory.IdealTrajectory, gekuerzt) --
     #: Quelle der DAgger-Labels (bc/dagger.py); None bei aelteren Aufrufern
     ideal: object = None
+    #: Probegriff "objekt": Abstand der Backenspitzen ueber der Objektoberkante
+    #: (``--probe-abstand``; None = config.PROBE_GAP_M)
+    probe_gap_m: float = None
+
+    @property
+    def gap_m(self):
+        return config.PROBE_GAP_M if self.probe_gap_m is None else float(self.probe_gap_m)
 
     @property
     def pick_yaw_deg(self):
@@ -141,7 +148,7 @@ def probe_clearance(mode, known):
     """Mindestabstand des TCP zur Tischebene (m) fuer den Probegriff."""
     if mode == "objekt":
         return (known.pick_above_table_m + config.PROBE_OBJECT_TOP_ABOVE_PICK_M
-                + config.PROBE_GAP_M)
+                + known.gap_m)
     return config.TABLE_MIN_CLEARANCE_M
 
 
@@ -213,6 +220,7 @@ def summarize(rows, known, grasp_step=None, stop_step=None, predicted=None, prob
         "pick_above_table_m": known.pick_above_table_m,
         "source": known.source,
         "probe": probe,
+        "probe_gap_m": known.gap_m if probe == "objekt" else None,
         "at_grasp": snapshot(rows, grasp_step),
         "at_stop": snapshot(rows, stop_step),
         "predicted": predicted,
@@ -224,7 +232,7 @@ def summarize(rows, known, grasp_step=None, stop_step=None, predicted=None, prob
 
 # -- Experte nach dem Probegriff (Anwender 2026-11-16) -------------------------
 #
-# Die Policy steht 3 mm ueber dem Objekt, ohne es beruehrt zu haben. Der
+# Die Policy steht known.gap_m (Standard 25 mm) ueber dem Objekt, ohne es beruehrt zu haben. Der
 # Experte (Planer) korrigiert auf derselben Hoehe in xy und Drehung auf PICK,
 # senkt senkrecht ab, greift, hebt an und legt das Objekt an eine neue Lage
 # (wie die Aufnahme, bc/auto_layout.Coverage); PICK wird nachgefuehrt. Die
@@ -255,12 +263,15 @@ def correction(known, stop_pose):
     (Grad) und Abstieg (m).
     """
     stop_pose = np.asarray(stop_pose, dtype=float)
-    grasp, flipped = flip_closer(known.pick, stop_pose, known.table)
+    if config.EXPERT_FLIP_180:
+        grasp, flipped = flip_closer(known.pick, stop_pose, known.table)
+    else:
+        grasp, flipped = np.asarray(known.pick, dtype=float).copy(), False
     above = grasp.copy()
     # gleiche Hoehe wie beim Stopp: nur xy und Drehung -- aber nie unter der
     # Probehoehe (Violation-Stopp, 16.11.: der Arm schwang 3-4 mm darunter,
     # waagrecht korrigiert haette eine Backe das Teil schieben koennen)
-    probe_z = known.pick[2] + config.PROBE_OBJECT_TOP_ABOVE_PICK_M + config.PROBE_GAP_M
+    probe_z = known.pick[2] + config.PROBE_OBJECT_TOP_ABOVE_PICK_M + known.gap_m
     above[2] = max(stop_pose[2], probe_z)
     info = {"dx_m": float(grasp[0] - stop_pose[0]), "dy_m": float(grasp[1] - stop_pose[1]),
             "xy_m": float(np.hypot(grasp[0] - stop_pose[0], grasp[1] - stop_pose[1])),
@@ -385,7 +396,9 @@ def csv_row(episode, stop_reason, summary, correction_info=None, after=""):
     p = summary.get("predicted") or {}
     return [
         episode, _mm(summary["pick"][0]), _mm(summary["pick"][1]), _deg(summary["pick_yaw_deg"]),
-        summary.get("probe") or "", str(stop_reason),
+        (summary.get("probe") or "") + (" (%.0f mm)" % (1e3 * summary["probe_gap_m"])
+                                         if summary.get("probe_gap_m") else ""),
+        str(stop_reason),
         g.get("step", ""), _mm(g.get("xy_m")), _mm(g.get("dz_m")), _deg(g.get("yaw_deg")),
         _mm(g.get("table_m")),
         s.get("step", ""), _mm(s.get("xy_m")), _mm(s.get("dz_m")), _deg(s.get("yaw_deg")),

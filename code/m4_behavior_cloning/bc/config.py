@@ -455,15 +455,26 @@ TABLE_MIN_CLEARANCE_M = 0.003
 #: erreichen die Objektoberkante (14,9 mm ueber dem Tisch), wenn der TCP so weit
 #: ueber PICK steht (Werte wie APPROACH_OFFSET_FREE_M) ...
 PROBE_OBJECT_TOP_ABOVE_PICK_M = 0.007
-#: ... und sollen so weit darueber anhalten.
-PROBE_GAP_M = 0.003
+#: ... und sollen so weit darueber anhalten. Anlage 2026-11-17: 3 mm reichten
+#: nicht -- nach dem abgelehnten Ziel lief der Arm bis 7,5 mm unter die Ebene
+#: nach (Nachlauf ~ Abstiegstempo x 50 ms, 66-150 mm/s), die Backen trafen das
+#: Objekt. Jetzt 25 mm (Anwender 2026-11-17: sicherer Standard, in der GUI
+#: bzw. mit --probe-abstand schrittweise kleiner), dazu
+#: PROBE_TARGET_LOOKAHEAD_STEPS.
+PROBE_GAP_M = 0.025
+#: Unter diesem Abstand warnt die GUI vor dem Start (Nachlauf bis 7,5 mm).
+PROBE_GAP_WARN_M = 0.010
+#: Probegriff: jedes Ziel zusaetzlich um so viele Takte linear verlaengert
+#: pruefen (bc/safety.check_target) -- bei schnellem Abstieg wird frueher
+#: abgelehnt, der Nachlauf endet vor der Ebene.
+PROBE_TARGET_LOOKAHEAD_STEPS = 1.0
 #: Policy-Test "Erfolg": Greifpunkt (bzw. vorhergesagter) hoechstens so weit
 #: waagrecht von PICK -- wie das Kriterium von metrics.evaluate_rollout.
 KNOWN_POSE_SUCCESS_XY_M = 0.010
 #: Violation-Stopp des Geofence-Waechters an der Probegriff-Ebene zaehlt als
 #: Probegriff-Stopp, wenn das Werkzeug hoechstens so tief darunter war
-#: (Anlage 2026-11-16: 3,1 und 3,9 mm; die Ebene liegt 3 mm ueber dem Objekt)
-PROBE_VIOLATION_MAX_M = 0.005
+#: (Anlage 2026-11-16: 3,1 und 3,9 mm; 2026-11-17 Nachlauf bis 7,5 mm)
+PROBE_VIOLATION_MAX_M = 0.010
 #: Kamerapruefung vor der Inferenz (bc/camera_check.py): so lange nach dem
 #: Anfahren der Startstellung warten, bis die Bilder sicher frisch sind.
 CAMERA_CHECK_SETTLE_S = 0.5
@@ -761,13 +772,26 @@ STALL_STEPS = 5
 
 #: PICK aus der Lokalisierung der Gruppe (bc/lokalisierung.py, 2026-11-16):
 #: Steuerungspunkt, an dem der Arm aus dem Bild der Draufsichtkamera ist
-#: (M2 lokalisiert ebenfalls an "Home") ...
-LOCALIZE_POINT = "Home"
+#: (Anlage 2026-11-17: "Home" ist an der Anlage nicht geteacht -- CLEAR_FOV
+#: aus dem Ablauf, der Arm faehrt selbst hin, apps/infer.localize_pick) ...
+LOCALIZE_POINT = "CLEAR_FOV"
 #: ... und so lange nach dem Anhalten warten, bis das Bild sicher frisch ist
 LOCALIZE_SETTLE_S = 0.5
 #: Hoechstens so weit darf die M1-Lage vom zuletzt bekannten PICK abweichen,
 #: bevor nachgefragt wird (nur als Pruefung, wenn das Teil nicht bewegt wurde)
 LOCALIZE_WARN_M = 0.010
+#: Fase (Anwender 2026-11-17): Das Objekt hat eine angeschraegte Seite, die
+#: Handgelenkkamera schaut zu ihr -- die Greifrichtung ist eindeutig (360 Grad).
+#: M1 liefert mit erkannter Fase den Winkel 0..360; Werkzeug-x-Richtung an PICK
+#: = M2-Greiferdrehung + dieser Versatz (Grad). None = noch nicht an der Anlage
+#: abgeglichen: dann wie bisher modulo 180, naeher an der geteachten Lage, und
+#: der Unterschied steht im Protokoll ("Fase: ...") -- daraus den Versatz
+#: setzen (erwartet 0 oder 180).
+LOCALIZE_CHAMFER_OFFSET_DEG = None
+#: Experte nach dem Probegriff: darf er um 180 Grad gedreht greifen, wenn das
+#: naeher an der Stoppstellung liegt? Nein (2026-11-17): die Richtung ist
+#: eindeutig, sonst lernte DAgger beide Richtungen.
+EXPERT_FLIP_180 = False
 
 #: DAgger (bc/dagger.py, 2026-11-16): Jeder Takt der Policy bekommt das Label
 #: des Planers ("zurueck auf die Idealbahn, dann weiter auf ihr").

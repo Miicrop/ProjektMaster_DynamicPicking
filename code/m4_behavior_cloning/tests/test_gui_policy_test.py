@@ -91,7 +91,8 @@ def test_operation_tab_policy_test_controls(tmp_path):
         tab.probe.setCurrentIndex(tab.probe.findData("objekt"))
         argv = tab._argv()
         assert "--lage-bekannt" in argv and argv[argv.index("--probegriff") + 1] == "objekt"
-        assert "--pick-quelle" not in argv and "--dagger" not in argv
+        assert "--pick-quelle" not in argv
+        assert argv[argv.index("--dagger") + 1].endswith("_dagger")   # vorbelegt (2026-11-17)
         assert not tab.photo_point.isEnabled()
         tab.pick_source.setCurrentIndex(tab.pick_source.findData("m1"))
         assert tab.photo_point.isEnabled()

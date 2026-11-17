@@ -232,19 +232,35 @@ class OperationTab(ModeTab):
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.probe = block_wheel(QComboBox())
-        self.probe.addItem("Echter Griff (3 mm über Tisch)", "tisch")
-        self.probe.addItem("Probegriff (3 mm über Objekt)", "objekt")
+        # Standard: Probegriff ueber dem Objekt (Anwender 2026-11-17: keine Crashs mehr);
+        # "Tisch" nur bewusst waehlen
+        self.probe.addItem("Probegriff (über Objekt, Abstand unten)", "objekt")
+        self.probe.addItem("Echter Griff (%g mm über Tisch)" % (1e3 * config.TABLE_MIN_CLEARANCE_M), "tisch")
         self.probe.setToolTip(
-            "Probegriff: der Geofence hält die Werkzeugspitze 3 mm über der "
-            "Objektoberkante. Beim Stopp wird der Rest der Vorhersage gespeichert — "
+            "Probegriff: der Geofence hält die Werkzeugspitze den eingestellten Abstand "
+            "über der Objektoberkante (Standard %g mm; Nachlauf nach dem Stopp an der "
+            "Anlage bis 7,5 mm — schrittweise annähern). Beim Stopp wird der Rest der Vorhersage gespeichert — "
             "daraus der Greifpunkt, an dem die Policy gegriffen hätte.\n"
             "1 Fahrt: der Arm bleibt über dem Objekt stehen (Spiel prüfen).\n"
             "Mehrere Fahrten: der Experte korrigiert auf derselben Höhe xy und "
             "Drehung auf PICK, senkt ab, greift, legt das Objekt an eine neue Lage "
             "und führt PICK nach (Korrektur in policy_test.csv, Bahn in "
-            "experte_XXX.npz).")
-        self.probe.currentIndexChanged.connect(self._update_command)
+            "experte_XXX.npz)." % (1e3 * config.PROBE_GAP_M))
+        self.probe.currentIndexChanged.connect(self._on_probe_changed)
         form.addRow("Ende", self.probe)
+        self.probe_gap = block_wheel(QDoubleSpinBox())
+        self.probe_gap.setRange(1.0, 100.0)
+        self.probe_gap.setDecimals(1)
+        self.probe_gap.setSingleStep(1.0)
+        self.probe_gap.setSuffix(" mm")
+        self.probe_gap.setValue(1e3 * config.PROBE_GAP_M)
+        self.probe_gap.setToolTip(
+            "Abstand der Werkzeugspitze über der Objektoberkante beim Probegriff "
+            "(--probe-abstand). Standard %g mm. Der Arm läuft nach dem Stopp bis "
+            "7,5 mm nach (Anlage 2026-11-17) — unter %g mm fragt die Oberfläche nach."
+            % (1e3 * config.PROBE_GAP_M, 1e3 * config.PROBE_GAP_WARN_M))
+        self.probe_gap.valueChanged.connect(self._update_command)
+        form.addRow("Abstand über Objekt", self.probe_gap)
         self.sequence = QLineEdit()
         self.sequence.setPlaceholderText("aus dem Modell")
         self.sequence.textChanged.connect(self._update_command)
@@ -262,10 +278,13 @@ class OperationTab(ModeTab):
         self.photo_point = QLineEdit(config.LOCALIZE_POINT)
         self.photo_point.setToolTip(
             "Steuerungspunkt, an dem der Arm aus dem Bild der Draufsichtkamera ist "
-            "(alle vier Marker und das Teil sichtbar). M2 lokalisiert an 'Home'.")
+            "(alle vier Marker und das Teil sichtbar). Standard: CLEAR_FOV aus dem "
+            "Ablauf; steht der Arm nicht dort, fährt er vor dem Foto selbst hin.")
         self.photo_point.textChanged.connect(self._update_command)
         form.addRow("Fotostellung", self.photo_point)
-        self.dagger_dir = QLineEdit()
+        # Vorbelegt (Anlage 2026-11-17: Feld war leer, DAgger lief nie mit)
+        from datetime import date
+        self.dagger_dir = QLineEdit("data/%s_dagger" % date.today().isoformat())
         self.dagger_dir.setPlaceholderText("leer = nicht mitschreiben")
         self.dagger_dir.setToolTip(
             "Nur Probegriff mit Experte: jede Fahrt (Policy + Korrektur) mit Bildern als "
@@ -316,7 +335,13 @@ class OperationTab(ModeTab):
         return box
 
     def _known_widgets(self):
-        return (self.probe, self.sequence, self.pick_source, self.photo_point, self.dagger_dir)
+        return (self.probe, self.probe_gap, self.sequence, self.pick_source, self.photo_point,
+                self.dagger_dir)
+
+    def _on_probe_changed(self, *_):
+        self.probe_gap.setEnabled(self.known.isChecked()
+                                  and self.probe.currentData() == "objekt")
+        self._update_command()
 
     def _on_pick_source_changed(self, *_):
         self.photo_point.setEnabled(self.known.isChecked()
@@ -354,9 +379,17 @@ class OperationTab(ModeTab):
             "Nur die Kameraprüfung: Arm in die Startstellung, Bilder gegen die "
             "Aufnahme des Modells vergleichen, nicht fahren.")
         self.btn_camera_check.clicked.connect(self.start_camera_check)
+        self.btn_live = QPushButton("Live-Ansicht")
+        self.btn_live.setToolTip(
+            "Eigenes Fenster: Kamerabilder, Draufsicht mit PICK, TCP und dem, was die "
+            "Policy plant (je Vorhersage und gemittelt), Verlauf des Drehfehlers. "
+            "Öffnet sich beim Start einer Fahrt von selbst.")
+        self.btn_live.setEnabled(False)
+        self.btn_live.clicked.connect(self.show_live)
         layout.addWidget(self.btn_start)
         layout.addWidget(self.btn_camera_check)
         layout.addWidget(self.btn_stop)
+        layout.addWidget(self.btn_live)
         layout.addStretch(1)
         outer.addWidget(row)
         return bar
@@ -518,6 +551,7 @@ class OperationTab(ModeTab):
             real_robot=status.is_real_plant,
             known_pose=self.known.isChecked() and not only_check,
             probe=self.probe.currentData(),
+            probe_gap_mm=self.probe_gap.value(),
             sequence=self.sequence.text().strip() or None,
             camera_check=camera_check or self.camera_check.currentData(),
             pick_source=self.pick_source.currentData(),
@@ -563,8 +597,29 @@ class OperationTab(ModeTab):
         self.start_inference(camera_check="nur")
 
     def start_inference(self, camera_check=None):
+        """Rueckfragen, dann apps/infer.py starten.
+
+        Wiedereintrittsschutz (Anlage 2026-11-17): solange eine Rueckfrage
+        offen ist, sind die Startknoepfe gesperrt und ein weiterer Klick
+        tut nichts -- sonst stapelten sich die Dialoge und jeder "Ja"
+        startete eine eigene Fahrt.
+        """
         if camera_check is not None and not isinstance(camera_check, str):
             camera_check = None          # clicked(bool) von Qt
+        if getattr(self, "_starting", False):
+            return
+        self._starting = True
+        self.btn_start.setEnabled(False)
+        self.btn_camera_check.setEnabled(False)
+        try:
+            self._start_inference(camera_check)
+        finally:
+            self._starting = False
+            if not self.process.running:
+                self.btn_start.setEnabled(True)
+                self.btn_camera_check.setEnabled(True)
+
+    def _start_inference(self, camera_check):
         if self.process.running:
             QMessageBox.information(self, "Läuft bereits",
                                     "Es läuft schon eine Fahrt.")
@@ -645,6 +700,15 @@ class OperationTab(ModeTab):
             lines.append("Fahrten: %d" % self.episodes.value())
             if self.known.isChecked():
                 lines.append("Policy-Test mit bekannter Lage, %s" % self.probe.currentText())
+                if self.probe.currentData() == "objekt":
+                    gap = self.probe_gap.value()
+                    lines.append("Abstand über Objekt: %.1f mm" % gap)
+                    if gap < 1e3 * config.PROBE_GAP_WARN_M:
+                        lines.append("ACHTUNG: unter %.0f mm — der Arm lief nach dem Stopp "
+                                     "bis 7,5 mm nach, die Backen können das Objekt treffen."
+                                     % (1e3 * config.PROBE_GAP_WARN_M))
+                else:
+                    lines.append("ACHTUNG: echter Griff — nur 3 mm Tischabstand.")
                 if self.pick_source.currentData() == "m1":
                     lines.append("PICK aus M1: vor jeder Fahrt an die Fotostellung '%s'"
                                  % (self.photo_point.text().strip() or config.LOCALIZE_POINT))
@@ -672,7 +736,28 @@ class OperationTab(ModeTab):
     def _on_started(self, command):
         self.output.append_record("$ " + " ".join(command[1:]), logging.INFO)
 
+    def show_live(self):
+        """Live-Fenster zeigen (bc/gui/live_window.py) -- Ordner aus der Ausgabe."""
+        if getattr(self, "_live_folder", None) is None:
+            return
+        if getattr(self, "_live_window", None) is None:
+            from .live_window import LiveWindow
+            self._live_window = LiveWindow()
+        if self._live_window.folder != self._live_folder:
+            self._live_window.set_folder(self._live_folder)
+        self._live_window.show()
+        self._live_window.raise_()
+
     def _on_line(self, text):
+        from .. import live as live_module
+
+        if text.startswith(live_module.LIVE_PREFIX):
+            self._live_folder = Path(text[len(live_module.LIVE_PREFIX):].strip())
+            self.btn_live.setEnabled(True)
+            try:
+                self.show_live()
+            except Exception as exc:     # Anzeige darf nichts blockieren
+                self.output.append_record("Live-Ansicht: %s" % exc, logging.WARNING)
         self.output.append_line(text)
         if self._progress is None or not self._progress.feed(text):
             return
@@ -731,6 +816,7 @@ class OperationTab(ModeTab):
         for widget in self._known_widgets():
             widget.setEnabled(checked)
         self._on_pick_source_changed()
+        self._on_probe_changed()
 
     def _sequence_path(self):
         text = self.sequence.text().strip() or (self._described or {}).get("sequence_file")
@@ -776,6 +862,8 @@ class OperationTab(ModeTab):
     def shutdown(self):
         if self.process.running:
             self.process.stop()
+        if getattr(self, "_live_window", None) is not None:
+            self._live_window.close()
 
 
 def _hint(text):

@@ -56,6 +56,7 @@ import _bootstrap  # noqa: F401
 import numpy as np
 
 from bc import config, dagger, dataset, known_pose, metrics, obstacles, replay
+from bc import live as live_module
 from bc import camera_settings as camera_settings_module
 from bc.adapters import (
     CAMERA_MODES,
@@ -115,7 +116,8 @@ def build_observation(robot, captures, frames_out=None):
 def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 end_joints=None, end_gripper=None, min_steps=0, threaded_watchdog=True,
                 progress=print, servo_rate_hz=config.SERVO_RATE_HZ, execution=None,
-                frame_guard=None, stop_at_grasp=False, on_tick=None, mitschrieb=None):
+                frame_guard=None, stop_at_grasp=False, on_tick=None, mitschrieb=None,
+                target_lookahead=0.0, live=None):
     """Eine Policy-Fahrt. Rueckgabe: Log-dict (Arrays je Takt + Zusammenfassung).
 
     ``mitschrieb``: bc/dagger.Mitschrieb -- bekommt je Takt Beobachtung (mit
@@ -135,6 +137,12 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
 
     ``frame_guard``: safety.FrameAgeGuard (Default: Werte aus config) -- haelt
     an, wenn ein Kamerabild einfriert (die Policy saehe ein Standbild).
+
+    ``live``: bc/live.LiveWriter -- je Takt TCP, Bilder und die Vorhersagen
+    fuer das Live-Fenster der GUI (nur Kopien, rechnet im eigenen Thread).
+
+    ``target_lookahead``: Ziele zusaetzlich um so viele Takte verlaengert
+    pruefen (bc/safety.check_target, Nachlauf; Probegriff "objekt").
 
     ``stop_at_grasp``: die Policy endet mit dem Schliessbefehl (stop_reason
     "griff"); Anheben und Transport uebernimmt :func:`planned_transport`
@@ -167,6 +175,7 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
     # Dwell-Takt nach einem Greiferwechsel, bis dahin kein Vorlauf darueber.
     halt = execution_module.reach_rule(execution)
     hold_end, last_target, reach_waits = None, None, []
+    prev_ziel = None
     # Wie in der Aufnahme: servo_j linear oder servo_j_pos ohne v/a.
     interp = ServoInterpolator(
         servo_rate_hz=servo_rate_hz,
@@ -220,14 +229,15 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                     ziel = last_target
                 else:
                     ziel = limiter.limit((executor.lookahead(vorlauf) if vorlauf else action)[:6])
-                    check_target(workspace, robot, ziel)
+                    check_target(workspace, robot, ziel, last_target, target_lookahead)
                 if not robot.stop_requested:
                     pacer.tick()
                     robot.online_j(ziel, execution["vel"], execution["acc"])
                     last_target = ziel
             else:
                 ziel = limiter.limit(action[:6])
-                check_target(workspace, robot, ziel)
+                check_target(workspace, robot, ziel, prev_ziel, target_lookahead)
+                prev_ziel = ziel
                 for q, v, a in interp.window(ziel):
                     if robot.stop_requested:
                         break
@@ -273,6 +283,11 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
             log["ensemble_spread"].append(getattr(executor, "last_spread", 0.0))
             log["ensemble_count"].append(getattr(executor, "last_count", 1))
             log["halt_s"].append(wait_s)
+            if live is not None:
+                try:
+                    live.update(step, state, frames, executor, ziel)
+                except Exception:      # Anzeige darf die Fahrt nie stoppen
+                    pass
             if mitschrieb is not None:
                 mitschrieb.add(obs, state.joints if ziel is None else ziel, gripper,
                                dagger.POLICY, policy_action=action)
@@ -555,6 +570,8 @@ def load_known_pose(args, info, robot, planner=None):
         known, resolved = known_pose.load(path, robot, planner)
     except (OSError, ValueError) as exc:
         raise SystemExit("--lage-bekannt: %s (%s)" % (exc, path))
+    gap_mm = getattr(args, "probe_abstand", None)
+    known.probe_gap_m = None if gap_mm is None else 1e-3 * float(gap_mm)
     if resolved.table_missing:
         print("Hinweis: Tischpunkte fehlen in der Steuerung: %s" % ", ".join(resolved.table_missing))
     print("Ablauf: %s, Tisch aus %d Punkt(en): %s"
@@ -932,6 +949,15 @@ def localize_pick(robot, captures, localizer, known, args, info, planner, pick_s
     print("Lokalisierung: PICK gesetzt (Sicherung %s), gegen den bisherigen PICK dx %.1f dy %.1f "
           "mm, Drehung %.1f Grad" % (Path(backup).name, 1e3 * diff["dx_m"], 1e3 * diff["dy_m"],
                                      diff["yaw_deg"]))
+    if loc.gripper_yaw360_deg is not None:
+        # Abgleich der Fase (config.LOCALIZE_CHAMFER_OFFSET_DEG): M2-Richtung gegen
+        # die Werkzeug-x-Richtung des bisherigen PICK (geteacht / vom Experten)
+        from bc.live import yaw360, yaw_diff
+        offset = yaw_diff(yaw360(before, known.table), loc.gripper_yaw360_deg)
+        print("Lokalisierung: Fase erkannt -- M2-Richtung %.0f Grad, bisheriger PICK %.0f Grad, "
+              "Versatz %+.0f Grad (config.LOCALIZE_CHAMFER_OFFSET_DEG = %s)"
+              % (loc.gripper_yaw360_deg, yaw360(before, known.table), offset,
+                 config.LOCALIZE_CHAMFER_OFFSET_DEG))
     if diff["xy_m"] > config.LOCALIZE_WARN_M:
         print("   Hinweis: mehr als %.0f mm -- Teil von Hand bewegt? Sonst M1-Kalibrierung pruefen."
               % (1e3 * config.LOCALIZE_WARN_M))
@@ -1151,7 +1177,12 @@ def parse_args():
     parser.add_argument("--ablauf", default=None, metavar="DATEI",
                         help="Ablaufdatei fuer --lage-bekannt (Default: die der Aufnahme aus "
                              "bc_policy.json table_spec.sequence_file)")
-    parser.add_argument("--probegriff", choices=known_pose.PROBE_MODES, default="tisch",
+    parser.add_argument("--probe-abstand", dest="probe_abstand", type=float, default=None,
+                        metavar="MM",
+                        help="mit --probegriff objekt: Abstand der Werkzeugspitze ueber der "
+                             "Objektoberkante in mm (Default %.0f; Nachlauf nach dem Stopp an der "
+                             "Anlage bis 7,5 mm -- schrittweise annaehern)" % (1e3 * config.PROBE_GAP_M))
+    parser.add_argument("--probegriff", choices=known_pose.PROBE_MODES, default="objekt",
                         help="mit --lage-bekannt: 'tisch' = echter Griff (Werkzeugspitze >= %.0f mm "
                              "ueber dem Tisch), 'objekt' = Stopp %.0f mm ueber der Objektoberkante, "
                              "ohne Kontakt (Default %%(default)s)"
@@ -1177,6 +1208,9 @@ def parse_args():
                              "Aufnahme des Modells pruefen (bc/camera_check.py): 'an' = bei "
                              "Abweichung nachfragen (ohne Antwort: nicht fahren), 'warnen' = nur "
                              "anzeigen, 'nur' = pruefen und nicht fahren (Default %(default)s)")
+    parser.add_argument("--keine-live-ansicht", dest="live", action="store_false",
+                        help="keine Live-Ansicht schreiben (<Protokoll>/live, bc/live.py: "
+                             "Kamerabilder, TCP, Vorhersagen fuer das Fenster der GUI)")
     parser.add_argument("--out", default=None,
                         help="Ordner fuer Fahrtprotokolle (Default: <checkpoint>/rollouts/<Zeit>)")
     args = parser.parse_args()
@@ -1188,6 +1222,10 @@ def parse_args():
     if args.dagger and not (args.lage_bekannt and args.probegriff == "objekt"):
         parser.error("--dagger braucht --lage-bekannt --probegriff objekt (der Experte "
                      "uebernimmt nach dem Probegriff)")
+    if args.probe_abstand is not None and not 0.0 < args.probe_abstand <= 100.0:
+        parser.error("--probe-abstand: 0 < mm <= 100")
+    if args.probe_abstand is not None and args.probegriff != "objekt":
+        parser.error("--probe-abstand gilt nur mit --probegriff objekt")
     if args.pick_quelle != "steuerung" and not args.lage_bekannt:
         parser.error("--pick-quelle gilt nur mit --lage-bekannt")
     if not args.hold and not args.checkpoint:
@@ -1400,7 +1438,7 @@ def main():
         print("Lage bekannt: %s" % known.describe())
         print("Probegriff %s: Werkzeugspitze bleibt >= %.1f mm ueber dem Tisch%s"
               % (args.probegriff, 1e3 * table_clearance,
-                 " (%.1f mm ueber der Objektoberkante)" % (1e3 * config.PROBE_GAP_M)
+                 " (%.1f mm ueber der Objektoberkante)" % (1e3 * known.gap_m)
                  if args.probegriff == "objekt" else " -- echter Griff"))
     workspace = build_workspace(table_z, info, robot, robot_info, args, known, table_clearance)
     # Experte nach dem Probegriff (bc/known_pose.py): normaler Tischabstand,
@@ -1486,6 +1524,32 @@ def main():
         print("DAgger: Episoden nach %s (bisher %d)"
               % (args.dagger, len(dagger_writer._index["episodes"])))
 
+    live = None
+    if args.live and args.episodes:
+        fk_fast = live_module.fast_fk(robot)
+        live = live_module.LiveWriter(out / "live", fk=fk_fast)
+        live.set_known(known)
+        print("%s%s" % (live_module.LIVE_PREFIX, (out / "live").resolve()))
+        if fk_fast is None:
+            print("   Live-Ansicht ohne Vorhersage-Bahn: keine bestaetigte lokale Kinematik "
+                  "(FK je Pose waere ein RPC an die Steuerung)")
+        if localizer is None:
+            scene_cap = next((c for c in captures if c.name == "scene"), None)
+            frame = None if scene_cap is None else scene_cap.latest()
+            if frame is not None:
+                try:
+                    live.set_scene_map(live_module.detect_scene_map(frame.image))
+                except Exception as exc:
+                    cached = live_module.cached_scene_map()
+                    if cached:
+                        live.set_scene_map(cached, remember=False)
+                        print("   Live-Ansicht: Marker verdeckt (%s) -- Abbildung vom %s"
+                              % (str(exc).splitlines()[0][:80], cached.get("gespeichert", "?")))
+                    else:
+                        print("   Live-Ansicht: Szenenkamera ohne Pfeile (Marker nicht erkannt: "
+                              "%s; einmal mit PICK aus M1 fahren, dann gespeichert)"
+                              % str(exc).splitlines()[0][:120])
+
     results = []
     try:
         for ep in range(args.episodes):
@@ -1515,8 +1579,16 @@ def main():
             lokal = None
             if localizer is not None:
                 try:
+                    if live is not None:
+                        live.phase("Lokalisierung (Fotostellung)")
                     lokal, known = localize_pick(robot, captures, localizer, known, args, info,
                                                  rec_planner, pick_state, clock)
+                    if live is not None:
+                        live.set_known(known)
+                        try:
+                            live.set_scene_map(live_module.detect_scene_map(None, localizer))
+                        except Exception as exc:
+                            print("   Live-Ansicht: keine Abbildung fuer das Kamerabild (%s)" % exc)
                 except Exception as exc:
                     print("Fahrt %d: Lokalisierung gescheitert -- %s" % (ep, exc))
                     if not pick_state.get("used_xy"):
@@ -1543,6 +1615,8 @@ def main():
                 if away > config.START_POSE_TOL_RAD:
                     print("Fahrt %d: an die Startstellung (%.3f rad entfernt)" % (ep, away))
                     robot.move_to_joints(ep_start)
+            if live is not None:
+                live.start_episode(ep)
             t0 = time.perf_counter()
             log = run_episode(robot, captures, executor, clock, max_steps, workspace,
                               end_joints=end, end_gripper=end_gripper, min_steps=min_steps,
@@ -1550,7 +1624,11 @@ def main():
                               servo_rate_hz=args.servo_rate, execution=execution,
                               stop_at_grasp=args.transport_geplant or known is not None,
                               on_tick=None if known is None else _deviation_text(known),
-                              mitschrieb=mitschrieb if ideal_q is not None else None)
+                              mitschrieb=mitschrieb if ideal_q is not None else None,
+                              live=live,
+                              target_lookahead=(config.PROBE_TARGET_LOOKAHEAD_STEPS
+                                                if known is not None and args.probegriff == "objekt"
+                                                else 0.0))
             lage = None
             if known is not None:
                 lage = evaluate_known(log, known, robot, args.probegriff)
@@ -1611,6 +1689,11 @@ def main():
                 summary["lokalisierung"] = lokal
             results.append(summary)
             arrays_out = {k: v for k, v in log.items() if isinstance(v, np.ndarray)}
+            # jede rohe Vorhersage (Anwender 2026-11-17: springt die Drehung?)
+            history = list(getattr(executor, "history", None) or [])
+            if history and len({c.shape for _, c in history}) == 1:
+                arrays_out["pred_step"] = np.array([s for s, _ in history], dtype=int)
+                arrays_out["pred_chunk"] = np.stack([c for _, c in history]).astype(np.float32)
             if lage is not None:
                 # je Takt (gemessen, wie log["tcp"] plus Schlusszustand)
                 arrays_out.update({"lage_" + k: v for k, v in lage["rows"].items()})
@@ -1641,12 +1724,14 @@ def main():
                                    % log["stop_reason"])
                     elif expert_workspace is None:
                         retreat = ("stehen geblieben -- Werkzeug %.0f mm ueber dem Objekt, "
-                                   "Spiel pruefen" % (1e3 * config.PROBE_GAP_M))
+                                   "Spiel pruefen" % (1e3 * known.gap_m))
                     else:
                         back_to = ep_start if ep_start is not None else np.asarray(log["joints"][0])
                         if probe_violation(log["stop_reason"]):
                             print("   Violation-Stopp an der Probegriff-Ebene: Experte hebt "
                                   "zuerst senkrecht an")
+                        if live is not None:
+                            live.phase("Experte korrigiert und legt um")
                         expert = expert_after_probe(
                             robot, expert_workspace, known, reference_pick, back_to, clock, args,
                             rec_planner, rng, pick_state, captures=captures,
@@ -1683,7 +1768,11 @@ def main():
                 if expert is not None and ep + 1 < args.episodes:
                     known = load_known_pose(args, info, robot, rec_planner)   # neuer PICK
                     print("Lage bekannt: %s" % known.describe())
+                    if live is not None:
+                        live.set_known(known)
     finally:
+        if live is not None:
+            live.close()
         if hasattr(executor, "close"):
             executor.close()
         for cap in captures:
