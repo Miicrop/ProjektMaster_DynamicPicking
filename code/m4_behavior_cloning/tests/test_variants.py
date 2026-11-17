@@ -238,14 +238,18 @@ def test_put_back_to_a_variant_is_faster(tmp_path):
     resolved = resolve_sequence(parse_sequence(SEQ), robot)
     kin = Kinematics(robot)
     workspace = default_workspace(table_height_m=-1.0)
+    # Endanflug wie bis 2026-11-17 (0,05): langsames Ablegen (0,02) ist dann langsamer
     slow = plan_put_back(kin, workspace, resolved.waypoints, fk=robot.fk, regrip=False,
-                         slow_speed=0.02)
+                         slow_speed=0.02, approach_speed=0.05)
     fast = plan_put_back(kin, workspace, resolved.waypoints, fk=robot.fk, regrip=False,
-                         slow=False)
+                         slow=False, approach_speed=0.05)
     assert len(fast) < len(slow)
     # seit 2026-11-03 legt auch der Lagenwechsel mit Endanflug-Tempo ab
+    # mit den Standardwerten (Ablegen = Endanflug-Tempo) gleich schnell
     default = plan_put_back(kin, workspace, resolved.waypoints, fk=robot.fk, regrip=False)
-    assert len(default) == len(fast)
+    fast_default = plan_put_back(kin, workspace, resolved.waypoints, fk=robot.fk, regrip=False,
+                                 slow=False)
+    assert len(default) == len(fast_default)
 
 
 def test_record_logs_heights_at_grasp_and_place(tmp_path):

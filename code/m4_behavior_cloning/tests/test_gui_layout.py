@@ -34,7 +34,10 @@ def test_display_frames_never_touch_the_camera_image():
 
 def test_camera_settings_follow_the_device(tmp_path):
     wrist = config.WRIST_CAMERA
-    assert camera_settings.apply([wrist], root=tmp_path) == ([wrist], [])
+    assert camera_settings.apply([wrist], root=tmp_path, default_wb=False) == ([wrist], [])
+    # Standard seit 2026-11-17: fester Weissabgleich je Geraet (config.CAMERA_WHITE_BALANCE)
+    pinned = camera_settings.apply([wrist], root=tmp_path)[0][0]
+    assert pinned.white_balance_ratios == config.CAMERA_WHITE_BALANCE["daheng:EBK24100633"]
     camera_settings.save(wrist, {"exposure_us": 6000.0, "gain_db": None}, root=tmp_path)
     data = json.loads((tmp_path / camera_settings.SETTINGS_FILE).read_text(encoding="utf-8"))
     assert data == {"daheng:%s" % wrist.device: {"exposure_us": 6000.0, "gain_db": None}}

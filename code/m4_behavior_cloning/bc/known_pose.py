@@ -283,7 +283,7 @@ def correction(known, stop_pose):
 
 
 def new_place_pose(known, reference_pick, rng, used_xy=(), yaw_range_deg=None,
-                   camera_guard=True, candidates=10):
+                   camera_guard=True, candidates=10, center_shift_deg=None):
     """Kandidaten fuer die naechste Lage (Pose, xy, Drehung gegen die Bezugslage).
 
     Wie apps/record.py: seltenstes Feld der Tischabdeckung, Drehung gleich
@@ -301,7 +301,7 @@ def new_place_pose(known, reference_pick, rng, used_xy=(), yaw_range_deg=None,
     coverage = Coverage(known.region, base_yaw, keepouts=known.keepouts or (),
                         yaw_range_deg=(config.AUTO_YAW_RANGE_DEG if yaw_range_deg is None
                                        else yaw_range_deg),
-                        rng=rng, camera_guard=camera_guard)
+                        rng=rng, camera_guard=camera_guard, center_shift_deg=center_shift_deg)
     for xy in list(used_xy) + [known.pick[:2]]:
         coverage.add(xy)
     upright = align_pose(reference_pick, known.table, height)

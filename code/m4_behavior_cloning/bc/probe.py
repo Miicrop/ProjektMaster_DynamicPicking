@@ -25,8 +25,10 @@ from . import config
 from .noise import TrajectoryPlan
 
 
-def slowed_plan(plan, factor=config.PROBE_SPEED_FACTOR):
-    """Ideale Bahn von ``plan``, zeitlich gestreckt, Greifer durchgehend offen.
+def slowed_plan(plan, factor=config.PROBE_SPEED_FACTOR, keep_gripper=False):
+    """Ideale Bahn von ``plan``, zeitlich gestreckt, Greifer durchgehend offen
+    (``keep_gripper``: Greifer wie geplant -- erster Griff bei
+    ``--start-lage m1``).
 
     ``factor`` < 1 = langsamer (0.4 -> 2,5-fache Dauer). Soll = Ist: Die
     Probefahrt hat kein Rauschen.
@@ -48,7 +50,8 @@ def slowed_plan(plan, factor=config.PROBE_SPEED_FACTOR):
         joints_noisy=joints.copy(),
         poses_ideal=poses,
         poses_noisy=poses.copy(),
-        gripper=np.full(m, config.GRIPPER_OPEN),
+        gripper=(np.asarray(plan.gripper)[nearest] if keep_gripper
+                 else np.full(m, config.GRIPPER_OPEN)),
         dwell_mask=np.asarray(plan.dwell_mask)[nearest],
         rate_hz=plan.rate_hz,
     )

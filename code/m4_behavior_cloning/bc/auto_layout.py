@@ -13,7 +13,13 @@ Wie gezogen wird:
 * **Sperrzonen** (bc/table.Keepout): die neue Greifposition liegt ausserhalb.
 * **Abstand**: mindestens ``config.AUTO_MIN_DIST_M`` zu allen bisherigen Lagen
   des Aufrufs -- gleichmaessig ueber die Flaeche statt Haufen.
-* **Drehung**: gleichverteilt in +-``yaw_range_deg`` um die geteachte.
+* **Drehung**: gleichverteilt in +-``yaw_range_deg`` um die Mitte
+  (Startstellung der Policy, config.AUTO_YAW_CENTER_POINT; ohne Angabe die
+  geteachte Lage). ``center_shift_deg`` = Drehung von der geteachten Lage zur
+  Mitte in VOLLEN 360 Grad (Fase: Richtung eindeutig, Anlage 2026-11-17 --
+  modulo 180 sah die Verteilung bei +-89 Grad ausgeglichen aus, der Greifer
+  drehte aber im Median +31 Grad gegen den Start). Zurueckgegeben wird die
+  Drehung gegen die geteachte Lage, an der ``place_pose`` dreht.
 * **Hoehe und Neigung**: wie "Ausrichten" (bc/table.align_pose) -- senkrecht
   zur Tischebene, Greifhoehe darueber. So wird an jeder Stelle des schiefen
   Tisches gleich hoch gegriffen und abgelegt.
@@ -184,7 +190,8 @@ class Coverage(object):
 
     def __init__(self, region_points, base_yaw_deg, keepouts=(), margin=config.AUTO_EDGE_MARGIN_M,
                  yaw_range_deg=config.AUTO_YAW_RANGE_DEG, cell_size=config.AUTO_CELL_SIZE_M,
-                 yaw_bins=config.AUTO_YAW_BINS, rng=None, camera_guard=False):
+                 yaw_bins=config.AUTO_YAW_BINS, rng=None, camera_guard=False,
+                 center_shift_deg=None):
         self.camera_guard = bool(camera_guard)
         self.hull = convex_hull([p[:2] for p in region_points])
         if len(self.hull) < 3:
@@ -192,6 +199,13 @@ class Coverage(object):
         self.margin = float(margin)
         self.keepouts = list(keepouts)
         self.base_yaw = float(base_yaw_deg)
+        # Mitte der Verteilung (absolut) und ihr Abstand zur Bezugslage: die
+        # Abschnitte zaehlen gegen die Mitte, gedreht wird gegen die Bezugslage
+        self.center_shift = 0.0 if center_shift_deg is None else float(
+            (float(center_shift_deg) + 180.0) % 360.0 - 180.0)
+        # Abschnitte zaehlen modulo 180 gegen die Mitte -- eindeutig, solange
+        # yaw_range < 90 (bisherige Episoden kennen nur object_yaw_deg 0..180)
+        self.center_yaw = (self.base_yaw + self.center_shift) % 180.0
         self.yaw_range = float(yaw_range_deg)
         self.yaw_bins = max(1, int(yaw_bins)) if self.yaw_range > 0 else 1
         self.rng = rng if rng is not None else np.random.default_rng()
@@ -271,7 +285,7 @@ class Coverage(object):
         if cell is not None:
             self.cell_count[cell] += 1
         if yaw_abs_deg is not None:
-            k = self.yaw_bin_of(yaw_offset(yaw_abs_deg, self.base_yaw))
+            k = self.yaw_bin_of(yaw_offset(yaw_abs_deg, self.center_yaw))
             if k is not None:
                 self.yaw_count[k] += 1
 
@@ -314,18 +328,21 @@ class Coverage(object):
         raise ValueError("Feld %s: keine erlaubte Stelle gefunden" % (cell,))
 
     def next_turn(self):
-        """Drehung gegen die Bezugslage (Grad) aus dem seltensten Abschnitt."""
+        """Drehung gegen die Bezugslage (Grad) aus dem seltensten Abschnitt
+        (Abschnitte um die Mitte ``center_yaw``)."""
         if self.yaw_range <= 0:
-            return 0.0
+            return self.center_shift
         least = min(self.yaw_count)
         cands = [k for k, c in enumerate(self.yaw_count) if c == least]
         k = cands[int(self.rng.integers(len(cands)))]
         width = 2 * self.yaw_range / self.yaw_bins
-        return float(-self.yaw_range + (k + self.rng.uniform()) * width)
+        return self.center_shift + float(-self.yaw_range + (k + self.rng.uniform()) * width)
 
     def any_turn(self):
-        """Drehung gegen die Bezugslage (Grad), gleichverteilt im ganzen Bereich."""
-        return float(self.rng.uniform(-self.yaw_range, self.yaw_range)) if self.yaw_range > 0 else 0.0
+        """Drehung gegen die Bezugslage (Grad), gleichverteilt im ganzen Bereich um die Mitte."""
+        if self.yaw_range <= 0:
+            return self.center_shift
+        return self.center_shift + float(self.rng.uniform(-self.yaw_range, self.yaw_range))
 
     def turn_candidates(self):
         """Drehungen zum Durchprobieren: erst die seltensten Abschnitte, dann alle."""

@@ -197,8 +197,8 @@ def record_argv(out, robot_kind="sim", episodes=1, sequence=None,
     # ohne sie bleibt record.py beim geteachten PICK
     if sequence and put_back and final_new:
         argv += ["--schluss-lage", "neu"]
-    if sequence and put_back and start_lage == "auto":
-        argv += ["--start-lage", "auto"]
+    if sequence and put_back and start_lage in ("auto", "m1"):
+        argv += ["--start-lage", str(start_lage)]
     if not camera_guard:
         argv.append("--ohne-kameraschutz")
     # Varianten (Anwender 2026-11-01) -- in record.py Standard, sobald
@@ -435,6 +435,9 @@ def probe_question(line):
 _PLACE = re.compile(r"^LAGEVORSCHLAG\s+x\s+(?P<x>-?\d+)\s+y\s+(?P<y>-?\d+)\s+"
                     r"Drehung\s+(?P<yaw>-?\d+)")
 _INSERT = re.compile(r"^EINLEGEN\s+bereit")
+#: --start-lage m1 (record.run_first_grasp): Handlage greifen und an Lage 1 legen
+_FIRST_GRASP = re.compile(r"^ERSTER_GRIFF\s+x\s+(?P<x>-?\d+)\s+y\s+(?P<y>-?\d+)\s+->\s+"
+                          r"x\s+(?P<tx>-?\d+)\s+y\s+(?P<ty>-?\d+)")
 #: Grund eines vorzeitigen Endes (record.end_run)
 _RUN_END = re.compile(r"^LAUF_ENDE:\s*(?P<text>.+?)\s*$")
 
@@ -443,6 +446,12 @@ def place_question(line):
     """Lagevorschlag von record.py: (x mm, y mm, Drehung Grad), sonst None."""
     match = _PLACE.match((line or "").strip())
     return (int(match["x"]), int(match["y"]), int(match["yaw"])) if match else None
+
+
+def first_grasp_question(line):
+    """Erster Griff an der Handlage: (x, y, Ziel-x, Ziel-y) in mm, sonst None."""
+    match = _FIRST_GRASP.match((line or "").strip())
+    return (tuple(int(match[k]) for k in ("x", "y", "tx", "ty")) if match else None)
 
 
 def insert_question(line):

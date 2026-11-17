@@ -124,7 +124,9 @@ GRIPPER_DWELL_STEPS = int(math.ceil(GRIPPER_DWELL_S * CONTROL_RATE_HZ))
 #: Endanflug-Tempo 0,05 m/s), das langsame Ablegen beim Lagenwechsel
 #: kostete nur Zeit -- von 0,02 auf das Endanflug-Tempo
 #: (``record.py --ablage-tempo``; kleiner = wieder langsamer).
-PUT_BACK_APPROACH_SPEED_MS = 0.05
+#: 2026-11-17: mit dem neuen Endanflug (0,02) ebenfalls 0,02 -- Ablegen nie
+#: schneller als der Endanflug der Aufnahme.
+PUT_BACK_APPROACH_SPEED_MS = 0.02
 #: Ablage-Zugabe (Anlage 2026-11-02, B013-B037): beim Zuruecklegen so viel
 #: UEBER der Greifhoehe oeffnen. Die Tischhoehe stimmt nur auf einige
 #: Zehntel mm; lieber faellt das Objekt kurz, als dass es eingedrueckt wird
@@ -389,7 +391,12 @@ URDF_PATH = Path(__file__).resolve().parent / "data" / "lara5_candidate.urdf"
 TRANSIT_SPEED_MS = 0.15
 
 #: Reduzierte Geschwindigkeit im Endanflug (Greifen/Absetzen).
-APPROACH_SPEED_MS = 0.05
+#: 2026-11-17 (Anwender): 0,020 statt 0,050 fuer neue Datensaetze -- so schnell
+#: wie die Probefahrt beim Greifen (40 % von 0,05), mehr Bilder und
+#: Korrekturchancen ueber dem Objekt, weniger Nachlauf. Gilt nur fuer NEUE
+#: Aufnahmen: Modelle tragen ihr Tempo in bc_policy.json (recording.planner),
+#: var_C2 faehrt weiter mit 0,05.
+APPROACH_SPEED_MS = 0.02
 
 #: Hoechste Gelenkgeschwindigkeit in PTP-Segmenten (Interpolation im
 #: Gelenkraum). Die Schrittzahl eines PTP-Segments richtet sich nach dem
@@ -538,6 +545,13 @@ AUTO_PLAN_TRIES = 8
 AUTO_CELL_SIZE_M = 0.06
 #: ... und in den bisher seltensten von so vielen Abschnitten des Drehbereichs.
 AUTO_YAW_BINS = 6
+#: Mitte der Drehverteilung (Anwender 2026-11-17): Steuerungspunkt, gegen
+#: dessen Werkzeugdrehung plus und minus gleich oft vorkommen sollen -- die
+#: Startstellung der Policy. Vorher war die Mitte der geteachte PICK; mit
+#: "Schluss-Lage neu" wanderte er von Aufnahme zu Aufnahme, in den Demos
+#: vom 02./03./09.11. drehten 62 % nach plus und 25 % nach minus gegen den
+#: Start -- die Policy drehte bei Minus-Lagen zu wenig. None = alte Mitte.
+AUTO_YAW_CENTER_POINT = "CLEAR_FOV"
 
 #: Varianten innerhalb einer Gruppe (``record.py``, Anwender 2026-11-01):
 #: nach jedem Griff wird das Objekt nicht an derselben Stelle, sondern so weit
@@ -942,6 +956,17 @@ SCENE_CAMERA_DAHENG = CameraConfig(
 )
 
 CAMERAS = (WRIST_CAMERA, SCENE_CAMERA)
+
+#: Fester Weissabgleich je Daheng-Kamera (R, G, B) -- Standard fuer neue
+#: Datensaetze (Anwender 2026-11-17). Ohne feste Werte misst die Kamera bei
+#: jedem Start einmal ("Once"): am 17.11. sprang Blau so zwischen 1,85 und
+#: 2,68. Gemessen im Lauf 2026-11-17 ep_00006 mit dem neuen Standardlicht
+#: (Decke + Kameralicht, Fenster offen). Ueberschreibbar je Kamera in
+#: einstellungen/kameras.local.json ("white_balance_ratios").
+CAMERA_WHITE_BALANCE = {
+    "daheng:EBK24100633": (1.156, 1.0, 2.641),   # wrist
+    "daheng:EBK24100634": (1.074, 1.0, 2.383),   # scene
+}
 
 #: NUR ZUM TESTEN: beliebige USB-Webcam als Ersatz fuer die Wrist-Kamera
 #: (Kameramodus "wrist-uvc", AP 1.1/1.3). Prueft die Kamera-KETTE mit

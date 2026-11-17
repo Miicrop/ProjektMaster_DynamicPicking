@@ -1893,13 +1893,18 @@ class RecordingTab(ModeTab):
         self.first_lage = block_wheel(QComboBox())
         self.first_lage.addItem("Geteachter PICK (wie gewohnt)", "geteacht")
         self.first_lage.addItem("Neue Lage suchen und vorschlagen", "auto")
+        self.first_lage.addItem("Teil liegt irgendwo: M1 findet, Arm legt um", "m1")
         self.first_lage.setToolTip(
             "Womit der Lauf beginnt. Neue Lage: Die Aufnahme sucht eine Stelle im bisher "
             "seltensten Feld und schlägt sie vor. Nach deiner Freigabe fährt der Arm langsam "
             "mit offenem Greifer dorthin, du legst das Teil von Hand ein und bestätigst. "
             "Die Stelle wird dann als PICK gespeichert.\n\nPICK muss trotzdem einmal "
             "geteacht sein (Orientierung und Greifhöhe). Braucht Zurücklegen und die "
-            "Tischpunkte.")
+            "Tischpunkte.\n\nM1: Teil irgendwo zwischen die Marker legen. Der Arm fährt an "
+            "die Fotostellung, M1 bestimmt die Lage, nach deiner Freigabe greift der Arm "
+            "langsam und legt das Teil an die erste automatische Lage. Die Handlage wird "
+            "nicht aufgezeichnet (kein Bias), danach gilt immer der PICK aus dem eigenen "
+            "Ablegen.")
         self.first_lage.currentIndexChanged.connect(self._update_command)
         form.addRow("Erste Lage", self.first_lage)
         self.camera_guard = QCheckBox("Kameraschutz an kritischen Randfeldern")
@@ -3198,7 +3203,7 @@ class RecordingTab(ModeTab):
                 argv,
                 stdin_text="ANLAGE\n" if status.is_real_plant else None,
                 keep_stdin=(self.ask_label.isChecked() or self.probe.isChecked()
-                            or self.first_lage.currentData() == "auto"))
+                            or self.first_lage.currentData() in ("auto", "m1")))
         except Exception as exc:
             self.live_timer.stop()
             QMessageBox.warning(self, "Start gescheitert", str(exc))
@@ -3256,6 +3261,9 @@ class RecordingTab(ModeTab):
         if self.first_lage.currentData() == "auto":
             lines += ["", "Erste Lage: wird gesucht und vorgeschlagen. Vor der Fahrt und beim "
                           "Einlegen fragt die Oberfläche noch einmal nach."]
+        if self.first_lage.currentData() == "m1":
+            lines += ["", "Erste Lage aus M1: der Arm fährt zuerst an die Fotostellung, "
+                          "M1 sucht das Teil. Vor dem Greifen fragt die Oberfläche nach."]
         lines += ["", "Arbeitsraum frei? Not-Aus in Reichweite?"]
         return self.confirm("Roboter bewegt sich", "\n".join(lines))
 
@@ -3312,6 +3320,10 @@ class RecordingTab(ModeTab):
         if reason:
             self._end_reason = reason
 
+        grasp = recording_module.first_grasp_question(text)
+        if grasp is not None:
+            self._ask_first_grasp(*grasp)
+            return
         proposal = recording_module.place_question(text)
         if proposal is not None:
             self._ask_place(*proposal)
@@ -3377,6 +3389,19 @@ class RecordingTab(ModeTab):
             "Kabel, und bei Gefahr sofort stoppen."
             % (100 * config.PROBE_SPEED_FACTOR),
             "Anfahren")
+
+    def _ask_first_grasp(self, x_mm, y_mm, tx_mm, ty_mm):
+        """--start-lage m1: Handlage greifen und an Lage 1 legen (record.run_first_grasp)."""
+        self._answer_box(
+            "Teil greifen und umlegen?",
+            "M1 hat das Teil bei x %d mm, y %d mm gefunden. Erste Lage der Aufnahme: "
+            "x %d mm, y %d mm." % (x_mm, y_mm, tx_mm, ty_mm),
+            "Der Arm fährt mit %.0f %% Tempo hin, greift das Teil und legt es an der ersten "
+            "Lage ab. Nichts davon wird aufgezeichnet.\n\n• Prüfen, ob die gefundene Lage "
+            "zum Teil passt (Live-Bild).\n• Not-Aus griffbereit, Arbeitsraum frei halten.\n"
+            "• Bei Gefahr sofort stoppen."
+            % (100 * config.PROBE_SPEED_FACTOR),
+            "Greifen und umlegen")
 
     def _ask_insert(self):
         """Der Arm steht offen an der Lage: Teil von Hand einlegen."""

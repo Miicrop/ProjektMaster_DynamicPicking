@@ -286,8 +286,13 @@ def test_put_back_places_slowly_and_regrips_on_the_spot():
     assert len(no_open) == len(plain)
     # Abstieg zum Ablegen hoechstens slow_speed (record.py --ablage-tempo);
     # Vorgabe seit 2026-11-03 = Endanflug-Tempo der Aufnahme
-    slow = plan_put_back(kin, workspace, wps, fk=robot.fk, regrip=False, slow_speed=0.02)
-    assert len(slow) > len(plain)
+    # (Endanflug 0,05 wie bis 2026-11-17; mit dem neuen Standard 0,02 ist
+    # langsames Ablegen gleich schnell)
+    plain05 = plan_put_back(kin, workspace, wps, fk=robot.fk, regrip=False, slow=False,
+                            approach_speed=0.05)
+    slow = plan_put_back(kin, workspace, wps, fk=robot.fk, regrip=False, slow_speed=0.02,
+                         approach_speed=0.05)
+    assert len(slow) > len(plain05)
     fast = plan_put_back(kin, workspace, wps, fk=robot.fk, regrip=False,
                          approach_speed=config.APPROACH_SPEED_MS)
     assert len(fast) == len(plain)

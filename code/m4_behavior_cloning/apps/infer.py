@@ -856,8 +856,14 @@ def expert_after_probe(robot, workspace, known, reference_pick, start_joints, cl
                   approach_speed=planner.get("approach_speed_ms") or config.APPROACH_SPEED_MS,
                   ptp_joint_speed=planner.get("ptp_joint_speed_rads") or config.PTP_JOINT_SPEED_RADS)
     plan, last_error = None, "keine freie Lage"
+    # Drehverteilung um die Startstellung (config.AUTO_YAW_CENTER_POINT): plus und
+    # minus gegen den Start gleich oft -- wie bei der Aufnahme
+    from bc.live import yaw360 as _yaw360
+    center = (((_yaw360(start_pose, known.table) - _yaw360(reference_pick, known.table)
+                + 180.0) % 360.0 - 180.0) if config.AUTO_YAW_CENTER_POINT else None)
     for pose, xy, turn in known_pose.new_place_pose(known, reference_pick, rng,
-                                                    used_xy=pick_state.get("used_xy", ())):
+                                                    used_xy=pick_state.get("used_xy", ()),
+                                                    center_shift_deg=center):
         # in derselben Orientierung ablegen, wie gegriffen wurde
         place = (rotated_about(pose, known.table.normal_at(pose[0], pose[1]), np.pi)
                  if info["flipped"] else pose)
@@ -1273,7 +1279,8 @@ def main():
             raise SystemExit("--replay: %s" % exc)
         print("Replay: Bilder aus %s, Episoden %s" % (args.replay, args.replay_episodes))
     # Dieselbe Belichtung/Gain wie bei der Aufnahme (bc/camera_settings.py)
-    cam_cfgs, notes = camera_settings_module.apply(cam_cfgs)
+    # Weissabgleich: nicht der Standard aus config, sondern wie im Modell (unten)
+    cam_cfgs, notes = camera_settings_module.apply(cam_cfgs, default_wb=False)
     for note in notes:
         print("Kamera %s" % note)
     use_sim_cameras = all(c.backend in SOFT_BACKENDS for c in cam_cfgs)
@@ -1402,6 +1409,16 @@ def main():
             " ohne Geschwindigkeit (servo_j_pos)" if execution["mode"] == execution_module.SERVO_J_POS
             else ""))
 
+    # Fester Weissabgleich der Aufnahme (neue Datensaetze, Anwender 2026-11-17):
+    # hatte jede Episode denselben, gilt er hier auch; sonst wie bisher "Once"
+    from dataclasses import replace as _replace
+    rec_cams = ((info or {}).get("recording") or {}).get("camera_settings")
+    for k, cfg in enumerate(cam_cfgs):
+        wb = camera_settings_module.recorded_white_balance(rec_cams, cfg.name)
+        if wb is not None and cfg.backend == "daheng" and not cfg.white_balance_ratios:
+            cam_cfgs[k] = _replace(cfg, white_balance_ratios=wb)
+            print("Kamera %s: Weissabgleich fest wie in der Aufnahme %s"
+                  % (cfg.name, "/".join("%.2f" % v for v in wb)))
     try:
         captures, cam_cfgs = start_cameras(camera_mode, clock, seed=args.seed,
                                            uvc_device=args.uvc_device,

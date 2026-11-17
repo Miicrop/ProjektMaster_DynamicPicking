@@ -88,7 +88,7 @@ from bc.auto_layout import (
     variant_offsets,
 )
 from bc.gui.recording import next_block
-from bc.probe import placement_plans, probe_plans
+from bc.probe import placement_plans, probe_plans, slowed_plan
 from bc.put_back import (
     PutBackError,
     grasp_index,
@@ -141,6 +141,8 @@ PROBE_PROMPT = "PROBEFAHRT"
 #: wenn der Arm dort steht: Teil eingelegt? (gui/recording.py erkennt beide)
 PLACE_PROMPT = "LAGEVORSCHLAG"
 INSERT_PROMPT = "EINLEGEN"
+#: --start-lage m1: Handlage langsam greifen und an Lage 1 legen? (gui/recording.py)
+FIRST_GRASP_PROMPT = "ERSTER_GRIFF"
 
 #: Warum der Lauf vorzeitig endete; die Schlusszeile "LAUF_ENDE: ..." zeigt die
 #: Oberflaeche an (Anwender 2026-11-09: Lauf endete ohne erkennbaren Grund).
@@ -489,6 +491,27 @@ def plan_variants(args, sequence, robot, kin, rng, start, centre, coverage, draw
     return variants
 
 
+def yaw_center_shift(resolved, upright):
+    """Drehung (volle 360 Grad) von der geteachten Lage ``upright`` zur Mitte der
+    Drehverteilung = Werkzeugdrehung an config.AUTO_YAW_CENTER_POINT
+    (Startstellung der Policy). None (alte Mitte = PICK), wenn nicht gesetzt
+    oder der Punkt im Ablauf fehlt."""
+    from bc.live import yaw360
+
+    name = config.AUTO_YAW_CENTER_POINT
+    point = resolved.points.get(name) if name else None
+    if point is None:
+        if name:
+            print("Hinweis: Drehverteilung um PICK -- Punkt %s fehlt im Ablauf" % name)
+        return None
+    center = yaw360(point["pose_quat"], resolved.table)
+    base = yaw360(upright, resolved.table)
+    shift = (center - base + 180.0) % 360.0 - 180.0
+    print("Drehverteilung: Mitte = Werkzeugdrehung an %s (%.0f Grad, PICK %.0f Grad, "
+          "Versatz %+.0f), volle 360 Grad" % (name, center, base, shift))
+    return shift
+
+
 def make_coverage(args, sequence, resolved, rng, in_simulation=None):
     """Felder und Drehabschnitte (bc/auto_layout.Coverage), belegt mit den
     Lagen der Episoden im Zielordner und in ``--abdeckung``."""
@@ -497,7 +520,8 @@ def make_coverage(args, sequence, resolved, rng, in_simulation=None):
     coverage = Coverage([p["pose_quat"] for p in resolved.table_points.values()],
                         yaw_deg(upright, resolved.table), resolved.keepouts,
                         margin=args.randabstand, yaw_range_deg=args.drehung, rng=rng,
-                        camera_guard=not args.ohne_kameraschutz)
+                        camera_guard=not args.ohne_kameraschutz,
+                        center_shift_deg=yaw_center_shift(resolved, upright))
     found, files, seconds = load_coverage([args.out] + list(args.abdeckung), in_simulation)
     for xy, yaw in found:
         coverage.add(xy, yaw)
@@ -839,6 +863,95 @@ def run_placement(lage, robot, recorder, factor):
     print("Teil eingelegt, Arm wieder am Start.")
 
 
+def localize_start(robot, captures, sequence, resolved, kin, use_sim_robot, pick_state):
+    """``--start-lage m1``: an die Fotostellung, M1 lokalisiert das von Hand
+    gelegte Teil, PICK wird gesetzt (Sicherung wie Touch-up). Rueckgabe: der
+    neu aufgeloeste Ablauf."""
+    from types import SimpleNamespace
+
+    from bc import live, lokalisierung
+
+    scene = next((c for c in captures if c.name == "scene"), None)
+    if scene is None:
+        raise SystemExit("--start-lage m1: keine Szenenkamera -- M1 braucht ihr Bild")
+    try:
+        localizer = lokalisierung.M1Localizer()
+    except Exception as exc:
+        raise SystemExit("--start-lage m1: M1 nicht ladbar (%s)" % exc)
+    joints, _ = robot.get_point(config.LOCALIZE_POINT)
+    joints = np.asarray(joints, dtype=float)
+    if float(np.max(np.abs(robot.read_state().joints - joints))) > config.START_POSE_TOL_RAD:
+        print("Lokalisierung: an die Fotostellung %s" % config.LOCALIZE_POINT)
+        robot.move_to_joints(joints)
+    try:
+        loc = localizer.locate(lokalisierung.full_frame(scene))
+    except Exception as exc:
+        raise SystemExit("Lokalisierung gescheitert: %s -- Teil zwischen die Marker legen, "
+                         "Arm aus dem Bild?" % exc)
+    print("Lokalisierung: %s" % loc.describe())
+    if not loc.chamfer:
+        print("   HINWEIS: Fase nicht erkannt -- Richtung nur modulo 180 Grad (die naeher "
+              "an der geteachten)")
+    try:   # Abbildung fuer die Pfeile der Live-Ansicht merken (Kamera steht fest)
+        import time as _time
+        live.write_json_atomic(live.SCENE_MAP_CACHE, dict(
+            live.detect_scene_map(None, localizer),
+            gespeichert=_time.strftime("%Y-%m-%d %H:%M:%S")))
+    except Exception:
+        pass
+    template = resolved.points["PICK"]
+    pose = lokalisierung.pick_pose(loc, template["pose_quat"], resolved.table)
+    q = kin.ik(pose, np.asarray(template["joints"], dtype=float))
+    lage = {"resolved": SimpleNamespace(points={"PICK": {"pose_quat": pose, "joints": q}}),
+            "yaw_deg": loc.gripper_yaw_deg}
+    if adopt_pick(robot, lage, pick_state) is None:
+        raise SystemExit("PICK aus M1 nicht gesetzt -- nichts gegriffen.")
+    return resolve_points(sequence, robot, use_sim_robot)
+
+
+def run_first_grasp(m1_lage, target, robot, recorder, factor):
+    """``--start-lage m1``: Handlage langsam anfahren und greifen, dann an die
+    erste automatische Lage ``target`` ablegen. Nichts davon wird aufgezeichnet.
+
+    Freigabe vor der Fahrt (Rueckfrage wie beim Lagevorschlag, die Oberflaeche
+    erkennt PLACE_PROMPT). Bahn = ideale Bahn der Handlage, mit ``factor``
+    gestreckt, Greifer wie geplant (schliesst an PICK).
+    """
+    forward = next((p for p in m1_lage["plans"] if p is not None), None)
+    if forward is None:
+        raise SystemExit("Handlage (M1) nicht planbar -- Teil anders hinlegen.")
+    pose = m1_lage["resolved"].points["PICK"]["pose_quat"]
+    tp = target["resolved"].points["PICK"]["pose_quat"]
+    print("%s x %.0f y %.0f -> x %.0f y %.0f -- Handlage (M1) langsam greifen und an Lage 1 "
+          "legen? [j]a / [n]ein" % (FIRST_GRASP_PROMPT, 1e3 * pose[0], 1e3 * pose[1],
+                                     1e3 * tp[0], 1e3 * tp[1]))
+    if ask("", "").strip().lower()[:1] != "j":
+        raise SystemExit("Erster Griff nicht freigegeben -- nichts bewegt (PICK steht auf der "
+                         "M1-Lage).")
+    hin = slowed_plan(forward, factor, keep_gripper=True)
+    start = hin.joints_noisy[0]
+    if float(np.max(np.abs(robot.read_state().joints - start))) > config.START_POSE_TOL_RAD:
+        robot.move_to_joints(start)
+    print("Erster Griff (Handlage, %.0f %% Tempo, nicht aufgezeichnet)" % (100 * factor))
+    try:
+        result = recorder.record(hin, metadata={"probe": True, "erster_griff": True})
+    except RuntimeError as exc:
+        raise SystemExit("Erster Griff abgebrochen: %s -- Arm und Teil pruefen." % exc)
+    if result.discarded:
+        raise SystemExit("Erster Griff abgebrochen (%s) -- Arm und Teil pruefen."
+                         % result.discard_reason)
+    back = target["regrip_plan"] or target["back_plan"]
+    print("Umlegen: Teil an Lage 1 (x %.0f y %.0f mm), nicht aufgezeichnet"
+          % (1e3 * tp[0], 1e3 * tp[1]))
+    try:
+        result = recorder.record(back, metadata={"put_back": True})
+    except RuntimeError as exc:
+        raise SystemExit("Umlegen abgebrochen: %s -- Teil von Hand pruefen." % exc)
+    if result.discarded:
+        raise SystemExit("Umlegen abgebrochen (%s) -- Teil von Hand pruefen."
+                         % result.discard_reason)
+
+
 def switch_to_teach(robot):
     """Nach dem Lauf in den Teach-Modus (``--nach-ende-teach``).
 
@@ -1116,10 +1229,15 @@ def parse_args():
              "beginnt dort, ohne neu zu teachen (Anwender 2026-11-03)",
     )
     parser.add_argument(
-        "--start-lage", dest="start_lage", choices=("geteacht", "auto"), default="geteacht",
+        "--start-lage", dest="start_lage", choices=("geteacht", "auto", "m1"),
+        default="geteacht",
         help="erste Lage: der geteachte PICK (Standard) oder 'auto' -- eine neue Lage wird "
              "gesucht und vorgeschlagen, der Arm faehrt sie langsam an, das Teil wird von "
-             "Hand eingelegt und bestaetigt (Anwender 2026-11-09)",
+             "Hand eingelegt und bestaetigt (Anwender 2026-11-09) -- oder 'm1': das Teil "
+             "liegt irgendwo von Hand, M1 lokalisiert es an der Fotostellung, der Arm "
+             "greift es langsam (nicht aufgezeichnet) und legt es an die erste "
+             "automatische Lage; die Handlage kommt nicht in die Daten (Anwender "
+             "2026-11-17). Danach gilt immer der PICK aus dem eigenen Ablegen.",
     )
     parser.add_argument(
         "--ohne-kameraschutz", dest="ohne_kameraschutz", action="store_true",
@@ -1607,9 +1725,18 @@ def run(args):
         # gedreht ablegen statt dieselbe Pose zu wiederholen -- braucht den
         # Tisch (Hoehe an der neuen Stelle) und den Bereich der Tischpunkte
         want_variation = args.zuruecklegen and args.episodes > 1 and not args.feste_lage
+        if args.start_lage == "m1":
+            # Handlage nur lokalisieren -- sie wird gegriffen und umgelegt, nie
+            # aufgezeichnet (Anwender 2026-11-17: von Hand gelegt = Bias)
+            if resolved is None or resolved.table is None or not args.zuruecklegen:
+                raise SystemExit("--start-lage m1 braucht Ablaufdatei, Tischpunkte und "
+                                 "Zuruecklegen.")
+            resolved = localize_start(robot, captures, sequence, resolved, kin,
+                                      use_sim_robot, pick_state)
+            waypoints = resolved.waypoints
         if args.zuruecklegen and resolved is not None and resolved.table is not None \
                 and (args.lagen > 1 or want_variation or args.schluss_lage == "neu"
-                     or args.start_lage == "auto"):
+                     or args.start_lage in ("auto", "m1")):
             try:
                 coverage = make_coverage(args, sequence, resolved, rng,
                                          robot_info.get("in_simulation"))
@@ -1617,7 +1744,7 @@ def run(args):
                 if args.lagen > 1:
                     raise SystemExit("Automatische Lagen nicht moeglich: %s" % exc)
                 print("Varianten AUS: %s" % exc)
-        if args.start_lage == "auto" and coverage is None:
+        if args.start_lage in ("auto", "m1") and coverage is None:
             raise SystemExit("Selbst gesuchter PICK (--start-lage auto) braucht Ablaufdatei, "
                              "Zuruecklegen und die Tischpunkte.")
         layout["variation"] = want_variation and coverage is not None
@@ -1644,7 +1771,7 @@ def run(args):
         # Bezug fuer neue Lagen und Varianten bleibt immer der geteachte PICK
         # (Orientierung, Greifhoehe, IK-Startwert) -- auch beim Selbstsuchen.
         reference = {"resolved": resolved}
-        if args.start_lage == "auto":
+        if args.start_lage in ("auto", "m1"):
             start = next_auto_lage(args, sequence, robot, kin, rng, reference, coverage,
                                    first_scales, 0, args.block)
             if start is None:
@@ -1660,6 +1787,13 @@ def run(args):
         resolved_start = resolved
         print(duration_line(args, start, time.perf_counter() - t_plan, group))
 
+        if args.start_lage == "m1":
+            # Handlage (M1) langsam greifen, an die erste Lage ablegen -- ohne Aufnahme
+            m1_lage = plan_lage(args, waypoints, resolved, robot, kin, [0.0], rng,
+                                index=0, block=None, source="m1")
+            run_first_grasp(m1_lage, start, robot, put_back_recorder, args.probefahrt_tempo)
+            if adopt_pick(robot, start, pick_state):
+                resolved_start = resolve_points(sequence, robot, use_sim_robot)
         if args.start_lage == "auto":
             run_placement(start, robot, put_back_recorder, args.probefahrt_tempo)
             if adopt_pick(robot, start, pick_state):

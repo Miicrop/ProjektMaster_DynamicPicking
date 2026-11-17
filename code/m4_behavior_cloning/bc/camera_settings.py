@@ -25,7 +25,7 @@ from pathlib import Path
 #: Ablage, relativ zum Arbeitsordner (nicht eingecheckt: einstellungen/*.local.json)
 SETTINGS_FILE = "einstellungen/kameras.local.json"
 #: Werte, die hier eingestellt werden
-KEYS = ("exposure_us", "gain_db")
+KEYS = ("exposure_us", "gain_db", "white_balance_ratios")
 #: Grenzen fuer die Eingabe (VEN-161-61U3C: Belichtung ab ~20 us, Gain 0-24 dB).
 #: Mehr als ~16 ms Belichtung verwischt bei Armbewegung und begrenzt die Rate.
 EXPOSURE_RANGE_US = (20.0, 30000.0)
@@ -64,7 +64,12 @@ def save(cfg, values, root=None):
     for key in KEYS:
         if key in values:
             value = values[key]
-            clean[key] = None if value is None else round(float(value), 2)
+            if value is None:
+                clean[key] = None
+            elif key == "white_balance_ratios":
+                clean[key] = [round(float(v), 3) for v in value]
+            else:
+                clean[key] = round(float(value), 2)
     data[device_key(cfg)] = clean
     path = _path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -72,21 +77,41 @@ def save(cfg, values, root=None):
     return path
 
 
-def apply(cfgs, root=None):
+def apply(cfgs, root=None, default_wb=True):
     """Gespeicherte Werte auf die Konfigurationen legen.
 
     Rueckgabe: (neue Liste, Textzeilen dazu). Nur Daheng -- die UVC-Webcam
     stellt Belichtung ueber OpenCV meist gar nicht verlaesslich ein.
     """
+    from . import config
+
     stored = load(root)
     out, notes = [], []
     for cfg in cfgs:
-        values = stored.get(device_key(cfg)) if cfg.backend == "daheng" else None
+        values = dict(stored.get(device_key(cfg)) or {}) if cfg.backend == "daheng" else None
+        if default_wb and values is not None and "white_balance_ratios" not in values \
+                and device_key(cfg) in config.CAMERA_WHITE_BALANCE:
+            # fester Weissabgleich als Standard (config.CAMERA_WHITE_BALANCE)
+            values["white_balance_ratios"] = config.CAMERA_WHITE_BALANCE[device_key(cfg)]
+        if values and values.get("white_balance_ratios") is not None:
+            values["white_balance_ratios"] = tuple(float(v) for v in values["white_balance_ratios"])
         if values:
             cfg = replace(cfg, **values)
-            notes.append("%s: %s aus %s" % (cfg.name, describe(values), SETTINGS_FILE))
+            notes.append("%s: %s (%s / config.CAMERA_WHITE_BALANCE)"
+                         % (cfg.name, describe(values), SETTINGS_FILE))
         out.append(cfg)
     return out, notes
+
+
+def recorded_white_balance(recorded, camera):
+    """Fester Weissabgleich der Aufnahme fuer ``camera`` -- nur wenn alle
+    Episoden denselben hatten (neue Datensaetze, config.CAMERA_WHITE_BALANCE),
+    sonst None (aeltere Aufnahmen mit "Once": je Sitzung anders)."""
+    seen = ((recorded or {}).get(camera) or {}).get("white_balance_ratios") or []
+    distinct = {tuple(round(float(v), 2) for v in r) for r in seen if r}
+    if len(distinct) != 1:
+        return None
+    return tuple(float(v) for v in seen[0])
 
 
 def describe(values):
@@ -97,6 +122,9 @@ def describe(values):
     if "gain_db" in values:
         bits.append("Gain %s" % ("Automatik" if values["gain_db"] is None
                                  else "%.1f dB" % values["gain_db"]))
+    if values.get("white_balance_ratios"):
+        bits.append("Weissabgleich fest %s" % "/".join(
+            "%.2f" % v for v in values["white_balance_ratios"]))
     return ", ".join(bits)
 
 
@@ -118,7 +146,7 @@ def collect(per_episode):
     for settings in per_episode:
         for cam, values in (settings or {}).items():
             slot = out.setdefault(cam, {})
-            for key in tuple(COMPARE_TOLERANCE) + COMPARE_MODES:
+            for key in tuple(COMPARE_TOLERANCE) + COMPARE_MODES + ("white_balance_ratios",):
                 v = (values or {}).get(key)
                 if v is not None and v not in slot.setdefault(key, []):
                     slot[key].append(v)

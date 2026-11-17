@@ -142,3 +142,36 @@ def test_cell_layout_has_base_and_obstacles():
     cell = live.cell_layout()
     assert cell["base"]["r"] > 0
     assert {b["name"] for b in cell["boxes"]} >= {"Kamerastange", "Teststation"}
+
+
+def test_turns_are_balanced_around_the_start_not_the_pick():
+    """Drehverteilung (Anwender 2026-11-17): PICK 30 Grad neben dem Start --
+    die Drehungen sollen um den Start liegen, gleich oft plus und minus."""
+    from bc.auto_layout import Coverage
+
+    region = [[0.3, -0.2, 0, 1, 0, 0, 0], [0.6, -0.2, 0, 1, 0, 0, 0], [0.6, 0.1, 0, 1, 0, 0, 0],
+              [0.3, 0.1, 0, 1, 0, 0, 0]]
+    cov = Coverage(region, base_yaw_deg=133.0, yaw_range_deg=45.0, center_shift_deg=-30.0,
+                   rng=np.random.default_rng(0))
+    absolute = []
+    for _ in range(600):
+        turn = cov.next_turn()
+        absolute.append(133.0 + turn)
+        cov.add((0.4, 0.0), (133.0 + turn) % 180.0)
+    rel = np.array(absolute) - 103.0
+    assert abs(np.mean(rel)) < 3.0
+    assert rel.min() >= -45.0 - 1e-9 and rel.max() <= 45.0 + 1e-9
+    assert abs(np.sum(rel > 0) - np.sum(rel < 0)) < 30
+
+
+def test_center_shift_uses_the_full_turn():
+    """PICK 150 Grad neben dem Start (Fase auf der anderen Seite): modulo 180
+    waeren das -30 Grad -- gedreht werden muss aber -150."""
+    from bc.auto_layout import Coverage
+
+    region = [[0.3, -0.2, 0, 1, 0, 0, 0], [0.6, -0.2, 0, 1, 0, 0, 0], [0.6, 0.1, 0, 1, 0, 0, 0],
+              [0.3, 0.1, 0, 1, 0, 0, 0]]
+    cov = Coverage(region, base_yaw_deg=73.0, yaw_range_deg=45.0, center_shift_deg=-150.0,
+                   rng=np.random.default_rng(1))
+    turns = np.array([cov.next_turn() for _ in range(200)])
+    assert turns.min() >= -195.0 - 1e-9 and turns.max() <= -105.0 + 1e-9
