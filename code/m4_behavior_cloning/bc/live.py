@@ -84,13 +84,16 @@ def fast_fk(robot):
     return None
 
 
-def pose_info(pose, plane):
-    """Pose (7) -> dict x, y, z (m), yaw (Grad, 0..180), Hoehe ueber Tisch (mm)."""
+def pose_info(pose, plane, offset_deg=None):
+    """Pose (7) -> dict x, y, z (m), yaw (Grad 0..360: Blickrichtung der
+    Handgelenkkamera = Werkzeug-x + ``offset_deg``, Default
+    config.LIVE_CAMERA_YAW_OFFSET_DEG), Hoehe ueber Tisch (mm)."""
     from .table import clearance
 
+    offset = config.LIVE_CAMERA_YAW_OFFSET_DEG if offset_deg is None else offset_deg
     pose = np.asarray(pose, dtype=float)
     out = {"x": float(pose[0]), "y": float(pose[1]), "z": float(pose[2]),
-           "yaw": yaw360(pose, plane)}
+           "yaw": float((yaw360(pose, plane) + offset) % 360.0)}
     if plane is not None:
         out["table_mm"] = 1e3 * clearance(plane, pose[:3])
     return out
@@ -105,7 +108,7 @@ def grasp_index(actions):
     return int(closed[0]) if closed.size else None
 
 
-def plan_info(actions, fk, plane, stride=2):
+def plan_info(actions, fk, plane, stride=2, offset_deg=None):
     """Was eine Vorhersage noch vorhat: Bahn (jede ``stride``-te Action) und
     Greifpunkt (erstes Schliessen; schliesst sie nicht: das Ende).
     """
@@ -117,7 +120,7 @@ def plan_info(actions, fk, plane, stride=2):
                        + ([index] if index is not None else [])))
     poses = {i: np.asarray(fk(actions[i]), dtype=float) for i in picks}
     end = index if index is not None else len(actions) - 1
-    grasp = pose_info(poses[end], plane)
+    grasp = pose_info(poses[end], plane, offset_deg)
     grasp["closes"] = index is not None
     grasp["in_steps"] = int(end)
     path = [[round(float(poses[i][0]), 5), round(float(poses[i][1]), 5),
@@ -133,6 +136,43 @@ def mean_actions(chunks):
         return np.zeros((0, 7))
     n = min(len(c) for c in chunks)
     return np.mean([np.asarray(c[:n], dtype=float) for c in chunks], axis=0)
+
+
+# -- Zelle fuer die Draufsicht ------------------------------------------------
+
+def cell_layout():
+    """Feste Teile der Zelle (Basis-KS, m) -- nur zur Orientierung gezeichnet:
+    Roboterbasis, Hindernisse aus einstellungen/hindernisse.json (Stange und
+    Station sind dort grob geteacht), ArUco-Marker aus code/config/system.yaml
+    ueber workspace_to_robot. Fehlt etwas, fehlt es nur in der Zeichnung."""
+    out = {"base": {"x": 0.0, "y": 0.0, "r": 0.10}, "boxes": [], "markers": []}
+    root = Path(__file__).resolve().parents[1]
+    try:
+        data = json.loads((root / "einstellungen" / "hindernisse.json").read_text(encoding="utf-8"))
+        for item in data.get("hindernisse", []):
+            if item.get("art") == "quader":
+                out["boxes"].append({"name": item["name"], "lo": item["lo"][:2],
+                                     "hi": item["hi"][:2]})
+    except (OSError, ValueError, KeyError):
+        pass
+    try:
+        from . import lokalisierung
+
+        lokalisierung._import_group()
+        from common.config import load_config
+
+        cfg = load_config(lokalisierung.CODE_ROOT / "config" / "system.yaml")
+        w2r = cfg["workspace_to_robot"]
+        rot = math.radians(float(w2r["rotation_deg"]))
+        c, s = math.cos(rot), math.sin(rot)
+        t = np.asarray(w2r["translation_mm"], dtype=float)
+        for marker_id, (x, y) in sorted(cfg["workspace"]["markers_mm"].items()):
+            p = np.array([c * x - s * y, s * x + c * y]) + t
+            out["markers"].append({"id": int(marker_id), "x": float(1e-3 * p[0]),
+                                   "y": float(1e-3 * p[1])})
+    except Exception:
+        pass
+    return out
 
 
 # -- Abbildung Roboter -> Szenenkamera ---------------------------------------
@@ -245,6 +285,12 @@ class LiveWriter(object):
         self.image_period = 1.0 / float(image_hz)
         self.known = None
         self.episode = None
+        #: Pfeilrichtung = Werkzeug-x + Versatz (Blickrichtung der Kamera)
+        self.offset_deg = config.LIVE_CAMERA_YAW_OFFSET_DEG
+        try:
+            self.cell = cell_layout()
+        except Exception:
+            self.cell = None
         self.errors = []
         self._trail = deque(maxlen=TRAIL_POINTS)
         self._slot = None
@@ -356,29 +402,30 @@ class LiveWriter(object):
         plane = None if known is None else known.table
         out = {"t": slot.get("t", time.time()), "episode": self.episode,
                "phase": slot.get("phase"), "step": slot.get("step"), "trail": list(trail),
-               "fk": self.fk is not None}
+               "fk": self.fk is not None, "cell": self.cell}
+        off = self.offset_deg
         if known is not None:
-            out["pick"] = pose_info(known.pick, plane)
+            out["pick"] = pose_info(known.pick, plane, off)
             out["region"] = [[float(p[0]), float(p[1])] for p in (known.region or [])]
             out["gap_mm"] = 1e3 * getattr(known, "gap_m", config.PROBE_GAP_M)
         if slot.get("tcp") is None:
             return out
-        out["tcp"] = pose_info(slot["tcp"], plane)
+        out["tcp"] = pose_info(slot["tcp"], plane, off)
         out["spread_rad"] = slot.get("spread_rad", 0.0)
         if self.fk is None:
             return out
         if slot.get("target") is not None:
-            out["target"] = pose_info(self.fk(slot["target"]), plane)
+            out["target"] = pose_info(self.fk(slot["target"]), plane, off)
         plans = []
         for s, rest in slot.get("chunks") or []:
-            info = plan_info(rest, self.fk, plane)
+            info = plan_info(rest, self.fk, plane, offset_deg=off)
             if info is not None:
                 info["from_step"] = s
                 info["age"] = None if slot["step"] is None else int(slot["step"] - s)
                 plans.append(info)
         out["chunks"] = plans
         mean = mean_actions([rest for _, rest in slot.get("chunks") or []])
-        out["mean"] = plan_info(mean, self.fk, plane) if len(mean) else None
+        out["mean"] = plan_info(mean, self.fk, plane, offset_deg=off) if len(mean) else None
         pick_yaw = out.get("pick", {}).get("yaw")
         yaws = [p["grasp"]["yaw"] for p in plans]
         if yaws:

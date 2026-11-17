@@ -787,7 +787,17 @@ LOCALIZE_WARN_M = 0.010
 #: abgeglichen: dann wie bisher modulo 180, naeher an der geteachten Lage, und
 #: der Unterschied steht im Protokoll ("Fase: ...") -- daraus den Versatz
 #: setzen (erwartet 0 oder 180).
-LOCALIZE_CHAMFER_OFFSET_DEG = None
+#: Abgleich 2026-11-17 (11 Lokalisierungen an der Anlage): die volle M2-Richtung
+#: passte zu den geteachten/nachgefuehrten PICKs (0 Grad), in den Faellen mit
+#: +-180 Grad hatte das Umklappen PICK verdreht -- die Policy stand dort
+#: 0-4 Grad an der M2-Richtung, der Experte fand keine Bahn.
+LOCALIZE_CHAMFER_OFFSET_DEG = 0.0
+#: Live-Ansicht (bc/live.py): Pfeil in Blickrichtung der Handgelenkkamera =
+#: Werkzeug-x-Richtung + dieser Winkel (Grad). Aus den A6-Ablesungen des
+#: Anwenders 2026-11-17 (Kamera nach vorne bei A6 60, zur Szenenkamera bei 150,
+#: zur Teststation bei -30; grob, +-10 Grad). ACHTUNG: hindernisse.json setzt
+#: die Kamera auf Werkzeug +y (= +90 Grad) -- passt nicht dazu, pruefen.
+LIVE_CAMERA_YAW_OFFSET_DEG = -107.0
 #: Experte nach dem Probegriff: darf er um 180 Grad gedreht greifen, wenn das
 #: naeher an der Stoppstellung liegt? Nein (2026-11-17): die Richtung ist
 #: eindeutig, sonst lernte DAgger beide Richtungen.

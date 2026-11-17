@@ -139,6 +139,12 @@ class FieldView(QWidget):
         mean = st.get("mean")
         if mean:
             pts.append((mean["grasp"]["x"], mean["grasp"]["y"]))
+        cell = st.get("cell") or {}
+        if cell.get("base"):
+            pts += [(cell["base"]["x"], cell["base"]["y"])]
+        for box in cell.get("boxes") or []:
+            pts += [tuple(box["lo"]), tuple(box["hi"])]
+        pts += [(m["x"], m["y"]) for m in cell.get("markers") or []]
         if not st.get("region") and st.get("pick"):
             # ohne Tischpunkte: 15 cm um PICK
             px0, py0 = st["pick"]["x"], st["pick"]["y"]
@@ -157,7 +163,7 @@ class FieldView(QWidget):
         def double_arrow(info, color, width, label=None):
             if not info:
                 return
-            a, b = axis_points(info["x"], info["y"], info["yaw"])
+            a, b = axis_points(info["x"], info["y"], info["yaw"], 32.0 / scale)
             c = px(info["x"], info["y"])
             pen = QPen(QColor(color), width)
             painter.setPen(pen)
@@ -168,6 +174,7 @@ class FieldView(QWidget):
             if label:
                 painter.drawText(QRectF(c.x() + 7, c.y() + 2, 90, 14), label)
 
+        self._draw_cell(painter, cell, px, scale)
         if st.get("region"):
             hull = convex_hull([tuple(p) for p in st["region"]])
             painter.setPen(QPen(QColor("#9aa7b4"), 1))
@@ -194,7 +201,7 @@ class FieldView(QWidget):
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawPath(path)
             g = plan["grasp"]
-            a, b = axis_points(g["x"], g["y"], g["yaw"], ARROW_M * 0.7)
+            a, b = axis_points(g["x"], g["y"], g["yaw"], 22.0 / scale)
             painter.setPen(QPen(QColor(*CHUNK_COLOR), 1))
             painter.drawLine(px(*a), px(*b))
         if mean and mean.get("path"):
@@ -211,7 +218,47 @@ class FieldView(QWidget):
         painter.setPen(QColor("#888"))
         painter.drawText(self.rect().adjusted(0, 0, 0, -4),
                          Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter,
-                         "Roboter (unten) — dünn: einzelne Vorhersagen, dick: gemittelt (wird gefahren)")
+                         "Pfeil = Blickrichtung Handgelenkkamera — dünn: einzelne Vorhersagen, "
+                         "dick: gemittelt (wird gefahren)")
+
+    @staticmethod
+    def _draw_cell(painter, cell, px, scale):
+        """Zelle nur zur Orientierung: Basis, Stange, Station, ArUco-Marker."""
+        font = QFont()
+        font.setPointSize(8)
+        painter.setFont(font)
+        base = cell.get("base")
+        if base:
+            c = px(base["x"], base["y"])
+            painter.setPen(QPen(QColor("#7f8c8d"), 1.5))
+            painter.setBrush(QColor(127, 140, 141, 60))
+            painter.drawEllipse(c, base["r"] * scale, base["r"] * scale)
+            painter.setPen(QColor("#555"))
+            painter.drawText(QRectF(c.x() - 40, c.y() - 7, 80, 14), Qt.AlignmentFlag.AlignCenter,
+                             "Roboter")
+        colors = {"Kamerastange": "#8e44ad", "Teststation": "#b9770e"}
+        for box in cell.get("boxes") or []:
+            (x0, y0), (x1, y1) = box["lo"], box["hi"]
+            a, b = px(x0, y0), px(x1, y1)
+            rect = QRectF(min(a.x(), b.x()), min(a.y(), b.y()),
+                          abs(a.x() - b.x()), abs(a.y() - b.y()))
+            color = QColor(colors.get(box["name"], "#7f8c8d"))
+            painter.setPen(QPen(color, 1.5))
+            fill = QColor(color)
+            fill.setAlpha(50)
+            painter.setBrush(fill)
+            painter.drawRect(rect)
+            painter.setPen(color)
+            painter.drawText(QRectF(rect.left(), rect.bottom() + 1, 120, 14), box["name"])
+        for m in cell.get("markers") or []:
+            c = px(m["x"], m["y"])
+            half = 0.025 * scale
+            painter.setPen(QPen(QColor("#222"), 1))
+            painter.setBrush(QColor("#222"))
+            painter.drawRect(QRectF(c.x() - half, c.y() - half, 2 * half, 2 * half))
+            painter.setPen(QColor("#fff"))
+            painter.drawText(QRectF(c.x() - half, c.y() - half, 2 * half, 2 * half),
+                             Qt.AlignmentFlag.AlignCenter, "%d" % m["id"])
 
     @staticmethod
     def _head(painter, base, tip, color):

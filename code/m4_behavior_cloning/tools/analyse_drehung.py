@@ -52,6 +52,22 @@ def richtung(deg):
 
 # -- Policy-Fahrten -------------------------------------------------------
 
+def _lokalisierung(npz_path):
+    """Lokalisierungs-Protokoll der Fahrt aus summary.json daneben, oder None."""
+    import json
+
+    path = Path(npz_path).with_name("summary.json")
+    try:
+        episodes = json.loads(path.read_text(encoding="utf-8")).get("episodes") or []
+        ep = int(Path(npz_path).stem.split("_")[-1])
+        for e in episodes:
+            if int(e.get("episode", -1)) == ep:
+                return e.get("lokalisierung")
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def rollout_rows(roots):
     files = []
     for root in roots:
@@ -63,10 +79,20 @@ def rollout_rows(roots):
         if "lage_pick" not in z.files or "tcp" not in z.files or not len(z["tcp"]):
             continue
         start, end, pick = yaw360(z["tcp"][0]), yaw360(z["tcp"][-1]), yaw360(z["lage_pick"])
+        # PICK aus M1 mit Fase: volle Richtung (bis 2026-11-17 mittags wurde PICK
+        # bei grossen Drehungen um 180 Grad umgeklappt -- hier korrigiert)
+        quelle = "PICK"
+        lokal = _lokalisierung(f)
+        if lokal and lokal.get("gripper_yaw360_deg") is not None:
+            m1 = float((lokal["gripper_yaw360_deg"]
+                        + (config.LOCALIZE_CHAMFER_OFFSET_DEG or 0.0)) % 360.0)
+            if abs(diff(m1, pick)) > 90:
+                quelle = "M1 (PICK war umgeklappt)"
+            pick = m1
         noetig, gedreht = diff(pick, start), diff(end, start)
         row = {"datei": str(f), "pick": pick, "start": start, "ende": end,
                "noetig": noetig, "gedreht": gedreht, "fehler": diff(end, pick),
-               "richtung_noetig": richtung(noetig)}
+               "richtung_noetig": richtung(noetig), "quelle": quelle}
         row["falsch_herum"] = (row["richtung_noetig"] != "klein"
                                and richtung(gedreht) not in ("klein", row["richtung_noetig"]))
         # rohe Vorhersagen (ab 2026-11-17): Streuung der Drehung am Chunk-Ende
@@ -83,7 +109,8 @@ def report_rollouts(rows):
         name = "/".join(Path(r["datei"]).parts[-2:])
         print("%-44s %6.0f %6.0f %6.0f | %+7.0f %+7.0f %+7.0f  %s"
               % (name[-44:], r["pick"], r["start"], r["ende"], r["noetig"], r["gedreht"],
-                 r["fehler"], "FALSCH HERUM" if r["falsch_herum"] else ""))
+                 r["fehler"], ("FALSCH HERUM " if r["falsch_herum"] else "")
+                 + ("[%s]" % r["quelle"] if r["quelle"] != "PICK" else "")))
     print()
     for key in ("plus", "klein", "minus"):
         group = [r for r in rows if r["richtung_noetig"] == key]

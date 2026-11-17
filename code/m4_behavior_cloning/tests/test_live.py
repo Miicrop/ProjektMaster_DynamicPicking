@@ -41,7 +41,7 @@ def test_plan_info_finds_the_grasp_and_its_yaw():
     actions[:, 0] = np.linspace(0.3, 0.4, 10)
     actions[:, 5] = math.radians(30.0)
     actions[6:, 6] = 1.0                      # schliesst ab Index 6
-    info = live.plan_info(actions, _fk_yaw, None)
+    info = live.plan_info(actions, _fk_yaw, None, offset_deg=0.0)
     g = info["grasp"]
     assert g["closes"] and g["in_steps"] == 6
     assert abs(g["x"] - actions[6, 0]) < 1e-9
@@ -54,7 +54,7 @@ def test_two_modes_are_averaged_to_a_wrong_yaw():
     up[:, 5] = math.radians(130.0)
     down = np.zeros((8, 7))
     down[:, 5] = math.radians(50.0)
-    mean = live.plan_info(live.mean_actions([up, down]), _fk_yaw, None)
+    mean = live.plan_info(live.mean_actions([up, down]), _fk_yaw, None, offset_deg=0.0)
     assert abs(mean["grasp"]["yaw"] - 90.0) < 1e-6
 
 
@@ -104,6 +104,7 @@ def test_writer_state_shows_each_prediction_and_the_mean(tmp_path):
     pick = np.array([0.0, 0.0, 0.0, math.cos(math.radians(45)), 0, 0, math.sin(math.radians(45))])
     known = SimpleNamespace(pick=pick, table=None, region=[], gap_m=0.025)
     writer = live.LiveWriter(tmp_path, fk=_fk_yaw, threaded=False)
+    writer.offset_deg = 0.0
     writer.set_known(known)
     writer.start_episode(0)
     writer.update(1, _State(np.zeros(6), _fk_yaw(np.zeros(6))), executor=ens)
@@ -130,3 +131,14 @@ def test_writer_never_raises_into_the_loop(tmp_path):
 
 def test_default_probe_gap_is_25_mm():
     assert config.PROBE_GAP_M == 0.025
+
+
+def test_camera_offset_turns_every_arrow_alike():
+    pose = _fk_yaw([0, 0, 0, 0, 0, math.radians(100.0)])
+    assert abs(live.pose_info(pose, None, -107.0)["yaw"] - 353.0) < 1e-6
+
+
+def test_cell_layout_has_base_and_obstacles():
+    cell = live.cell_layout()
+    assert cell["base"]["r"] > 0
+    assert {b["name"] for b in cell["boxes"]} >= {"Kamerastange", "Teststation"}
