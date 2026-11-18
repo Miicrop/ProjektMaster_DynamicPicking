@@ -8,7 +8,7 @@ P="E:/Enviroments/bc_env/Scripts/python.exe"
 V=Berichte/Versuchsreihe_Policy-Varianten
 S=$V/skripte
 D="data/2026-11-02 data/2026-11-03 data/2026-11-09"
-CK=checkpoints/var_C2
+CK=checkpoints/C2_nur_griff_ohne_1111
 T60=$($P -c "import json;print(','.join(map(str,json.load(open('$V/testlagen.json'))['T60'])))")
 vm_ok() {
   $P -c "

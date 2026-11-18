@@ -31,7 +31,7 @@ for v in A B C D; do
 done
 R=checkpoints/2026-11-09/policy/rollouts/2026-11-13_vm_replay_daten-2026-11-11
 PYTHONIOENCODING=utf-8 $P $S/vergleich.py "Checkpoint 2026-11-09=$R" \
-  "A Basis=checkpoints/var_A/policy/rollouts/vm_T60" "B Pause kurz=checkpoints/var_B/policy/rollouts/vm_T60" \
-  "C Nur Griff=checkpoints/var_C/policy/rollouts/vm_T60" "D Eine Drehung=checkpoints/var_D/policy/rollouts/vm_T60" \
+  "A Basis=checkpoints/A_basis/policy/rollouts/vm_T60" "B Pause kurz=checkpoints/B_pause_kurz/policy/rollouts/vm_T60" \
+  "C Nur Griff=checkpoints/C_nur_griff/policy/rollouts/vm_T60" "D Eine Drehung=checkpoints/D_eine_drehung/policy/rollouts/vm_T60" \
   > $V/vergleich_T60.md 2> $V/logs/vergleich.log
 echo "$(date '+%F %T') VM-Kette fertig"

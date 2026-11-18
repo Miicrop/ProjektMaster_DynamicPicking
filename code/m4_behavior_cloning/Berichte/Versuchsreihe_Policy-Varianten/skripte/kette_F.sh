@@ -7,7 +7,7 @@ set -u
 P="E:/Enviroments/bc_env/Scripts/python.exe"
 V=Berichte/Versuchsreihe_Policy-Varianten
 S=$V/skripte
-CK=checkpoints/var_F
+CK=checkpoints/F_licht_augment
 T60=$($P -c "import json;print(','.join(map(str,json.load(open('$V/testlagen.json'))['T60'])))")
 vm_ok() {
   $P -c "

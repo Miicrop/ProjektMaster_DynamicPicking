@@ -90,9 +90,13 @@ def parse_args(argv=None):
     tr.add_argument("--resume", action="store_true", help="am letzten Checkpoint in --out fortsetzen")
     tr.add_argument("--init-from", dest="init_from", default=None, metavar="POLICY",
                     help="Gewichte einer fertigen Policy als Startpunkt (z. B. "
-                         "checkpoints/var_C2/policy) -- Nachtrainieren mit DAgger-Daten. "
+                         "checkpoints/C2_nur_griff_ohne_1111/policy) -- Nachtrainieren mit DAgger-Daten. "
                          "Gleiche Kameras/Architektur noetig; Optimierer und Schritt beginnen neu, "
                          "Normierung aus dem neuen Datensatz")
+    tr.add_argument("--episoden-gewichte", dest="episoden_gewichte", default=None, metavar="JSON",
+                    help="Ziehgewicht je Episode (tools/drehung_ausgleich.py): Episoden werden "
+                         "mit Zuruecklegen proportional zum Gewicht gezogen, 0 = nie. Datensatz, "
+                         "Split und Normierung bleiben unveraendert (Vergleich zu var_C2)")
     tr.add_argument("--licht-augment", action="store_true",
                     help="Helligkeit/Kontrast/Saettigung/Farbton der Trainingsbilder zufaellig "
                          "variieren (LICHT_AUGMENT); Geometrie und Validierung unveraendert")
@@ -373,6 +377,12 @@ def main(argv=None):
         seed=args.seed + step,
         absolute_to_relative_idx=train_ds.absolute_to_relative_idx,
     )
+    gewichte_info = None
+    if args.episoden_gewichte:
+        sampler, gewichte_info = weighted_sampler(
+            args.episoden_gewichte, train_ds, train_eps, policy_cfg.drop_n_last_frames,
+            seed=args.seed + step, n_episodes=meta.total_episodes)
+        print("Episoden-Gewichte %s: %s" % (args.episoden_gewichte, gewichte_info))
     loader = torch.utils.data.DataLoader(
         train_ds, batch_size=args.batch_size, sampler=sampler, num_workers=workers,
         pin_memory=device.type == "cuda", drop_last=True,
@@ -396,6 +406,7 @@ def main(argv=None):
         "val_episodes": val_eps,
         "cameras": cameras,
         "parameters": sum(p.numel() for p in policy.parameters()),
+        "episoden_gewichte": gewichte_info,
     }
     (out / "train_config.json").write_text(
         json.dumps(run_info, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
@@ -515,6 +526,70 @@ def main(argv=None):
         shutil.rmtree(policy_dir)
     save(policy_dir, step, last_metrics, with_state=False)
     print("Policy -> %s (Schritt %d)" % (policy_dir, step))
+
+
+class WeightedFrameSampler:
+    """Wie EpisodeAwareSampler, aber Frames mit Zuruecklegen nach Episoden-Gewicht.
+
+    Gleiche Epochenlaenge (Zahl der nutzbaren Frames) und dieselbe Seed-Logik
+    je Epoche -- nur die Ziehwahrscheinlichkeit aendert sich. Ein Frame zaehlt
+    mit dem Gewicht seiner Episode (lange Episoden ziehen also wie bisher mehr
+    Frames; das Gewicht verschiebt das Verhaeltnis der Episoden zueinander).
+    """
+
+    def __init__(self, frame_indices, frame_weights, seed=0):
+        import torch
+
+        self._indices = list(frame_indices)
+        self._weights = torch.as_tensor(frame_weights, dtype=torch.double)
+        if not len(self._indices) or float(self._weights.sum()) <= 0:
+            raise ValueError("keine Frames mit Gewicht > 0")
+        self.seed = seed
+        self._epoch = 0
+
+    def __iter__(self):
+        import torch
+
+        epoch = self._epoch
+        self._epoch += 1
+        seed = int(np.random.SeedSequence([self.seed, epoch]).generate_state(1, dtype=np.uint64)[0])
+        gen = torch.Generator().manual_seed(seed)
+        picks = torch.multinomial(self._weights, len(self._indices), replacement=True, generator=gen)
+        return iter([self._indices[int(k)] for k in picks])
+
+    def __len__(self):
+        return len(self._indices)
+
+
+def weighted_sampler(path, train_ds, train_eps, drop_n_last_frames, seed, n_episodes):
+    """WeightedFrameSampler aus einer Gewichtsdatei (tools/drehung_ausgleich.py)."""
+    spec = json.loads(Path(path).read_text(encoding="utf-8"))
+    weights = list(spec["gewichte"])
+    if len(weights) != n_episodes:
+        raise SystemExit("--episoden-gewichte: %d Gewichte fuer %d Episoden" % (len(weights), n_episodes))
+    starts = train_ds.meta.episodes["dataset_from_index"]
+    ends = train_ds.meta.episodes["dataset_to_index"]
+    rel = train_ds.absolute_to_relative_idx
+    frames, frame_w = [], []
+    for ep in train_eps:
+        for absolute in range(int(starts[ep]), int(ends[ep]) - int(drop_n_last_frames)):
+            frames.append(rel[absolute] if rel is not None else absolute)
+            frame_w.append(float(weights[ep]))
+    klasse = spec.get("klasse") or [None] * n_episodes
+    mass = {}
+    for ep in train_eps:
+        n = int(ends[ep]) - int(starts[ep]) - int(drop_n_last_frames)
+        mass[klasse[ep]] = mass.get(klasse[ep], 0.0) + float(weights[ep]) * max(n, 0)
+    total = sum(mass.values()) or 1.0
+    info = {
+        "datei": str(path),
+        "modus": spec.get("modus"),
+        "regel": spec.get("regel"),
+        "train_episoden_mit_gewicht": int(sum(1 for ep in train_eps if weights[ep] > 0)),
+        "train_episoden": len(train_eps),
+        "anteil_frames_gewichtet": {str(k): round(v / total, 3) for k, v in sorted(mass.items(), key=str)},
+    }
+    return WeightedFrameSampler(frames, frame_w, seed=seed), info
 
 
 def _cycle(loader, sampler):

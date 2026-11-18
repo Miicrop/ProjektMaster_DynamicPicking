@@ -42,7 +42,7 @@ PICK „Steuerung“ oder „M1“, DAgger-Ordner z. B. `data/2026-11-17_dagger`
 Kommandozeile entsprechend:
 
 ```
-python apps/infer.py --checkpoint checkpoints/var_C2 --robot neura --real-robot --override 0.5 ^
+python apps/infer.py --checkpoint checkpoints/C2_nur_griff_ohne_1111 --robot neura --real-robot --override 0.5 ^
     --camera wrist=daheng:EBK24100633@60 --camera scene=daheng:EBK24100634@60 ^
     --lage-bekannt --probegriff objekt --episodes 25 --dagger data/2026-11-17_dagger ^
     [--pick-quelle m1 --foto-punkt Home]
@@ -68,7 +68,7 @@ python apps/infer.py --checkpoint checkpoints/var_C2 --robot neura --real-robot 
 python tools/export_variante.py --data data/2026-11-02 data/2026-11-03 data/2026-11-09 data/2026-11-17_dagger ^
     --abschneiden-nach 3 --dagger-gewicht 5 --out datasets/var_C2_dagger1
 python apps/train.py --dataset datasets/var_C2_dagger1 --out checkpoints/var_C2_dagger1 ^
-    --init-from checkpoints/var_C2/policy --steps 3000
+    --init-from checkpoints/C2_nur_griff_ohne_1111/policy --steps 3000
 ```
 
 - Aus PowerShell ohne aktiviertes venv vorher `$env:PATH = "E:\Enviroments\bc_env\Scripts;" + $env:PATH`

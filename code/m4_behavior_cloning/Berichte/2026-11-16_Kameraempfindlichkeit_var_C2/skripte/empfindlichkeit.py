@@ -33,7 +33,7 @@ from bc import config, replay  # noqa: E402
 from bc.adapters.sim_robot import SimRobot  # noqa: E402
 from bc.diffusion import DiffusionPolicyRunner  # noqa: E402
 
-CHECKPOINT = ROOT / "checkpoints" / "var_C2" / "policy"
+CHECKPOINT = ROOT / "checkpoints" / "C2_nur_griff_ohne_1111" / "policy"
 EXPORT = ROOT / "datasets" / "var_C2" / "meta" / "bc_export.json"
 NEUER_TAG = ROOT / "data" / "2026-11-11"     # nicht im Training von var_C2
 #: Chunk-Index, an dem verglichen wird: Ende der ausgefuehrten Aktionen

@@ -10,10 +10,10 @@ ROOT = Path(r"E:\Projekt\ProjektMaster_DynamicPicking\code\m4_behavior_cloning")
 RUNS = {
     "alt s0 (Wdh.)": "checkpoints/2026-11-09/policy/rollouts/2026-11-14_vm_T60_wiederholung",
     "alt s1": "checkpoints/kontrolle_2026-11-09_seed1/policy/rollouts/vm_T60",
-    "A": "checkpoints/var_A/policy/rollouts/vm_T60",
-    "C": "checkpoints/var_C/policy/rollouts/vm_T60",
-    "C2": "checkpoints/var_C2/policy/rollouts/vm_T60",
-    "F": "checkpoints/var_F/policy/rollouts/vm_T60",
+    "A": "checkpoints/A_basis/policy/rollouts/vm_T60",
+    "C": "checkpoints/C_nur_griff/policy/rollouts/vm_T60",
+    "C2": "checkpoints/C2_nur_griff_ohne_1111/policy/rollouts/vm_T60",
+    "F": "checkpoints/F_licht_augment/policy/rollouts/vm_T60",
 }
 data = {k: {r["episode"]: r for r in json.loads((ROOT / v / "auswertung.json").read_text(encoding="utf-8"))}
         for k, v in RUNS.items()}

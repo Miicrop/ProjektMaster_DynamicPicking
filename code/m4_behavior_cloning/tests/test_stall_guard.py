@@ -18,7 +18,7 @@ from bc import config
 from bc.safety import ArmStalled, StallGuard
 
 ROLLOUTS = (Path(__file__).resolve().parents[1]
-            / "checkpoints" / "var_C2" / "policy" / "rollouts")
+            / "checkpoints" / "C2_nur_griff_ohne_1111" / "policy" / "rollouts")
 
 
 def test_frozen_arm_with_distant_target_stops_after_the_limit():

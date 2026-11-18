@@ -10,7 +10,7 @@ Richtung ist eindeutig). "noetig" = PICK gegen Start, "gedreht" = Ende
 gegen Start, "Fehler" = Ende gegen PICK.
 
   # Policy-Fahrten (Ordner mit rollout_*.npz, auch mehrere / Elternordner)
-  python tools/analyse_drehung.py rollouts checkpoints/var_C2/policy/rollouts
+  python tools/analyse_drehung.py rollouts checkpoints/C2_nur_griff_ohne_1111/policy/rollouts
 
   # Demos (Aufnahme-Ordner mit index.json, auch mehrere / Elternordner)
   python tools/analyse_drehung.py demos data/2026-11-02 data/2026-11-03

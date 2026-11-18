@@ -19,7 +19,7 @@ r=open_robot('neura');r.connect(power_on=False);ok=r.in_simulation is True;r.clo
 warte_vm() { until vm_ok; do echo "$(date '+%F %T') warte auf VM"; sleep 120; done; }
 
 # 1. Training F
-CK=checkpoints/var_F
+CK=checkpoints/F_licht_augment
 if [ ! -f $CK/policy/bc_policy.json ]; then
   echo "$(date '+%F %T') Training F (A + Licht-Augmentierung)"
   $P apps/train.py --dataset datasets/var_A --out $CK --steps 10000 --batch-size 128 --licht-augment \
@@ -27,7 +27,7 @@ if [ ! -f $CK/policy/bc_policy.json ]; then
 fi
 
 # 2. C2 Rest
-C2=checkpoints/var_C2/policy/rollouts
+C2=checkpoints/C2_nur_griff_ohne_1111/policy/rollouts
 if ! grep -q zusammengefuehrt $C2/vm_T60/summary.json 2>/dev/null; then
   if [ ! -f $C2/vm_T60/summary.json ]; then
     $P $S/summary_aus_log.py $C2/vm_T60 $V/logs/vm_C2.log data/2026-11-11 $T60
@@ -37,7 +37,7 @@ if ! grep -q zusammengefuehrt $C2/vm_T60/summary.json 2>/dev/null; then
   if [ ! -f $C2/vm_T60_rest/summary.json ]; then
     warte_vm
     echo "$(date '+%F %T') VM-Replay C2 Rest (ab Fahrt $K)"
-    GEOFENCE=alt $P $S/stufe2_vm.py --robot neura --checkpoint checkpoints/var_C2/policy --replay data/2026-11-11 \
+    GEOFENCE=alt $P $S/stufe2_vm.py --robot neura --checkpoint checkpoints/C2_nur_griff_ohne_1111/policy --replay data/2026-11-11 \
       --transport-geplant --replay-episode $REST --out $C2/vm_T60_rest > $V/logs/vm_C2_rest.log 2>&1
   fi
   [ -f $C2/vm_T60_rest/summary.json ] || { echo "C2 Rest gescheitert"; exit 1; }

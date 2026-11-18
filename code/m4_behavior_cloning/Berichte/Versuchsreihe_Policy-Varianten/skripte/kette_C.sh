@@ -13,9 +13,9 @@ if [ ! -f datasets/var_C/meta/bc_export.json ]; then
     --out datasets/var_C > $V/logs/export_C.log 2>&1 || { echo "Export C gescheitert"; exit 1; }
 fi
 until grep -q "Kette fertig" $V/logs/kette_ABD.log 2>/dev/null; do sleep 60; done
-if [ ! -f checkpoints/var_C/policy/bc_policy.json ]; then
+if [ ! -f checkpoints/C_nur_griff/policy/bc_policy.json ]; then
   echo "$(date '+%F %T') Training C"
-  $P apps/train.py --dataset datasets/var_C --out checkpoints/var_C --steps 10000 --batch-size 128 \
+  $P apps/train.py --dataset datasets/var_C --out checkpoints/C_nur_griff --steps 10000 --batch-size 128 \
     > $V/logs/train_C.log 2>&1 || { echo "Training C gescheitert"; exit 1; }
 fi
 echo "$(date '+%F %T') Kette C fertig"
