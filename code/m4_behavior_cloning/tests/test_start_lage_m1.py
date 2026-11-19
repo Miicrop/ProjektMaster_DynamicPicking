@@ -38,3 +38,10 @@ def test_gui_passes_start_lage_m1_and_reads_the_question():
     assert recording.first_grasp_question(
         "ERSTER_GRIFF x 412 y -80 -> x 300 y -150 -- Handlage (M1)") == (412, -80, 300, -150)
     assert recording.first_grasp_question("LAGEVORSCHLAG x 1 y 2 Drehung 3") is None
+
+
+def test_gui_passes_start_lage_pick():
+    """Anwender 2026-11-19: Teil am geteachten PICK holen und umlegen (ohne M1)."""
+    argv = recording.record_argv("data/x", robot_kind="neura", sequence="seq.json",
+                                 start_lage="pick")
+    assert argv[argv.index("--start-lage") + 1] == "pick"

@@ -197,7 +197,7 @@ def record_argv(out, robot_kind="sim", episodes=1, sequence=None,
     # ohne sie bleibt record.py beim geteachten PICK
     if sequence and put_back and final_new:
         argv += ["--schluss-lage", "neu"]
-    if sequence and put_back and start_lage in ("auto", "m1"):
+    if sequence and put_back and start_lage in ("auto", "m1", "pick"):
         argv += ["--start-lage", str(start_lage)]
     if not camera_guard:
         argv.append("--ohne-kameraschutz")

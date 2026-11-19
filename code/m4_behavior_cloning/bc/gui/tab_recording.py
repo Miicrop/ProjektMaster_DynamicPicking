@@ -1894,6 +1894,7 @@ class RecordingTab(ModeTab):
         self.first_lage.addItem("Geteachter PICK (wie gewohnt)", "geteacht")
         self.first_lage.addItem("Neue Lage suchen und vorschlagen", "auto")
         self.first_lage.addItem("Teil liegt irgendwo: M1 findet, Arm legt um", "m1")
+        self.first_lage.addItem("Teil liegt am PICK: Arm holt es, legt um", "pick")
         self.first_lage.setToolTip(
             "Womit der Lauf beginnt. Neue Lage: Die Aufnahme sucht eine Stelle im bisher "
             "seltensten Feld und schlägt sie vor. Nach deiner Freigabe fährt der Arm langsam "
@@ -3203,7 +3204,7 @@ class RecordingTab(ModeTab):
                 argv,
                 stdin_text="ANLAGE\n" if status.is_real_plant else None,
                 keep_stdin=(self.ask_label.isChecked() or self.probe.isChecked()
-                            or self.first_lage.currentData() in ("auto", "m1")))
+                            or self.first_lage.currentData() in ("auto", "m1", "pick")))
         except Exception as exc:
             self.live_timer.stop()
             QMessageBox.warning(self, "Start gescheitert", str(exc))
@@ -3264,6 +3265,10 @@ class RecordingTab(ModeTab):
         if self.first_lage.currentData() == "m1":
             lines += ["", "Erste Lage aus M1: der Arm fährt zuerst an die Fotostellung, "
                           "M1 sucht das Teil. Vor dem Greifen fragt die Oberfläche nach."]
+        if self.first_lage.currentData() == "pick":
+            lines += ["", "Teil am geteachten PICK: der Arm holt es langsam (nicht "
+                          "aufgezeichnet) und legt es an Lage 1. Vor dem Greifen fragt die "
+                          "Oberfläche nach."]
         lines += ["", "Arbeitsraum frei? Not-Aus in Reichweite?"]
         return self.confirm("Roboter bewegt sich", "\n".join(lines))
 
@@ -3394,8 +3399,9 @@ class RecordingTab(ModeTab):
         """--start-lage m1: Handlage greifen und an Lage 1 legen (record.run_first_grasp)."""
         self._answer_box(
             "Teil greifen und umlegen?",
-            "M1 hat das Teil bei x %d mm, y %d mm gefunden. Erste Lage der Aufnahme: "
-            "x %d mm, y %d mm." % (x_mm, y_mm, tx_mm, ty_mm),
+            "Teil bei x %d mm, y %d mm (%s). Erste Lage der Aufnahme: x %d mm, y %d mm."
+            % (x_mm, y_mm, "von M1 gefunden" if self.first_lage.currentData() == "m1"
+               else "geteachter PICK", tx_mm, ty_mm),
             "Der Arm fährt mit %.0f %% Tempo hin, greift das Teil und legt es an der ersten "
             "Lage ab. Nichts davon wird aufgezeichnet.\n\n• Prüfen, ob die gefundene Lage "
             "zum Teil passt (Live-Bild).\n• Not-Aus griffbereit, Arbeitsraum frei halten.\n"

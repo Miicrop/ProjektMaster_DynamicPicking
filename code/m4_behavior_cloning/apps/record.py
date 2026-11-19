@@ -922,10 +922,10 @@ def run_first_grasp(m1_lage, target, robot, recorder, factor):
     """
     forward = next((p for p in m1_lage["plans"] if p is not None), None)
     if forward is None:
-        raise SystemExit("Handlage (M1) nicht planbar -- Teil anders hinlegen.")
+        raise SystemExit("Startlage nicht planbar -- Teil anders hinlegen bzw. PICK pruefen.")
     pose = m1_lage["resolved"].points["PICK"]["pose_quat"]
     tp = target["resolved"].points["PICK"]["pose_quat"]
-    print("%s x %.0f y %.0f -> x %.0f y %.0f -- Handlage (M1) langsam greifen und an Lage 1 "
+    print("%s x %.0f y %.0f -> x %.0f y %.0f -- Teil langsam greifen und an Lage 1 "
           "legen? [j]a / [n]ein" % (FIRST_GRASP_PROMPT, 1e3 * pose[0], 1e3 * pose[1],
                                      1e3 * tp[0], 1e3 * tp[1]))
     if ask("", "").strip().lower()[:1] != "j":
@@ -1244,7 +1244,7 @@ def parse_args():
              "beginnt dort, ohne neu zu teachen (Anwender 2026-11-03)",
     )
     parser.add_argument(
-        "--start-lage", dest="start_lage", choices=("geteacht", "auto", "m1"),
+        "--start-lage", dest="start_lage", choices=("geteacht", "auto", "m1", "pick"),
         default="geteacht",
         help="erste Lage: der geteachte PICK (Standard) oder 'auto' -- eine neue Lage wird "
              "gesucht und vorgeschlagen, der Arm faehrt sie langsam an, das Teil wird von "
@@ -1252,7 +1252,9 @@ def parse_args():
              "liegt irgendwo von Hand, M1 lokalisiert es an der Fotostellung, der Arm "
              "greift es langsam (nicht aufgezeichnet) und legt es an die erste "
              "automatische Lage; die Handlage kommt nicht in die Daten (Anwender "
-             "2026-11-17). Danach gilt immer der PICK aus dem eigenen Ablegen.",
+             "2026-11-17). Danach gilt immer der PICK aus dem eigenen Ablegen. -- 'pick': "
+             "wie 'm1', aber das Teil liegt am geteachten PICK (ohne Lokalisierung; "
+             "Anwender 2026-11-19).",
     )
     parser.add_argument(
         "--ohne-kameraschutz", dest="ohne_kameraschutz", action="store_true",
@@ -1761,7 +1763,7 @@ def run(args):
             waypoints = resolved.waypoints
         if args.zuruecklegen and resolved is not None and resolved.table is not None \
                 and (args.lagen > 1 or want_variation or args.schluss_lage == "neu"
-                     or args.start_lage in ("auto", "m1")):
+                     or args.start_lage in ("auto", "m1", "pick")):
             try:
                 coverage = make_coverage(args, sequence, resolved, rng,
                                          robot_info.get("in_simulation"))
@@ -1769,7 +1771,7 @@ def run(args):
                 if args.lagen > 1:
                     raise SystemExit("Automatische Lagen nicht moeglich: %s" % exc)
                 print("Varianten AUS: %s" % exc)
-        if args.start_lage in ("auto", "m1") and coverage is None:
+        if args.start_lage in ("auto", "m1", "pick") and coverage is None:
             raise SystemExit("Selbst gesuchter PICK (--start-lage auto) braucht Ablaufdatei, "
                              "Zuruecklegen und die Tischpunkte.")
         layout["variation"] = want_variation and coverage is not None
@@ -1796,7 +1798,7 @@ def run(args):
         # Bezug fuer neue Lagen und Varianten bleibt immer der geteachte PICK
         # (Orientierung, Greifhoehe, IK-Startwert) -- auch beim Selbstsuchen.
         reference = {"resolved": resolved}
-        if args.start_lage in ("auto", "m1"):
+        if args.start_lage in ("auto", "m1", "pick"):
             start = next_auto_lage(args, sequence, robot, kin, rng, reference, coverage,
                                    first_scales, 0, args.block)
             if start is None:
@@ -1812,10 +1814,14 @@ def run(args):
         resolved_start = resolved
         print(duration_line(args, start, time.perf_counter() - t_plan, group))
 
-        if args.start_lage == "m1":
-            # Handlage (M1) langsam greifen, an die erste Lage ablegen -- ohne Aufnahme
+        if args.start_lage in ("m1", "pick"):
+            # Teil (M1-Lage bzw. geteachter PICK) langsam greifen, an die erste Lage
+            # ablegen -- ohne Aufnahme
+            if resolved is None or resolved.table is None or not args.zuruecklegen:
+                raise SystemExit("--start-lage %s braucht Ablaufdatei, Tischpunkte und "
+                                 "Zuruecklegen." % args.start_lage)
             m1_lage = plan_lage(args, waypoints, resolved, robot, kin, [0.0], rng,
-                                index=0, block=None, source="m1")
+                                index=0, block=None, source=args.start_lage)
             run_first_grasp(m1_lage, start, robot, put_back_recorder, args.probefahrt_tempo)
             if adopt_pick(robot, start, pick_state):
                 resolved_start = resolve_points(sequence, robot, use_sim_robot)
