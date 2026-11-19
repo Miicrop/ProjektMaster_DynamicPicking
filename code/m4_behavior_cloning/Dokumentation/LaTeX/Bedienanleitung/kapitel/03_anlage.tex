@@ -1,0 +1,126 @@
+\chapter{Anlage starten und einrichten}
+\label{ch:anlage}
+
+Quelle der Schritte: \pfad{docs/inbetriebnahme.md} im Repository der Gruppe, ergänzt um die
+Werkzeugdaten aus \pfad{code/m2_robot_control/ANLEITUNG_NEURA.md}.
+
+\section{Vor dem Einschalten}
+
+\begin{itemize}
+  \item Zu zweit arbeiten, eine Person hat die Hand am Not-Halt.
+  \item Arbeitsraum frei; Kamerastange, Prüfvorrichtung und Tisch an ihrem Platz.
+  \item Handgelenkkamera fest am Greifer, Objektiv fixiert, Kabel so geführt, dass sie bei
+    Drehung des Handgelenks nicht spannen.
+  \item Kameralicht an der Handgelenkkamera einschalten (Standard seit 17.11.).
+\end{itemize}
+
+\section{Anlage einschalten}
+\label{sec:einschalten}
+
+Die Reihenfolge ist wichtig: Kameras und das Ethernet-Kabel des Roboters werden erst am Ende
+an den Rechner gesteckt.
+
+\begin{enumerate}
+  \item \textbf{Hardware anschließen:} Roboter, Greifer usw. verbinden. Kameras und
+    Roboter-Ethernet noch \emph{nicht} an den Rechner stecken.
+  \item \textbf{Robotersteuerung einschalten} (Control Box).
+  \item \textbf{Touchpad (Teach-Pendant) einschalten und anmelden.} Bleibt der Bildschirm
+    schwarz: Kabel des Touchpads abziehen und wieder einstecken. Die Zugangsdaten gibt es beim
+    Laborbetreuer; sie gehören nicht ins Repository.
+  \item \textbf{Roboter einschalten:} Am Touchpad auf \textbf{Real} umschalten, dann den
+    \textbf{weißen Knopf} an der Steuerung drücken $\rightarrow$ \textbf{Power On}. Falls nötig
+    vorher den Not-Halt entriegeln und Fehler quittieren.
+  \item \textbf{Greifer-Ausgang setzen:} \emph{Settings $\rightarrow$ IO Settings},
+    \textbf{Output 1.3 auf 1}. Alle anderen Outputs müssen auf 0 stehen
+    (\cref{sec:greifer}).
+  \item \textbf{Kameras und Ethernet anstecken:} beide Daheng-Kameras direkt an getrennte
+    USB-3-Anschlüsse, dann das Ethernet-Kabel des Roboters an den Rechner.
+  \item \textbf{Oberfläche starten} (\cref{ch:oberflaeche}) und verbinden.
+\end{enumerate}
+
+\paragraph{Checkliste.}
+\begin{itemize}
+  \item[$\square$] Roboter, Greifer usw. angeschlossen
+  \item[$\square$] Robotersteuerung eingeschaltet
+  \item[$\square$] Touchpad an (bei schwarzem Bildschirm Kabel ab- und wieder anstecken), angemeldet
+  \item[$\square$] auf Real geschaltet, weißer Knopf $\rightarrow$ Power On
+  \item[$\square$] IO Settings: Output 1.3 = 1, alle anderen = 0
+  \item[$\square$] Kameras angesteckt, Kameralicht an
+  \item[$\square$] Roboter-Ethernet angesteckt
+  \item[$\square$] Oberfläche gestartet, Anzeige rot nach dem Verbinden
+\end{itemize}
+
+\section{Greifer und Werkzeug einrichten}
+\label{sec:greifer}
+
+Montiert ist ein Zimmer LWR50L (elektrisch, IO-Link) auf dem Robotermodul LWR50F. In der
+Steuerung ist dafür das Werkzeug \code{ZimmerLWR50} angelegt.
+
+\begin{enumerate}
+  \item Greifer mit Spannung versorgen: \emph{Settings $\rightarrow$ IO Settings},
+    Output 1.3 = 1, alle anderen Outputs = 0 (Schritt 5 in \cref{sec:einschalten}).
+  \item Am Pendant das Werkzeug \code{ZimmerLWR50} auswählen. Alle Punkte und alle Ziele von
+    Modul~4 sind \acs{tcp}-Posen dieses Werkzeugs; mit einem anderen Werkzeug liegt jede
+    Greifhöhe falsch.
+  \item \acs{tcp}-Versatz prüfen: \SI{197.5}{\milli\metre} in $z$ (Flansch bis Backenspitzen,
+    geschlossen).
+  \item Last prüfen: Masse \SI{1.75}{\kilo\gram}, Schwerpunkt etwa \SI{81}{\milli\metre} über
+    dem Flansch in $z$. Masse und Schwerpunkt sind wichtig für Schwerkraftkompensation und
+    Kollisionserkennung.
+  \item Greifer einmal öffnen und schließen (Pendant oder Reiter M2: \knopf{Greifer auf/zu}).
+  \item In der Oberfläche von Modul~4 \emph{Systemcheck} $\rightarrow$
+    \knopf{Steuerung pruefen (nur lesen)}: Greifermodus muss \enquote{hardware} sein, das
+    Werkzeug gesetzt.
+\end{enumerate}
+
+\hinweis{Der Greifer kennt über NeuraPy nur \enquote{auf} und \enquote{zu}. Öffnungsweite und
+Kraft sind feste Parameter des Werkzeugs in der Steuerung. Zwischen Bauteil
+(\SI{39.7}{\milli\metre}) und Backen (\SI{44.8}{\milli\metre}) bleiben nur etwa
+\SI{2.5}{\milli\metre} je Seite.}
+
+\section{Punkte für Modul~4}
+\label{sec:punkte}
+
+Modul~4 liest die Punkte bei jedem Start direkt aus der Punktedatenbank der Steuerung.
+\Cref{tab:punkte} zeigt, welche Punkte geteacht sein müssen.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Punkte in der Steuerung}
+  \label{tab:punkte}
+  \begin{tabularx}{\textwidth}{@{}l X@{}}
+    \toprule
+    Punkt & Bedeutung \\
+    \midrule
+    \code{CLEAR_FOV} & Startstellung; der Arm verdeckt die Draufsichtkamera nicht \\
+    \code{PICK} & Greifpunkt am Bauteil; bei automatischen Lagen setzt die Aufnahme ihn selbst \\
+    \code{PRE_PLACE} & Übergabepunkt über der Prüfvorrichtung (nur Ablauf
+      \pfad{pick_to_station}) \\
+    \code{ID0} bis \code{ID8} & Tischpunkte mittig über den ArUco-Markern im $3\times3$-Raster,
+      Backen berühren den Tisch \\
+    \code{IGNORE} & Mitte einer Sperrzone (Größe in der Ablaufdatei) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\code{ANFLUG}, \code{PRE_PICK} und der Endpunkt \code{UEBER_TISCH} werden aus \code{PICK} bzw.\
+\code{ID4} berechnet und müssen nicht geteacht werden.
+
+\achtung{Werden die Tischpunkte neu geteacht, ändert sich das Kollisionsmodell. Die Punkte vor
+jeder Änderung sichern: \emph{Systemcheck} $\rightarrow$ \knopf{Punkte sichern} schreibt eine
+Datei nach \pfad{sequences/}.}
+
+\section{Erste Prüfung nach dem Einschalten}
+
+In der Oberfläche von Modul~4, Reiter \emph{Systemcheck}, Gruppe \enquote{verbunden, ohne
+Bewegung}:
+\begin{enumerate}
+  \item \knopf{Steuerung pruefen (nur lesen)}: \code{is_robot_in_simulation() = False},
+    Werkzeug, Greifermodus.
+  \item \knopf{Kinematik und Achsgrenzen}: Abweichung zur \acs{vm} unter
+    \SI{1}{\milli\metre}.
+  \item \knopf{Kameras suchen} und \knopf{Kameras: Rate und Versatz}: beide Daheng mit
+    Seriennummer, je mindestens \SI{15}{fps}, Bildalter p95 unter \SI{30}{\milli\second}.
+\end{enumerate}
+Danach \knopf{Protokoll speichern}; das Ergebnis liegt in \pfad{Berichte/<Datum>_Systemcheck.txt}.

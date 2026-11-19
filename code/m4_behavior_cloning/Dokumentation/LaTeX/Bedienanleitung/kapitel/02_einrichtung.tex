@@ -1,0 +1,90 @@
+\chapter{Einrichtung (einmalig)}
+\label{ch:einrichtung}
+
+\section{Python-Umgebung}
+
+\paragraph{Mit dem Setup-Fenster (empfohlen).} Im Repository der Gruppe
+\pfad{code\setup_m4.bat} doppelklicken. Das Fenster zeigt jede Komponente mit Status und legt
+ohne Administratorrechte \pfad{code\m4_behavior_cloning\.venv} an: Python~3.12, torch (mit
+NVIDIA-Karte die CUDA-Version, sonst CPU) und LeRobot. Treiber und Kamera-SDK prüft es nur und
+gibt dafür eine Checkliste für den Laborbetreuer aus.
+
+\paragraph{Von Hand.} Die Reihenfolge ist wichtig, sonst überschreibt LeRobot die CUDA-Version
+von torch. Ausführlich in \pfad{Dokumentation/Environment-Einrichtung.md}:
+\begin{enumerate}
+  \item Umgebung mit Python~3.12 anlegen (3.11 geht nicht, LeRobot verlangt 3.12).
+  \item torch und torchvision \emph{zuerst} aus dem cu128-Index installieren
+    (RTX-50-Karten brauchen sm\_120).
+  \item \pfad{python tools/check_gpu.py}: \texttt{sm\_120} muss in der Architekturliste stehen.
+  \item \pfad{lerobot[dataset,diffusion]==0.6.1} installieren.
+  \item OpenCV auf die volle Variante umstellen (nicht headless).
+  \item \pfad{pip install -e .[dev,gui]} für die übrigen Abhängigkeiten.
+\end{enumerate}
+Die gepinnten Versionen stehen in \pfad{Dokumentation/environment-lock.txt} (PC) und
+\pfad{environment-lock-laptop.txt}.
+
+\hinweis{Für das Training ohne Internet die ImageNet-Gewichte von ResNet18 vorher nach
+\pfad{~/.cache/torch/hub/checkpoints/resnet18-f37072fd.pth} kopieren.}
+
+\section{Daheng-Kameras (Galaxy SDK)}
+
+\begin{enumerate}
+  \item Galaxy SDK des Herstellers mit Administratorrechten installieren (Treiber).
+  \item Die Python-Schnittstelle \pfad{gxipy} ist kein pip-Paket. Der Adapter findet sie im
+    Installationsordner selbst; abweichend über die Umgebungsvariable
+    \pfad{GALAXY_SDK_PYTHON}.
+  \item Nach der Installation die Shell neu öffnen. Fehlermeldungen wie
+    \pfad{KeyError: 'GALAXY_GENICAM_ROOT'} bedeuten nur, dass die Umgebungsvariablen noch nicht
+    angekommen sind.
+  \item Prüfen: \pfad{python tools/check_cameras.py --list} zeigt Modell und Seriennummer.
+\end{enumerate}
+
+\achtung{Beide Kameras direkt an getrennte USB-3-Anschlüsse des Rechners stecken, nicht an
+einen Verteiler. Am Verteiler liefern sie nur etwa 23 statt 60 Bilder pro Sekunde, und die
+Episoden werden verworfen.}
+
+\section{Netzwerk}
+\label{sec:netzwerk}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{tabularx}{\textwidth}{@{}l l X@{}}
+    \toprule
+    Gerät & Adresse & Bemerkung \\
+    \midrule
+    Steuerung der Anlage & 192.168.2.13, Port 65432 & NeuraPy-Server, Steuerung v5.0.8 \\
+    Laptop an der Anlage & 192.168.2.14 & feste IP am LAN-Anschluss, Maske 255.255.255.0 \\
+    \acs{vm} \enquote{Lara5\_V5} & 192.168.2.13 & gleiche Adresse wie die Anlage! \\
+    Laptop zur \acs{vm} & 192.168.2.11 & VirtualBox Host-Only-Adapter \#3 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{itemize}
+  \item LAN-Kabel von der Buchse \enquote{Ethernet RJ45} in der Control Box direkt an den Laptop.
+  \item IPv4 am Laptop manuell setzen, Gateway und DNS leer lassen. Ist das WLAN selbst ein
+    192.168.2.x-Netz, WLAN ausschalten.
+  \item Prüfen:
+\begin{lstlisting}[style=ps]
+ping 192.168.2.13
+Test-NetConnection 192.168.2.13 -Port 65432
+\end{lstlisting}
+\end{itemize}
+
+\achtung{\acs{vm} und Anlage hören auf dieselbe Adresse. Welche gerade antwortet, zeigt
+\emph{nur} die Statusanzeige der Oberfläche (rot = reale Anlage, \cref{sec:backend}). Nie
+annehmen, mit der \acs{vm} verbunden zu sein. Vor der Arbeit an der Anlage die \acs{vm}
+ausschalten.}
+
+\hinweis{In den Unterlagen stehen mehrere Adressen: Die Neura-Anleitung von Modul~2 nennt
+192.168.2.20 (dort selbst als \enquote{prüfen} markiert), Neura-Standard ist 192.168.2.13. Mit
+Modul~4 lief die Verbindung zur Anlage über 192.168.2.13. Antwortet sie dort nicht, die Adresse
+am Touchpad in den Netzwerkeinstellungen nachsehen und
+\pfad{Test-NetConnection <Adresse> -Port 65432} prüfen.}
+
+\paragraph{Virtuelle Steuerung.} Die \acs{vm} \enquote{Lara5\_V5} läuft in VirtualBox. Der zweite
+Netzwerkadapter der \acs{vm} muss auf \enquote{VirtualBox Host-Only Ethernet Adapter \#3} zeigen;
+steht er auf dem Adapter ohne Nummer, startet die \acs{vm} mit
+\pfad{VERR_INTNET_FLT_IF_NOT_FOUND}. Der Laptop muss mit Netzteil und im Energiemodus
+\enquote{Beste Leistung} laufen, sonst hält er den Takt nicht.

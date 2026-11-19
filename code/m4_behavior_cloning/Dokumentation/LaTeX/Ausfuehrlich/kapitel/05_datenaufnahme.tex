@@ -1,0 +1,553 @@
+\chapter{Datenaufnahme}
+\label{ch:datenaufnahme}
+
+Die Qualität einer Behavior-Cloning-Policy ist durch ihre Daten begrenzt. Dieses Kapitel
+beschreibt deshalb ausführlich, wie die Demonstrationen entstehen: vom Teachen der Punkte
+über die Bahnplanung und das eingespeiste Rauschen bis zum fertigen Datensatz.
+
+% ==============================================================================
+\section{Grundentscheidung: Planer statt Teleoperation}
+\label{sec:planer-statt-teleop}
+
+\paragraph{Idee.} Üblich ist es, Demonstrationen von einem Menschen vorführen zu lassen, etwa
+per Gamepad oder durch Handführung. Modul~4 trennt dagegen zwei Rollen: Der Mensch teacht nur
+wenige Punkte der Bahn, die eigentliche Fahrt führt ein Bahnplaner aus, und dabei wird
+aufgezeichnet.
+
+\paragraph{Begründung.}
+\begin{itemize}
+  \item \textbf{Gleichmäßiges Tempo.} Die Policy lernt die Geschwindigkeit aus dem Abstand
+    zweier Aktionen (\cref{sec:unumkehrbar}). Ein Mensch fährt jedes Mal anders schnell und
+    zögert an schwierigen Stellen. Solche Pausen lernt die Policy als \enquote{stehen
+    bleiben}. Der Planer fährt immer gleich.
+  \item \textbf{Korrekturbeispiele.} Ein Planer fährt ohne Störung immer exakt die ideale
+    Bahn, was die Fehlerfortpflanzung aus \cref{sec:covariate-shift} begünstigt. Weil er die
+    ideale Bahn aber kennt, kann man ihn gezielt stören und trotzdem die richtige Aktion
+    speichern (\cref{sec:noise-umsetzung}). Bei einem menschlichen Bediener ist die ideale
+    Aktion unbekannt.
+  \item \textbf{Aufwand.} Nach einmaligem Teachen nimmt die Anlage viele Episoden ohne
+    Eingriff auf.
+\end{itemize}
+
+\paragraph{Preis.} Die Demonstrationen sind nur so gut wie die geteachten Punkte, und alle
+Bahnen haben dieselbe Struktur. Die Vielfalt muss gezielt über Objektlagen, Rauschen und
+Versatz hergestellt werden (\cref{sec:lagen}).
+
+% ==============================================================================
+\section{Ablauf und Punkte}
+\label{sec:ablauf-punkte}
+
+Der Ablauf einer Demonstration ist in einer Ablaufdatei als Folge von Punktnamen mit
+Bewegungsart festgelegt. \Cref{fig:ablauf-punkte} zeigt die Folge, die für das Projekt
+verwendet wird.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[font=\small, x=1cm, y=1cm,
+      pt/.style={circle, fill=black, inner sep=1.4pt},
+      lbl/.style={font=\scriptsize\ttfamily}]
+    % Tisch, Objekt, Station
+    \fill[black!10] (-0.5,0) rectangle (12.5,-0.25);
+    \fill[blue!40] (2.6,0) rectangle (3.4,0.25);
+    \fill[black!25] (10.2,0) rectangle (11.8,1.0);
+    \node[font=\scriptsize] at (11,0.5) {Prüfvorr.};
+    \node[font=\scriptsize, blue!50!black] at (3,-0.5) {Bauteil};
+    % Punkte
+    \node[pt] (start) at (-0.2,4.4) {}; \node[lbl, above] at (start) {CLEAR\_FOV};
+    \node[pt] (ap1) at (3,3.3) {};    \node[lbl, left=1mm] at (ap1) {ANFLUG};
+    \node[pt] (pre) at (3,1.8) {};    \node[lbl, left=1mm] at (pre) {PRE\_PICK};
+    \node[pt] (pick) at (3,0.3) {};   \node[lbl, left=1mm] at (pick) {PICK};
+    \node[pt] (place) at (11,2.2) {}; \node[lbl, above] at (place) {PRE\_PLACE};
+    % Bahnen
+    \draw[-{Stealth[length=2mm]}, thick] (start) to[out=-5, in=120] node[above right, font=\scriptsize] {PTP, mit Drehung} (ap1);
+    \draw[-{Stealth[length=2mm]}, thick, red!70!black] ([xshift=-1mm]ap1.south) -- ([xshift=-1mm]pre.north);
+    \draw[-{Stealth[length=2mm]}, thick, red!70!black] ([xshift=-1mm]pre.south) -- ([xshift=-1mm]pick.north);
+    \draw[-{Stealth[length=2mm]}, thick, red!70!black] ([xshift=1mm]pick.north) -- ([xshift=1mm]pre.south);
+    \node[font=\scriptsize, red!70!black, anchor=west] at (3.15,2.55) {LIN, \SI{5}{\centi\metre}};
+    \node[font=\scriptsize, red!70!black, anchor=west] at (3.15,1.05) {LIN ab/auf, \SI{5}{\centi\metre}};
+    \draw[-{Stealth[length=2mm]}, thick] (pre) to[out=50, in=170] node[above, font=\scriptsize] {PTP} (place);
+    \node[font=\scriptsize, align=left, anchor=west] at (3.6,0.35) {schließen, \SI{0.5}{\second} warten};
+    \draw[densely dotted] (10.2,2.2) -- (9.4,2.2);
+    \draw[{Stealth[length=1.4mm]}-{Stealth[length=1.4mm]}] (9.6,1.0) -- node[left, font=\scriptsize] {\SI{7}{\centi\metre}} (9.6,2.2);
+    \draw[densely dotted] (10.2,1.0) -- (9.4,1.0);
+    \node[font=\scriptsize, green!40!black, anchor=west] at (11.9,2.2) {Übergabe an Modul~2};
+  \end{tikzpicture}
+  \caption[Ablauf einer Demonstration]{Ablauf einer Demonstration (Seitenansicht,
+  schematisch). Die Startstellung \code{CLEAR_FOV} gibt das Bild der Draufsichtkamera
+  frei. \code{ANFLUG} und \code{PRE_PICK} liegen \SI{15}{} bzw.\ \SI{5}{\centi\metre}
+  senkrecht über \code{PICK} und werden daraus berechnet. Die gesamte Drehung geschieht in der
+  Gelenkfahrt bis \code{ANFLUG}, darunter fährt der Arm linear und senkrecht.}
+  \label{fig:ablauf-punkte}
+\end{figure}
+
+\paragraph{Abgeleitete Punkte.} Nur \code{CLEAR_FOV}, \code{PICK} und \code{PRE_PLACE} werden
+geteacht. \code{ANFLUG} und \code{PRE_PICK} legt die Ablaufdatei relativ zu \code{PICK} fest.
+Für eine neue Objektlage muss damit nur noch \code{PICK} bekannt sein, was das automatische
+Umlegen erst möglich macht (\cref{sec:lagen}).
+
+\paragraph{Punkte aus der Steuerung.} Die Ablaufdatei enthält nur Namen. Die Koordinaten
+werden bei jedem Start frisch aus der Punktedatenbank der Steuerung gelesen. Wird ein Punkt
+nachgeteacht, fährt schon die nächste Aufnahme die neue Lage an, ohne Export oder Neustart.
+Ändert sich ein Punkt während einer laufenden Aufnahme, wird sie beendet, statt mit einem
+veralteten Plan weiterzufahren.
+
+\paragraph{Teachen.} Für das Teachen gibt es drei Wege, die nach Rückmeldungen aus der
+Arbeit an der Anlage entstanden sind:
+\begin{itemize}
+  \item mit dem Gamepad über den Teleop-Port,
+  \item per Handführung mit den Knöpfen am Arm: Der Punkt wird in der Ablauftabelle der
+    Oberfläche markiert, der Arm frei geführt und der Punkt am Arm gespeichert (Teach-Serie),
+  \item per Touch-up aus der Oberfläche: Die aktuelle Stellung des Arms wird mit einem Klick
+    für den gewählten Punkt übernommen.
+\end{itemize}
+Außerdem kann die Startlage des Bauteils aus der Objekterkennung von Modul~1 übernommen
+werden (\cref{sec:lagen}).
+
+\paragraph{Tischpunkte.} Zusätzlich werden Punkte direkt auf dem Tisch geteacht, mittig über
+den ArUco-Markern im $3 \times 3$-Raster. Aus ihnen wird die Tischoberfläche bestimmt
+(\cref{sec:tisch}). Sie dient der Kollisionsprüfung, dem Ausrichten des Greifers senkrecht
+zum Tisch und dem automatischen Umlegen des Bauteils.
+
+% ==============================================================================
+\section{Bahnplanung}
+\label{sec:bahnplanung}
+
+Der Planer erzeugt aus den Punkten eine Bahn, die mit dem Takt von \SI{15}{\hertz} abgetastet
+ist. Die Geschwindigkeit steckt damit im Abstand zweier aufeinanderfolgender Sollwerte.
+
+\paragraph{Geschwindigkeitsprofil.} Jeder Abschnitt beginnt mit einer Anfahrrampe von
+\SI{0.5}{\second}, fährt mit konstanter Geschwindigkeit und bremst bis zum Stillstand. In
+einer ersten Fassung sprang die Bahn direkt auf volle Geschwindigkeit; der Regler der
+Steuerung schwang daraufhin in der \ac{vm} um bis zu \SI{0.1}{rad} über. Die Rampen sind fest
+und in jeder Episode gleich, das gelernte Tempo bleibt also konsistent.
+\Cref{tab:geschwindigkeiten} nennt die Geschwindigkeiten.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Geschwindigkeiten des Bahnplaners}
+  \label{tab:geschwindigkeiten}
+  \begin{tabular}{@{}l r@{}}
+    \toprule
+    Abschnitt & Geschwindigkeit \\
+    \midrule
+    Transfer, linear & \SI{0.15}{\metre\per\second} \\
+    Gelenkfahrt (\acs{ptp}) & \SI{0.5}{rad/s} je Gelenk \\
+    Endanflug zum Greifpunkt & \SI{0.02}{\metre\per\second} \\
+    Override der Steuerung & \num{0.5} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Der Endanflug wurde nach dem Anlagentest vom 16.11.\ von \SI{0.05}{} auf
+\SI{0.02}{\metre\per\second} gesenkt. Langsameres Greifen gibt der Policy mehr Takte mit
+Bildern unmittelbar vor dem Bauteil und verringert den Versatz des Bauteils im Greifer.
+
+\paragraph{Überschleifen.} An Durchfahrpunkten hält der Arm nicht an. Das Folgesegment
+beginnt bereits während der Bremsrampe des vorherigen, Brems- und Anfahrrampe überlagern
+sich, und die Geschwindigkeit bleibt stetig. Zwei Gelenkfahrten werden im Gelenkraum
+überlagert, jede Kombination mit einer Linearfahrt kartesisch. Nie überschliffen wird am
+Start, am Ende und an Greiferwechseln. Überschliffen wird an \code{ANFLUG} (\SI{5}{\centi\metre}) und an \code{PRE_PICK}
+(\SI{1}{\centi\metre} hinab, \SI{4}{\centi\metre} hinauf). Das Überschleifen an der
+Vorgreifposition war eine Folge
+der ersten Versuche in der \ac{vm}: Dort endete eine Gelenkfahrt im Stillstand, und die Policy
+blieb genau dort stehen, weil \enquote{angekommen} und \enquote{gleich losfahren} im Zustand
+nicht zu unterscheiden waren (\cref{sec:multimodal}).
+
+\paragraph{Greifer.} Am Greifpunkt hält der Arm, der Greifer schließt, und die Bahn wartet
+\SI{0.5}{\second}, bevor sie anhebt. Die Wartezeit sorgt dafür, dass der Arm erst anhebt, wenn
+die Backen geschlossen sind. Da der Greifer keine Rückmeldung gibt, ist der Greiferzustand in
+den Daten der \emph{kommandierte} Wert.
+
+\todo[inline]{Greifer-Totzeit (\SI{0.5}{\second}) an der Anlage per Video bestätigen.}
+
+% ==============================================================================
+\section{Eingespeistes Rauschen}
+\label{sec:noise-umsetzung}
+
+\subsection{Idee}
+
+Die Grundlage ist \ac{dart} mit asymmetrischen Datenpaaren (\cref{sec:rauschen-mathe}):
+Während der Fahrt wird die Bahn ausgelenkt, gespeichert werden der ausgelenkte Zustand mit
+seinen Bildern und als Aktion der nächste Punkt der idealen Bahn. Damit die Zuordnung später
+überprüft und bei Bedarf neu gebildet werden kann, speichert der Datensatz zusätzlich ideale
+und tatsächliche Bahn getrennt.
+
+\subsection{Kartesisch statt im Gelenkraum}
+
+Das Rauschen wird kartesisch auf die \ac{tcp}-Pose gegeben und anschließend mit der inversen
+Kinematik in Gelenkwinkel umgerechnet. Einfacher wäre Rauschen direkt auf die Gelenkwinkel,
+aber dann hängt die Auslenkung des Werkzeugs über die Jacobi-Matrix von der Armstellung ab:
+Dasselbe Rauschen auf einem schulternahen Gelenk verschiebt das Werkzeug viel stärker als auf
+einem Handgelenk. Eine Grenze in einer festen Richtung, etwa \enquote{höchstens wenige
+Millimeter zum Tisch hin}, ließe sich so nicht garantieren. Die kartesische Variante ist
+aufwändiger, aber die einzige, deren Amplitude und Richtung kontrollierbar sind.
+
+\subsection{Amplitude und zeitlicher Verlauf}
+
+Position und Drehung werden mit je einem geglätteten \ac{ou}-Prozess
+(\cref{eq:ou-diskret}) ausgelenkt. \Cref{tab:rauschen} nennt die Parameter.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Parameter des eingespeisten Rauschens}
+  \label{tab:rauschen}
+  \begin{tabularx}{\textwidth}{@{}l r X@{}}
+    \toprule
+    Parameter & Wert & Begründung \\
+    \midrule
+    Amplitude Position & \SI{15}{\milli\metre} & im Bild deutlich sichtbar, über Kamera-
+      und Schwingungsrauschen \\
+    Amplitude Drehung & \SI{0.05}{rad} & entsprechend \\
+    Zeitkonstante $\tau$ & \SI{0.8}{\second} & langsames Schlingern statt Zittern \\
+    Glättung (2.\,Ordnung) & \SI{0.25}{\second} & begrenzte Geschwindigkeit und
+      Beschleunigung der Störung \\
+    Stärke je Episode & gleichverteilt $0 \dots 1$ & ruhige und stark gestörte Fahrten
+      im selben Datensatz \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Eine Auslenkung im Millimeterbereich wäre im Bild von Bildrauschen kaum zu unterscheiden und
+würde kein lernbares Korrektursignal erzeugen. Deshalb ist die Amplitude bewusst im
+Zentimeterbereich gewählt. Der ungeglättete \ac{ou}-Prozess hat allerdings keine begrenzte
+Geschwindigkeit; die Bahnen hätten einzelne Gelenke kurzzeitig über ihre zulässige
+Geschwindigkeit gebracht und wären verworfen worden. Ein nachgeschaltetes, kritisch
+gedämpftes Glied zweiter Ordnung behält den Charakter der Störung bei, macht aber
+Geschwindigkeit und Beschleunigung endlich. Die Verstärkung ist so gewählt, dass die
+Standardabweichung trotzdem der Amplitude entspricht.
+
+Die Rauschstärke wird je Episode zufällig gezogen. Eine Ersatzstudie ohne Bilder ergab, dass
+diese Variante bei seitlichen Stößen am robustesten ist und zugleich die ruhigsten
+Bewegungen erzeugt (\cref{ch:versuche}).
+
+\subsection{Trichter vor dem Greifpunkt}
+
+Kurz vor dem Greifen muss die Bahn genau sein, denn das Spiel zwischen Bauteil und Backen
+beträgt nur etwa \SI{2.5}{\milli\metre} je Seite (Bauteil \SI{39.7}{\milli\metre}, Backen
+\SI{44.8}{\milli\metre}). Das Rauschen wird deshalb mit dem Abstand $d$ zum Greifpunkt
+gedämpft:
+\begin{equation}
+  \delta_t' = s(d_t)\,\delta_t,\qquad
+  s(d) = \begin{cases}
+    0, & d \le d_0,\\
+    h\!\left(\dfrac{d - d_0}{d_1 - d_0}\right), & d_0 < d < d_1,\\
+    1, & d \ge d_1,
+  \end{cases}
+  \label{eq:trichter}
+\end{equation}
+mit $d_0 = \SI{2}{\centi\metre}$, $d_1 = \SI{15}{\centi\metre}$ und einer glatten Rampe $h$
+(\cref{fig:trichter}). Nach unten, zum Tisch hin, ist die Auslenkung zusätzlich begrenzt.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[font=\small, x=1cm, y=1cm]
+    \fill[blue!8] (0,1) -- (6.5,1) -- (9.3,0) -- (6.5,-1) -- (0,-1) -- cycle;
+    \draw[blue!40, densely dashed] (0,1) -- (6.5,1) -- (9.3,0) -- (6.5,-1) -- (0,-1);
+    \draw[thick] (0,0) -- (10,0);
+    \fill (0,0) circle (2pt) node[left] {Start};
+    \fill (10,0) circle (2pt) node[right] {Greifpunkt};
+    \draw[red!70!black, thick] plot[smooth, tension=0.7] coordinates
+      {(0,0) (0.9,0.45) (1.8,0.75) (2.7,0.3) (3.6,-0.5) (4.5,-0.8) (5.4,-0.2) (6.3,0.55)
+       (7.2,0.4) (8.1,-0.15) (8.8,0.05) (9.4,0) (10,0)};
+    \foreach \x/\y in {1.8/0.75, 4.5/-0.8, 6.3/0.55} {
+      \draw[-{Stealth[length=1.6mm]}, green!50!black, thick] (\x,\y) -- (\x+0.7,0.04*\y);
+    }
+    \draw[{Stealth[length=1.4mm]}-{Stealth[length=1.4mm]}] (0.3,-1) -- (0.3,1);
+    \node[font=\scriptsize, anchor=west] at (0.35,1.2) {Amplitude};
+    \draw[densely dotted] (6.5,-1.1) -- (6.5,-1.5);
+    \draw[densely dotted] (9.3,-0.1) -- (9.3,-1.5);
+    \draw[densely dotted] (10,-0.1) -- (10,-1.5);
+    \draw[{Stealth[length=1.4mm]}-{Stealth[length=1.4mm]}] (6.5,-1.4) -- node[below, font=\scriptsize] {$d_1 = \SI{15}{\centi\metre}$} (10,-1.4);
+    \node[font=\scriptsize, anchor=north] at (9.65,-1.6) {$d_0$};
+    \begin{scope}[shift={(0,-2.5)}, font=\scriptsize]
+      \draw[thick] (0,0) -- (0.6,0); \node[anchor=west] at (0.7,0) {ideale Bahn (Aktion)};
+      \draw[red!70!black, thick] (4.0,0) -- (4.6,0); \node[anchor=west] at (4.7,0) {gefahrene Bahn (Beobachtung)};
+      \draw[-{Stealth[length=1.6mm]}, green!50!black, thick] (9.3,0) -- (9.9,0); \node[anchor=west] at (10.0,0) {Korrektur};
+    \end{scope}
+  \end{tikzpicture}
+  \caption[Rauschkorridor um die ideale Bahn]{Rauschkorridor um die ideale Bahn
+  (schematisch). Bis $d_1$ vor dem Greifpunkt ist die Auslenkung voll wirksam, danach wird sie
+  gedämpft und ist ab $d_0$ null. Aus der Paarung von ausgelenktem Zustand und idealer
+  Sollstellung lernt die Policy, zur Bahn zurückzusteuern.}
+  \label{fig:trichter}
+\end{figure}
+
+\subsection{Problem: blinder Endanflug und gezielter Versatz}
+\label{sec:versatz}
+
+\paragraph{Problem.} Der Trichter hat eine unerwünschte Folge: Im senkrechten Abstieg auf das
+Bauteil ist das Rauschen praktisch null (ab etwa \SI{5}{\centi\metre} unter
+\SI{2}{\milli\metre}, ab \SI{3}{\centi\metre} unter \SI{0.3}{\milli\metre}). Die Policy sieht
+in den Daten also nie, was zu tun ist, wenn sie versetzt oder verdreht über dem Bauteil
+ankommt. Genau das wurde an der Anlage beobachtet: Die Policy stand \SIrange{2}{16}{\milli\metre}
+und bis etwa \ang{50} neben dem Bauteil und korrigierte im Anflug kaum noch.
+
+\paragraph{Lösung.} Ein Teil der Episoden fährt mit einem gezielten seitlichen Versatz und
+einer Drehung über dem Greifpunkt an, die im Abstieg bis \SI{2}{\centi\metre} über dem
+Greifpunkt auf null abklingen (\cref{fig:versatz}). Die Aktion bleibt die ideale Bahn und
+zeigt damit zur Mitte zurück. Die aktuellen Werte sind in \cref{tab:versatz} aufgeführt.
+
+\begin{table}[htbp]
+  \centering
+  \caption[Gezielter Versatz im Anflug]{Gezielter Versatz im Anflug (Stand 19.11.2026)}
+  \label{tab:versatz}
+  \begin{tabular}{@{}l r@{}}
+    \toprule
+    Parameter & Wert \\
+    \midrule
+    Anteil der Episoden mit Versatz & \SI{50}{\percent} \\
+    seitlich, Richtung gleichverteilt & \SIrange{5}{10}{\milli\metre} \\
+    Drehung um die Senkrechte & \SIrange{10}{20}{\degree} \\
+    Ausreißer (je \SI{15}{\percent}) & bis \SI{25}{\milli\metre} bzw.\ \ang{35} \\
+    Auf- und Abbau höchstens & \SI{30}{\milli\metre\per\second}, \SI{12}{\degree\per\second} \\
+    voll wirksam & \SIrange{5}{10}{\centi\metre} vor dem Greifpunkt \\
+    null ab & \SI{2}{\centi\metre} vor dem Greifpunkt \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Folgeproblem.} In einer ersten Fassung wurde die Drehung zu schnell auf- und
+wieder abgebaut. Gelenk~6 kam der Umkehr nicht nach, lief bis zu \SI{0.34}{rad} hinterher, und
+die Episoden wurden verworfen. Seitdem ist die Änderungsrate begrenzt, der Verlauf zusätzlich
+über \SI{0.8}{\second} geglättet, und die Drehung beginnt früher (\SI{30}{\centi\metre} vor
+dem Greifpunkt), damit sie eine Haltephase hat.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[font=\small, x=0.75cm, y=2.4cm]
+    \draw[-{Stealth[length=2mm]}] (0,0) -- (16.3,0);
+    \node[font=\scriptsize, anchor=north east] at (16.3,-0.15) {Abstand zum Greifpunkt};
+    \draw[-{Stealth[length=2mm]}] (0,0) -- (0,1.25) node[above] {Versatz / Rauschen (relativ)};
+    \foreach \x/\l in {0/0, 2/2, 5/5, 10/10, 15/15} {
+      \draw (\x,0) -- (\x,-0.04) node[below, font=\scriptsize] {\l\,cm};
+    }
+    \draw[blue!60!black, thick] (15.5,1) -- (15,1) .. controls (11,1) and (5,0.2) .. (2,0) -- (0,0);
+    \node[blue!60!black, font=\scriptsize, anchor=south east] at (15.5,1.02) {Trichter des Rauschens};
+    \draw[orange!80!black, thick] (15.5,0) -- (15,0) .. controls (13,0) and (12,1) .. (10,1)
+      -- (5,1) .. controls (3.5,1) and (3,0) .. (2,0) -- (0,0);
+    \node[orange!80!black, font=\scriptsize, anchor=south] at (7.5,1.02) {gezielter Versatz};
+    \fill[red!10] (0,0) rectangle (2,1.2);
+    \node[font=\scriptsize, align=center] at (1,0.6) {Backen\\am\\Bauteil};
+  \end{tikzpicture}
+  \caption[Trichter und gezielter Versatz über dem Abstand zum Greifpunkt]{Trichter des
+  Rauschens (blau) und gezielter Versatz (orange) über dem Abstand zum Greifpunkt
+  (schematisch). Der Versatz schließt die Lücke, die der Trichter im Endanflug hinterlässt. In
+  den letzten \SI{2}{\centi\metre} sind beide null.}
+  \label{fig:versatz}
+\end{figure}
+
+% ==============================================================================
+\section{Kollisionsprüfung und Neuziehen}
+\label{sec:kollision}
+
+Jede geplante Bahn wird vor der Fahrt vollständig geprüft. Verletzt sie eine Bedingung, wird
+das Rauschen neu gezogen, höchstens 20-mal (Rejection Sampling). Geprüft werden:
+\begin{itemize}
+  \item jede Stellung gegen die Achsgrenzen und gegen eine Lösung der inversen Kinematik,
+  \item die Änderung der Gelenkwinkel zwischen zwei Takten, um Sprünge nahe singulärer
+    Stellungen zu erkennen, auch wenn die inverse Kinematik formal eine Lösung liefert,
+  \item der Abstand von Werkzeug, Kamera, Handgelenk und Ellbogen zu Tisch und Hindernissen
+    (\cref{sec:tisch}) und
+  \item die seitliche Abweichung in den letzten \SI{2}{\centi\metre} vor dem Greifen
+    (höchstens \SI{1.5}{\milli\metre}, \cref{sec:versatz}).
+\end{itemize}
+Die inverse Kinematik läuft dabei offline bei der Planung und nicht im Echtzeittakt. Die
+Prüfung braucht ohnehin die ganze Bahn, und der Roundtrip zur Steuerung geht so nicht in die
+Taktzeit ein.
+
+\subsection{Tisch und Hindernisse}
+\label{sec:tisch}
+
+\paragraph{Idee.} Das erste Kollisionsmodell bestand aus Kugeln um Werkzeug, Handgelenk und
+Ellbogen und einem pauschalen Tisch \SI{15}{\centi\metre} unter dem tiefsten Punkt.
+
+\paragraph{Probleme.} Der pauschale Tisch fing nichts ab. Und die Kugeln waren für diese Zelle
+zu grob: Der Übergabepunkt liegt \SI{7}{\centi\metre} über der Prüfvorrichtung, und Tischpunkte
+an der Kamerastange liegen nur wenige Zentimeter davor. Mit Kugeln wären beide eine
+\enquote{Kollision}.
+
+\paragraph{Lösung.} Die Tischoberfläche wird aus den geteachten Tischpunkten bestimmt: ab
+drei Punkten als Ebene $z = ax + by + c$, ab genügend Punkten zusätzlich mit einem
+quadratischen Anteil für den leicht gewölbten Tisch. Der quadratische Anteil wird nur
+verwendet, wenn er die Punkte deutlich besser trifft als die Ebene; sonst würde er Streuung
+beim Teachen nachbilden. Die Restabweichung an den Punkten (bis \SI{0.4}{\milli\metre}) wird
+zwischen den Punkten interpoliert und addiert, weil das Bauteil beim Umlegen über
+\SIrange{10}{30}{\centi\metre} sonst spürbar zu hoch oder zu tief abgelegt wurde. Feste
+Hindernisse (Kamerastange, Prüfvorrichtung, Roboterbasis) sind als Quader beschrieben, jeweils
+mit eigenem Mindestabstand je Stützpunkt des Arms \quelle{einstellungen/hindernisse.json}.
+Sie gelten nur an der realen Anlage und nur für Modul~4.
+
+% ==============================================================================
+\section{Kameras und Bildaufnahme}
+\label{sec:kameras}
+
+\subsection{Kamerawahl}
+
+\paragraph{Handgelenk und Draufsicht.} Eine Policy nur mit Handgelenkkamera wäre unabhängig
+von der Lage einer festen Kamera, ihr fehlt aber der Überblick: Liegt das Bauteil nicht im
+Bild der Startstellung, findet sie es nicht, und kurz vor dem Greifen verdecken die Backen
+einen großen Teil des Bildes. Die Draufsicht liefert den Überblick. Aufgezeichnet werden
+deshalb beide Kameras. Ein Vergleich nur mit Handgelenkkamera bleibt jederzeit möglich, weil
+sich ein vorhandener Bildstrom beim Training weglassen, ein fehlender aber nicht nachträglich
+ergänzen lässt.
+
+\paragraph{Objektiv.} Zur Wahl standen für die Handgelenkkamera ein rektilineares Objektiv mit
+festem Fokus und ein Fischauge mit \SI{1.85}{\milli\metre} Brennweite. Das Festfokus-Objektiv
+wäre nur im Endanflug scharf, also gerade dort, wo die Backen das Bild verdecken, und im
+Anflug unscharf, wo das Korrektursignal aus dem Rauschen seinen Wert hat. Entschieden wurde
+für das Fischauge: Unschärfe ist unwiederbringlicher Informationsverlust, die Verzeichnung
+dagegen in jedem Bild gleich und wird vom Netz mitgelernt. Der Preis ist eine geringere
+effektive Auflösung; das Bauteil belegt im $240 \times 320$-Bild nur wenige Pixel.
+
+\paragraph{Anbindung.} Die Daheng-Kameras sind \acs{usb}3-Vision-Kameras und lassen sich nicht
+über die übliche Videoschnittstelle öffnen, sondern nur über das Galaxy SDK des Herstellers.
+Die Python-Schnittstelle des SDK ist kein installierbares Paket; der Adapter findet sie zur
+Laufzeit. Weitere Stolpersteine der Inbetriebnahme sind im Dokument
+\code{Dokumentation/Kamera-Inbetriebnahme.md} beschrieben, unter anderem ein in der Kamera
+gespeicherter Bildausschnitt, der ohne aktives Setzen stumm eine Bildecke lieferte.
+
+\subsection{Einstellungen}
+
+Die Policy lernt die Bildstatistik mit. Jede Automatik, die Helligkeit oder Farbe zwischen
+Sitzungen verändert, verschiebt daher die Eingangsverteilung. Die Einstellungen wurden
+deshalb schrittweise festgelegt:
+\begin{description}
+  \item[Bildrate] beide Kameras \SI{60}{fps}, direkt an getrennten \acs{usb}-3-Anschlüssen.
+    An einem Verteiler erreichten sie nur \SI{23}{fps}, mit \SI{30}{fps} war das neueste Bild
+    bis zu \SI{33}{\milli\second} alt und lag damit über dem Budget aus \cref{sec:sync}.
+  \item[Belichtung und Verstärkung] fest, einstellbar im Fenster \enquote{Kameraeinstellungen}
+    und je Aufnahme protokolliert.
+  \item[Weißabgleich] fest je Kamera (Seriennummer). Die Kamera kennt nur \enquote{aus} und
+    \enquote{einmal messen}; beim einmaligen Messen sprang der Blauanteil zwischen Sitzungen
+    von \num{1.85} auf \num{2.68}.
+  \item[Kameralicht] Seit dem 17.11.\ ist eine Leuchte an der Handgelenkkamera Standard. Das
+    Bild beim Greifen war vorher oft zu dunkel; mit Licht ist es etwa dreimal heller und
+    kontrastreicher.
+  \item[Zuordnung] Bei zwei Daheng-Kameras ist die Reihenfolge der Geräte nicht stabil. Beide
+    werden deshalb über ihre Seriennummer zugeordnet, sonst könnten Handgelenk- und
+    Draufsichtbild unbemerkt vertauscht im Datensatz landen.
+\end{description}
+
+\subsection{Draufsicht ohne Rektifizierung}
+
+\paragraph{Problem.} Die Policy lernt \enquote{Bauteil an dieser Bildposition, also diese
+Bewegung}. Verschiebt sich die Draufsichtkamera zwischen Aufnahme und Ausführung, greift sie
+systematisch daneben, ohne dass ein Fehler gemeldet wird. Die ArUco-Marker auf dem Tisch
+helfen dabei nicht von selbst, denn die Policy nutzt sie nicht als Bezug.
+
+\paragraph{Erste Lösung, verworfen.} Ursprünglich sollte jedes Bild über eine Homographie aus
+den Markern auf eine feste Draufsicht entzerrt werden. Für alles in der Tischebene wäre die
+Kameraposition dann weitgehend unerheblich. Die Prüfvorrichtung, das Ziel der Fahrt, liegt
+aber außerhalb der Marker und ist \SI{70}{\milli\metre} hoch. Eine Homographie der Tischebene
+hätte genau diesen Bildteil verzerrt oder abgeschnitten. Die Entscheidung wurde am 11.11.\
+revidiert: Die Bilder werden unverändert aufgezeichnet und verwendet.
+
+\paragraph{Stattdessen.} Gegen eine verschobene Kamera wirkt die bewusste Variation der
+Kameraposition im Datensatz; jede Episode trägt die Kameraposition als Metadatum. Ein
+Referenzbild erlaubt zu prüfen, ob die Kamera weiter verschoben ist als in den Daten
+abgedeckt. Die Empfindlichkeit der Policy gegenüber der Kameraposition wurde gesondert
+untersucht (\cref{ch:versuche}).
+
+\subsection{Synchronisation}
+\label{sec:sync}
+
+Kameras und Roboterzustand liefern asynchron mit verschiedenen Raten. Jede Quelle läuft in
+einem eigenen Thread und hält ihren jüngsten Wert mit Zeitstempel bereit. Im
+\SI{15}{\hertz}-Takt greift der Recorder von jeder Quelle den jüngsten Wert ab und vergleicht
+die Zeitstempel. Liegen Bild und Zustand mehr als \SI{30}{\milli\second} auseinander, also
+weniger als einen halben Takt, wird der Takt als ungültig markiert. Sind mehr als
+\SI{5}{\percent} der Takte einer Episode markiert, wird die Episode verworfen.
+
+% ==============================================================================
+\section{Objektlagen}
+\label{sec:lagen}
+
+Damit die Policy das Bauteil an beliebigen Stellen findet, braucht der Datensatz viele
+verschiedene Lagen. Für jede Lage den Greifpunkt von Hand nachzuteachen, wäre der größte
+Zeitaufwand der Aufnahme. Es wurde in zwei Schritten gelöst.
+
+\paragraph{Zurücklegen.} Nach jeder Episode legt der Arm das Bauteil am Greifpunkt wieder
+ab und fährt zum Start, ohne Aufzeichnung und ohne Rauschen. Die Rückfahrt ist die Bahn
+rückwärts, es wird also nur Geometrie gefahren, die schon geplant und geprüft war. So lässt
+sich eine Lage mehrfach mit neuem Rauschen aufnehmen. Eine Abschätzung auf vorhandenen Daten
+zeigte, dass der Abstand einer neuen Abweichung zum nächsten Trainingszustand mit der Zahl
+$K$ der Wiederholungen auf \SI{73}{\percent} ($K=2$), \SI{60}{\percent} ($K=3$) und
+\SI{53}{\percent} ($K=4$) sinkt und danach kaum noch. Wiederholungen ersetzen aber keine neue
+Lage, weil das Bauteil im Bild an derselben Stelle bleibt.
+
+\paragraph{Automatisches Umlegen.} Deshalb legt der Arm das Bauteil nach den Fahrten einer
+Lage an eine \emph{neue} Lage. Die neue Position liegt innerhalb der um \SI{4}{\centi\metre}
+geschrumpften Hülle der Tischpunkte, außerhalb von Sperrzonen und mindestens
+\SI{3}{\centi\metre} von allen bisherigen Lagen entfernt. Gezogen wird über eine
+Abdeckungskarte, weil rein zufälliges Ziehen manche Stellen häufte. Die Drehung ist
+gleichverteilt in \ang{\pm 45}. Da der Roboter die Lage selbst hergestellt hat, ist sie exakt
+bekannt und wird als Zahl in den Metadaten der Episode gespeichert.
+
+\paragraph{Problem Drehbias.} Die Drehung wurde zunächst um die geteachte Lage verteilt.
+Gemessen gegen die Startstellung der Policy waren die Demonstrationen dadurch einseitig
+(\SI{62}{\percent} in die eine, \SI{25}{\percent} in die andere Richtung), und die Policy drehte
+an der Anlage systematisch zu weit (\cref{ch:versuche}). Seit dem 17.11.\ wird die Drehung um
+die Startstellung verteilt.
+
+\paragraph{Start mit Modul~1.} Für die erste Lage einer Aufnahme kann die Lage aus der
+Objekterkennung von Modul~1 übernommen werden. Der erste Griff wird dann nicht aufgezeichnet;
+danach greift der Arm nur noch dort, wo er selbst abgelegt hat.
+
+\paragraph{Höhenprotokoll.} An jedem Greiferwechsel werden Soll- und Ist-Höhe, die Tischhöhe
+an der Stelle und die Bewegung des Arms beim Schaltbefehl protokolliert. Anlass war ein
+Ablegen, das nach einigen Episoden zu tief geriet, obwohl alle Sollhöhen gleich waren.
+
+% ==============================================================================
+\section{Gültigkeit einer Episode}
+\label{sec:gueltigkeit}
+
+Eine Episode wird verworfen, wenn
+\begin{itemize}
+  \item ein Schutzstopp der Steuerung auslöst,
+  \item der Arm vier Takte lang mehr als \SI{0.30}{rad} hinter der Sollstellung liegt
+    (Schleppfehler),
+  \item zu viele Takte die Synchronisation verletzen (\cref{sec:sync}) oder
+  \item der Bediener sie verwirft.
+\end{itemize}
+Verworfene Episoden werden nicht gespeichert; die Aufnahme setzt mit der nächsten fort.
+
+% ==============================================================================
+\section{Datensatzformat und Export}
+\label{sec:datensatz}
+
+\paragraph{Zwei Formate.} Aufgezeichnet wird in einem eigenen, neutralen Format (NumPy-Archiv
+und JSON je Episode), unabhängig von LeRobot und ohne Videokodierung im Takt. Die
+Kodierung der Bilder als Video würde den Rechner während der Aufnahme belasten, und ein
+Wechsel der LeRobot-Version würde sonst bereits aufgenommene Daten betreffen. Für das
+Training werden die Episoden anschließend in das LeRobot-Format (Version~0.6.1, Format~3.0)
+exportiert.
+
+\paragraph{Inhalt.} \Cref{tab:schema} zeigt die Felder. Neben Zustand, Aktion und Bildern
+werden ideale und tatsächliche Bahn getrennt gespeichert, dazu ein Gültigkeitsflag je Takt.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Felder einer Episode}
+  \label{tab:schema}
+  \small
+  \begin{tabularx}{\textwidth}{@{}l l X@{}}
+    \toprule
+    Feld & Größe & Inhalt \\
+    \midrule
+    \code{observation.state} & 14 & sechs Gelenkwinkel (rad), \acs{tcp}-Position (m),
+      \acs{tcp}-Quaternion, Greifer (0/1) \\
+    \code{observation.images.wrist} & $240 \times 320 \times 3$ & Handgelenkkamera \\
+    \code{observation.images.scene} & $240 \times 320 \times 3$ & Draufsichtkamera \\
+    \code{action} & 7 & Gelenkwinkel der idealen Bahn im nächsten Takt, Greifer \\
+    \code{aux.joints_ideal}, \code{aux.pose_ideal} & 6, 7 & ideale Bahn \\
+    \code{aux.pose_noisy} & 7 & tatsächlich geplante, verrauschte Bahn \\
+    \code{aux.sync_ok} & 1 & Takt innerhalb des Zeitbudgets \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\paragraph{Metadaten.} Jede Episode speichert die Einstellungen ihrer Aufnahme: Punkte,
+Objektlage, Rauschstärke und -parameter, Versatz, Geschwindigkeiten, Override,
+Kameraeinstellungen und Kameraposition. Der Export schreibt Schemaversion, LeRobot-Version und
+Quellordner in eine eigene Datei. Training und Ausführung prüfen dagegen und brechen bei
+Abweichungen ab (\cref{sec:unumkehrbar}).

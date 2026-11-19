@@ -1,0 +1,217 @@
+\chapter{Systemarchitektur}
+\label{ch:architektur}
+
+% ==============================================================================
+\section{Ausgangslage und Idee}
+\label{sec:arch-idee}
+
+Als die Arbeit an Modul~4 begann, standen weder der Roboter noch die Kameras zur Verfügung.
+Gleichzeitig ist der teuerste Fehler bei Behavior Cloning einer, der erst nach der
+Datenaufnahme auffällt: Er entwertet den ganzen Datensatz (\cref{sec:unumkehrbar}). Daraus
+ergaben sich zwei Anforderungen mit derselben Lösung (N2 und N3 aus
+\cref{sec:anf-nichtfunktional}): Die gesamte Logik soll ohne Hardware laufen und getestet
+sein, und Roboter und Kameras sollen austauschbar sein. Umgesetzt wurde das mit einer
+Architektur aus Ports und Adaptern.
+
+% ==============================================================================
+\section{Schichtenmodell mit Ports und Adaptern}
+\label{sec:ports}
+
+Die Software ist in vier Schichten gegliedert (\cref{fig:schichten}). Die
+\emph{Pipeline} enthält alle Logik von der Bahnplanung über das Rauschen bis zur Ausführung
+der Policy. Sie spricht Hardware ausschließlich über abstrakte Schnittstellen an, die
+\emph{Ports}: \code{RobotPort} für den Roboter, \code{CameraPort} für Kameras,
+\code{TeleopPort} für Eingabegeräte beim Teachen und \code{ClockPort} für die Zeit. Für jeden
+Port gibt es mehrere \emph{Adapter}: einen für die reale Hardware und einen oder mehrere für
+die Simulation.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[font=\small,
+      lay/.style={draw, rounded corners=1.5mm, minimum height=10mm, text width=108mm,
+                  align=left, inner xsep=3mm},
+      tag/.style={font=\small\bfseries, anchor=east, text width=22mm, align=right}]
+    \node[lay, fill=black!5] (app) at (0,0)
+      {\code{teach}\quad \code{record}\quad \code{export}\quad \code{train}\quad \code{infer}\quad
+       \code{eval}\quad Bedienoberfläche};
+    \node[lay, fill=blue!8, minimum height=16mm, below=3mm of app] (pipe)
+      {Bahnplanung, Rauschen, Kollisionsprüfung, Synchronisation, Aufnahme, Datensatz,
+       Policy-Ausführung, Sicherheitsprüfung, Auswertung\\[1mm]
+       \scriptsize importiert nie \code{neurapy} oder \code{gxipy} (durch Test erzwungen)};
+    \node[lay, fill=orange!12, below=3mm of pipe] (ports)
+      {\code{RobotPort}\quad \code{CameraPort}\quad \code{TeleopPort}\quad \code{ClockPort}};
+    \node[lay, fill=green!8, minimum height=16mm, below=3mm of ports] (ad)
+      {real:\quad Neura (NeuraPy), Daheng (\code{gxipy}), UVC-Kamera, Gamepad, Echtzeit\\
+       simuliert:\quad SimRobot (\acs{urdf}), Simulations-, Replay- und Dateikameras,
+       Skript-Teleop, Simulationsuhr};
+    \node[tag] at ([xshift=-2mm]app.west) {Anwendungen};
+    \node[tag] at ([xshift=-2mm]pipe.west) {Pipeline};
+    \node[tag] at ([xshift=-2mm]ports.west) {Ports};
+    \node[tag] at ([xshift=-2mm]ad.west) {Adapter};
+  \end{tikzpicture}
+  \caption[Schichtenmodell der Software]{Schichtenmodell der Software. Die Pipeline kennt
+  nur die Ports; welcher Adapter dahinter steht, wird beim Start festgelegt.}
+  \label{fig:schichten}
+\end{figure}
+
+Die Trennung ist nicht nur eine Konvention. Ein automatischer Test durchsucht alle
+Pipeline-Module und schlägt fehl, sobald eines davon \code{neurapy} oder \code{gxipy}
+importiert, auch verzögert innerhalb einer Funktion. Zeit und Zufall sind ebenfalls über
+Ports eingebunden: Mit einer simulierten Uhr und festen Startwerten der Zufallsgeneratoren
+laufen Tests reproduzierbar und schneller als in Echtzeit.
+
+\paragraph{Was die Trennung leistet und was nicht.}
+Abgesichert wird damit die \emph{Logik}: Synchronisationsregeln, Zuordnung von Bild und
+Aktion, Bahn- und Rauschmathematik, Kollisionsprüfung, Datensatzformat, Trainings- und
+Ausführungsschleife sowie alle Fehler- und Abbruchpfade. Nicht abgesichert werden die
+\emph{Physik} und die tatsächlichen Eigenschaften der Schnittstellen: reale Latenzen,
+\acs{usb}-Bandbreite, das Verhalten der Steuerung bei \code{servo_j}, die Totzeit des
+Greifers und die Bildstatistik. Ein simulierter Adapter bildet immer nur die eigene Annahme
+über die Hardware ab. Das Risiko verschwindet also nicht, es verlagert sich in die Adapter.
+Deshalb wurden die Adapter an der Hardware gesondert abgenommen (\cref{sec:testkonzept}).
+
+% ==============================================================================
+\section{Modulübersicht}
+\label{sec:module}
+
+\Cref{tab:module} zeigt die wichtigsten Module. Die Anwendungen in \code{apps/} sind
+Kommandozeilenprogramme, die auch die Bedienoberfläche aufruft. \code{tools/} enthält
+Prüf- und Auswertewerkzeuge, die nicht Teil des Ablaufs sind.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Wichtige Module der Pipeline (\code{bc/})}
+  \label{tab:module}
+  \small
+  \begin{tabularx}{\textwidth}{@{}l X@{}}
+    \toprule
+    Modul & Aufgabe \\
+    \midrule
+    \code{ports.py}, \code{adapters/} & Schnittstellen und ihre realen und simulierten
+      Umsetzungen \\
+    \code{config.py} & alle Konstanten an einer Stelle, mit Begründung im Kommentar \\
+    \code{sequence.py}, \code{trajectory.py} & Ablauf als Punktfolge, Bahnplanung mit
+      Rampen und Überschleifen \\
+    \code{noise.py} & Rauschprozess, Trichter, Versatz im Anflug, Neuziehen ungültiger
+      Bahnen \\
+    \code{collision.py}, \code{table.py}, \code{obstacles.py} & Kollisionsmodell aus Tisch,
+      Sperrzonen und festen Hindernissen \\
+    \code{sync.py}, \code{capture.py}, \code{recorder.py} & Bild- und Zustandsabgriff,
+      Synchronisation, Aufzeichnung einer Episode \\
+    \code{put_back.py}, \code{auto_layout.py} & Zurücklegen und automatisches Umlegen des
+      Bauteils \\
+    \code{dataset.py}, \code{lerobot_io.py} & eigenes Aufnahmeformat und Export nach
+      LeRobot \\
+    \code{diffusion.py}, \code{policy.py} & Laden der Diffusion Policy, Ausführung von
+      Aktionsfolgen \\
+    \code{execution.py}, \code{servo.py}, \code{live.py} & Taktschleife und
+      Sollwertstrom zum Roboter \\
+    \code{safety.py} & Prüfung jedes Sollwerts, Arbeitsraumüberwachung, Stopp \\
+    \code{gui/} & Reiter von Modul~4 in der Bedienoberfläche \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+% ==============================================================================
+\section{Kinematik}
+\label{sec:kinematik}
+
+Bahnplanung, Rauschen und Kollisionsprüfung brauchen inverse und Vorwärtskinematik. Bei
+der LARA~5 liegen beide in der Steuerung und sind nur über NeuraPy erreichbar. Damit wäre
+genau der aufwändigste und fehleranfälligste Teil, die Erzeugung verrauschter Bahnen, ohne
+Roboter nicht ausführbar gewesen.
+
+\paragraph{Idee.} Aus dem \ac{urdf}-Modell, das mit der Steuerungssoftware ausgeliefert
+wird, wurde eine eigene Kinematik für den simulierten Roboter gebaut: Vorwärtskinematik
+analytisch entlang der Gelenkkette, inverse Kinematik numerisch mit gedämpfter
+Pseudoinverse,
+\begin{equation}
+  \Delta q = J^{\mathsf T}\bigl(J J^{\mathsf T} + \lambda^2 I\bigr)^{-1} e ,
+  \label{eq:dls}
+\end{equation}
+wobei $J$ die Jacobi-Matrix, $e$ der Posenfehler und $\lambda$ ein Dämpfungsfaktor ist, der
+die Lösung in der Nähe singulärer Stellungen stabil hält.
+
+\paragraph{Problem.} Eine Gegenprobe mit einer real gemessenen Stellung traf die Pose der
+Steuerung mit keinem der ausgelieferten Modelle; der kleinste Fehler lag bei etwa
+\SI{83}{\milli\metre}. Das \ac{urdf} ist damit als Strukturvorlage brauchbar, aber nicht als
+verbindliches Modell der Anlage.
+
+\paragraph{Lösung.} Es wurde zweigleisig gearbeitet. Die eigene Kinematik dient nur dazu,
+die \emph{Logik} offline zu prüfen; Zahlen wie Erreichbarkeit oder Abstände aus der
+Simulation werden nicht als Nachweis verwendet. An der virtuellen Steuerung und später an der
+Anlage rechnet die Pipeline ausschließlich mit der Kinematik der Steuerung. Ein
+Prüfwerkzeug vergleicht dazu Vorwärtskinematik, inverse Kinematik und die gemeldete
+\ac{tcp}-Pose. An der Anlage stimmten Vorwärtskinematik und \ac{vm} exakt überein, und die
+Rückprobe der inversen Kinematik ergab keinen Fehler \quelle{Berichte/2026-10-05_12-59_Kinematik-Anlage.json}.
+Damit ist die \ac{vm} für Bahnplanung und Kollisionsprüfung gleichwertig zur Anlage.
+
+Bei der inversen Kinematik wird in jedem Schritt die Lösung des vorherigen Schritts als
+Startwert übergeben. Die Steuerung liefert dann die nächstgelegene Lösung, und Sprünge
+zwischen Armkonfigurationen sind ausgeschlossen. Ein Vortest an drei realen Posen ergab, dass
+alle Punkte in einem Korridor von \SI{\pm 20}{\milli\metre} erreichbar sind, ohne
+Konfigurationssprung und weit von singulären Stellungen entfernt, bei
+\SI{2.2}{\milli\second} je Aufruf.
+
+% ==============================================================================
+\section{Testkonzept}
+\label{sec:testkonzept}
+
+Die Tests bauen in drei Stufen aufeinander auf:
+\begin{enumerate}
+  \item \textbf{Unit-Tests} prüfen einzelne Module hardwarefrei und deterministisch, zum
+    Beispiel Rauschprozess, Bahnplanung, Kollisionsmodell und Datensatzformat.
+  \item \textbf{Contract-Tests} prüfen die Zusagen eines Ports, also Wertebereiche,
+    Einheiten, Bezugssysteme, Zeitstempel und Verhalten im Fehlerfall. Dieselbe Testsuite
+    läuft gegen den simulierten und gegen den realen Adapter. Aus \enquote{der Adapter ist
+    noch ungetestet} wird so eine abhakbare Liste für den ersten Tag an der Anlage.
+  \item \textbf{End-to-End-Läufe} in der Simulation führen die ganze Kette aus: Punkte,
+    Bahnplanung mit Rauschen, Aufnahme, Export, Kurztraining und Ausführung der Policy. Sie
+    weisen nach, dass Zustand und Aktion bei Aufnahme und Ausführung zusammenpassen.
+\end{enumerate}
+
+Damit die simulierten Adapter nicht nur zeigen, dass nichts abstürzt, lassen sie sich gezielt
+fehlerhaft einstellen: Latenz und Schwankung, verlorene und veraltete Bilder, fehlende
+Lösungen der inversen Kinematik, leere Antworten der Steuerung, ausgelöster Schutzstopp und
+verschobene Kamera. Erst damit werden die Abbruch- und Verwerfungspfade tatsächlich
+durchlaufen. Die Testsuite umfasst derzeit rund 600 Testfälle und läuft auch ohne
+\code{pytest} (\code{tests/run_all.py}).
+
+Für den ersten Zugang zur Anlage wurde aus dem, was hardwarefrei nicht prüfbar ist, eine
+Abnahmeliste abgeleitet: erreichte Rate und Zeitversatz je Quelle, Formate und Einheiten der
+NeuraPy-Aufrufe, Roundtrip von \code{servo_j}, Kinematik, Greifer-Totzeit,
+Werkzeuggeometrie, beide Kameras, Kollisionsmodell und Not-Halt. Die zugehörigen
+Prüfwerkzeuge (\code{tools/check_*.py}) schreiben ihre Ergebnisse als Bericht in den
+Ordner \code{Berichte/}.
+
+% ==============================================================================
+\section{Simulation und virtuelle Steuerung}
+\label{sec:sim-vm}
+
+Modul~4 wurde in drei Umgebungen erprobt, die jeweils einen anderen Teil absichern
+(\cref{tab:umgebungen}).
+
+\begin{table}[htbp]
+  \centering
+  \caption{Umgebungen und was sie absichern}
+  \label{tab:umgebungen}
+  \small
+  \begin{tabularx}{\textwidth}{@{}l X X@{}}
+    \toprule
+    Umgebung & sichert ab & sichert nicht ab \\
+    \midrule
+    Eigene Simulation (\code{SimRobot}) & gesamte Logik, schneller als Echtzeit, mit
+      Fehlerinjektion & Geometrie der Anlage, Bilder, Verhalten der Steuerung \\
+    \acs{vm} der Neura-Steuerung & NeuraPy-Schnittstelle, Kinematik, Sollwertstrom,
+      Bahnplanung mit echten Punkten & Bilder, Greifer, Mechanik (der Arm folgt ideal) \\
+    Reale Anlage & alles, insbesondere Kameras, Schwingungen und Greifen & -- \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Die \ac{vm} wird von Neura als virtuelle Maschine bereitgestellt und spricht dieselbe
+Schnittstelle wie die reale Steuerung. Sie läuft auf dem Betriebsrechner mit einem
+eigenen Host-only-Netzwerk, weil NeuraPy eine feste Adresse der Steuerung erwartet. Für
+Bildtests ohne Anlage gibt es zusätzlich eine Wiedergabe-Kamera, die aufgezeichnete Bilder
+einer Episode synchron zur Bahn abspielt. Damit lässt sich eine Policy in der \ac{vm} mit
+echten Bildern prüfen (\cref{ch:versuche}).

@@ -1,0 +1,62 @@
+% !TeX program = pdflatex
+% !BIB program = biber
+% Dokument C: Bedienanleitung Modul 4 (intern, nicht Teil der Bewertung).
+% Bauen:  latexmk   (im Ordner Bedienanleitung, Ausgabe nach build/)
+\documentclass[
+  a4paper,
+  11pt,
+  oneside,
+  parskip=half,
+  listof=totoc,
+  numbers=noenddot
+]{scrreprt}
+
+\input{../praeambel}
+
+% Kästen für Warnungen und Hinweise
+\newcommand{\achtung}[1]{\par\noindent\fcolorbox{red!60!black}{red!6}{%
+  \parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{Achtung:} #1}}\par}
+\newcommand{\hinweis}[1]{\par\noindent\fcolorbox{blue!50!black}{blue!5}{%
+  \parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{Hinweis:} #1}}\par}
+\newcommand{\knopf}[1]{\fbox{\small\sffamily #1}}
+\newcommand{\pfad}[1]{\texttt{\detokenize{#1}}}
+\lstdefinestyle{ps}{language=,numbers=none,basicstyle=\ttfamily\small}
+
+\newcommand{\doctitle}{Modul 4: Behavior Cloning}
+\newcommand{\docsubtitle}{Bedienanleitung}
+\newcommand{\docauthor}{Jeremy Zid}
+
+\hypersetup{pdftitle={\doctitle{} -- \docsubtitle},pdfauthor={\docauthor}}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{4cm}
+  {\LARGE\bfseries \doctitle\par}
+  \vspace{0.8cm}
+  {\Large \docsubtitle\par}
+  \vspace{0.5cm}
+  {\large Einrichten, Anlage starten, Daten aufnehmen, trainieren, fahren\par}
+  \vfill
+  \begin{tabular}{ll}
+    Verfasser: & \docauthor \\
+    Stand:     & \today \\
+  \end{tabular}\par
+  \vspace{1cm}
+  {\small Internes Arbeitsdokument, nicht Teil der Projektarbeit.\par}
+\end{titlepage}
+
+\tableofcontents
+\listoftodos[Offene Punkte]
+
+\input{kapitel/01_ueberblick}
+\input{kapitel/02_einrichtung}
+\input{kapitel/03_anlage}
+\input{kapitel/04_oberflaeche}
+\input{kapitel/05_ablaeufe}
+\input{kapitel/06_einstellungen}
+\input{kapitel/07_werkzeuge}
+\input{kapitel/08_fehler}
+
+\end{document}

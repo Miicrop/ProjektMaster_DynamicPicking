@@ -1,0 +1,164 @@
+\chapter{Arbeitsabläufe Schritt für Schritt}
+\label{ch:ablaeufe}
+
+Jeder Ablauf ist in der Oberfläche und auf der Kommandozeile gleich möglich. Die Oberfläche
+zeigt unter \enquote{Kommandozeile} den Befehl, den sie ausführt; den kann man kopieren.
+Kommandozeilen laufen im Ordner \pfad{code/m4_behavior_cloning} mit aktivierter
+\pfad{.venv}.
+
+% ==============================================================================
+\section{Daten aufnehmen}
+\label{sec:aufnehmen}
+
+\subsection{Vorbereitung}
+\begin{enumerate}
+  \item Anlage nach \cref{ch:anlage} gestartet, Systemcheck ohne Fehler.
+  \item Backend \enquote{Neura}, Override \num{0.5}, \enquote{Reale Anlage freigeben},
+    \knopf{Verbinden}; Anzeige rot.
+  \item Kameras zuordnen, \knopf{Vorschau starten}. Kameralicht an? Bild beim Greifen hell
+    genug, Bauteil nicht ausgebrannt? Weißabgleich fest (Laufprotokoll zeigt
+    \enquote{Weissabgleich fest}).
+  \item Ablaufdatei \pfad{sequences/pick_bis_griff.json} wählen (Standard seit 19.11.).
+  \item Tischpunkte \code{ID0}--\code{ID8} vorhanden; Punkte sichern.
+\end{enumerate}
+
+\subsection{Aufnahme starten}
+\begin{enumerate}
+  \item Bauteil frei auf den Tisch legen.
+  \item \enquote{Erste Lage} auf \enquote{M1} stellen: Modul~1 bestimmt die Lage, der Arm greift
+    sie unaufgezeichnet und legt das Bauteil an Lage~1. Alternativ \code{PICK} per
+    \knopf{PICK teachen} bzw.\ Touch-up setzen.
+  \item Lagen, Fahrten je Lage, Rauschen und Versatz einstellen (\cref{sec:aufnahme-einst}).
+  \item Metadaten ausfüllen: Block, Objekt, Licht, Kameralage.
+  \item \enquote{Probefahrt vor der ersten Episode} anlassen: Der Arm fährt die Bahn einmal
+    langsam ohne Aufzeichnung.
+  \item \knopf{Aufnahme starten}. Die Oberfläche fragt bei der realen Anlage nach; mit
+    \enquote{Hand am Not-Halt} bestätigen.
+\end{enumerate}
+
+Danach läuft die Aufnahme selbstständig: Episode fahren, prüfen, Bauteil zurücklegen oder
+an eine neue Lage umlegen, nächste Episode. Abbrechen mit \knopf{STOPP} oder geordnet mit
+\knopf{Nach dieser Lage beenden}.
+
+Kommandozeile (Beispiel):
+\begin{lstlisting}[style=ps]
+python apps/record.py --robot neura --real-robot --override 0.5 `
+  --sequence sequences/pick_bis_griff.json --start-lage m1 `
+  --lagen 10 --episodes 3 --out data/2026-11-20/B001 --block B001 `
+  --object "Lila-Objekt" --light "Decke an, Kameralicht" --camera-pose nominal
+\end{lstlisting}
+
+\subsection{Nach der Aufnahme}
+\begin{itemize}
+  \item \emph{Systemcheck} $\rightarrow$ \knopf{Aufnahmen bewerten}: Takt gehalten (unter
+    \SI{5}{\percent} verspätete Sollwerte), kein Ruckeln, Schleppfehler-Median unter
+    \SI{0.03}{rad}.
+  \item \knopf{Episodenbericht (PDF)} für eine Übersicht.
+  \item Drehverteilung prüfen:
+\begin{lstlisting}[style=ps]
+python tools/analyse_drehung.py demos data/2026-11-20
+\end{lstlisting}
+    Plus- und Minus-Drehungen sollten etwa gleich häufig sein.
+\end{itemize}
+
+\achtung{Alle Episoden eines Datensatzes müssen mit gleichem Override, gleicher Sollwertrate,
+gleichem Tempo und gleichen Kameras aufgenommen sein. Der Export bricht sonst ab.}
+
+% ==============================================================================
+\section{Exportieren}
+\label{sec:exportieren}
+
+Reiter \emph{Training}, Bereich \enquote{1. Datensatz}: Aufnahmeordner hinzufügen, Ziel unter
+\pfad{datasets/} angeben, erst \knopf{Nur prüfen}, dann \knopf{Exportieren}. Dauer etwa
+\SIrange{1}{2}{\second} je Episode.
+
+\begin{lstlisting}[style=ps]
+python apps/export.py --data "data/2026-11-20/*" --check
+python apps/export.py --data "data/2026-11-2*/*" --out datasets/2026-11-21
+\end{lstlisting}
+
+Der Ordner unter \pfad{datasets/} ist eigenständig und kann auf den Trainingsrechner kopiert
+werden.
+
+% ==============================================================================
+\section{Trainieren}
+\label{sec:trainieren}
+
+Reiter \emph{Training}, \enquote{4. Lauf}: Datensatz wählen, \knopf{Training starten}. Vorgaben:
+Batchgröße 64 (bei viel Grafikspeicher 128), \num{10000} bis \num{60000} Schritte.
+
+\begin{lstlisting}[style=ps]
+python apps/train.py --dataset datasets/2026-11-21 --out checkpoints/2026-11-21 --steps 10000 --batch-size 128
+\end{lstlisting}
+
+\begin{itemize}
+  \item \num{10000} Schritte mit Batchgröße 128 dauern auf der RTX~5070~Ti etwa
+    \SIrange{1.3}{3.3}{\hour}, je nachdem, wie schnell die Videos dekodiert werden.
+  \item Abgebrochenes Training mit \pfad{--resume} fortsetzen, auch auf einem anderen Rechner.
+  \item Fortschritt in \pfad{train_log.csv}: Validierungsverlust, Gelenkfehler (rad),
+    Greifer-Trefferquote, größter Sprung in einer Folge.
+\end{itemize}
+
+\achtung{Unter Windows nicht zwei Trainings gleichzeitig und nicht neben der \acs{vm} starten.
+Fehler 1455 oder \enquote{CUDA out of memory} trotz freier Karte bedeuten, dass das
+Speicherlimit erreicht ist: nacheinander trainieren oder \pfad{--num-workers 2}.}
+
+% ==============================================================================
+\section{Modell ohne Anlage prüfen}
+\label{sec:pruefen}
+
+\paragraph{Stufe 1, offline.} Bilder und Zustand einer Aufnahme gehen in die Policy:
+\begin{lstlisting}[style=ps]
+python apps/replay_check.py --checkpoint checkpoints/2026-11-21/policy --data data/2026-11-20 --episodes 0-4 --plot
+\end{lstlisting}
+Gelenkfehler je Takt im Median um \ang{1} ist gut. Ist er schon hier groß, nicht weiter zur
+Anlage.
+
+\paragraph{Stufe 2, in der \acs{vm}.} \acs{vm} starten, Backend \enquote{Neura}, Anzeige
+\emph{grün}. Dann:
+\begin{lstlisting}[style=ps]
+python apps/infer.py --robot neura --checkpoint checkpoints/2026-11-21/policy `
+  --replay data/2026-11-20 --replay-episode 0,5,9
+\end{lstlisting}
+Die Bilder reagieren nicht auf den Arm; die Ergebnisse taugen nur zum Vergleich von Modellen.
+
+% ==============================================================================
+\section{An der Anlage fahren}
+\label{sec:fahren}
+
+\subsection{Policy-Test mit bekannter Lage}
+\label{sec:policy-test}
+
+Der sichere erste Test eines neuen Modells:
+\begin{enumerate}
+  \item Bauteil hinlegen, \code{PICK} setzen (Touch-up oder über Modul~1), im Reiter
+    \emph{Betrieb} \knopf{PICK lesen}.
+  \item \enquote{Lage bekannt} an, \enquote{Abstand über Objekt} \SI{25}{\milli\metre} lassen.
+  \item \knopf{Inferenz starten}. Die Policy fährt an und wird angehalten, bevor sie tiefer als
+    der Abstand kommt. Das Protokoll zeigt, wo sie gegriffen hätte und wie weit sie daneben lag.
+  \item Mit \enquote{Experte greift und legt um} greift danach der Planer und legt an eine neue
+    Lage; so lassen sich viele Lagen hintereinander testen.
+\end{enumerate}
+
+\subsection{Echtes Greifen}
+\begin{enumerate}
+  \item Zuerst Lagen in der Mitte des Arbeitsraums, nicht am Rand.
+  \item \enquote{Lage bekannt} aus, \knopf{Inferenz starten}. Erfolg: Greifer geschlossen,
+    Endstellung erreicht.
+\end{enumerate}
+\begin{lstlisting}[style=ps]
+python apps/infer.py --robot neura --real-robot --checkpoint checkpoints/2026-11-21/policy --episodes 1
+\end{lstlisting}
+
+\subsection{Im automatischen Ablauf der Gruppe}
+Gesamt-GUI, Reiter \emph{Ablauf}, Greifen = \enquote{M4 Behavior Cloning}. Das Modell steht in den
+Einstellungen unter \pfad{m4.checkpoint}. Modul~1 erkennt, Modul~4 greift und hält am
+Übergabepunkt, Modul~2 legt ab. Erreicht Modul~4 den Übergabepunkt nicht, stoppt der Zyklus
+mit Fehler.
+
+\todo[inline]{Nachziehen, sobald der Ablauf den geplanten Transport
+(\texttt{--transport-geplant}) nutzt.}
+
+\achtung{Wird während einer Fahrt der Not-Halt am Bedienhandgerät gedrückt, beendet die Fahrt
+sich nach etwa \SI{0.35}{\second} selbst (\enquote{arm steht}). Not-Halt erst entriegeln, wenn
+die Fahrt in der Oberfläche beendet ist.}

@@ -1,0 +1,81 @@
+\chapter{Einbindung in das Gesamtsystem}
+\label{ch:integration}
+
+Modul~4 wurde zunächst in einem eigenen Repository entwickelt und anschließend in das
+Repository der Gruppe übernommen \quelle{INTEGRATION.md}. Dort ist es auf zwei Wegen
+erreichbar: als Greifvariante im automatischen Ablauf und als eigener Reiter in der
+gemeinsamen Bedienoberfläche.
+
+% ==============================================================================
+\section{Schnittstelle zum Ablauf}
+\label{sec:grasper}
+
+Der Ablauf des Gesamtsystems ist ein Zustandsautomat, in dem das Greifen über eine
+Schnittstelle \code{Grasper} angesprochen wird. Die Variante von Modul~4 übernimmt nur den
+Zustand PICK; das Ablegen auf der Prüfvorrichtung macht weiterhin Modul~2.
+
+\paragraph{Eigene Python-Umgebung.} LeRobot~0.6.1 setzt Python~3.12 voraus, und seine
+Abhängigkeiten kollidieren mit denen der Texterkennung von Modul~3. Die Policy läuft deshalb
+als Unterprozess in einer eigenen Umgebung. Die Bedienoberfläche und die übrigen Module
+bleiben in ihrer Umgebung. Der Nachteil ist eine Startzeit von einigen Sekunden je Fahrt; der
+Vorteil, dass keine der beiden Umgebungen auf Kompromissversionen festgelegt werden muss.
+
+\paragraph{Ablauf eines Greifvorgangs} (\cref{fig:grasper}):
+\begin{enumerate}
+  \item Modul~1 gibt die Draufsichtkamera frei, damit Modul~4 sie öffnen kann; Modul~2 trennt
+    seine Verbindung zur Steuerung. Je Kamera und je Steuerung darf immer nur ein Prozess
+    verbunden sein.
+  \item Der Unterprozess startet die Policy und fährt den Roboter. Die Lage aus der
+    Objekterkennung wird übergeben, aber nur protokolliert; die Policy findet das Bauteil
+    selbst in den Bildern.
+  \item Der Fortschritt wird aus der Ausgabe des Unterprozesses gelesen. Erreicht die Policy
+    den Übergabepunkt nicht oder dauert die Fahrt länger als \SI{300}{\second}, gilt das
+    Greifen als fehlgeschlagen, und der Ablauf geht in den Fehlerzustand.
+  \item Für das Ablegen verbindet sich Modul~2 wieder, setzt Werkzeug, Override und
+    Bewegungsprogramm auf seine eigenen Werte zurück und legt das Bauteil ab.
+\end{enumerate}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[font=\small, x=1cm, y=1cm]
+    \foreach \x/\n in {0/Ablauf, 3.4/Modul~1, 6.8/{Modul~4\\(Unterprozess)}, 10.2/Modul~2} {
+      \node[draw, rounded corners=1.5mm, fill=black!5, text width=24mm, align=center,
+            minimum height=9mm, font=\scriptsize] at (\x,0) {\n};
+      \draw[black!30, densely dashed] (\x,-0.45) -- (\x,-6.3);
+    }
+    \def\msg#1#2#3#4{\draw[-{Stealth[length=2mm]}, thick] (#1,#3) -- node[above, font=\scriptsize, fill=white, inner sep=1pt] {#4} (#2,#3);}
+    \msg{0}{3.4}{-1.0}{Lage bestimmen, Kamera freigeben}
+    \msg{0}{10.2}{-1.7}{Verbindung trennen}
+    \msg{0}{6.8}{-2.4}{Policy starten (Lage nur Protokoll)}
+    \fill[blue!10] (6.55,-2.6) rectangle (7.05,-4.4);
+    \node[font=\scriptsize, anchor=west, align=left] at (7.15,-3.5) {greifen, fahren\\bis PRE\_PLACE};
+    \draw[-{Stealth[length=2mm]}, thick, densely dashed] (6.8,-4.6) -- node[above, font=\scriptsize] {Übergabepunkt erreicht} (0,-4.6);
+    \msg{0}{10.2}{-5.4}{verbinden, Einstellungen zurücksetzen, ablegen}
+  \end{tikzpicture}
+  \caption[Ablauf eines Greifvorgangs mit Modul~4]{Ablauf eines Greifvorgangs mit Modul~4
+  im Gesamtsystem (vereinfacht).}
+  \label{fig:grasper}
+\end{figure}
+
+\todo[inline]{Höhe des Übergabepunkts über der Prüfvorrichtung vereinheitlichen: Hindernismodell
+nennt \SI{7}{\centi\metre}, Orchestrator etwa \SI{9}{\centi\metre}.}
+
+% ==============================================================================
+\section{Bedienoberfläche}
+\label{sec:gui}
+
+Die Bedienoberfläche von Modul~4 ist als Reiter in die gemeinsame Oberfläche eingebunden und
+lässt sich auch eigenständig starten; es ist dieselbe Oberfläche. Sie gliedert sich in vier
+Bereiche:
+\begin{description}
+  \item[Systemcheck] Prüfung von Umgebung, Grafikkarte, Kameras, Verbindung zur Steuerung,
+    Kinematik und Sollwerttakt; die Ergebnisse werden als Bericht gespeichert.
+  \item[Aufnahme] Ablauftabelle mit Teachen und Touch-up, Tischpunkte, Kameraeinstellungen,
+    Einstellungen für Rauschen, Versatz und Objektlagen, Start der Aufnahme und Abdeckungskarte
+    der bisherigen Lagen.
+  \item[Training] Export und Training mit Fortschrittsanzeige.
+  \item[Betrieb] Auswahl eines Modells, Fahrten mit Live-Ansicht, Probegriff bei bekannter
+    Lage.
+\end{description}
+Dass immer nur eine Seite den Roboter und die Draufsichtkamera benutzt, regelt die gemeinsame
+Oberfläche. Die Bedienung im Einzelnen beschreibt die Bedienanleitung (Dokument~C).

@@ -1,0 +1,87 @@
+% Gemeinsame Präambel der M4-Dokumente (übernommen aus thesis/main.tex, damit die Integration einfach bleibt).
+% Wird aus einem Unterordner eingebunden; Pfade sind relativ zu diesem Unterordner.
+% --- Sprache und Schrift -------------------------------------------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[ngerman]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[autostyle=true,german=quotes]{csquotes}
+
+% --- Layout --------------------------------------------------------------------
+\usepackage[left=3cm,right=2.5cm,top=2.5cm,bottom=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% --- Inhalte -------------------------------------------------------------------
+\usepackage{graphicx}
+\graphicspath{{abbildungen/}{../../../../../thesis/figures/}}
+\usepackage{amsmath,amssymb}
+\usepackage{siunitx}
+\sisetup{locale=DE}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single,language=Python,
+        numbers=left,numberstyle=\tiny,showstringspaces=false}
+\usepackage{xcolor}
+\usepackage{acro}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,automata,fit,shapes.geometric,calc}
+% Ablaufdiagramme (Programmablaufplan)
+\tikzset{
+  pap/.style={node distance=6mm and 10mm, font=\small},
+  pap term/.style={draw, rounded corners=3mm, fill=black!8, align=center, minimum height=7mm,
+                   inner xsep=3mm},
+  pap proc/.style={draw, fill=white, align=center, text width=#1, minimum height=8mm},
+  pap proc/.default=64mm,
+  pap dec/.style={draw, diamond, aspect=2.6, fill=black!3, align=center, inner sep=1pt},
+  pap arr/.style={-{Stealth[length=2.2mm]}, thick},
+  pap lbl/.style={font=\scriptsize, fill=white, inner sep=1pt},
+  pap good/.style={pap term, fill=green!12},
+  pap bad/.style={pap term, fill=red!10},
+}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\floatname{algorithm}{Algorithmus}
+\algrenewcommand\algorithmicrequire{\textbf{Eingabe:}}
+\algrenewcommand\algorithmicensure{\textbf{Ausgabe:}}
+\algrenewcommand\algorithmicif{\textbf{wenn}}
+\algrenewcommand\algorithmicthen{\textbf{dann}}
+\algrenewcommand\algorithmicelse{\textbf{sonst}}
+\algrenewcommand\algorithmicfor{\textbf{für}}
+\algrenewcommand\algorithmicforall{\textbf{für alle}}
+\algrenewcommand\algorithmicdo{\textbf{tue}}
+\algrenewcommand\algorithmicwhile{\textbf{solange}}
+\algrenewcommand\algorithmicreturn{\textbf{gib zurück}}
+\algrenewcommand\algorithmicfunction{\textbf{Funktion}}
+\algrenewcommand\algorithmicprocedure{\textbf{Prozedur}}
+\algrenewcommand\algorithmicend{\textbf{Ende}}
+\algrenewcommand{\algorithmiccomment}[1]{\hfill$\triangleright$ #1}
+\renewcommand{\listalgorithmname}{Algorithmenverzeichnis}
+\usepackage[colorinlistoftodos,textsize=footnotesize]{todonotes}
+
+% --- Literatur (IEEE) ----------------------------------------------------------
+\usepackage[backend=biber,style=ieee,dashed=false]{biblatex}
+\addbibresource{../../../../../thesis/references.bib}
+\addbibresource{../m4.bib}
+
+% --- Links (zuletzt laden) -----------------------------------------------------
+\usepackage[hidelinks]{hyperref}
+\usepackage[ngerman]{cleveref}
+\crefname{algorithm}{Algorithmus}{Algorithmen}
+
+
+% --- Abkürzungen: die der Gesamtarbeit plus M4-spezifische ---------------------
+\input{../../../../../thesis/chapters/00_abkuerzungen}
+\input{../abkuerzungen_m4}
+
+% --- Zusätzliche TikZ-Bibliotheken für die M4-Grafiken ---------------------------
+\usetikzlibrary{decorations.pathreplacing}
+
+% --- Kleine Hilfen -------------------------------------------------------------
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\quelle}[1]{\textit{(Quelle: \code{#1})}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\N}{\mathcal{N}}

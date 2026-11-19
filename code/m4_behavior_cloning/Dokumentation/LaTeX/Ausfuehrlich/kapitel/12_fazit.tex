@@ -1,0 +1,37 @@
+\chapter{Fazit und Ausblick}
+\label{ch:fazit}
+
+% ==============================================================================
+\section{Fazit}
+\label{sec:fazit}
+
+\todo[inline]{Ergebnis steht noch aus. Nach den Versuchen mit dem neuen Datensatz schreiben:
+Erfolgsquote an der Anlage, Genauigkeit, Vergleich mit dem klassischen Greifen von Modul~2.}
+
+Bis zum Stand dieses Dokuments ist die vollständige Kette aus automatischer Aufnahme mit
+eingespeistem Rauschen, Training einer Diffusion Policy und sicherer Ausführung umgesetzt und
+in das Gesamtsystem eingebunden. An der Anlage findet die Policy das Bauteil an unbekannten
+Lagen aus den Bildern und trifft den Greifpunkt im Median auf knapp \SI{1}{\centi\metre}.
+Die verbleibenden Fehler entstehen im Endanflug und bei der Drehung, in Zuständen, die die
+Demonstrationen nicht abdecken.
+
+% ==============================================================================
+\section{Ausblick}
+\label{sec:ausblick}
+
+\paragraph{DAgger.} Die Fehler an der Anlage entstehen dort, wo die Demonstrationen keine
+Beispiele haben. Genau diese Zustände sammelt \ac{dagger} (\cref{sec:covariate-shift}). Da der
+Experte in Modul~4 ein Planer ist, kann er jeden Zustand nachträglich beschriften: Bei
+bekannter Lage ist die richtige Aktion \enquote{von hier senkrecht über den Greifpunkt, dann
+ab}. Geplant ist, Fahrten der Policy mit Bildern aufzuzeichnen, offline mit den Aktionen des
+Planers zu beschriften und im Training höher zu gewichten. Erste Episoden dieser Art wurden am
+17.11.\ aufgenommen \quelle{Dokumentation/DAgger-Ablauf.md}.
+
+\paragraph{Weitere Punkte.}
+\begin{itemize}
+  \item Gegenversuch mit dem gewichteten Modell C3 an den Minus-Lagen,
+  \item Drehkorrektur unterhalb von \code{ANFLUG} lehren und die Drehfahrt verlangsamen,
+  \item geordneter Abbruch aus dem Ablauf des Gesamtsystems,
+  \item Vergleich nur mit Handgelenkkamera, da der Datensatz beide Bildströme enthält,
+  \item Übertragung auf weitere Bauteile und auf das Greifen aus einer Kiste.
+\end{itemize}

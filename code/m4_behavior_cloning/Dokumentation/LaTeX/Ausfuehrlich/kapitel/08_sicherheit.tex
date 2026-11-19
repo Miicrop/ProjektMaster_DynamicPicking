@@ -1,0 +1,118 @@
+\chapter{Sicherheitskonzept}
+\label{ch:sicherheit}
+
+% ==============================================================================
+\section{Gefährdungen durch eine gelernte Policy}
+\label{sec:gefahren}
+
+Eine programmierte Bahn lässt sich vor der Fahrt vollständig prüfen. Bei einer gelernten
+Policy ist das nicht möglich: Sie erzeugt ihre Sollwerte erst während der Fahrt, und in
+Zuständen außerhalb der Trainingsdaten ist ihr Verhalten nicht vorhersagbar
+(\cref{sec:covariate-shift}). Typische Fehlbilder aus den Versuchen sind ein Abtauchen in
+Richtung Tisch, Sprünge zwischen zwei Vorhersagen und ein Stehenbleiben an Haltepunkten.
+Hinzu kommen technische Fehler wie ein eingefrorenes Kamerabild oder ein unterbrochener
+Steuerkanal.
+
+NeuraPy bietet keine frei definierbaren Schutzräume. Modul~4 baut deshalb eine eigene,
+mehrstufige Sicherheitsschicht zusätzlich zu den Schutzfunktionen des Roboters
+(\cref{fig:sicherheit}). Der Hardware-Not-Halt bleibt bei allen Fahrten in Reichweite; ein
+Software-Stopp ersetzt ihn nicht.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[font=\small, node distance=3.5mm,
+      st/.style={draw, rounded corners=1.5mm, align=left, text width=96mm, minimum height=9mm,
+                 inner xsep=3mm},
+      tag/.style={font=\scriptsize\bfseries, anchor=east, align=right, text width=26mm},
+      arr/.style={-{Stealth[length=2mm]}, thick}]
+    \node[st, fill=blue!6] (s1) {Weiche Begrenzung: Änderung je Takt $\le$ \SI{0.8}{rad/s}, Richtung bleibt};
+    \node[st, fill=blue!10, below=of s1] (s2) {Zielprüfung: Ziel und Nachlauf gegen Tisch, Sperrzonen,
+      Hindernisse und Hülle der Demonstrationen};
+    \node[st, fill=blue!14, below=of s2] (s3) {Harte Grenze je \SI{60}{\hertz}-Sollwert: endlich, Achsgrenzen,
+      $\le$ \SI{1.0}{rad/s}, Ziel--Ist $\le$ \SI{0.35}{rad}};
+    \node[st, fill=orange!12, below=of s3] (s4) {Überwachung (eigener Thread, \SI{20}{\hertz}): gemessene
+      Stellung gegen Kollisionsmodell};
+    \node[st, fill=orange!16, below=of s4] (s5) {Bildalter, stehender Arm, Vorhersage zu spät};
+    \node[st, fill=red!10, below=of s5] (s6) {Schutzfunktionen der Steuerung, Hardware-Not-Halt};
+    \node[tag] at ([xshift=-2mm]s1.west) {vor dem Senden};
+    \node[tag] at ([xshift=-2mm]s4.west) {während der Fahrt};
+    \node[tag] at ([xshift=-2mm]s6.west) {Anlage};
+    \draw[arr] ([xshift=4mm]s1.east) -- ([xshift=4mm]s6.east)
+      node[midway, right, font=\scriptsize, align=left] {letzte\\Instanz};
+  \end{tikzpicture}
+  \caption[Stufen der Sicherheitsschicht]{Stufen der Sicherheitsschicht von Modul~4. Die
+  oberen Stufen prüfen jeden Befehl, bevor er die Steuerung erreicht, die unteren den
+  tatsächlichen Zustand während der Fahrt.}
+  \label{fig:sicherheit}
+\end{figure}
+
+% ==============================================================================
+\section{Prüfung vor dem Senden}
+\label{sec:pruefung-senden}
+
+\paragraph{Weiche Begrenzung.} Die Änderung der Sollstellung je Takt wird auf eine
+Gelenkgeschwindigkeit von \SI{0.8}{rad/s} begrenzt; die Richtung bleibt erhalten.
+\emph{Begründung:} Die Daten enthalten Korrekturen bis etwa \SI{1}{rad/s}, und beim
+Eintreffen einer verspäteten Vorhersage springt der Mittelwert kurzzeitig. Ohne diese Stufe
+stoppte die harte Grenze eine sonst gute Fahrt bei \SI{1.03}{rad/s}.
+
+\paragraph{Zielprüfung.} Jedes Ziel der Policy wird vor dem Senden gegen das Kollisionsmodell
+geprüft. Dazu werden aus den Gelenkwinkeln die Positionen von Werkzeug, Kamera, Handgelenk und
+Ellbogen berechnet und mit Tisch, Sperrzonen und festen Hindernissen verglichen. Der Tisch
+wird live aus den Tischpunkten der Steuerung gelesen, ersatzweise aus den Werten der Aufnahme.
+Zusätzlich muss das Werkzeug innerhalb der um \SI{3}{\centi\metre} erweiterten Hülle aller
+Demonstrationen bleiben.
+
+\begin{description}
+  \item[Problem] Zuerst prüfte nur die Überwachung die \emph{gemessene} Stellung. Sie reagiert
+    erst, wenn der Arm schon an der Grenze ist; mit Prüftakt und Stoppzeit kommt der Stopp
+    einige Millimeter zu spät. Und nach einem abgelehnten Ziel lief der Arm an der Anlage noch
+    bis zu \SI{7.5}{\milli\metre} nach.
+  \item[Lösung] Geprüft wird das Ziel selbst, und zusätzlich das um einen Takt linear
+    verlängerte Ziel. So wird bereits abgelehnt, solange der Nachlauf bei der aktuellen
+    Geschwindigkeit noch vor der Grenze endet.
+\end{description}
+
+\paragraph{Harte Grenze.} Jeder einzelne \SI{60}{\hertz}-Sollwert wird im Adapter verworfen,
+wenn er nicht endlich ist, außerhalb der Achsgrenzen liegt oder eine Gelenkgeschwindigkeit
+über \SI{1.0}{rad/s} gegenüber dem letzten Sollwert erfordert. Die Zeitbasis dafür ist nach
+unten begrenzt, ein Stocken des Takts erlaubt also keinen großen Sprung. Liegt die
+Sollstellung mehr als \SI{0.35}{rad} von der gemessenen entfernt, wird ebenfalls nichts
+gesendet. In allen Fällen stoppt der Roboter. Diese Grenze gilt auch bei Aufnahme und Teachen.
+
+% ==============================================================================
+\section{Überwachung während der Fahrt}
+\label{sec:ueberwachung}
+
+\begin{description}
+  \item[Arbeitsraum] Ein eigener Thread prüft alle \SI{50}{\milli\second} die gemessene
+    Stellung gegen dasselbe Kollisionsmodell. Er läuft getrennt von der Vorhersage, damit eine
+    verzögerte Vorhersage den Stopp nicht verzögert.
+  \item[Eingefrorenes Bild] Ist ein Kamerabild zwei Takte in Folge älter als
+    \SI{100}{\milli\second}, hält die Fahrt an. Die Policy würde sonst auf ein veraltetes Bild
+    reagieren, ohne es zu merken.
+  \item[Stehender Arm] Bewegt sich der Arm fünf Takte lang praktisch nicht, obwohl das Ziel
+    mehr als \SI{0.02}{rad} entfernt ist, endet die Fahrt. \emph{Anlass:} Der Not-Halt am
+    Bedienhandgerät hält den Arm an, ohne dass \code{servo_j} einen Fehler meldet. Die Fahrt
+    schickte weiter Ziele, und nach dem Entriegeln hätte ein weit entferntes Ziel angelegen.
+  \item[Vorhersage zu spät] Liegt keine gültige Vorhersage mehr für den aktuellen Takt vor,
+    endet die Fahrt (\cref{sec:takt}).
+\end{description}
+
+% ==============================================================================
+\section{Stoppverhalten und Freigabe}
+\label{sec:stopp}
+
+Der Software-Stopp hielt den Arm an der Anlage innerhalb von \SI{96}{\milli\second} an. Der
+Befehl zum Beenden der Online-Bewegung bremst dagegen nicht, er wird deshalb für Abbrüche
+nicht verwendet. Fahrten am realen Roboter erfordern eine ausdrückliche Bestätigung; aus dem
+Ablauf des Gesamtsystems wird die Freigabe des dortigen Sicherheitsdialogs übernommen
+(\cref{ch:integration}).
+
+\paragraph{Grenzen.} Die Sicherheitsschicht erkennt, was sich im Kollisionsmodell abbilden
+lässt. Ein Greifen neben das Bauteil oder ein Anstoßen des Bauteils innerhalb des erlaubten
+Raums verhindert sie nicht. Die Grenzwerte der Gelenkgeschwindigkeiten stammen aus Daten der
+\ac{vm} und wurden an der Anlage bestätigt; die Achsgrenzen stammen aus dem \ac{urdf}.
+
+\todo[inline]{Achsgrenzen gegen Datenblatt bzw.\ Bedienhandgerät abgleichen (im Code noch als
+nicht verifiziert markiert).}
