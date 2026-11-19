@@ -102,8 +102,8 @@ das enthaltene Rauschen voraus (\cref{eq:loss-eps}).
 \end{description}
 
 \paragraph{Augmentierung.} Der zufällige Bildausschnitt deckt kleine Verschiebungen der
-Draufsichtkamera ab. Beim Fischauge der Handgelenkkamera ist sein Nutzen geringer, weil ein
-Ausschnitt das optische Zentrum verschiebt, was keiner echten Kamerabewegung entspricht.
+Draufsichtkamera ab. Die Handgelenkkamera sitzt fest am Greifer; für sie verhindert der
+Ausschnitt vor allem, dass das Netz einzelne Pixelpositionen auswendig lernt.
 
 % ==============================================================================
 \section{Training und Validierung}

@@ -391,13 +391,22 @@ deshalb beide Kameras. Ein Vergleich nur mit Handgelenkkamera bleibt jederzeit m
 sich ein vorhandener Bildstrom beim Training weglassen, ein fehlender aber nicht nachträglich
 ergänzen lässt.
 
-\paragraph{Objektiv.} Zur Wahl standen für die Handgelenkkamera ein rektilineares Objektiv mit
-festem Fokus und ein Fischauge mit \SI{1.85}{\milli\metre} Brennweite. Das Festfokus-Objektiv
-wäre nur im Endanflug scharf, also gerade dort, wo die Backen das Bild verdecken, und im
-Anflug unscharf, wo das Korrektursignal aus dem Rauschen seinen Wert hat. Entschieden wurde
-für das Fischauge: Unschärfe ist unwiederbringlicher Informationsverlust, die Verzeichnung
-dagegen in jedem Bild gleich und wird vom Netz mitgelernt. Der Preis ist eine geringere
-effektive Auflösung; das Bauteil belegt im $240 \times 320$-Bild nur wenige Pixel.
+\paragraph{Objektiv.} Geplant war zunächst ein Fischauge mit \SI{1.85}{\milli\metre}
+Brennweite. Für Behavior Cloning wäre das unproblematisch gewesen, denn die Verzeichnung ist
+in jedem Bild gleich und wird vom Netz mitgelernt. Noch vor der ersten Aufnahme wurde aber ein
+Objektiv mit \SI{3.6}{\milli\metre} Brennweite und Blende F8.0 (IR, Megapixel) montiert, das
+kaum verzeichnet. \emph{Begründung:} Durch die kleine Blende ist die Schärfentiefe groß, und
+das Bild bleibt über den ganzen Arbeitsraum scharf, vom Anflug bis zum Greifpunkt. Das war die
+Anforderung, für die ursprünglich das Fischauge vorgesehen war: Unschärfe ist
+unwiederbringlicher Informationsverlust. Zusätzlich verzeichnet das Objektiv kaum, sodass die
+Handgelenkkamera auch von den anderen Modulen mit klassischer Bildverarbeitung genutzt werden
+kann. Alle Datensätze und Modelle sind mit diesem Objektiv aufgenommen.
+\emph{Preis:} Die kleine Blende lässt wenig Licht durch; das Bild ist dunkel, vor allem
+kurz vor dem Greifen, wo Arm und Greifer das Licht abschatten. Daraus
+entstanden die feste Belichtung und das Kameralicht (siehe unten).
+
+\todo[inline]{Sichtfeld und Fokus des \SI{3.6}{\milli\metre}-Objektivs am Aufbau angeben
+(Arbeitsabstand, Schärfebereich).}
 
 \paragraph{Anbindung.} Die Daheng-Kameras sind \acs{usb}3-Vision-Kameras und lassen sich nicht
 über die übliche Videoschnittstelle öffnen, sondern nur über das Galaxy SDK des Herstellers.
