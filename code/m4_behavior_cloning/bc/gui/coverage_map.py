@@ -271,7 +271,8 @@ _CANDIDATE = "#1565c0"
 _KEEPOUT = "#c62828"
 _OLD = "#546e7a"
 _RUN = "#e65100"
-_NEXT = "#8e24aa"             # naechste geplante Lage
+_NEXT = "#8e24aa"             # naechste geplante Lage (lila ...
+_NEXT_EDGE = "#ffffff"        # ... mit hellem Rand)
 _TEXT = "#37474f"
 
 
@@ -287,6 +288,9 @@ class CoverageMap(QWidget):
     YAW_PANEL = 132
     #: Drehabschnitte je Zeile im Raster
     YAW_COLUMNS = 2
+    #: so weit (Anteil der Tischgroesse) waechst der Rahmen fuer Roboter, Stange
+    #: und Station -- was darueber liegt, wird am Rand abgeschnitten
+    CELL_MARGIN = 0.32
 
     double_clicked = Signal()
 
@@ -342,17 +346,26 @@ class CoverageMap(QWidget):
             cx, cy = zone.center
             h = zone.half_size + zone.object_margin
             xs += [(cx - h, cy - h), (cx + h, cy + h)]
-        cell = self.cell or {}
-        if cell.get("base"):
-            r = cell["base"]["r"]
-            xs += [(cell["base"]["x"] - r, cell["base"]["y"] - r),
-                   (cell["base"]["x"] + r, cell["base"]["y"] + r)]
-        for box in cell.get("boxes") or []:
-            xs += [tuple(box["lo"]), tuple(box["hi"])]
         if self.next_target is not None:
             xs.append(tuple(self.next_target[:2]))
         uv = np.array([self._view(*p) for p in xs])
         lo, hi = uv.min(axis=0), uv.max(axis=0)
+        # Roboter, Stange, Station nur am Rand andeuten (Anwender 2026-11-19: mit
+        # allem im Bild war der Tisch zu klein) -- der Rahmen waechst hoechstens
+        # um CELL_MARGIN der Tischgroesse in ihre Richtung, der Rest wird abgeschnitten
+        cell = self.cell or {}
+        extra = []
+        if cell.get("base"):
+            r = cell["base"]["r"]
+            extra += [(cell["base"]["x"] - r, cell["base"]["y"] - r),
+                      (cell["base"]["x"] + r, cell["base"]["y"] + r)]
+        for box in cell.get("boxes") or []:
+            extra += [tuple(box["lo"]), tuple(box["hi"])]
+        if extra:
+            grow = self.CELL_MARGIN * np.maximum(hi - lo, 1e-3)
+            ev = np.array([self._view(*p) for p in extra])
+            lo = np.maximum(np.minimum(lo, ev.min(axis=0)), lo - grow)
+            hi = np.minimum(np.maximum(hi, ev.max(axis=0)), hi + grow)
         span = np.maximum(hi - lo, 1e-3)
         pad = 26
         panel = self.YAW_PANEL if snap.coverage is not None else 0
@@ -505,18 +518,20 @@ class CoverageMap(QWidget):
             painter.drawLine(QPointF(p.x() - 6, p.y()), QPointF(p.x() + 6, p.y()))
             painter.drawLine(QPointF(p.x(), p.y() - 6), QPointF(p.x(), p.y() + 6))
 
-        # naechste geplante Lage: lila X mit Pfeil (noch nicht gefahren)
+        # naechste geplante Lage: dicker lila Punkt mit Pfeil, hell umrandet
+        # (noch nicht gefahren)
         if self.next_target is not None:
             x, y, cam = self.next_target
             p = self._to_px(layout, x, y)
-            purple = QColor(_NEXT)
-            painter.setPen(QPen(purple, 2.4))
-            s = 7.0
-            painter.drawLine(QPointF(p.x() - s, p.y() - s), QPointF(p.x() + s, p.y() + s))
-            painter.drawLine(QPointF(p.x() - s, p.y() + s), QPointF(p.x() + s, p.y() - s))
+            fill, edge = QColor(_NEXT), QColor(_NEXT_EDGE)
             if cam is not None:
-                self._arrow(painter, layout, (x, y), cam, 1.9 * jaw, purple, 2.2)
-            painter.drawText(QPointF(p.x() + 9, p.y() + 14), "nächste")
+                self._arrow(painter, layout, (x, y), cam, 2.2 * jaw, edge, 5.0)
+                self._arrow(painter, layout, (x, y), cam, 2.2 * jaw - 1.5, fill, 2.6)
+            painter.setPen(QPen(edge, 2.0))
+            painter.setBrush(fill)
+            painter.drawEllipse(p, 7.0, 7.0)
+            painter.setPen(fill)
+            painter.drawText(QPointF(p.x() + 10, p.y() + 15), "nächste")
 
         self._draw_header(painter, snap)
         self._draw_axes(painter, layout)
@@ -541,7 +556,17 @@ class CoverageMap(QWidget):
         painter.drawPolygon(QPolygonF([end, left, right]))
 
     def _draw_cell(self, painter, layout):
-        """Roboterbasis, Kamerastange, Teststation -- nur zur Orientierung."""
+        """Roboterbasis, Kamerastange, Teststation -- nur zur Orientierung, auf
+        den Zeichenbereich beschnitten (ragen meist ueber den Rand)."""
+        lo, scale, ox, oy, span = layout
+        painter.save()
+        painter.setClipRect(QRectF(ox - 2, oy - 2, span[0] * scale + 4, span[1] * scale + 4))
+        try:
+            self._draw_cell_items(painter, layout)
+        finally:
+            painter.restore()
+
+    def _draw_cell_items(self, painter, layout):
         cell = self.cell or {}
         base = cell.get("base")
         if base:
@@ -550,9 +575,11 @@ class CoverageMap(QWidget):
             painter.setPen(QPen(QColor("#7f8c8d"), 1.5))
             painter.setBrush(QColor(127, 140, 141, 60))
             painter.drawEllipse(c, r, r)
+            visible = QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r).intersected(
+                painter.clipBoundingRect())
             painter.setPen(QColor("#555555"))
-            painter.drawText(QRectF(c.x() - 40, c.y() - 7, 80, 14), Qt.AlignmentFlag.AlignCenter,
-                             "Roboter")
+            if visible.height() > 4:
+                painter.drawText(visible, Qt.AlignmentFlag.AlignCenter, "Roboter")
         colors = {"Kamerastange": "#8e44ad", "Teststation": "#b9770e"}
         for box in cell.get("boxes") or []:
             (x0, y0), (x1, y1) = box["lo"], box["hi"]
@@ -563,9 +590,39 @@ class CoverageMap(QWidget):
             painter.setPen(QPen(color, 1.5))
             painter.setBrush(fill)
             painter.drawPolygon(poly)
-            rect = poly.boundingRect()
-            painter.setPen(color)
-            painter.drawText(QPointF(rect.left(), rect.bottom() + 12), box["name"])
+            # Name am sichtbaren Teil (die Objekte ragen meist ueber den Rand)
+            clip = painter.clipBoundingRect()
+            visible = poly.boundingRect().intersected(clip)
+            if visible.width() <= 2 or visible.height() <= 2:
+                # ganz ausserhalb: Hinweis am Rand in ihrer Richtung
+                centre = poly.boundingRect().center()
+                inner = clip.adjusted(8, 8, -8, -8)
+                px = min(max(centre.x(), inner.left()), inner.right())
+                py = min(max(centre.y(), inner.top()), inner.bottom())
+                dx, dy = centre.x() - px, centre.y() - py
+                n = max(1e-6, (dx * dx + dy * dy) ** 0.5)
+                ux, uy = dx / n, dy / n
+                tip = QPointF(px + 6 * ux, py + 6 * uy)
+                painter.setPen(QPen(color, 1.2))
+                painter.setBrush(color)
+                painter.drawPolygon(QPolygonF([
+                    tip, QPointF(px - 4 * ux + 4 * uy, py - 4 * uy - 4 * ux),
+                    QPointF(px - 4 * ux - 4 * uy, py - 4 * uy + 4 * ux)]))
+                tx = px + 8 if ux <= 0 else px - 118
+                painter.drawText(QRectF(tx, py - 7, 110, 14),
+                                 Qt.AlignmentFlag.AlignLeft if ux <= 0 else Qt.AlignmentFlag.AlignRight,
+                                 box["name"])
+                continue
+            if visible.width() > 2 and visible.height() > 2:
+                painter.setPen(color)
+                label = QRectF(visible.left() + 2, visible.top() + 2, 110, 14)
+                if visible.width() < 110:
+                    # schmaler Streifen am Rand: Name daneben ins Feld schreiben
+                    right = visible.right() + 3
+                    left = visible.left() - 113
+                    x = right if right + 110 <= painter.clipBoundingRect().right() else left
+                    label = QRectF(x, visible.top() + 2, 110, 14)
+                painter.drawText(label, Qt.AlignmentFlag.AlignLeft, box["name"])
 
     def _draw_header(self, painter, snap):
         painter.setPen(QColor(_TEXT))

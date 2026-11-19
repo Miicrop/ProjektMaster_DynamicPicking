@@ -79,7 +79,7 @@ COVERAGE_LEGEND = (
     "Feld: Zahl = Fahrten, orange = noch leer, blau gestrichelt = Kandidaten für die nächste Lage\n"
     "● grau = frühere Lagen, ● orange = dieser Lauf, Pfeil = Blickrichtung der Handkamera "
     "(zur Fase; Strich bei älteren Episoden ohne Richtung),\n"
-    "Kreis = zuletzt aufgenommen, lila X = als Nächstes geplant (noch nicht gefahren),\n"
+    "Kreis = zuletzt aufgenommen, dicker lila Punkt = als Nächstes geplant (noch nicht gefahren),\n"
     "Linie = Varianten einer Lage, + = PICK in der Steuerung\n"
     "Grau Roboter, lila Kamerastange, braun Teststation (zur Orientierung)\n"
     "Rot schraffiert = Sperrzone, rot gestrichelt = so nah kommt der TCP neuer Lagen\n"
