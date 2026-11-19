@@ -40,6 +40,22 @@ class Region:
     base_yaw_deg: float = 0.0
     pick_xy: tuple = None
     source: str = ""                  # "Steuerung" | "Episode ep_00012"
+    #: Drehung (volle 360 Grad) vom PICK zur Mitte der Drehverteilung
+    #: (config.AUTO_YAW_CENTER_POINT, Startstellung) -- wie record.py zaehlt
+    center_shift_deg: float = None
+
+
+def _center_shift(points, pick_pose, plane=None):
+    """Versatz PICK -> Mitte der Drehverteilung in vollen 360 Grad, oder None."""
+    name = config.AUTO_YAW_CENTER_POINT
+    centre = (points or {}).get(name) if name else None
+    pose = centre.get("pose_quat") if isinstance(centre, dict) else None
+    if pose is None or pick_pose is None:
+        return None
+    from ..live import yaw360
+
+    return float((yaw360(np.asarray(pose, dtype=float), plane)
+                  - yaw360(np.asarray(pick_pose, dtype=float), plane) + 180.0) % 360.0 - 180.0)
 
 
 def region_from_resolved(resolved, pick_height=config.PICK_HEIGHT_DEFAULT_M):
@@ -53,7 +69,9 @@ def region_from_resolved(resolved, pick_height=config.PICK_HEIGHT_DEFAULT_M):
         pick = np.asarray(resolved.points["PICK"]["pose_quat"], dtype=float)
         base = yaw_deg(align_pose(pick, resolved.table, pick_height), resolved.table)
         pick_xy = (float(pick[0]), float(pick[1]))
-    return Region(points, list(resolved.keepouts), base, pick_xy, "Steuerung")
+    shift = _center_shift(resolved.points, resolved.points.get("PICK", {}).get("pose_quat"),
+                          resolved.table)
+    return Region(points, list(resolved.keepouts), base, pick_xy, "Steuerung", shift)
 
 
 def _plane_from_dict(data):
@@ -95,7 +113,9 @@ def region_from_meta(meta, folder=""):
         pose = np.asarray(pick["pose_quat"], dtype=float)
         base = yaw_deg(pose, plane)
         pick_xy = (float(pose[0]), float(pose[1]))
-    return Region(points, keepouts, base, pick_xy, "Episode %s" % folder if folder else "Episode")
+    shift = _center_shift(data.get("points"), (pick or {}).get("pose_quat"), plane)
+    return Region(points, keepouts, base, pick_xy, "Episode %s" % folder if folder else "Episode",
+                  shift)
 
 
 @dataclass
@@ -147,10 +167,15 @@ def load_episodes(roots, in_simulation=None):
         if in_simulation is not None and other is not None and bool(other) != bool(in_simulation):
             continue
         folder = meta_path.parent
-        if data.get("table_points") and data.get("object_source", "geteacht") == "geteacht":
+        if data.get("table_points"):
+            # Bereich aus der juengsten Episode mit Tischpunkten -- bevorzugt einer
+            # geteachten; neue Datensaetze (erste Lage vorgeschlagen/M1/geholt)
+            # haben keine, dann irgendeine (Anwender 2026-11-19: Grafik war leer)
             stamp = data.get("recorded_at") or ""
-            if latest is None or stamp >= latest[2]:
-                latest = (folder.name, meta, stamp)
+            taught = data.get("object_source", "geteacht") == "geteacht"
+            key = (taught, stamp)
+            if latest is None or key >= latest[3]:
+                latest = (folder.name, meta, stamp, key)
         xy = data.get("object_xy_m")
         if not xy:
             continue
@@ -198,7 +223,8 @@ def build_snapshot(region, spots, margin=config.AUTO_EDGE_MARGIN_M,
     try:
         coverage = Coverage([np.r_[xy, 0.0] for xy in region.points.values()],
                             region.base_yaw_deg, region.keepouts, margin=margin,
-                            yaw_range_deg=yaw_range_deg, rng=np.random.default_rng(0))
+                            yaw_range_deg=yaw_range_deg, rng=np.random.default_rng(0),
+                            center_shift_deg=region.center_shift_deg)
     except ValueError as exc:
         return Snapshot(region, None, list(spots), [], [], str(exc))
     for spot in spots:

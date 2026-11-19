@@ -120,3 +120,34 @@ def test_next_target_line_and_camera_arrow():
     assert abs(coverage_map.camera_yaw(pose)
                - (90.0 + config.LIVE_CAMERA_YAW_OFFSET_DEG) % 360.0) < 1e-6
     assert coverage_map.camera_yaw(None) is None
+
+
+def test_coverage_region_without_taught_episode_and_centered_on_start(tmp_path):
+    """Anwender 2026-11-19: Grafik leer, wenn keine Episode 'geteacht' war;
+    Drehabschnitte muessen um die Startstellung zaehlen wie record.py."""
+    import json
+    import math
+
+    from bc.gui import coverage_map
+
+    def quat(deg):
+        h = math.radians(deg) / 2
+        return [math.cos(h), 0.0, 0.0, math.sin(h)]
+
+    folder = tmp_path / "data_vm" / "2026-11-20" / "ep_00000"
+    folder.mkdir(parents=True)
+    table = {"ID%d" % k: {"pose_quat": [0.3 + 0.1 * (k % 2), -0.2 + 0.1 * (k // 2), 0.0, 1, 0, 0, 0]}
+             for k in range(4)}
+    meta = {"discarded": False, "metadata": {
+        "object_source": "vorgeschlagen", "object_xy_m": [0.35, -0.15], "object_yaw_deg": 150.0,
+        "table_points": table, "recorded_at": "2026-11-20T10:00:00",
+        "points": {"PICK": {"pose_quat": [0.35, -0.15, 0.01] + quat(150.0)},
+                   config.AUTO_YAW_CENTER_POINT: {"pose_quat": [0.2, 0.0, 0.4] + quat(100.0)}}}}
+    (folder / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    spots, latest = coverage_map.load_episodes([tmp_path / "data_vm"])
+    assert latest is not None                         # Bereich trotz "vorgeschlagen"
+    region = coverage_map.region_from_meta(latest[1], latest[0])
+    assert abs(region.center_shift_deg - (-50.0)) < 1e-6
+    snap = coverage_map.build_snapshot(region, spots, yaw_range_deg=60)
+    # die Lage liegt 50 Grad gegen den Start -> oberster Drehabschnitt
+    assert snap.coverage.yaw_count[-1] == 1
