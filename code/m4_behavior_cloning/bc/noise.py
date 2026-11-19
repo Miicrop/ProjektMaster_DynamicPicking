@@ -217,13 +217,33 @@ def distance_to_grasp(ideal):
     return out
 
 
-def approach_offset_profile(ideal):
-    """Anteil 0..1 des Anflug-Versatzes je Schritt (config.APPROACH_OFFSET_*)."""
+def approach_offset_profile(ideal, start_m=None):
+    """Anteil 0..1 des Anflug-Versatzes je Schritt (config.APPROACH_OFFSET_*).
+
+    ``start_m``: Bahnlaenge vor dem Greifen, ab der der Versatz einsetzt
+    (Default HOLD+RAMP); voll ab HOLD, null ab FREE."""
     d = distance_to_grasp(ideal)
+    hold = config.APPROACH_OFFSET_HOLD_M
+    start = hold + config.APPROACH_OFFSET_RAMP_M if start_m is None else max(float(start_m), hold + 1e-3)
     rise = _smooth_ramp(d, config.APPROACH_OFFSET_FREE_M, config.APPROACH_OFFSET_FULL_M)
-    fall = 1.0 - _smooth_ramp(d, config.APPROACH_OFFSET_HOLD_M,
-                              config.APPROACH_OFFSET_HOLD_M + config.APPROACH_OFFSET_RAMP_M)
+    fall = 1.0 - _smooth_ramp(d, hold, start)
     return np.where(np.isfinite(d), rise * fall, 0.0)
+
+
+def smooth_limited(target, max_step, window, max_step_hard=None):
+    """Wie :func:`rate_limited`, zusaetzlich gleitend gemittelt (``window``
+    Schritte) -- begrenzt so auch die Beschleunigung (kein spitzes V). Bleibt
+    <= :func:`rate_limited` mit ``max_step_hard`` (Default 2x) und damit null,
+    wo ``target`` null ist."""
+    r = rate_limited(target, max_step)
+    window = int(window)
+    if window <= 1 or len(r) < 2:
+        return r
+    pad = window // 2
+    kernel = np.ones(2 * pad + 1) / (2 * pad + 1)
+    avg = np.convolve(np.pad(r, (pad, pad), mode="edge"), kernel, mode="valid")
+    hard = rate_limited(target, 2.0 * max_step if max_step_hard is None else max_step_hard)
+    return np.minimum(avg, hard)
 
 
 def rate_limited(target, max_step):
@@ -322,14 +342,18 @@ def sample_noisy_poses(
     if approach_offset is not None:
         values = np.asarray(approach_offset, dtype=float)
         profile = approach_offset_profile(ideal)
-        # Tempo begrenzen (config.APPROACH_*_RATE_*): Anstieg liegt im Transfer
+        # Tempo begrenzen und glaetten (config.APPROACH_*_RATE_*, _SMOOTH_S):
+        # Anstieg liegt im Transfer, Gelenk 6 verkraftet keine spitzen Umkehrungen
+        window = int(round(config.APPROACH_OFFSET_SMOOTH_S / dt))
         size = float(np.linalg.norm(values[:3]))
         if size > 0:
-            lateral = rate_limited(profile * size, config.APPROACH_OFFSET_RATE_M_S * dt)
+            lateral = smooth_limited(profile * size, config.APPROACH_OFFSET_RATE_M_S * dt, window)
             offset = (lateral / size)[:, None] * values[None, :3]
         if len(values) > 3 and values[3]:
-            yaw_offset = np.sign(values[3]) * rate_limited(
-                profile * abs(values[3]), np.radians(config.APPROACH_YAW_RATE_DEG_S) * dt)
+            yaw_profile = approach_offset_profile(ideal, start_m=config.APPROACH_YAW_START_M)
+            yaw_offset = np.sign(values[3]) * smooth_limited(
+                yaw_profile * abs(values[3]), np.radians(config.APPROACH_YAW_RATE_DEG_S) * dt,
+                window)
 
     noisy = ideal.poses_quat.copy()
     for i in range(len(noisy)):

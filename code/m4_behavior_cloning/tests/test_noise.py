@@ -396,9 +396,13 @@ def test_approach_yaw_offset_decays_to_zero_without_swinging():
                      for p, q in zip(poses, ideal.poses_quat)])
     d = distance_to_grasp(ideal)
     assert np.all(turn[d <= config.APPROACH_OFFSET_FREE_M] < 1e-6)       # am PICK exakt
-    voll = (d >= config.APPROACH_OFFSET_FULL_M) & (d <= config.APPROACH_OFFSET_HOLD_M)
-    assert np.allclose(turn[voll], 20.0, atol=1e-6)
-    # im Abstieg monoton abnehmend (kein Ueberschwingen)
-    down = np.flatnonzero(np.isfinite(d) & (d <= config.APPROACH_OFFSET_FULL_M))
-    assert np.all(np.diff(turn[down]) <= 1e-9)
+    # volle Groesse mit Haltephase erreicht
+    assert np.isclose(turn.max(), 20.0, atol=1e-6) and (turn > 19.9).sum() >= 3
+    # genau ein Anstieg und ein Abbau -- kein Pendeln, keine Umkehr dazwischen
+    peak = int(np.argmax(turn))
+    assert np.all(np.diff(turn[:peak + 1]) >= -1e-9) and np.all(np.diff(turn[peak:]) <= 1e-9)
+    # Beschleunigung begrenzt (Anlage 2026-11-19: spitzes V riss Gelenk 6 ab)
+    dt = 1.0 / ideal.rate_hz
+    acc = np.abs(np.diff(np.radians(turn), 2)) / dt ** 2
+    assert acc.max() < 1.0      # rad/s^2, vorher (spitzes V) ~ 2 * 0.35 / dt
     assert np.allclose(poses[:, :3], ideal.poses_quat[:, :3])   # nur gedreht, nicht versetzt

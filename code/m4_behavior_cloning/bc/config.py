@@ -760,8 +760,18 @@ APPROACH_YAW_OUTLIER_MAX_DEG = 35.0
 #: 20-35 Grad in ~0,3 s, Gelenk 6 bis 2 rad/s -- jede Bahn verworfen (Test
 #: 2026-11-19). Wird die volle Groesse in der verfuegbaren Zeit nicht erreicht,
 #: bleibt der Versatz kleiner; null ab APPROACH_OFFSET_FREE_M gilt immer.
-APPROACH_YAW_RATE_DEG_S = 20.0
+APPROACH_YAW_RATE_DEG_S = 12.0
 APPROACH_OFFSET_RATE_M_S = 0.03
+#: ... und zusaetzlich geglaettet (Fenster in s): Anlage 2026-11-19, zwei
+#: Episoden mit "arm folgt nicht" -- die Drehung wurde mit 20 Grad/s auf- und
+#: sofort wieder abgebaut (spitzes V ohne Haltephase), Gelenk 6 kam der
+#: Richtungsumkehr nicht nach (0,5 s hinterher, 6 Grad Ueberschwinger, dann
+#: 0,31-0,34 rad Schleppfehler). Die anderen Gelenke folgten auf 1-4 mrad.
+APPROACH_OFFSET_SMOOTH_S = 0.8
+#: ... die Drehung beginnt frueher als der seitliche Versatz (Bahnlaenge vor dem
+#: Greifen, m): mehr Zeit zum Aufbauen, damit sie trotz langsamerem Tempo ihre
+#: Groesse erreicht und eine Haltephase hat.
+APPROACH_YAW_START_M = 0.30
 #: ... Bahnlaenge bis zum Greifen: darunter 0 (Backenspitzen erreichen die
 #: Objektoberkante 14,9 mm ueber dem Tisch bei TCP ~7 mm ueber PICK, + Reserve),
 #: ab FULL voll (PRE_PICK 5 cm ueber PICK), ab HOLD wieder abklingend bis HOLD+RAMP.
