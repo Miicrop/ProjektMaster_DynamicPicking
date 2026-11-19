@@ -130,3 +130,15 @@ def test_operation_tab_policy_test_controls(tmp_path):
     finally:
         tab.shutdown()
         tab.close()
+
+
+def test_expert_switch_off_only_measures():
+    """Anwender 2026-11-19: Experte aus -- anfliegen, messen, nicht greifen."""
+    from bc.gui import operation
+
+    argv = operation.infer_argv(checkpoint="ck", robot_kind="sim", known_pose=True,
+                                    probe="objekt", dagger_dir="data/x_dagger", expert=False)
+    assert "--ohne-experte" in argv and "--dagger" not in argv
+    argv = operation.infer_argv(checkpoint="ck", robot_kind="sim", known_pose=True,
+                                    probe="objekt", dagger_dir="data/x_dagger")
+    assert "--ohne-experte" not in argv and "--dagger" in argv

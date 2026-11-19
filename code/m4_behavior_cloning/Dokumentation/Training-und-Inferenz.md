@@ -300,3 +300,27 @@ aussagekräftig.
   gespeichert und sonst von dort genommen. Abschalten: `--keine-live-ansicht`.
 * **Rohe Vorhersagen** stehen im Rollout (`pred_step`, `pred_chunk`) -- damit
   lässt sich nachträglich prüfen, ob die Policy zwischen Drehungen springt.
+
+## Standards für den neuen Datensatz (2026-11-17 bis 11-19)
+
+* **Endanflug und Ablegen 0,020 m/s** (`APPROACH_SPEED_MS`, `PUT_BACK_APPROACH_SPEED_MS`),
+  Transfer 0,15 m/s, Override 0,5. Modelle tragen ihr Tempo in `bc_policy.json`.
+* **Drehverteilung um die Startstellung** (`AUTO_YAW_CENTER_POINT = "CLEAR_FOV"`), in
+  vollen 360°: die alten Demos drehten im Median +31° gegen den Start, modulo 180 sah
+  das bei ±89° ausgeglichen aus. Prüfen: `tools/analyse_drehung.py demos <Ordner>`.
+* **Erste Lage per M1** (`--start-lage m1`): Handlage lokalisieren, unaufgezeichnet
+  greifen und an Lage 1 legen; danach nur noch PICK aus dem eigenen Ablegen.
+* **Kamera:** Kameralicht an der Handgelenkkamera, fester Weißabgleich je Gerät
+  (`CAMERA_WHITE_BALANCE`); die Inferenz übernimmt ihn nur, wenn das Modell mit
+  einheitlichem Weißabgleich aufgenommen wurde.
+* **Anflug-Versatz** (`bc/noise.py`, `APPROACH_*`): bei 50 % der Episoden EIN fester
+  Fehler je Episode -- seitlich 5–10 mm in beliebiger Richtung, Drehung ±10–20° um die
+  Senkrechte, je Größe 15 % Ausreißer bis 25 mm bzw. 35°. Voll zwischen 10 und 5 cm
+  Bahnlänge vor dem Greifen, stetig (ohne Überschwingen) auf 0 ab 2 cm. Label bleibt
+  die Idealbahn. Metadaten: `anflug_versatz_m`, `anflug_drehung_grad`.
+  Kommandozeile: `--anflug-anteil`, `--anflug-versatz min,max` (mm),
+  `--anflug-drehung min,max` (Grad), `--anflug-ausreisser`.
+* **Zu tief fahren** wird nicht in der Aufnahme erzeugt, sondern über DAgger gelernt.
+* **Policy-Test ohne Greifen:** Schalter „Experte greift und legt um" aus
+  (`--ohne-experte`): anfliegen, über dem Objekt halten, Vorhersage speichern,
+  senkrecht anheben, zurück zum Start.

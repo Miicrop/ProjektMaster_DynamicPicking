@@ -657,7 +657,8 @@ def expected_test_stop(stop_reason, probe=None):
     return probe == "objekt" and probe_violation(text)
 
 
-def retreat_after_test(robot, workspace, log, start_joints, clock, args, planner=None):
+def retreat_after_test(robot, workspace, log, start_joints, clock, args, planner=None,
+                       probe=None):
     """Nach dem Policy-Test: Greifer auf, senkrecht anheben, zurueck zum Start.
 
     Nur nach dem vorgesehenen Ende (Griff, Probegriff am Tisch-Geofence) --
@@ -666,7 +667,8 @@ def retreat_after_test(robot, workspace, log, start_joints, clock, args, planner
     quittiert (``clear_stop``), der Rueckzug ist geplant und vorab geprueft.
     Rueckgabe: Text fuer Protokoll und Oberflaeche.
     """
-    if not expected_test_stop(log["stop_reason"]):
+    if not (expected_test_stop(log["stop_reason"], probe)
+            or (probe == "objekt" and log["stop_reason"] == "max_steps")):
         return "keiner -- Stopp nicht vom Test (%s), Arbeitsraum pruefen" % log["stop_reason"]
     if start_joints is None:
         return "keiner -- keine Startstellung in bc_policy.json"
@@ -1188,6 +1190,11 @@ def parse_args():
                         help="mit --probegriff objekt: Abstand der Werkzeugspitze ueber der "
                              "Objektoberkante in mm (Default %.0f; Nachlauf nach dem Stopp an der "
                              "Anlage bis 7,5 mm -- schrittweise annaehern)" % (1e3 * config.PROBE_GAP_M))
+    parser.add_argument("--ohne-experte", dest="experte", action="store_false",
+                        help="mit --probegriff objekt: nach dem Stopp ueber dem Objekt NICHT "
+                             "korrigieren/greifen/umlegen -- senkrecht anheben, zurueck zum "
+                             "Start; gespeichert wird, wohin die Policy noch wollte "
+                             "(Anwender 2026-11-19). Das Objekt bleibt liegen.")
     parser.add_argument("--probegriff", choices=known_pose.PROBE_MODES, default="objekt",
                         help="mit --lage-bekannt: 'tisch' = echter Griff (Werkzeugspitze >= %.0f mm "
                              "ueber dem Tisch), 'objekt' = Stopp %.0f mm ueber der Objektoberkante, "
@@ -1225,6 +1232,10 @@ def parse_args():
                      "andere Lage")
     if args.lage_bekannt and args.transport_geplant:
         parser.error("--lage-bekannt endet selbst mit dem Griff -- ohne --transport-geplant")
+    if args.dagger and not args.experte:
+        parser.error("--dagger braucht den Experten (ohne --ohne-experte)")
+    if not args.experte and not (args.lage_bekannt and args.probegriff == "objekt"):
+        parser.error("--ohne-experte gilt nur mit --lage-bekannt --probegriff objekt")
     if args.dagger and not (args.lage_bekannt and args.probegriff == "objekt"):
         parser.error("--dagger braucht --lage-bekannt --probegriff objekt (der Experte "
                      "uebernimmt nach dem Probegriff)")
@@ -1461,7 +1472,10 @@ def main():
     # Experte nach dem Probegriff (bc/known_pose.py): normaler Tischabstand,
     # er greift ja am Objekt -- der erhoehte gilt nur fuer die Policy
     expert_workspace = None
-    if known is not None and args.probegriff == "objekt" and (args.episodes > 1 or args.dagger):
+    # auch ohne Experte: der Rueckzug nach dem Probegriff braucht den normalen
+    # Tischabstand (nach einem Violation-Stopp liegt der Arm unter der Probe-Ebene)
+    if known is not None and args.probegriff == "objekt" and (
+            args.episodes > 1 or args.dagger or not args.experte):
         expert_workspace = build_workspace(table_z, info, robot, robot_info, args, known,
                                            None, progress=lambda *_: None)
     start = np.asarray(info["start_joints"]) if info.get("start_joints") else None
@@ -1739,6 +1753,15 @@ def main():
                               or log["stop_reason"] == "max_steps"):
                         retreat = ("keiner -- Stopp nicht vom Test (%s), Arbeitsraum pruefen"
                                    % log["stop_reason"])
+                    elif not args.experte:
+                        # Anwender 2026-11-19: nur anfliegen und messen, nicht greifen --
+                        # Vorhersage steht schon in lage["summary"]["predicted"]
+                        retreat = retreat_after_test(robot, expert_workspace, log,
+                                                     ep_start if ep_start is not None
+                                                     else np.asarray(log["joints"][0]),
+                                                     clock, args, rec_planner, probe="objekt")
+                        if retreat == "am Start":
+                            retreat = "ohne Experte: angehoben, am Start (Objekt unberuehrt)"
                     elif expert_workspace is None:
                         retreat = ("stehen geblieben -- Werkzeug %.0f mm ueber dem Objekt, "
                                    "Spiel pruefen" % (1e3 * known.gap_m))

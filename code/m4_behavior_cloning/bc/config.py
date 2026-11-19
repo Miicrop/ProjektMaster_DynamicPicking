@@ -735,9 +735,28 @@ FUNNEL_ZERO_DIST_M = 0.02
 #: mit einem festen seitlichen Versatz an PRE_PICK, der im Abstieg auf 0
 #: abklingt; das Label bleibt die ideale Bahn und zeigt damit zurueck zur Mitte.
 #: Anteil der Episoden mit Versatz (0 = aus) ...
-APPROACH_OFFSET_SHARE = 0.4
-#: ... Betrag (m), gleichverteilt, Richtung waagrecht gleichverteilt ...
-APPROACH_OFFSET_RANGE_M = (0.003, 0.006)
+#: 2026-11-19 (Anwender, neuer Datensatz): 0,5 statt 0,4; seitlich 5-10 mm statt
+#: 3-6 mm, dazu Drehung und Ausreisser -- an der Anlage stand die Policy 2-16 mm
+#: und bis ~50 Grad daneben und korrigierte im Anflug kaum noch.
+APPROACH_OFFSET_SHARE = 0.5
+#: ... Betrag (m), gleichverteilt, Richtung waagrecht gleichverteilt (auch schraeg) ...
+APPROACH_OFFSET_RANGE_M = (0.005, 0.010)
+#: ... Drehung um die Senkrechte (Grad), Betrag gleichverteilt, Vorzeichen zufaellig,
+#: klingt wie der seitliche Versatz bis APPROACH_OFFSET_FREE_M auf 0 ab ...
+APPROACH_YAW_RANGE_DEG = (10.0, 20.0)
+#: ... je Groesse unabhaengig mit diesem Anteil ein Ausreisser: seitlich bis
+#: APPROACH_OFFSET_OUTLIER_MAX_M, Drehung bis APPROACH_YAW_OUTLIER_MAX_DEG
+#: (jeweils ab dem Normalbereich aufwaerts).
+APPROACH_OFFSET_OUTLIER_SHARE = 0.15
+APPROACH_OFFSET_OUTLIER_MAX_M = 0.025
+APPROACH_YAW_OUTLIER_MAX_DEG = 35.0
+#: ... auf- und abgebaut hoechstens so schnell (je Sekunde). Der Anstieg
+#: liegt 15-10 cm vor dem Greifen noch im Transfer (0,15 m/s): ohne Grenze kamen
+#: 20-35 Grad in ~0,3 s, Gelenk 6 bis 2 rad/s -- jede Bahn verworfen (Test
+#: 2026-11-19). Wird die volle Groesse in der verfuegbaren Zeit nicht erreicht,
+#: bleibt der Versatz kleiner; null ab APPROACH_OFFSET_FREE_M gilt immer.
+APPROACH_YAW_RATE_DEG_S = 20.0
+APPROACH_OFFSET_RATE_M_S = 0.03
 #: ... Bahnlaenge bis zum Greifen: darunter 0 (Backenspitzen erreichen die
 #: Objektoberkante 14,9 mm ueber dem Tisch bei TCP ~7 mm ueber PICK, + Reserve),
 #: ab FULL voll (PRE_PICK 5 cm ueber PICK), ab HOLD wieder abklingend bis HOLD+RAMP.
@@ -809,8 +828,10 @@ LOCALIZE_CHAMFER_OFFSET_DEG = 0.0
 #: Live-Ansicht (bc/live.py): Pfeil in Blickrichtung der Handgelenkkamera =
 #: Werkzeug-x-Richtung + dieser Winkel (Grad). Aus den A6-Ablesungen des
 #: Anwenders 2026-11-17 (Kamera nach vorne bei A6 60, zur Szenenkamera bei 150,
-#: zur Teststation bei -30; grob, +-10 Grad). ACHTUNG: hindernisse.json setzt
-#: die Kamera auf Werkzeug +y (= +90 Grad) -- passt nicht dazu, pruefen.
+#: zur Teststation bei -30; grob, +-10 Grad). Bestaetigt 2026-11-19: Kamera
+#: in Werkzeug +y, 15-20 Grad gedreht (Werkzeug-z zeigt nach unten, deshalb
+#: liegt Werkzeug +y von oben gesehen bei -90 Grad), hindernisse.json
+#: kamera_versatz_werkzeug_m = 60 mm unter 107 Grad.
 LIVE_CAMERA_YAW_OFFSET_DEG = -107.0
 #: Experte nach dem Probegriff: darf er um 180 Grad gedreht greifen, wenn das
 #: naeher an der Stoppstellung liegt? Nein (2026-11-17): die Richtung ist

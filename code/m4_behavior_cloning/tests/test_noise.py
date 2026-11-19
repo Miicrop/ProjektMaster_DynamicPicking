@@ -370,4 +370,35 @@ def test_approach_offset_profile_and_rest_check():
     treffer = [sample_approach_offset(np.random.default_rng(k), share=0.4) for k in range(200)]
     gezogen = [t for t in treffer if t is not None]
     assert 50 < len(gezogen) < 110
-    assert all(0.003 - 1e-12 <= np.linalg.norm(t) <= 0.006 + 1e-12 and t[2] == 0 for t in gezogen)
+    # seitlich: Normalbereich 5-10 mm, Ausreisser bis 25 mm; Drehung 10-20 / bis 35 Grad
+    assert all(0.005 - 1e-12 <= np.linalg.norm(t[:3]) <= 0.025 + 1e-12 and t[2] == 0
+               for t in gezogen)
+    yaws = np.degrees(np.abs([t[3] for t in gezogen]))
+    assert np.all((yaws >= 10 - 1e-9) & (yaws <= 35 + 1e-9))
+    assert (yaws > 20).any() and (yaws <= 20).sum() > len(yaws) // 2
+
+
+def test_approach_yaw_offset_decays_to_zero_without_swinging():
+    """Anwender 2026-11-19: ein falscher Winkel je Episode, stetig auf 0 -- kein Pendeln."""
+    import numpy as np
+
+    from bc import config, geometry
+    from bc.noise import approach_offset_profile, distance_to_grasp, sample_noisy_poses
+    from bc.trajectory import Waypoint, build_ideal_trajectory
+
+    oben = np.array([0.4, 0.0, 0.20, 0.0, 1.0, 0.0, 0.0])
+    pick = np.array([0.4, 0.0, 0.01, 0.0, 1.0, 0.0, 0.0])
+    ideal = build_ideal_trajectory([Waypoint(oben), Waypoint(pick, gripper_closed=True, approach=True),
+                                    Waypoint(oben, gripper_closed=True)])
+    poses = sample_noisy_poses(ideal, np.random.default_rng(0), sigma_pos=0.0, sigma_rot=0.0,
+                               approach_offset=[0.0, 0.0, 0.0, np.radians(-20.0)])
+    turn = np.array([np.degrees(geometry.quat_angle_between(p[3:], q[3:]))
+                     for p, q in zip(poses, ideal.poses_quat)])
+    d = distance_to_grasp(ideal)
+    assert np.all(turn[d <= config.APPROACH_OFFSET_FREE_M] < 1e-6)       # am PICK exakt
+    voll = (d >= config.APPROACH_OFFSET_FULL_M) & (d <= config.APPROACH_OFFSET_HOLD_M)
+    assert np.allclose(turn[voll], 20.0, atol=1e-6)
+    # im Abstieg monoton abnehmend (kein Ueberschwingen)
+    down = np.flatnonzero(np.isfinite(d) & (d <= config.APPROACH_OFFSET_FULL_M))
+    assert np.all(np.diff(turn[down]) <= 1e-9)
+    assert np.allclose(poses[:, :3], ideal.poses_quat[:, :3])   # nur gedreht, nicht versetzt

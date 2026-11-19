@@ -261,6 +261,16 @@ class OperationTab(ModeTab):
             % (1e3 * config.PROBE_GAP_M, 1e3 * config.PROBE_GAP_WARN_M))
         self.probe_gap.valueChanged.connect(self._update_command)
         form.addRow("Abstand über Objekt", self.probe_gap)
+        self.expert = QCheckBox("Experte greift und legt um")
+        self.expert.setChecked(True)
+        self.expert.setToolTip(
+            "An: nach dem Stopp über dem Objekt korrigiert der Planer auf PICK, greift, "
+            "legt das Teil an eine neue Lage (Voraussetzung für DAgger).\n"
+            "Aus: nur anfliegen und messen -- die Policy hält über dem Objekt, gespeichert "
+            "wird, wohin sie noch wollte; dann senkrecht anheben und zurück zum Start. "
+            "Das Teil wird nicht berührt (z. B. wenn die M1-Lage nicht sicher stimmt).")
+        self.expert.toggled.connect(self._on_probe_changed)
+        form.addRow("", self.expert)
         self.sequence = QLineEdit()
         self.sequence.setPlaceholderText("aus dem Modell")
         self.sequence.textChanged.connect(self._update_command)
@@ -335,12 +345,14 @@ class OperationTab(ModeTab):
         return box
 
     def _known_widgets(self):
-        return (self.probe, self.probe_gap, self.sequence, self.pick_source, self.photo_point,
-                self.dagger_dir)
+        return (self.probe, self.probe_gap, self.expert, self.sequence, self.pick_source,
+                self.photo_point, self.dagger_dir)
 
     def _on_probe_changed(self, *_):
-        self.probe_gap.setEnabled(self.known.isChecked()
-                                  and self.probe.currentData() == "objekt")
+        objekt = self.known.isChecked() and self.probe.currentData() == "objekt"
+        self.probe_gap.setEnabled(objekt)
+        self.expert.setEnabled(objekt)
+        self.dagger_dir.setEnabled(objekt and self.expert.isChecked())
         self._update_command()
 
     def _on_pick_source_changed(self, *_):
@@ -552,6 +564,7 @@ class OperationTab(ModeTab):
             known_pose=self.known.isChecked() and not only_check,
             probe=self.probe.currentData(),
             probe_gap_mm=self.probe_gap.value(),
+            expert=self.expert.isChecked(),
             sequence=self.sequence.text().strip() or None,
             camera_check=camera_check or self.camera_check.currentData(),
             pick_source=self.pick_source.currentData(),
@@ -712,7 +725,11 @@ class OperationTab(ModeTab):
                 if self.pick_source.currentData() == "m1":
                     lines.append("PICK aus M1: vor jeder Fahrt an die Fotostellung '%s'"
                                  % (self.photo_point.text().strip() or config.LOCALIZE_POINT))
-                if self.dagger_dir.text().strip() and self.probe.currentData() == "objekt":
+                if self.probe.currentData() == "objekt" and not self.expert.isChecked():
+                    lines.append("Ohne Experte: Policy hält über dem Objekt, danach anheben "
+                                 "und zurück zum Start -- das Teil wird nicht gegriffen.")
+                if self.dagger_dir.text().strip() and self.probe.currentData() == "objekt" \
+                        and self.expert.isChecked():
                     lines.append("DAgger: Episoden nach %s" % self.dagger_dir.text().strip())
         if status.state == session_module.OFFLINE:
             lines += ["", "Es ist nichts verbunden — apps/infer.py verbindet "

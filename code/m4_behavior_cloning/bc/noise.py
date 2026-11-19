@@ -226,9 +226,33 @@ def approach_offset_profile(ideal):
     return np.where(np.isfinite(d), rise * fall, 0.0)
 
 
+def rate_limited(target, max_step):
+    """Betrag von ``target`` (>= 0) mit hoechstens ``max_step`` Aenderung je
+    Schritt, ueberall <= ``target`` -- also null, wo ``target`` null ist, und
+    rechtzeitig vorher abgebaut (Vorwaerts- und Rueckwaertsdurchlauf)."""
+    m = np.abs(np.asarray(target, dtype=float))
+    out = m.copy()
+    for i in range(1, len(out)):
+        out[i] = min(out[i], out[i - 1] + max_step)
+    for i in range(len(out) - 2, -1, -1):
+        out[i] = min(out[i], out[i + 1] + max_step)
+    return out
+
+
 def sample_approach_offset(rng, share=config.APPROACH_OFFSET_SHARE,
-                           range_m=config.APPROACH_OFFSET_RANGE_M):
-    """Versatz einer Episode: waagrechter Vektor (3,) oder None (kein Versatz).
+                           range_m=config.APPROACH_OFFSET_RANGE_M,
+                           yaw_range_deg=config.APPROACH_YAW_RANGE_DEG,
+                           outlier_share=config.APPROACH_OFFSET_OUTLIER_SHARE,
+                           outlier_max_m=config.APPROACH_OFFSET_OUTLIER_MAX_M,
+                           outlier_yaw_max_deg=config.APPROACH_YAW_OUTLIER_MAX_DEG):
+    """Versatz einer Episode: ``[dx, dy, 0, dyaw_rad]`` oder None (kein Versatz).
+
+    EIN fester Fehler je Episode, der im Abstieg stetig auf 0 abklingt
+    (:func:`approach_offset_profile`) -- kein Hin-und-her. Seitlich in
+    beliebiger Richtung (gleichverteilt, auch schraeg), Drehung mit zufaelligem
+    Vorzeichen. Je Groesse unabhaengig mit ``outlier_share`` ein Ausreisser
+    (seitlich bis ``outlier_max_m``, Drehung bis ``outlier_yaw_max_deg``).
+    ``yaw_range_deg`` None/(0, 0) = ohne Drehung.
 
     Zieht nur aus ``rng``, wenn ``share`` > 0 -- abgeschaltet bleibt die
     Zufallsfolge des Rauschens unveraendert.
@@ -237,9 +261,19 @@ def sample_approach_offset(rng, share=config.APPROACH_OFFSET_SHARE,
         return None
     if rng.random() >= share:
         return None
-    size = rng.uniform(min(range_m), max(range_m))
+    lo, hi = min(range_m), max(range_m)
+    if outlier_share and outlier_max_m and outlier_max_m > hi and rng.random() < outlier_share:
+        lo, hi = hi, outlier_max_m
+    size = rng.uniform(lo, hi)
     angle = rng.uniform(0.0, 2.0 * np.pi)
-    return np.array([size * np.cos(angle), size * np.sin(angle), 0.0])
+    yaw = 0.0
+    if yaw_range_deg and max(yaw_range_deg) > 0:
+        ylo, yhi = min(yaw_range_deg), max(yaw_range_deg)
+        if outlier_share and outlier_yaw_max_deg and outlier_yaw_max_deg > yhi \
+                and rng.random() < outlier_share:
+            ylo, yhi = yhi, outlier_yaw_max_deg
+        yaw = np.radians(rng.uniform(ylo, yhi)) * (1.0 if rng.random() < 0.5 else -1.0)
+    return np.array([size * np.cos(angle), size * np.sin(angle), 0.0, yaw])
 
 
 def approach_rest(ideal, poses_noisy, free_m=config.APPROACH_OFFSET_FREE_M):
@@ -269,7 +303,8 @@ def sample_noisy_poses(
     asymmetrischen Grenzen wirken innerhalb des Prozesses.
     Daempfung: Trichter (Naehe zu einem Ankerpunkt) UND Dwell-Schritte
     (Greifer schliesst -- dort wird still gehalten, Rauschen = 0).
-    ``approach_offset``: fester Versatz (3,) im Anflug, verteilt nach
+    ``approach_offset``: fester Versatz im Anflug, ``[dx, dy, dz]`` oder
+    ``[dx, dy, dz, dyaw_rad]`` (Drehung um die Senkrechte), verteilt nach
     :func:`approach_offset_profile` (0 auf den letzten Zentimetern).
     """
     if limits is None:
@@ -283,19 +318,33 @@ def sample_noisy_poses(
     scale = funnel_scale(ideal.dist_to_anchor)
     scale = np.where(ideal.dwell_mask, 0.0, scale)
     offset = np.zeros((len(scale), 3))
+    yaw_offset = np.zeros(len(scale))
     if approach_offset is not None:
-        offset = approach_offset_profile(ideal)[:, None] * np.asarray(approach_offset, dtype=float)[None, :]
+        values = np.asarray(approach_offset, dtype=float)
+        profile = approach_offset_profile(ideal)
+        # Tempo begrenzen (config.APPROACH_*_RATE_*): Anstieg liegt im Transfer
+        size = float(np.linalg.norm(values[:3]))
+        if size > 0:
+            lateral = rate_limited(profile * size, config.APPROACH_OFFSET_RATE_M_S * dt)
+            offset = (lateral / size)[:, None] * values[None, :3]
+        if len(values) > 3 and values[3]:
+            yaw_offset = np.sign(values[3]) * rate_limited(
+                profile * abs(values[3]), np.radians(config.APPROACH_YAW_RATE_DEG_S) * dt)
 
     noisy = ideal.poses_quat.copy()
     for i in range(len(noisy)):
         n_pos = ou_pos.step() * scale[i]
         n_rot = ou_rot.step() * scale[i]
         noisy[i, :3] = ideal.poses_quat[i, :3] + n_pos + offset[i]
+        if yaw_offset[i]:
+            # Anflug-Drehung um die Senkrechte (Basis-z)
+            dq = geometry.quat_from_axis_angle(np.array([0.0, 0.0, 1.0]), float(yaw_offset[i]))
+            noisy[i, 3:7] = geometry.quat_normalize(geometry.quat_multiply(dq, noisy[i, 3:7]))
         angle = float(np.linalg.norm(n_rot))
         if angle > 1e-12:
             dq = geometry.quat_from_axis_angle(n_rot / angle, angle)
             noisy[i, 3:7] = geometry.quat_normalize(
-                geometry.quat_multiply(dq, ideal.poses_quat[i, 3:7])
+                geometry.quat_multiply(dq, noisy[i, 3:7])
             )
     return noisy
 

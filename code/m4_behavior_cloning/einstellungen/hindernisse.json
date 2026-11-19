@@ -5,7 +5,8 @@
     "Stuetzpunkte: tool = Spitze der Greiferbacken (Tool ZimmerLWR50), wrist, elbow, camera = Wrist-Kamera (seitlich, auf Hoehe der Backenspitzen gerechnet).",
     "Bestimmt 2026-11-11 aus den Punkten Test-DKamera, Test-DArm, Test-DStation (Steuerung) und den Massen des Anwenders. PROVISORISCH: Stange und Station sind grob geteacht; Station noch nicht festgeschraubt."
   ],
-  "kamera_versatz_werkzeug_m": [0.0, 0.054, 0.0],
+  "kamera_versatz_werkzeug_m": [-0.0175, 0.0574, 0.0],
+  "_kamera_versatz_quelle": "2026-11-19 (Anwender): Objektiv 55-60 mm vom TCP, Richtung Werkzeug +y, 15-20 Grad gedreht -- passt zu den A6-Ablesungen (Kamera = Werkzeug-x -107 Grad von oben). 60 mm, 107 Grad von Werkzeug-x zu Werkzeug-y. Vorher [0, 0.054, 0]. Hoehe weiter auf den Backenspitzen gerechnet.",
   "hindernisse": [
     {
       "name": "Kamerastange",

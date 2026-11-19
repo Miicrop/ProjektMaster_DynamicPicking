@@ -20,7 +20,7 @@ def test_cell_file_loads_and_applies_only_at_the_real_plant():
     assert cell is not None, "einstellungen/hindernisse.json fehlt"
     names = {s.name for s in cell.surfaces}
     assert {"Kamerastange", "Teststation"} <= names
-    assert abs(np.linalg.norm(cell.camera_offset_tool) - 0.054) < 0.005
+    assert abs(np.linalg.norm(cell.camera_offset_tool) - 0.060) < 0.005   # gemessen 2026-11-19
     # VM und SimRobot haben andere Koordinaten -> dort nicht (auto)
     assert obstacles.applies("neura", False)
     assert not obstacles.applies("neura", True)

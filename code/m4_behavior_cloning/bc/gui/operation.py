@@ -260,7 +260,7 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
                realtime=False, hold=False, no_ensemble=False, out=None,
                real_robot=False, seed=None, known_pose=False, probe="tisch",
                sequence=None, camera_check="an", pick_source="steuerung",
-               photo_point=None, dagger_dir=None, probe_gap_mm=None):
+               photo_point=None, dagger_dir=None, probe_gap_mm=None, expert=True):
     """Kommandozeile fuer apps/infer.py (ohne das Python-Programm).
 
     ``known_pose``: Policy-Test mit bekannter Lage (``--lage-bekannt``,
@@ -301,13 +301,15 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
         argv += ["--lage-bekannt", "--probegriff", str(probe)]
         if probe == "objekt" and probe_gap_mm is not None:
             argv += ["--probe-abstand", "%g" % float(probe_gap_mm)]
+        if probe == "objekt" and not expert:
+            argv.append("--ohne-experte")
         if sequence:
             argv += ["--ablauf", str(sequence)]
         if pick_source and pick_source != "steuerung":
             argv += ["--pick-quelle", str(pick_source)]
             if photo_point:
                 argv += ["--foto-punkt", str(photo_point)]
-        if dagger_dir and probe == "objekt":
+        if dagger_dir and probe == "objekt" and expert:
             argv += ["--dagger", str(dagger_dir)]
     if camera_check and camera_check != "an":
         argv += ["--kamerapruefung", str(camera_check)]

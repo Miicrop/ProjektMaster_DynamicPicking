@@ -667,8 +667,11 @@ def plan_all(args, waypoints, robot, kin, scales, rng, table=None, keepouts=(),
     plans = []
     for ep, scale in enumerate(scales):
         try:
-            offset = sample_approach_offset(rng, getattr(args, "anflug_anteil", 0.0),
-                                            getattr(args, "anflug_versatz", None))
+            offset = sample_approach_offset(
+                rng, getattr(args, "anflug_anteil", 0.0), getattr(args, "anflug_versatz", None),
+                yaw_range_deg=getattr(args, "anflug_drehung", config.APPROACH_YAW_RANGE_DEG),
+                outlier_share=getattr(args, "anflug_ausreisser",
+                                      config.APPROACH_OFFSET_OUTLIER_SHARE))
             plans.append(generate_plan(kin, workspace, ideal, seed_joints, rng=rng,
                                        noise_scale=scale, joints_ideal=joints_ideal,
                                        approach_offset=offset))
@@ -1175,6 +1178,18 @@ def parse_args():
              % tuple(1e3 * v for v in config.APPROACH_OFFSET_RANGE_M),
     )
     parser.add_argument(
+        "--anflug-drehung", dest="anflug_drehung", default=None,
+        help="Drehung des Anflug-Versatzes in Grad als 'min,max' (Default %g,%g; "
+             "'0,0' = ohne Drehung)" % config.APPROACH_YAW_RANGE_DEG,
+    )
+    parser.add_argument(
+        "--anflug-ausreisser", dest="anflug_ausreisser", type=float,
+        default=config.APPROACH_OFFSET_OUTLIER_SHARE,
+        help="Anteil Ausreisser je Groesse (seitlich bis %.0f mm, Drehung bis %.0f Grad; "
+             "Default %%(default)g)" % (1e3 * config.APPROACH_OFFSET_OUTLIER_MAX_M,
+                                       config.APPROACH_YAW_OUTLIER_MAX_DEG),
+    )
+    parser.add_argument(
         "--hindernisse", choices=("auto", "an", "aus"), default="auto",
         help="feste Hindernisse der Zelle (einstellungen/hindernisse.json: Kamerastange, "
              "Teststation, Roboterbasis) beim Planen pruefen; auto = nur an der realen "
@@ -1342,9 +1357,19 @@ def parse_args():
         except ValueError:
             parser.error("--anflug-versatz: 'min,max' in mm, z. B. 3,6")
         args.anflug_versatz = (min(werte), max(werte))
+    if args.anflug_drehung is None:
+        args.anflug_drehung = config.APPROACH_YAW_RANGE_DEG
+    else:
+        try:
+            werte = [float(v) for v in str(args.anflug_drehung).split(",")]
+        except ValueError:
+            parser.error("--anflug-drehung: 'min,max' in Grad, z. B. 10,20")
+        args.anflug_drehung = (min(werte), max(werte))
     if not 0 <= args.anflug_anteil <= 1 or not 0 <= min(args.anflug_versatz) \
-            or max(args.anflug_versatz) > 0.015:
-        parser.error("--anflug-anteil 0..1, --anflug-versatz 0..15 mm")
+            or max(args.anflug_versatz) > 0.025 or not 0 <= min(args.anflug_drehung) \
+            or max(args.anflug_drehung) > 45 or not 0 <= args.anflug_ausreisser <= 1:
+        parser.error("--anflug-anteil 0..1, --anflug-versatz 0..25 mm, --anflug-drehung "
+                     "0..45 Grad, --anflug-ausreisser 0..1")
     if not 0.1 <= args.probefahrt_tempo <= 1.0:
         parser.error("--probefahrt-tempo 0.1..1")
     if args.seed is None:
