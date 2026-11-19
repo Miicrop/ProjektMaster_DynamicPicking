@@ -944,6 +944,7 @@ def run_first_grasp(m1_lage, target, robot, recorder, factor):
         raise SystemExit("Erster Griff abgebrochen (%s) -- Arm und Teil pruefen."
                          % result.discard_reason)
     back = target["regrip_plan"] or target["back_plan"]
+    align_to_plan(robot, back, "Umlegen")
     print("Umlegen: Teil an Lage 1 (x %.0f y %.0f mm), nicht aufgezeichnet"
           % (1e3 * tp[0], 1e3 * tp[1]))
     try:
@@ -976,6 +977,26 @@ def switch_to_teach(robot):
               "= %r -- am Pendant pruefen." % (state,))
 
 
+def align_to_plan(robot, plan, label=""):
+    """Nachlauf am Episodenende ausgleichen: steht der Arm etwas neben dem Start
+    von ``plan`` (mehr als START_POSE_TOL_RAD, hoechstens
+    PUT_BACK_ALIGN_MAX_RAD), faehrt er per PTP hin. Groessere Abweichung:
+    RobotError (echter Fehler, nicht ueberdecken). Rueckgabe: Abweichung (rad)."""
+    from bc.ports import RobotError
+
+    start = np.asarray(plan.joints_noisy[0], dtype=float)
+    error = float(np.max(np.abs(robot.read_state().joints - start)))
+    if error <= config.START_POSE_TOL_RAD:
+        return error
+    if error > config.PUT_BACK_ALIGN_MAX_RAD:
+        raise RobotError("Arm steht %.3f rad neben dem Start der Rueckfahrt (> %.2f rad) -- "
+                         "Arm und Teil pruefen" % (error, config.PUT_BACK_ALIGN_MAX_RAD))
+    print("   %s: Arm %.4f rad neben dem Start der Bahn (Nachlauf) -- fahre erst hin"
+          % (label or "Bahn", error))
+    robot.move_to_joints(start)
+    return error
+
+
 def put_back(episode, plan, put_back_recorder, table=None, log_root=None, label=""):
     """Objekt am Greifpunkt ablegen und an den Start fahren (Schritt 7).
 
@@ -1001,6 +1022,7 @@ def put_back(episode, plan, put_back_recorder, table=None, log_root=None, label=
     print("Zuruecklegen: %d Schritte (%.1f s), nicht aufgezeichnet"
           % (len(plan), len(plan) / plan.rate_hz))
     try:
+        align_to_plan(put_back_recorder.robot, plan, "Zuruecklegen")
         result = put_back_recorder.record(plan, metadata={"put_back": True})
     except RuntimeError as exc:  # RobotError, oder Stopp vor dem ersten Takt
         end_run("Zuruecklegen abgebrochen: %s -- Wiederholungen beendet." % exc)

@@ -9,6 +9,6 @@
     {"point": "PRE_PICK", "motion": "lin", "above": "PICK", "dz": 0.05, "blend": 0.01},
     {"point": "PICK", "motion": "lin", "approach": true, "gripper": "close"},
     {"point": "PRE_PICK", "motion": "lin", "blend": 0.04},
-    {"point": "UEBER_TISCH", "motion": "lin", "above": "ID4", "dz": 0.15}
+    {"point": "UEBER_TISCH", "motion": "ptp", "above": "ID4", "dz": 0.15}
   ]
 }

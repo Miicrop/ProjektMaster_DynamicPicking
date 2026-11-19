@@ -45,3 +45,40 @@ def test_gui_passes_start_lage_pick():
     argv = recording.record_argv("data/x", robot_kind="neura", sequence="seq.json",
                                  start_lage="pick")
     assert argv[argv.index("--start-lage") + 1] == "pick"
+
+
+def test_put_back_aligns_small_lag_and_refuses_large(monkeypatch):
+    """Anlage 2026-11-19: 0,0154 rad Nachlauf brach das Zuruecklegen ab."""
+    import sys
+    from types import SimpleNamespace
+
+    import pytest
+
+    sys.path.insert(0, "apps")
+    import record
+    from bc.ports import RobotError
+
+    class Robot(object):
+        def __init__(self, joints):
+            self.joints = np.asarray(joints, dtype=float)
+            self.moves = []
+
+        def read_state(self):
+            return SimpleNamespace(joints=self.joints)
+
+        def move_to_joints(self, q):
+            self.moves.append(np.asarray(q))
+            self.joints = np.asarray(q, dtype=float)
+
+    plan = _plan()
+    start = plan.joints_noisy[0]
+    exact = Robot(start)
+    record.align_to_plan(exact, plan)
+    assert exact.moves == []
+    lag = Robot(start + 0.0154)
+    record.align_to_plan(lag, plan)
+    assert len(lag.moves) == 1 and np.allclose(lag.joints, start)
+    far = Robot(start + 0.3)
+    with pytest.raises(RobotError):
+        record.align_to_plan(far, plan)
+    assert far.moves == []

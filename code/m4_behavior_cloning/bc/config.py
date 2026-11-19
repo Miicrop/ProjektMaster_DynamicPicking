@@ -127,6 +127,11 @@ GRIPPER_DWELL_STEPS = int(math.ceil(GRIPPER_DWELL_S * CONTROL_RATE_HZ))
 #: 2026-11-17: mit dem neuen Endanflug (0,02) ebenfalls 0,02 -- Ablegen nie
 #: schneller als der Endanflug der Aufnahme.
 PUT_BACK_APPROACH_SPEED_MS = 0.02
+#: Vor dem Zuruecklegen: steht der Arm nach der Episode bis zu so weit (rad,
+#: je Gelenk) neben dem Start der Rueckfahrt (Nachlauf am Episodenende),
+#: faehrt er erst langsam per PTP hin, statt abzubrechen (Anlage 2026-11-19:
+#: 0,0154 rad > 0,01 rad brach den Lauf ab). Mehr = echter Fehler, Abbruch.
+PUT_BACK_ALIGN_MAX_RAD = 0.10
 #: Ablage-Zugabe (Anlage 2026-11-02, B013-B037): beim Zuruecklegen so viel
 #: UEBER der Greifhoehe oeffnen. Die Tischhoehe stimmt nur auf einige
 #: Zehntel mm; lieber faellt das Objekt kurz, als dass es eingedrueckt wird
