@@ -76,9 +76,12 @@ LEFT_MIN_WIDTH_TEACHING = 740
 LAYOUT_VERSION = 2
 
 COVERAGE_LEGEND = (
-    "Feld: Zahl = Fahrten, orange = noch leer, blau gestrichelt = nächste Lage\n"
-    "● grau = frühere Lagen, ● orange = dieser Lauf, Strich = Backenrichtung,\n"
-    "Linie = Varianten einer Lage, + = geteachter PICK\n"
+    "Feld: Zahl = Fahrten, orange = noch leer, blau gestrichelt = Kandidaten für die nächste Lage\n"
+    "● grau = frühere Lagen, ● orange = dieser Lauf, Pfeil = Blickrichtung der Handkamera "
+    "(zur Fase; Strich bei älteren Episoden ohne Richtung),\n"
+    "Kreis = zuletzt aufgenommen, lila X = als Nächstes geplant (noch nicht gefahren),\n"
+    "Linie = Varianten einer Lage, + = PICK in der Steuerung\n"
+    "Grau Roboter, lila Kamerastange, braun Teststation (zur Orientierung)\n"
     "Rot schraffiert = Sperrzone, rot gestrichelt = so nah kommt der TCP neuer Lagen\n"
     "Rechts: Fahrten je Drehabschnitt · Roboter unten")
 
@@ -2503,6 +2506,7 @@ class RecordingTab(ModeTab):
         view.YAW_PANEL = 170
         view.setToolTip(COVERAGE_LEGEND)
         view.rotation = self.coverage_map.rotation
+        view.next_target = self.coverage_map.next_target
         view.set_snapshot(self.coverage_map.snapshot, self.coverage_map.run_since)
         view.double_clicked.connect(dialog.close)
         box = QVBoxLayout(dialog)
@@ -3416,6 +3420,11 @@ class RecordingTab(ModeTab):
         if reason:
             self._end_reason = reason
 
+        target = recording_module.next_target(text)
+        if target is not None and hasattr(self, "coverage_map"):
+            self.coverage_map.set_next_target(target)
+            if self._coverage_view is not None:
+                self._coverage_view.map.set_next_target(target)
         grasp = recording_module.first_grasp_question(text)
         if grasp is not None:
             self._ask_first_grasp(*grasp)

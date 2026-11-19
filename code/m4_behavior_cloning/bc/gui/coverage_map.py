@@ -109,6 +109,23 @@ class EpisodeSpot:
     group: str = None                 # repeat_group -- Varianten einer Lage
     recorded_at: str = ""
     discarded: bool = False
+    #: Blickrichtung der Handgelenkkamera (Grad, 0..360) aus dem PICK der
+    #: Episode -- Pfeil in der Ansicht (Anwender 2026-11-19); None: nur Strich
+    cam_yaw_deg: float = None
+
+
+def camera_yaw(pose_quat):
+    """Blickrichtung der Handgelenkkamera fuer eine Greifpose (wie die Pfeile der
+    Live-Ansicht: Werkzeug-x + config.LIVE_CAMERA_YAW_OFFSET_DEG), oder None."""
+    if pose_quat is None:
+        return None
+    try:
+        from ..live import yaw360
+
+        return float((yaw360(np.asarray(pose_quat, dtype=float))
+                      + config.LIVE_CAMERA_YAW_OFFSET_DEG) % 360.0)
+    except Exception:
+        return None
 
 
 def load_episodes(roots, in_simulation=None):
@@ -137,7 +154,8 @@ def load_episodes(roots, in_simulation=None):
         xy = data.get("object_xy_m")
         if not xy:
             continue
-        spots.append(EpisodeSpot(
+        pick = ((data.get("points") or {}).get("PICK") or {}).get("pose_quat")
+        spots.append(EpisodeSpot(cam_yaw_deg=camera_yaw(pick),
             folder="%s/%s" % (folder.parent.name, folder.name), xy=(float(xy[0]), float(xy[1])),
             yaw_deg=data.get("object_yaw_deg"), source=data.get("object_source") or "",
             group=data.get("repeat_group"), recorded_at=data.get("recorded_at") or "",
@@ -227,6 +245,7 @@ _CANDIDATE = "#1565c0"
 _KEEPOUT = "#c62828"
 _OLD = "#546e7a"
 _RUN = "#e65100"
+_NEXT = "#8e24aa"             # naechste geplante Lage
 _TEXT = "#37474f"
 
 
@@ -249,6 +268,17 @@ class CoverageMap(QWidget):
         super().__init__(parent)
         self.snapshot = None
         self.run_since = ""           # Lagen ab diesem Zeitstempel: laufender Aufruf
+        #: naechste geplante Lage (x m, y m, Kamera-Blickrichtung Grad) aus der
+        #: Ausgabe von record.py (NAECHSTE_LAGE) -- noch nicht gefahren
+        self.next_target = None
+        #: Roboter, Kamerastange, Teststation (bc/live.cell_layout), einmal geladen
+        self.cell = None
+        try:
+            from ..live import cell_layout
+
+            self.cell = cell_layout()
+        except Exception:
+            self.cell = None
         self.rotation = 0             # Vielfache von 90 Grad
         self.placeholder = "Keine Tischpunkte — Ablauf mit Tischpunkten wählen und verbinden."
         self.setMinimumHeight(200)
@@ -260,6 +290,10 @@ class CoverageMap(QWidget):
         self.snapshot = snapshot
         if run_since is not None:
             self.run_since = run_since
+        self.update()
+
+    def set_next_target(self, target):
+        self.next_target = target
         self.update()
 
     def rotate(self):
@@ -282,6 +316,15 @@ class CoverageMap(QWidget):
             cx, cy = zone.center
             h = zone.half_size + zone.object_margin
             xs += [(cx - h, cy - h), (cx + h, cy + h)]
+        cell = self.cell or {}
+        if cell.get("base"):
+            r = cell["base"]["r"]
+            xs += [(cell["base"]["x"] - r, cell["base"]["y"] - r),
+                   (cell["base"]["x"] + r, cell["base"]["y"] + r)]
+        for box in cell.get("boxes") or []:
+            xs += [tuple(box["lo"]), tuple(box["hi"])]
+        if self.next_target is not None:
+            xs.append(tuple(self.next_target[:2]))
         uv = np.array([self._view(*p) for p in xs])
         lo, hi = uv.min(axis=0), uv.max(axis=0)
         span = np.maximum(hi - lo, 1e-3)
@@ -326,6 +369,7 @@ class CoverageMap(QWidget):
         painter.setPen(QPen(QColor(_EDGE), 1.5))
         painter.setBrush(QColor(_TABLE))
         painter.drawPolygon(poly)
+        self._draw_cell(painter, layout)
 
         # Felder
         if cov is not None:
@@ -408,7 +452,10 @@ class CoverageMap(QWidget):
             if spot.discarded:
                 color.setAlpha(80)
             p = self._to_px(layout, *spot.xy)
-            if spot.yaw_deg is not None:
+            if spot.cam_yaw_deg is not None:
+                # Pfeil in Blickrichtung der Handgelenkkamera (zur Fase)
+                self._arrow(painter, layout, spot.xy, spot.cam_yaw_deg, 1.6 * jaw, color, 1.6)
+            elif spot.yaw_deg is not None:
                 a = np.radians(float(spot.yaw_deg))
                 tip = self._to_px(layout, spot.xy[0] + 0.012 * np.cos(a), spot.xy[1] + 0.012 * np.sin(a))
                 d = tip - p
@@ -432,10 +479,67 @@ class CoverageMap(QWidget):
             painter.drawLine(QPointF(p.x() - 6, p.y()), QPointF(p.x() + 6, p.y()))
             painter.drawLine(QPointF(p.x(), p.y() - 6), QPointF(p.x(), p.y() + 6))
 
+        # naechste geplante Lage: lila X mit Pfeil (noch nicht gefahren)
+        if self.next_target is not None:
+            x, y, cam = self.next_target
+            p = self._to_px(layout, x, y)
+            purple = QColor(_NEXT)
+            painter.setPen(QPen(purple, 2.4))
+            s = 7.0
+            painter.drawLine(QPointF(p.x() - s, p.y() - s), QPointF(p.x() + s, p.y() + s))
+            painter.drawLine(QPointF(p.x() - s, p.y() + s), QPointF(p.x() + s, p.y() - s))
+            if cam is not None:
+                self._arrow(painter, layout, (x, y), cam, 1.9 * jaw, purple, 2.2)
+            painter.drawText(QPointF(p.x() + 9, p.y() + 14), "nächste")
+
         self._draw_header(painter, snap)
         self._draw_axes(painter, layout)
         if cov is not None:
             self._draw_yaw_panel(painter, snap)
+
+    def _arrow(self, painter, layout, xy, yaw_deg, length_px, color, width):
+        """Pfeil von ``xy`` in Richtung ``yaw_deg`` (Basis-KS), Laenge in Pixeln."""
+        a = np.radians(float(yaw_deg))
+        p = self._to_px(layout, *xy)
+        tip = self._to_px(layout, xy[0] + 0.01 * np.cos(a), xy[1] + 0.01 * np.sin(a))
+        d = tip - p
+        n = max(1e-6, (d.x() ** 2 + d.y() ** 2) ** 0.5)
+        ux, uy = d.x() / n, d.y() / n
+        end = QPointF(p.x() + ux * length_px, p.y() + uy * length_px)
+        painter.setPen(QPen(color, width))
+        painter.drawLine(p, end)
+        head = max(4.0, 0.35 * length_px)
+        left = QPointF(end.x() - head * ux + 0.5 * head * uy, end.y() - head * uy - 0.5 * head * ux)
+        right = QPointF(end.x() - head * ux - 0.5 * head * uy, end.y() - head * uy + 0.5 * head * ux)
+        painter.setBrush(color)
+        painter.drawPolygon(QPolygonF([end, left, right]))
+
+    def _draw_cell(self, painter, layout):
+        """Roboterbasis, Kamerastange, Teststation -- nur zur Orientierung."""
+        cell = self.cell or {}
+        base = cell.get("base")
+        if base:
+            c = self._to_px(layout, base["x"], base["y"])
+            r = base["r"] * layout[1]
+            painter.setPen(QPen(QColor("#7f8c8d"), 1.5))
+            painter.setBrush(QColor(127, 140, 141, 60))
+            painter.drawEllipse(c, r, r)
+            painter.setPen(QColor("#555555"))
+            painter.drawText(QRectF(c.x() - 40, c.y() - 7, 80, 14), Qt.AlignmentFlag.AlignCenter,
+                             "Roboter")
+        colors = {"Kamerastange": "#8e44ad", "Teststation": "#b9770e"}
+        for box in cell.get("boxes") or []:
+            (x0, y0), (x1, y1) = box["lo"], box["hi"]
+            poly = self._rect_px(layout, x0, y0, x1 - x0, y1 - y0)
+            color = QColor(colors.get(box["name"], "#7f8c8d"))
+            fill = QColor(color)
+            fill.setAlpha(50)
+            painter.setPen(QPen(color, 1.5))
+            painter.setBrush(fill)
+            painter.drawPolygon(poly)
+            rect = poly.boundingRect()
+            painter.setPen(color)
+            painter.drawText(QPointF(rect.left(), rect.bottom() + 12), box["name"])
 
     def _draw_header(self, painter, snap):
         painter.setPen(QColor(_TEXT))

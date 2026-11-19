@@ -448,6 +448,18 @@ def place_question(line):
     return (int(match["x"]), int(match["y"]), int(match["yaw"])) if match else None
 
 
+_NEXT = re.compile(r"^NAECHSTE_LAGE\s+x\s+(?P<x>-?\d+)\s+y\s+(?P<y>-?\d+)\s+"
+                   r"Kamera\s+(?P<cam>-?\d+)")
+
+
+def next_target(line):
+    """Naechste Lage aus record.py: (x m, y m, Kamera-Blickrichtung Grad), sonst None."""
+    match = _NEXT.match((line or "").strip())
+    if not match:
+        return None
+    return (int(match["x"]) / 1000.0, int(match["y"]) / 1000.0, float(match["cam"]))
+
+
 def first_grasp_question(line):
     """Erster Griff an der Handlage: (x, y, Ziel-x, Ziel-y) in mm, sonst None."""
     match = _FIRST_GRASP.match((line or "").strip())

@@ -104,3 +104,19 @@ def test_coverage_counts_only_chosen_folders(tmp_path):
     argv = recording.record_argv("data_vm/2026-11-20", robot_kind="neura", sequence="seq.json",
                                  coverage_roots=["data_vm/2026-11-19"])
     assert argv[argv.index("--abdeckung") + 1] == "data_vm/2026-11-19"
+
+
+def test_next_target_line_and_camera_arrow():
+    """Anwender 2026-11-19: naechste Lage (lila X) und Kamerapfeile in der Abdeckung."""
+    import math
+
+    from bc.gui import coverage_map
+
+    assert recording.next_target("NAECHSTE_LAGE x 420 y -60 Kamera 30") == (0.42, -0.06, 30.0)
+    assert recording.next_target("Lage 2: x 410 mm") is None
+    # Werkzeug-x in Welt +y (90 Grad): Kamera = 90 + LIVE_CAMERA_YAW_OFFSET_DEG
+    h = math.radians(90.0) / 2
+    pose = [0.4, 0.0, 0.01, math.cos(h), 0.0, 0.0, math.sin(h)]
+    assert abs(coverage_map.camera_yaw(pose)
+               - (90.0 + config.LIVE_CAMERA_YAW_OFFSET_DEG) % 360.0) < 1e-6
+    assert coverage_map.camera_yaw(None) is None

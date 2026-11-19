@@ -977,6 +977,23 @@ def switch_to_teach(robot):
               "= %r -- am Pendant pruefen." % (state,))
 
 
+#: Zeile mit der naechsten Lage (Oberflaeche: lila X in der Tischabdeckung)
+NEXT_PROMPT = "NAECHSTE_LAGE"
+
+
+def announce_next(lage, table=None):
+    """Naechste Lage ankuendigen, bevor der Arm dorthin umlegt (Anwender
+    2026-11-19): ``NAECHSTE_LAGE x <mm> y <mm> Kamera <Grad>``."""
+    try:
+        from bc.live import yaw360
+
+        pose = np.asarray(lage["resolved"].points["PICK"]["pose_quat"], dtype=float)
+        cam = (yaw360(pose, table) + config.LIVE_CAMERA_YAW_OFFSET_DEG) % 360.0
+        print("%s x %.0f y %.0f Kamera %.0f" % (NEXT_PROMPT, 1e3 * pose[0], 1e3 * pose[1], cam))
+    except Exception:
+        pass
+
+
 def align_to_plan(robot, plan, label=""):
     """Nachlauf am Episodenende ausgleichen: steht der Arm etwas neben dem Start
     von ``plan`` (mehr als START_POSE_TOL_RAD, hoechstens
@@ -2104,6 +2121,7 @@ def run(args):
                         placed = following
                         print("Ablegen: Variante %d von Lage %d"
                               % (following["variant"], centre["index"] + 1))
+                    announce_next(placed, resolved.table if resolved is not None else None)
                     if not put_back(episode, back, put_back_recorder,
                                     table=resolved.table if resolved is not None else None,
                                     log_root=args.out, label="ep_%05d" % idx):

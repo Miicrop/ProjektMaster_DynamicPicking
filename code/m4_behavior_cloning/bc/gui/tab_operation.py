@@ -454,12 +454,70 @@ class OperationTab(ModeTab):
         progress_layout.addWidget(self.rollouts)
         layout.addWidget(progress_box)
 
+        layout.addWidget(self._build_camera_live_box())
+
         output_box = QGroupBox("Ausgabe")
         output_layout = QVBoxLayout(output_box)
         self.output = LogView()
         output_layout.addWidget(self.output)
         layout.addWidget(output_box, 1)
         return page
+
+    def _build_camera_live_box(self):
+        """Kamerabilder der laufenden Fahrt (Anwender 2026-11-19).
+
+        Die Kameras gehoeren waehrend der Fahrt apps/infer.py -- die Bilder
+        kommen aus dessen Live-Ordner (bc/live.py), wie im Live-Fenster.
+        Ohne Fahrt: Vorschau im Reiter Aufnahme.
+        """
+        from PySide6.QtCore import QTimer
+
+        from .widgets import ImageView
+
+        box = QGroupBox("Kameras (live während der Fahrt)")
+        box.setCheckable(True)
+        box.setChecked(True)
+        row = QHBoxLayout(box)
+        self.live_scene = ImageView("Szenenkamera — erscheint mit der Fahrt")
+        self.live_wrist = ImageView("Handgelenkkamera — erscheint mit der Fahrt")
+        for view in (self.live_scene, self.live_wrist):
+            view.setMinimumSize(200, 150)
+            view.setMaximumHeight(260)
+            row.addWidget(view, 1)
+        box.setToolTip("Bilder aus der laufenden Fahrt (etwa 5 je Sekunde). Ohne Fahrt: "
+                       "\"Vorschau starten\" im Reiter Aufnahme. Abhaken blendet sie aus.")
+        box.toggled.connect(lambda on: [v.setVisible(on) for v in (self.live_scene,
+                                                                   self.live_wrist)])
+        self._live_mtimes = {}
+        self.live_timer = QTimer(self)
+        self.live_timer.setInterval(200)
+        self.live_timer.timeout.connect(self._tick_live_cameras)
+        self.live_timer.start()
+        return box
+
+    def _tick_live_cameras(self):
+        folder = getattr(self, "_live_folder", None)
+        if folder is None or not self.live_scene.isVisible():
+            return
+        import cv2
+        import numpy as np
+
+        for name, view in (("scene", self.live_scene), ("wrist", self.live_wrist)):
+            path = Path(folder) / ("%s.jpg" % name)
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            if self._live_mtimes.get(name) == mtime:
+                continue
+            self._live_mtimes[name] = mtime
+            try:
+                data = np.frombuffer(path.read_bytes(), dtype=np.uint8)
+            except OSError:
+                continue
+            image = cv2.imdecode(data, cv2.IMREAD_COLOR) if data.size else None
+            if image is not None:
+                view.set_image(image)
 
     # -- Aktualisieren ------------------------------------------------------
 
