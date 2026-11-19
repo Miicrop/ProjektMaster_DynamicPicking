@@ -1859,8 +1859,24 @@ class RecordingTab(ModeTab):
             "Episoden früherer Tage im Datenordner mitzählen -- nur von derselben Art "
             "Roboter (Anlage bzw. VM). Aus = nur der Zielordner dieses Laufs.\n\n"
             "Die Grafik „Tischabdeckung“ zeigt dieselbe Zählung.")
-        self.coverage_all.toggled.connect(self._update_command)
-        form.addRow("", self.coverage_all)
+        self.coverage_all.toggled.connect(self._coverage_choice_changed)
+        #: None = ganzer Datenordner (alle Tage), sonst Liste der Unterordner
+        #: (Anwender 2026-11-19: alte Tage mit anderer Verteilung nicht mitzaehlen)
+        self._coverage_folders = None
+        self.btn_coverage_folders = QPushButton("Ordner …")
+        self.btn_coverage_folders.setToolTip(
+            "Welche Aufnahmeordner beim Verteilen der Lagen mitzählen. Ohne Auswahl: "
+            "alle Tage im Datenordner. Der Zielordner dieses Laufs zählt immer.")
+        self.btn_coverage_folders.clicked.connect(self._choose_coverage_folders)
+        self.coverage_folders_label = QLabel("alle Tage")
+        self.coverage_folders_label.setStyleSheet("color:#666")
+        cov_row = QWidget()
+        cov_layout = QHBoxLayout(cov_row)
+        cov_layout.setContentsMargins(0, 0, 0, 0)
+        cov_layout.addWidget(self.coverage_all)
+        cov_layout.addWidget(self.btn_coverage_folders)
+        cov_layout.addWidget(self.coverage_folders_label, 1)
+        form.addRow("", cov_row)
         self.regrip = QCheckBox("Nachgreifen beim Lagenwechsel")
         self.regrip.setChecked(True)
         self.regrip.setToolTip(
@@ -2166,13 +2182,18 @@ class RecordingTab(ModeTab):
         self._apply_settings(self._run_setting_widgets(), saved)
         self._apply_settings(self._metadata_widgets(), saved)
         self._block_used = bool(saved.get("block_benutzt"))
+        folders = saved.get("abdeckung_ordner")
+        self._coverage_folders = list(folders) if isinstance(folders, list) else None
+        if hasattr(self, "coverage_folders_label"):
+            self._coverage_choice_changed()
         self._next_free_block = saved.get("naechster_block") or None
 
     def _save_settings(self):
         values = {key: _widget_value(widget) for key, widget in self._run_setting_widgets().items()}
         values.update({key: _widget_value(widget)
                        for key, widget in self._metadata_widgets().items()})
-        values.update(block_benutzt=self._block_used, naechster_block=self._next_free_block)
+        values.update(block_benutzt=self._block_used, naechster_block=self._next_free_block,
+                      abdeckung_ordner=self._coverage_folders)
         if not recording_module.save_run_settings(self.workdir, values):
             log.warning("Einstellungen der Aufnahme nicht gespeichert")
 
@@ -2687,15 +2708,85 @@ class RecordingTab(ModeTab):
         root = Path(self.workdir) / recording_module.DATA_ROOTS.get(self._robot_kind(), "data_vm")
         return root if root.is_dir() else None
 
-    def _coverage_extra_roots(self):
-        """``--abdeckung`` fuer record.py: der Datenordner, wenn angehakt."""
+    def _coverage_extra_roots(self, relative=True):
+        """``--abdeckung`` fuer record.py: Datenordner bzw. die gewaehlten Ordner,
+        wenn angehakt."""
         if not getattr(self, "coverage_all", None) or not self.coverage_all.isChecked():
             return []
-        root = self._data_root()
-        out = self._out_path()
-        if root is None or (out is not None and out.resolve() == root.resolve()):
-            return []
-        return [recording_module.relative(root, self.workdir)]
+        paths = recording_module.coverage_roots(self._data_root(), self._coverage_folders,
+                                                self._out_path())
+        if not relative:
+            return paths
+        return [recording_module.relative(p, self.workdir) for p in paths]
+
+    def _coverage_folders_text(self):
+        if not self.coverage_all.isChecked():
+            return "nur Zielordner"
+        if self._coverage_folders is None:
+            return "alle Tage"
+        names = list(self._coverage_folders)
+        if not names:
+            return "keine weiteren Ordner"
+        return ", ".join(names) if len(names) <= 3 else "%d Ordner" % len(names)
+
+    def _coverage_choice_changed(self, *_):
+        self.btn_coverage_folders.setEnabled(self.coverage_all.isChecked())
+        self.coverage_folders_label.setText(self._coverage_folders_text())
+        self._update_command()
+        self._schedule_coverage()
+
+    def _choose_coverage_folders(self):
+        """Dialog: Aufnahmeordner im Datenordner an- und abhaken."""
+        from PySide6.QtCore import Qt as _Qt
+        from PySide6.QtWidgets import QDialogButtonBox, QListWidget, QListWidgetItem
+
+        folders = recording_module.coverage_folders(self._data_root())
+        if not folders:
+            QMessageBox.information(self, "Keine Ordner",
+                                    "Im Datenordner liegen keine Aufnahmeordner.")
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Abdeckung: welche Ordner zählen mit?")
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(
+            "Angehakte Ordner zählen beim Verteilen der Lagen (seltenstes Feld, seltenste "
+            "Drehung) mit. Der Zielordner dieses Laufs zählt immer.\nTipp: Nur die Ordner "
+            "des neuen Datensatzes anhaken -- alte Tage hatten eine andere Verteilung."))
+        lst = QListWidget()
+        chosen = None if self._coverage_folders is None else set(self._coverage_folders)
+        for name, count in folders:
+            item = QListWidgetItem("%s  (%d Episoden)" % (name, count))
+            item.setData(_Qt.ItemDataRole.UserRole, name)
+            item.setFlags(item.flags() | _Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(_Qt.CheckState.Checked if chosen is None or name in chosen
+                               else _Qt.CheckState.Unchecked)
+            lst.addItem(item)
+        layout.addWidget(lst)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
+                                   | QDialogButtonBox.StandardButton.Cancel)
+        all_button = buttons.addButton("Alle Tage (auch künftige)",
+                                       QDialogButtonBox.ButtonRole.ResetRole)
+        result = {"all": False}
+
+        def take_all():
+            result["all"] = True
+            dialog.accept()
+
+        all_button.clicked.connect(take_all)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.resize(520, 420)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        if result["all"]:
+            self._coverage_folders = None
+        else:
+            self._coverage_folders = [
+                lst.item(k).data(_Qt.ItemDataRole.UserRole) for k in range(lst.count())
+                if lst.item(k).checkState() == _Qt.CheckState.Checked]
+        self._coverage_choice_changed()
+        self._save_settings()
 
     def _coverage_in_simulation(self):
         """Wie record.py filtert: Anlage nur mit Anlage, VM/Sim nur mit VM/Sim."""
@@ -2738,8 +2829,7 @@ class RecordingTab(ModeTab):
             return
         out = self._out_path()
         roots = [out] if out is not None else []
-        if self.coverage_all.isChecked() and self._data_root() is not None:
-            roots.append(self._data_root())
+        roots += self._coverage_extra_roots(relative=False)
         t0 = time.perf_counter()
         spots, latest = coverage_module.load_episodes(roots, self._coverage_in_simulation())
         region = getattr(self, "_coverage_region", None)
@@ -2757,7 +2847,8 @@ class RecordingTab(ModeTab):
             self.coverage_info.setText(
                 "Bereich aus %s · %d Lage(n) aus %s in %.1f s gelesen"
                 % (region.source, len(spots),
-                   "Zielordner und allen Tagen" if len(roots) > 1 else "dem Zielordner",
+                   "Zielordner + %s" % self._coverage_folders_text() if len(roots) > 1
+                   else "dem Zielordner",
                    time.perf_counter() - t0))
 
     def _reload_coverage(self):

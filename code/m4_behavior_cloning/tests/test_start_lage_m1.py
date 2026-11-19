@@ -82,3 +82,25 @@ def test_put_back_aligns_small_lag_and_refuses_large(monkeypatch):
     with pytest.raises(RobotError):
         record.align_to_plan(far, plan)
     assert far.moves == []
+
+
+def test_coverage_counts_only_chosen_folders(tmp_path):
+    """Anwender 2026-11-19: Abdeckung ueber gewaehlte Aufnahmeordner statt alle Tage."""
+    root = tmp_path / "data_vm"
+    for name, eps in (("2026-11-09", 2), ("2026-11-19", 3), ("2026-11-20", 1)):
+        (root / name).mkdir(parents=True)
+        (root / name / "index.json").write_text("{}", encoding="utf-8")
+        for k in range(eps):
+            (root / name / ("ep_%05d" % k)).mkdir()
+    (root / "kein_aufnahmeordner").mkdir()
+    assert recording.coverage_folders(root) == [("2026-11-09", 2), ("2026-11-19", 3),
+                                                ("2026-11-20", 1)]
+    # ohne Auswahl: der ganze Datenordner (wie bisher)
+    assert recording.coverage_roots(root, None) == [root]
+    # Auswahl: nur diese Ordner, der Zielordner faellt weg (zaehlt ohnehin)
+    roots = recording.coverage_roots(root, ["2026-11-19", "2026-11-20"],
+                                     out=root / "2026-11-20")
+    assert roots == [root / "2026-11-19"]
+    argv = recording.record_argv("data_vm/2026-11-20", robot_kind="neura", sequence="seq.json",
+                                 coverage_roots=["data_vm/2026-11-19"])
+    assert argv[argv.index("--abdeckung") + 1] == "data_vm/2026-11-19"

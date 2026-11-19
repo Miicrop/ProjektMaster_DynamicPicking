@@ -465,6 +465,39 @@ def run_end_reason(line):
     return match["text"] if match else None
 
 
+def coverage_folders(data_root):
+    """Aufnahmeordner im Datenordner fuer die Abdeckung (Anwender 2026-11-19):
+    Liste ``(Name, Episoden)`` der Unterordner mit index.json, sortiert."""
+    root = Path(data_root) if data_root else None
+    if root is None or not root.is_dir():
+        return []
+    out = []
+    for sub in sorted(p for p in root.iterdir() if p.is_dir()):
+        if (sub / "index.json").is_file():
+            out.append((sub.name, sum(1 for e in sub.glob("ep_*") if e.is_dir())))
+    return out
+
+
+def coverage_roots(data_root, selected=None, out=None):
+    """Ordner, die die Abdeckung zusaetzlich zum Zielordner zaehlt.
+
+    ``selected`` None: der ganze Datenordner (alle Tage, wie bisher); sonst die
+    genannten Unterordner. Der Zielordner selbst zaehlt ohnehin und faellt hier
+    weg. Rueckgabe: Pfade."""
+    if data_root is None:
+        return []
+    root = Path(data_root)
+    out_resolved = Path(out).resolve() if out is not None else None
+    if selected is None:
+        return [] if out_resolved == root.resolve() else [root]
+    paths = []
+    for name in selected:
+        path = root / name
+        if path.is_dir() and path.resolve() != out_resolved:
+            paths.append(path)
+    return paths
+
+
 #: Einstellungen der letzten Aufnahme (lokal, nicht im Repository)
 RUN_SETTINGS_FILE = "einstellungen/aufnahme.local.json"
 
