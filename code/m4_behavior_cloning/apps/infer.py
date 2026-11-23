@@ -75,7 +75,7 @@ from bc.recorder import _to_schema_size
 from bc.safety import (ArmStalled, CameraStale, FrameAgeGuard, StallGuard, TargetRejected,
                        Watchdog, check_target, geofence_check)
 from bc import execution as execution_module
-from bc.servo import ServoGuard, ServoInterpolator, TargetLimiter, substeps_for
+from bc.servo import CommandLowpass, ServoGuard, ServoInterpolator, TargetLimiter, substeps_for
 from bc.sync import Pacer
 
 #: Wortlaut fuer --real-robot (wie apps/record.py).
@@ -117,8 +117,13 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 end_joints=None, end_gripper=None, min_steps=0, threaded_watchdog=True,
                 progress=print, servo_rate_hz=config.SERVO_RATE_HZ, execution=None,
                 frame_guard=None, stop_at_grasp=False, on_tick=None, mitschrieb=None,
-                target_lookahead=0.0, live=None):
+                target_lookahead=0.0, live=None, glaettung=1.0):
     """Eine Policy-Fahrt. Rueckgabe: Log-dict (Arrays je Takt + Zusammenfassung).
+
+    ``glaettung``: alpha des Tiefpasses auf die Ziele (bc/servo.CommandLowpass,
+    1 = aus). Wirkt hinter dem TargetLimiter und vor der Kollisionspruefung;
+    das gesendete Ziel steht je Takt in ``ziel`` (Log), die rohe Action in
+    ``action``.
 
     ``mitschrieb``: bc/dagger.Mitschrieb -- bekommt je Takt Beobachtung (mit
     Bildern), gesendetes Ziel und Greifer (DAgger, ``--dagger``).
@@ -156,7 +161,7 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
     if threaded_watchdog:
         watchdog.start()
 
-    log = {k: [] for k in ("t", "joints", "tcp", "action", "gripper_cmd", "predict_s",
+    log = {k: [] for k in ("t", "joints", "tcp", "action", "ziel", "gripper_cmd", "predict_s",
                            "delay_steps", "ensemble_spread", "ensemble_count", "halt_s")}
     # Takt 0 VOR dem Aktivieren des Servo-Interface: die erste Vorhersage
     # (bei asynchroner Vorhersage wird auf sie gewartet) haelt so keinen
@@ -182,6 +187,7 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
         profile=execution_module.servo_profile(execution) or "linear",
     ).reset(state.joints)
     limiter = TargetLimiter().reset(state.joints)
+    lowpass = CommandLowpass(glaettung).reset(state.joints)
     # Arm steht, Ziel nicht (Not-Aus am Handbediengeraet, 16.11.) -> Ende
     stall = StallGuard()
     robot.activate_servo("position")
@@ -228,14 +234,15 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 if vorlauf < 0:
                     ziel = last_target
                 else:
-                    ziel = limiter.limit((executor.lookahead(vorlauf) if vorlauf else action)[:6])
+                    ziel = lowpass.apply(limiter.limit(
+                        (executor.lookahead(vorlauf) if vorlauf else action)[:6]))
                     check_target(workspace, robot, ziel, last_target, target_lookahead)
                 if not robot.stop_requested:
                     pacer.tick()
                     robot.online_j(ziel, execution["vel"], execution["acc"])
                     last_target = ziel
             else:
-                ziel = limiter.limit(action[:6])
+                ziel = lowpass.apply(limiter.limit(action[:6]))
                 check_target(workspace, robot, ziel, prev_ziel, target_lookahead)
                 prev_ziel = ziel
                 for q, v, a in interp.window(ziel):
@@ -253,6 +260,7 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 # steht, dann Greiferbefehl und voller Dwell (wie der Recorder;
                 # der erste Greiferbefehl ist der Startzustand, kein Halt).
                 last_target = limiter.limit(action[:6])
+                lowpass.reset(last_target)   # gehaltenes Ziel ungeglaettet, kein Nachziehen
                 ergebnis = execution_module.wait_until_reached(
                     robot, last_target, execution, clock, config.CONTROL_RATE_HZ)
                 ergebnis["step"] = step
@@ -276,6 +284,7 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
             log["joints"].append(state.joints)
             log["tcp"].append(np.asarray(state.tcp_quat, dtype=float))
             log["action"].append(action)
+            log["ziel"].append(np.full(6, np.nan) if ziel is None else np.asarray(ziel, dtype=float))
             log["gripper_cmd"].append(float(gripper))
             predict_s = getattr(executor, "last_predict_s", None) if predicted else None
             log["predict_s"].append(np.nan if predict_s is None else predict_s)
@@ -483,6 +492,10 @@ def merge_transport(log, transport, robot):
     for key, fill in (("predict_s", np.nan), ("delay_steps", np.nan), ("ensemble_spread", 0.0),
                       ("ensemble_count", 0.0), ("halt_s", 0.0)):
         log[key] = np.concatenate([log[key], np.full(n, fill)])
+    if "ziel" in log and n:
+        # geplante Fahrt: gesendet wird die Planerbahn, kein Policy-Ziel
+        ziel = np.asarray(log["ziel"], dtype=float).reshape(-1, 6)
+        log["ziel"] = np.concatenate([ziel, np.asarray(transport["action"], dtype=float)[:, :6]])
     final = robot.read_state()
     log["final_tcp"] = np.asarray(final.tcp_quat, dtype=float)
     log["final_joints"] = np.asarray(final.joints, dtype=float)
@@ -1162,6 +1175,10 @@ def parse_args():
     parser.add_argument("--no-ensemble", action="store_true",
                         help="Chunks nicht mitteln, sondern je --replan Takte abarbeiten (Vergleich)")
     parser.add_argument("--inference-steps", type=int, default=None, help="DDIM-Schritte")
+    parser.add_argument("--glaettung", type=float, default=1.0,
+                        help="Tiefpass auf die Ziele: alpha in (0, 1], je Takt "
+                             "z = alpha*Ziel + (1-alpha)*z_vorher. 1 = aus (Default), "
+                             "0,5 ~1 Takt Verzug, 0,3 ~2,3 Takte (bc/servo.CommandLowpass)")
     parser.add_argument("--sync-predict", action="store_true",
                         help="Vorhersage im Takt statt im eigenen Thread (Default nur bei SimClock)")
     parser.add_argument("--device", default="auto")
@@ -1236,6 +1253,10 @@ def parse_args():
         parser.error("--dagger braucht den Experten (ohne --ohne-experte)")
     if not args.experte and not (args.lage_bekannt and args.probegriff == "objekt"):
         parser.error("--ohne-experte gilt nur mit --lage-bekannt --probegriff objekt")
+    if not 0.0 < args.glaettung <= 1.0:
+        parser.error("--glaettung muss in (0, 1] liegen (1 = aus)")
+    if args.inference_steps is not None and not 1 <= args.inference_steps <= 100:
+        parser.error("--inference-steps: 1 bis 100 (trainiert mit 100 Rausch-Stufen)")
     if args.dagger and not (args.lage_bekannt and args.probegriff == "objekt"):
         parser.error("--dagger braucht --lage-bekannt --probegriff objekt (der Experte "
                      "uebernimmt nach dem Probegriff)")
@@ -1495,6 +1516,9 @@ def main():
         warm = policy.warmup(build_observation(robot, captures)[0])
         print("  Vorhersage nach Aufwaermen: %.1f ms (%d DDIM-Schritte)"
               % (1e3 * warm, policy.policy.diffusion.num_inference_steps))
+    if args.glaettung < 1.0:
+        print("Glaettung: Tiefpass alpha %.2f auf die Ziele (~%.1f Takte Verzug)"
+              % (args.glaettung, CommandLowpass(args.glaettung).lag_steps))
     print("Fahrt: bis %d Takte, Tischhoehe %.3f m, %s, Vorhersage %s, Protokoll %s"
           % (max_steps, table_z,
              "ohne Mitteln, neu alle %d Takte" % replan if args.no_ensemble
@@ -1656,7 +1680,7 @@ def main():
                               stop_at_grasp=args.transport_geplant or known is not None,
                               on_tick=None if known is None else _deviation_text(known),
                               mitschrieb=mitschrieb if ideal_q is not None else None,
-                              live=live,
+                              live=live, glaettung=args.glaettung,
                               target_lookahead=(config.PROBE_TARGET_LOOKAHEAD_STEPS
                                                 if known is not None and args.probegriff == "objekt"
                                                 else 0.0))

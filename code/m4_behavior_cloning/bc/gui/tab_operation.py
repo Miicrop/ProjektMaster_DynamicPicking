@@ -7,10 +7,13 @@ Aufbau des Reiters:
     2. Kameras   Welches Geraet auf welchem Platz. Muss zur Aufzeichnung
                  passen -- die Pruefung darunter sagt das VORHER.
     3. Fahrt     Fahrten, Takte, Neuvorhersage, Geraet, Echtzeit.
+    3. Fahrt     ... dazu DDIM-Schritte und Glaettung (Tiefpass) der Ziele.
     4. Test      Policy-Test mit bekannter Lage (PICK aus der Steuerung, je
                  Takt die Abweichung; Probegriff 3 mm ueber Tisch oder ueber
                  dem Objekt) mit Draufsicht auf den aktuellen PICK, und die
                  Kamerapruefung gegen die Aufnahme des Modells.
+    5. Offline   DDIM-Schritte und Glaettung auf aufgezeichneten Demos messen
+                 (apps/ddim_offline.py): Vorhersagezeit, Ruck, Protokoll.
 
 Die Ampel oben im Fenster gilt auch hier: Rot heisst reale Anlage. Der
 Stoppknopf beendet den Unterprozess -- ein SOFTWARE-Stopp, der keinen
@@ -91,6 +94,7 @@ class OperationTab(ModeTab):
         column.addWidget(self._build_camera_box())
         column.addWidget(self._build_run_box())
         column.addWidget(self._build_test_box())
+        column.addWidget(self._build_offline_box())
         column.addStretch(1)
 
         area = QScrollArea()
@@ -170,6 +174,31 @@ class OperationTab(ModeTab):
             "Takt (67 ms).")
         self.replan.valueChanged.connect(self._update_command)
         form.addRow("Neu vorhersagen", self.replan)
+
+        self.ddim_steps = block_wheel(QSpinBox())
+        self.ddim_steps.setRange(0, 100)
+        self.ddim_steps.setSpecialValueText("aus dem Modell")
+        self.ddim_steps.setToolTip(
+            "Entrauschungsschritte je Vorhersage (--inference-steps). Trainiert "
+            "mit 100 Rausch-Stufen, gefahren bisher mit 10. Mehr = ruhigere "
+            "Chunks, aber längere Vorhersage (Grenze an der Anlage ~130 ms = "
+            "2 Takte). Kein neues Training nötig. Vorher mit dem Offline-Test "
+            "(5.) messen.")
+        self.ddim_steps.valueChanged.connect(self._update_command)
+        form.addRow("DDIM-Schritte", self.ddim_steps)
+
+        self.glaettung = block_wheel(QDoubleSpinBox())
+        self.glaettung.setRange(0.05, 1.0)
+        self.glaettung.setSingleStep(0.05)
+        self.glaettung.setDecimals(2)
+        self.glaettung.setValue(1.0)
+        self.glaettung.setToolTip(
+            "Tiefpass auf die Ziele der Policy (--glaettung): je Takt "
+            "Ziel = alpha·neu + (1−alpha)·vorher. 1,00 = aus. 0,5 ≈ 1 Takt "
+            "Verzug, 0,3 ≈ 2,3 Takte. Gegen das Zittern der Chunks "
+            "(Anlage 23.11.), kostet Reaktionszeit.")
+        self.glaettung.valueChanged.connect(self._update_command)
+        form.addRow("Glättung (alpha)", self.glaettung)
 
         self.device = block_wheel(QComboBox())
         self.device.currentIndexChanged.connect(self._update_command)
@@ -593,6 +622,92 @@ class OperationTab(ModeTab):
 
     # -- Pruefung und Kommandozeile ----------------------------------------
 
+    def _build_offline_box(self):
+        box = QGroupBox("5. Offline-Test: DDIM-Schritte und Glättung")
+        layout = QVBoxLayout(box)
+        layout.addWidget(_hint(
+            "Spielt aufgezeichnete Demos durch das gewählte Modell (ohne Roboter) "
+            "und misst je DDIM-Schrittzahl Vorhersagezeit, Ruck in den Chunks und "
+            "Sprung zwischen Chunks; dazu den Ruck des Befehls je Glättung. "
+            "Protokoll unter <Modell>/offline_ddim/<Zeit>/protokoll.txt. "
+            "Die Vorhersagezeit gilt für diesen Rechner."))
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        row = QHBoxLayout()
+        self.offline_data = QLineEdit()
+        self.offline_data.setPlaceholderText("Aufnahme-Ordner mit index.json, z. B. data_vm/2026-11-19-2")
+        row.addWidget(self.offline_data, 1)
+        btn_browse = QPushButton("…")
+        btn_browse.setFixedWidth(32)
+        btn_browse.clicked.connect(self._browse_offline_data)
+        row.addWidget(btn_browse)
+        form.addRow("Aufnahme", row)
+        self.offline_episodes = QLineEdit("0-4")
+        self.offline_episodes.setToolTip("'3', '0,4,7', '2-5' oder 'alle'")
+        form.addRow("Episoden", self.offline_episodes)
+        self.offline_steps = QLineEdit("10,20,50")
+        self.offline_steps.setToolTip("DDIM-Schritte, kommagetrennt (1–100)")
+        form.addRow("DDIM-Schritte", self.offline_steps)
+        self.offline_alpha = QLineEdit("1,0.5,0.3")
+        self.offline_alpha.setToolTip("Glättung alpha, kommagetrennt, 1 = aus")
+        form.addRow("Glättung", self.offline_alpha)
+        layout.addLayout(form)
+        self.btn_offline = QPushButton("Offline-Test starten")
+        self.btn_offline.clicked.connect(self.start_offline_test)
+        layout.addWidget(self.btn_offline)
+        return box
+
+    def _browse_offline_data(self):
+        from PySide6.QtWidgets import QFileDialog
+
+        start = self.offline_data.text().strip() or str(self.workdir / "data_vm")
+        folder = QFileDialog.getExistingDirectory(self, "Aufnahme wählen", start)
+        if folder:
+            try:
+                folder = str(Path(folder).resolve().relative_to(self.workdir.resolve()))
+            except ValueError:
+                pass
+            self.offline_data.setText(folder)
+
+    def offline_argv(self):
+        return operation_module.offline_ddim_argv(
+            self.checkpoint.currentData(), self.offline_data.text().strip(),
+            schritte=self.offline_steps.text().strip() or "10,20,50",
+            glaettung=self.offline_alpha.text().strip() or "1",
+            episodes=self.offline_episodes.text().strip() or "0-4",
+            device=self.device.currentData())
+
+    def start_offline_test(self):
+        """apps/ddim_offline.py starten -- kein Roboter, nur Modell und Aufnahme."""
+        if self.process.running:
+            QMessageBox.information(self, "Läuft bereits", "Es läuft schon ein Prozess.")
+            return
+        try:
+            argv = self.offline_argv()
+        except ValueError as exc:
+            QMessageBox.information(self, "Offline-Test", str(exc))
+            return
+        if not (self.workdir / argv[4] / "index.json").is_file()                 and not (Path(argv[4]) / "index.json").is_file():
+            QMessageBox.information(self, "Offline-Test",
+                                    "In %s liegt keine index.json — keine Aufnahme." % argv[4])
+            return
+        if not self.ensure_requirements(
+                "Der Offline-Test", ["torch", "lerobot", "cuda"],
+                "Ohne GPU läuft er auch, aber langsam (grob 1–3 s je Vorhersage), "
+                "und die gemessene Vorhersagezeit sagt nichts über die Anlage."):
+            return
+        self._progress = None
+        self.rollouts.clear()
+        self.output.clear()
+        self.headline.setText("Offline-Test läuft …")
+        self.headline.setStyleSheet("font-weight:bold")
+        try:
+            self.process.start(argv)
+        except Exception as exc:
+            QMessageBox.warning(self, "Start gescheitert", str(exc))
+            return
+        self._set_running(True)
+
     def _robot_kind(self):
         return ("sim" if self.session.backend == session_module.BACKEND_SIM
                 else "neura")
@@ -617,6 +732,8 @@ class OperationTab(ModeTab):
             realtime=self.realtime.isChecked(),
             hold=self.hold.isChecked(),
             no_ensemble=self.no_ensemble.isChecked(),
+            inference_steps=self.ddim_steps.value() or None,
+            glaettung=self.glaettung.value(),
             out=self.out.text().strip() or None,
             real_robot=status.is_real_plant,
             known_pose=self.known.isChecked() and not only_check,
@@ -881,7 +998,7 @@ class OperationTab(ModeTab):
     def _set_running(self, running):
         for widget in (self.btn_start, self.btn_rescan, self.checkpoint,
                        self.hold, self.episodes, self.cameras, self.btn_camera_check,
-                       self.btn_read_pick, self.known):
+                       self.btn_read_pick, self.known, self.btn_offline):
             widget.setEnabled(not running)
         self.btn_stop.setEnabled(running)
 

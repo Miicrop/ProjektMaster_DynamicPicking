@@ -260,7 +260,8 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
                realtime=False, hold=False, no_ensemble=False, out=None,
                real_robot=False, seed=None, known_pose=False, probe="tisch",
                sequence=None, camera_check="an", pick_source="steuerung",
-               photo_point=None, dagger_dir=None, probe_gap_mm=None, expert=True):
+               photo_point=None, dagger_dir=None, probe_gap_mm=None, expert=True,
+               inference_steps=None, glaettung=None):
     """Kommandozeile fuer apps/infer.py (ohne das Python-Programm).
 
     ``known_pose``: Policy-Test mit bekannter Lage (``--lage-bekannt``,
@@ -268,6 +269,10 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
     der Aufnahme). ``camera_check``: ``--kamerapruefung`` (an/warnen/aus/nur).
     ``pick_source`` "steuerung"/"m1" (``--pick-quelle``, mit ``photo_point``
     = ``--foto-punkt``), ``dagger_dir``: ``--dagger`` (nur Probegriff objekt).
+
+    ``inference_steps``: DDIM-Schritte (``--inference-steps``, None = aus dem
+    Modell). ``glaettung``: Tiefpass alpha auf die Ziele (``--glaettung``,
+    None oder 1 = aus; bc/servo.CommandLowpass).
 
     ``hold`` faehrt ohne Modell (HoldPolicy) -- der Verdrahtungstest, mit dem
     man Takt, Servo-Kette und Kameras prueft, bevor eine Policy dranhaengt.
@@ -291,6 +296,10 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
         argv += ["--replan", str(int(replan))]
     if no_ensemble:
         argv.append("--no-ensemble")
+    if inference_steps and not hold:
+        argv += ["--inference-steps", str(int(inference_steps))]
+    if glaettung is not None and float(glaettung) < 1.0:
+        argv += ["--glaettung", "%g" % float(glaettung)]
     if device and device != "auto":
         argv += ["--device", str(device)]
     if realtime:
@@ -317,6 +326,24 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
         argv += ["--out", str(out)]
     if real_robot:
         argv.append("--real-robot")
+    return argv
+
+
+def offline_ddim_argv(checkpoint, data, schritte="10,20,50", glaettung="1,0.5,0.3",
+                      episodes="0-4", device="auto", out=None):
+    """Kommandozeile fuer apps/ddim_offline.py (Offline-Test DDIM/Glaettung)."""
+    if not checkpoint:
+        raise ValueError("Kein Modell ausgewaehlt.")
+    if not data:
+        raise ValueError("Keine Aufnahme fuer den Offline-Test gewaehlt.")
+    argv = ["apps/ddim_offline.py", "--checkpoint", str(checkpoint), "--data", str(data),
+            "--schritte", str(schritte).replace(" ", ""),
+            "--glaettung", str(glaettung).replace(" ", ""),
+            "--episodes", str(episodes).replace(" ", "") or "0-4"]
+    if device and device != "auto":
+        argv += ["--device", str(device)]
+    if out:
+        argv += ["--out", str(out)]
     return argv
 
 
