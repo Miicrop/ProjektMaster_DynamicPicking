@@ -16,7 +16,9 @@ BLUE, ORANGE, VIOLET = '#2a78d6', '#eb6834', '#6250d6'
 INK, INK2, MUTED, GRID, SURF = '#0b0b0b', '#52514e', '#8a8984', '#e4e3df', '#fcfcfb'
 CH = KinematicChain.from_urdf('bc/data/lara5_candidate.urdf'); TOOL = np.array([0, 0, 0.1975])
 MODELS = {'G2': 'G2_licht_langsam_nur_griff', 'G3': 'G3_kappen030', 'G4': 'G4_ausblenden030'}
-RUNS = sys.argv[1:] or ['G4:11-46-08', 'G2:11-50-46', 'G4:11-58-48']
+ARGS = [a for a in sys.argv[1:] if not a.startswith('--out=')]
+OUTNAME = next((a[6:] for a in sys.argv[1:] if a.startswith('--out=')), 'seitenansicht_einzelfahrten.png')
+RUNS = ARGS or ['G4:11-46-08', 'G2:11-50-46', 'G4:11-58-48']
 
 
 def fk(q):
@@ -49,7 +51,10 @@ for row, spec in enumerate(RUNS):
     d = f'checkpoints/{MODELS[mod]}/policy/rollouts/2026-11-23_{stamp}'
     e = json.load(open(d + '/summary.json'))['episodes'][0]; r = np.load(d + '/rollout_000.npz')
     pk = np.array(e['lage']['pick'][:3]); t = r['t'] - r['t'][0]
-    ist = r['tcp'][:, :3]; soll = np.array([fk(q) for q in r['action'][:, :6]])
+    ist = r['tcp'][:, :3]
+    # ab 23.11. nachmittags: gesendetes Ziel (nach Tiefpass) im Log, sonst die Action
+    q_soll = r['ziel'] if 'ziel' in r.files and np.isfinite(r['ziel']).all() else r['action'][:, :6]
+    soll = np.array([fk(q) for q in q_soll])
     # Greifpunkt je Chunk = tiefster vorhergesagter Schritt
     gp = np.array([min((fk(q[:6]) for q in c), key=lambda v: v[2]) for c in r['pred_chunk']])
     h_i = (ist[:, 2] - pk[2]) * 1e3; h_s = (soll[:, 2] - pk[2]) * 1e3
@@ -73,7 +78,7 @@ for row, spec in enumerate(RUNS):
     ax.plot(p50, mid, color=BLUE, ls=(0, (1, 2)), lw=1.2, label='Demo-Median'); ax.plot(-p50, mid, color=BLUE, ls=(0, (1, 2)), lw=1.2)
     ax.add_patch(plt.Rectangle((-2.5, -6.6), 5, 14.9, color='#cfcdc6', zorder=1))
     ax.axvline(0, color=INK2, lw=0.8)
-    ax.plot(al_s, h_s, color=VIOLET, lw=1.5, ls=(0, (3, 2)), zorder=4, label='Soll (Policy-Aktion, FK)')
+    ax.plot(al_s, h_s, color=VIOLET, lw=1.5, ls=(0, (3, 2)), zorder=4, label='Soll (gesendetes Ziel, FK)')
     ax.plot(al_i, h_i, color=ORANGE, lw=2, zorder=5, label='Ist (gemessener TCP)')
     ax.plot(al_g, h_g, 'o', ms=4.5, mfc='none', mec=VIOLET, mew=1, zorder=4, label='Greifpunkt je Chunk (tiefster Schritt)')
     # Zeitmarken alle 0,5 s am Ist
@@ -84,7 +89,8 @@ for row, spec in enumerate(RUNS):
     ax.plot(al_i[-1], h_i[-1], 'o', ms=7, color=ORANGE, mec=SURF, mew=1.5, zorder=7, label='Stopp')
     ax.set_xlim(-30, 30); ax.set_ylim(-7, 155)
     ax.set_ylabel('Höhe über PICK [mm]')
-    ax.set_title(f"{mod} {stamp[:5].replace('-', ':')} – Lage x {pk[0]*1e3:.0f} / y {pk[1]*1e3:.0f} mm, "
+    alpha = (e.get('_alpha') if False else json.load(open(d + '/summary.json'))['args'].get('glaettung', 1.0)) if os.path.exists(d + '/summary.json') else None
+    ax.set_title(f"{mod} {stamp[:5].replace('-', ':')}" + (f" – Glättung α {alpha:.2f}" if alpha is not None else "") + f" – Lage x {pk[0]*1e3:.0f} / y {pk[1]*1e3:.0f} mm, "
                  f"Stopp {np.linalg.norm(off_i[-1]):.1f} mm daneben", loc='left', color=INK, fontsize=10.5)
     # Tempo Ist und Soll
     dt = np.diff(t)
@@ -105,5 +111,5 @@ for row, spec in enumerate(RUNS):
     print(f"{spec}: Takte {len(t)}, Dauer {t[-1]:.1f} s, Soll-Ist median {np.median(lag):.1f} max {lag.max():.1f} mm, "
           f"Greifpunkt-xy letzter {np.linalg.norm(off_g[-1]):.1f} mm")
 fig.tight_layout()
-out = 'Berichte/abbildungen_2026-11-23/seitenansicht_einzelfahrten.png'
+out = 'Berichte/abbildungen_2026-11-23/' + OUTNAME
 fig.savefig(out, dpi=140, facecolor=SURF); print(out)

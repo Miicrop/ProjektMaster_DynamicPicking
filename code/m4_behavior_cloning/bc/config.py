@@ -1110,6 +1110,15 @@ POLICY_REPLAN_STEPS = 2
 #: (reaktiver), k < 0 aeltere (ruhiger, ACT-Stil).
 POLICY_ENSEMBLE_DECAY = 0.0
 
+#: Tiefpass auf die Policy-Ziele (bc/servo.CommandLowpass, apps/infer.py
+#: ``--glaettung``): z = alpha*Ziel + (1-alpha)*z_vorher, 1 = aus.
+#: Anlage 2026-11-23 (Anwender: Standard): mit 0,5 folgte der Arm der Policy
+#: unter 60 mm auf 0,2 statt 4 mm, kein Pendeln mehr (10/10 Fahrten ruhig,
+#: ohne Glaettung 2/5 stark ausgeschwungen); Verzug ~1 Takt. 0,25 noch ruhiger,
+#: aber ~3 Takte Verzug und im Transit ~1/3 langsamer -- nur 2 Fahrten, ohne
+#: echten Griff geprueft (Berichte/Testprotokoll.md, Abschnitt 5).
+POLICY_COMMAND_LOWPASS_ALPHA = 0.5
+
 #: U-Net-Kanaele. (256, 512, 1024) ist die Groesse der Diffusion-Policy-
 #: Referenz fuer Realroboter (~65 M Parameter) statt lerobots Default
 #: (512, 1024, 2048, ~260 M) -- passt auf 16 GB und bleibt auf den

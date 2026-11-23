@@ -68,8 +68,10 @@ def test_offline_metrics_on_straight_descent():
 
 
 def test_argv_ddim_and_glaettung():
-    plain = operation.infer_argv("checkpoints/x", "neura", 1, glaettung=1.0)
+    plain = operation.infer_argv("checkpoints/x", "neura", 1)
     assert "--inference-steps" not in plain and "--glaettung" not in plain
+    off = operation.infer_argv("checkpoints/x", "neura", 1, glaettung=1.0)
+    assert off[off.index("--glaettung") + 1] == "1"          # aus muss explizit mit
     argv = operation.infer_argv("checkpoints/x", "neura", 1, inference_steps=20, glaettung=0.3)
     assert argv[argv.index("--inference-steps") + 1] == "20"
     assert argv[argv.index("--glaettung") + 1] == "0.3"

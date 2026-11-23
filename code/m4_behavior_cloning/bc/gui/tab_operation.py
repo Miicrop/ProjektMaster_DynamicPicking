@@ -191,12 +191,12 @@ class OperationTab(ModeTab):
         self.glaettung.setRange(0.05, 1.0)
         self.glaettung.setSingleStep(0.05)
         self.glaettung.setDecimals(2)
-        self.glaettung.setValue(1.0)
+        self.glaettung.setValue(config.POLICY_COMMAND_LOWPASS_ALPHA)
         self.glaettung.setToolTip(
             "Tiefpass auf die Ziele der Policy (--glaettung): je Takt "
-            "Ziel = alpha·neu + (1−alpha)·vorher. 1,00 = aus. 0,5 ≈ 1 Takt "
-            "Verzug, 0,3 ≈ 2,3 Takte. Gegen das Zittern der Chunks "
-            "(Anlage 23.11.), kostet Reaktionszeit.")
+            "Ziel = alpha·neu + (1−alpha)·vorher. 1,00 = aus. Standard 0,50 "
+            "(Anlage 23.11.: kein Pendeln mehr, ≈ 1 Takt Verzug); 0,25 ≈ 3 Takte "
+            "Verzug, im Transit langsamer.")
         self.glaettung.valueChanged.connect(self._update_command)
         form.addRow("Glättung (alpha)", self.glaettung)
 

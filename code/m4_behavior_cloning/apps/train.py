@@ -748,6 +748,7 @@ def build_policy_info(export_info, dataset_root, meta, policy_cfg, cameras, args
         "inference_defaults": {
             "replan_steps": config.POLICY_REPLAN_STEPS,
             "ensemble_decay": config.POLICY_ENSEMBLE_DECAY,
+            "glaettung": config.POLICY_COMMAND_LOWPASS_ALPHA,
         },
         "training": {
             "step": step,

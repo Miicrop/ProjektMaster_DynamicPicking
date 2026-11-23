@@ -272,7 +272,7 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
 
     ``inference_steps``: DDIM-Schritte (``--inference-steps``, None = aus dem
     Modell). ``glaettung``: Tiefpass alpha auf die Ziele (``--glaettung``,
-    None oder 1 = aus; bc/servo.CommandLowpass).
+    1 = aus; None = Default von apps/infer.py, 0,5; bc/servo.CommandLowpass).
 
     ``hold`` faehrt ohne Modell (HoldPolicy) -- der Verdrahtungstest, mit dem
     man Takt, Servo-Kette und Kameras prueft, bevor eine Policy dranhaengt.
@@ -298,7 +298,8 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
         argv.append("--no-ensemble")
     if inference_steps and not hold:
         argv += ["--inference-steps", str(int(inference_steps))]
-    if glaettung is not None and float(glaettung) < 1.0:
+    if glaettung is not None:
+        # immer mitgeben: Default von apps/infer.py ist 0,5, "1" = aus muss also explizit hin
         argv += ["--glaettung", "%g" % float(glaettung)]
     if device and device != "auto":
         argv += ["--device", str(device)]

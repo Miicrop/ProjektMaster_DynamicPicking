@@ -552,3 +552,193 @@ bis auf max. 0,04 rad, weil der Ankunftstakt der Chunks nur genähert ist):
   hinterher.
 - **Noch nicht geprüft:** mehr DDIM-Schritte (heute 10). Das geht offline auf aufgezeichneten Beobachtungen,
   ohne Anlage.
+
+### 4. Offline-Test DDIM-Schritte und Anlagenfahrten 23.11. nachmittags (G2)
+
+**Offline-Test** (RTX 5090, G2, `data_vm/2026-11-19-2` ep 0–4; Protokoll
+`checkpoints/G2_licht_langsam_nur_griff/policy/offline_ddim/2026-11-23_14-58-25/`):
+
+| DDIM | Vorhersage ms (5090) | Chunk-Ruck mm med/p95 | Chunk-Sprung mm med/p95 | Befehl-Ruck alpha 1 / 0,5 / 0,3 | Abstand Aufnahme mm (med) alpha 1 / 0,5 / 0,3 |
+|---:|---:|---:|---:|---:|---:|
+| 10 | 47 | 2,52 / 9,67 | 1,6 / 6,6 | 1,65 / 0,59 / 0,33 | 2,0 / 2,4 / 3,7 |
+| 20 | 97 | 2,54 / 9,59 | 1,6 / 6,6 | 1,62 / 0,59 / 0,32 | 2,1 / 2,4 / 3,7 |
+| 50 | 247 | 2,52 / 9,54 | 1,6 / 6,5 | 1,64 / 0,58 / 0,32 | 2,1 / 2,4 / 3,7 |
+
+- **Mehr DDIM-Schritte glätten nichts.** Chunk-Ruck und Chunk-Sprung bleiben bei 10, 20 und 50 Schritten gleich,
+  nur die Vorhersage wird länger. Das Zittern steckt im Modell selbst, nicht im Restrauschen der Entrauschung.
+- **Der Tiefpass wirkt.** alpha 0,5 senkt den Befehls-Ruck um Faktor 2,8, der Abstand zur Aufnahme steigt dabei nur
+  von 2,0 auf 2,4 mm. alpha 0,3 glättet stärker (Faktor 5), kostet aber mehr Verzug (3,7 mm, p95 8,2 mm).
+
+**Anlage 15:01–15:09** (G2, alle Fahrten an Lage 222/−156 mm, 60°, Override 0,5; **Glättung in keiner Fahrt aktiv**):
+
+| DDIM | Fahrten | Vorhersage ms (Anlage) | Chunk-Verzug | Ist → Soll unter 60 mm (med) | seitl. Spannweite | xy am Ende (med) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 10 (vormittags, 4 Lagen) | 22 | 104 | 2 Takte | 4,8 mm | 11 mm | 8,8 mm |
+| 10 (15:02) | 1 | 101 | 2 Takte | 21 mm | 18 mm | 18,8 mm |
+| 20 | 6 | 203 | 3–4 Takte | 10,5 mm | 21 mm | 9,4 mm |
+| 25 (inkl. Crash) | 6 | 250 | 4 Takte | 10,5 mm | 36 mm | 31 mm |
+
+- **Die Vorhersagezeit verdoppelt sich am Anlagenrechner gegenüber der 5090.** 10 Schritte brauchen 101 ms, 20 Schritte
+  203 ms, 25 Schritte 250 ms. Ab 20 Schritten liegt sie damit über der Grenze von ~133 ms. Die Chunks kommen dann 3–4 statt
+  2 Takte zu spät, die Policy reagiert auf veraltete Bilder.
+- **Mit 20/25 Schritten werden die Fahrten unruhiger.** Ist → Soll verdoppelt sich, die seitliche Spannweite steigt auf
+  21–36 mm. Ausreißer: 15:05:44 (48 mm daneben), 15:07:43 (31 mm), 15:08:13 (91 mm, Abbruch an der Hülle der
+  Demonstrationen), 15:09:03 (40 mm). Es gibt aber auch drei gute Fahrten (15:04:06, 15:04:37, 15:07:16 mit
+  2,6–3,6 mm am Ende).
+- **Vorbehalt:** Alle Nachmittagsfahrten liefen an derselben Lage. Geändert wurden nacheinander die DDIM-Schritte und
+  der Probeabstand:
+
+  | Probeabstand | 10 Schritte | 20 Schritte | 25 Schritte |
+  |---|---|---|---|
+  | 25 mm | 18,8 mm (15:02) | 21,2 mm (15:03) | – |
+  | 20 / 15 mm | – | 2,6 / 2,8 mm | – |
+  | 10 mm | – | 13,7 / 47,9 / 5,1 mm | 13,8 / 3,6 / 31,4 mm |
+  | 8 mm | – | – | 91 / 40 mm, Crash |
+
+  (Werte: xy-Abstand zu PICK am Ende der Fahrt.)
+
+  - Bei gleichem Probeabstand unterscheiden sich 20 und 25 Schritte nicht erkennbar; die Fahrten streuen untereinander
+    stärker als zwischen den Einstellungen.
+  - Mit 10 Schritten gibt es an dieser Lage nur eine Fahrt, die auch schon 18,8 mm daneben lag.
+  - Der Vergleich mit dem Vormittag ist nicht sauber, weil das eine andere Lage war.
+  - Dass mehr Schritte an der Anlage schaden, ist damit **nicht belegt**. Belegt ist nur: Sie verlängern die Vorhersage
+    über die Grenze (Verzug 3–4 statt 2 Takte) und glätten offline nichts. Deshalb trotzdem: **an der Anlage 10 Schritte**.
+
+**Crash 15:09:41** (G2, Probeabstand 8 mm, also unter der Warnschwelle von 10 mm; Vorhersage 251 ms → mit ~25 Schritten
+gefahren; Experte an; kein summary.json, die Fahrt wurde abgebrochen):
+
+- **Was passierte:** In den Takten 69–74 lag das gesendete Ziel 22–35 mm über PICK, der Arm stieg aber auf 56–66 mm.
+  Er wich also 30–40 mm von seinen Zielen ab. Danach sackte er schnell ab: Takt 75 bei 47 mm, Takt 76 bei 33 mm.
+- **Endstand nach der Policy:** TCP **8,2 mm über PICK** (15 mm über dem Tisch, Objektoberkante 14,9 mm),
+  **29,9 mm seitlich** und **−21° Gier**. Mit 44,8 mm offenen Backen steht eine Backe dann über dem Bauteil – der
+  Kontakt ist sehr wahrscheinlich hier entstanden. Danach startete der Experte („korrigiert und legt um“).
+- **Ursache:** Die Ziele sprangen in den Takten 66–68 seitlich um 7 → 18 → 26 mm, bei 4 Takten Verzug. Der Arm folgte
+  ihnen mit 30–40 mm Abweichung und schwang nach dem Stopp 30 mm unter das letzte Ziel (38 mm). Das Kollisionsmodell
+  prüft die Ziele, nicht den Weg des Arms dazwischen. Die Reserve für den Nachlauf (bisher gemessen ≤ 7,5–10 mm) reicht
+  bei so unruhigen Befehlen nicht.
+- **Folgerungen:**
+  - Probeabstand nicht unter 15 mm, solange der Arm der Policy so schlecht folgt.
+  - DDIM an der Anlage bei 10 lassen.
+  - Den Tiefpass (alpha 0,5) als Nächstes testen.
+
+### 5. Glättung an der Anlage (23.11., 15:29–15:50)
+
+G2 und var_C2 an der Lage 222/−156 mm (60°), DDIM 10, Probeabstand 25 → 10 mm, Override 0,5. Skript
+`skripte/glaettung_anlage_2026-11-23.py`, Abbildung `abbildungen_2026-11-23/seitenansicht_glaettung.png` (vier
+G2-Fahrten: α 1,0 unruhig, α 1,0 ruhig, α 0,5, α 0,25).
+
+**Nicht gewertet:**
+- 15:43:30, 15:44:07, 15:44:56, 15:45:21: Der Arm fuhr nicht los („arm steht“, 6–7 Takte, TCP in der Startstellung).
+  Dazu gehören 2× α 0,75, 1× α 0,25 und 1× α 1,0.
+- 15:28:35 und 15:41:18: nur die Kameraprüfung, keine Fahrt.
+- 15:35:38: Not-Aus zum Messen des Abstands über dem Objekt, kein Crash. Ohne summary.json; die Glättung wurde aus
+  dem Log geschätzt (α 0,50), die Fahrt wird bei α 0,5 mitgezählt.
+
+| G2, Median je α | Fahrten | Ist → Soll unter 60 mm (p95) | seitl. Spannweite (max) | Annäherungs-Umkehrungen/s | Ruck roh / gesendet / Arm | Takte | xy am Ende |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1,00 | 5 | 4,0 mm (9,8) | 15,7 mm (68) | 1,4 | 2,52 / 2,52 / 2,34 | 59 | 7,5 mm |
+| 0,75 | 1 | 2,0 mm (7,8) | 11,3 mm | 2,8 | 1,55 / 1,00 / 2,22 | 72 | 1,7 mm |
+| **0,50** | **10** | **0,19 mm (0,9)** | **3,3 mm (5,6)** | **0** | 0,80 / 0,30 / 0,63 | 75 | **4,1 mm** |
+| 0,25 | 2 | 0,14 mm (0,5) | 3,3 mm (3,5) | 0 | 1,26 / 0,18 / 0,42 | 92 | 2,8 mm |
+| var_C2, 0,50 | 2 | 2,4 mm (4,7) | 8,4 mm | 0 | 4,47 / 1,69 / 3,10 | 66 | 14 mm, Gier 36–41° |
+
+(Ruck = 2. Differenz der TCP-Position je Takt unter 60 mm, in mm: roh = Policy-Ausgabe, gesendet = nach dem Tiefpass,
+Arm = gemessener TCP.)
+
+- **Mit α 0,5 ist das Pendeln weg.** Der Arm folgt der gesendeten Bahn auf 0,2 mm genau, statt mit 4 mm wie bei α 1,0
+  (vormittags 4,8 mm). Die seitliche Spannweite sinkt von 16 auf 3 mm. Hin-und-her-Fahren zum Objekt gibt es nicht mehr.
+- **Alle 10 Fahrten mit α 0,5 waren ruhig**, bei jedem Probeabstand von 20 bis 10 mm (größte Spannweite 5,6 mm).
+- **α 1,0 bleibt unberechenbar.** 3 von 5 Fahrten waren ruhig, 2 schwangen stark aus:
+  - 15:42:59: Ist → Soll 29 mm, Spannweite 68 mm, 20 mm daneben
+  - 15:47:09: 24 mm, Spannweite 55 mm, 37 mm daneben
+- **Auch die rohe Ausgabe der Policy wird ruhiger** (Ruck 0,8 statt 2,5 mm). Ein ruhigerer Arm liefert ruhigere Bilder,
+  und darauf reagiert die Policy ruhiger. Das Pendeln war also zum Teil ein Aufschaukeln zwischen Arm und Policy.
+- **Tempo:** Mit α 0,5 fährt der Arm unter PRE_PICK fast genau das Tempo der Demos (~20 mm/s), ohne Ausreißer (Abbildung).
+  α 0,25 ist noch ruhiger, aber schon im Transit langsamer (~100 statt 150 mm/s, 92 statt 75 Takte). Das ist der
+  Verzug von ~3 Takten.
+- **Systematischer Versatz:** Alle α-0,5-Fahrten enden am selben Punkt neben PICK: dx +0,3…+1,9 mm, dy −2,6…−4,8 mm,
+  im Werkzeug-KS etwa −2,7 / +2,1 mm. Das ist kein Zufall, sondern eine feste Abweichung. Gemessen wurde 20–35 mm über
+  PICK, wo die Demos schon fast mittig sind. Mögliche Ursachen: ein geteachter PICK, der nicht genau auf der Objektmitte
+  liegt, oder ein Bias der Policy an dieser Lage. Unterscheiden lässt sich das nur mit Blick auf das Objekt, zum Beispiel
+  Backen gegen Objekt im Wrist-Bild oder der Griff des Experten. In Schließrichtung ist das Spiel nur 2,5 mm je Backe,
+  der Versatz ist also nicht harmlos.
+- **var_C2 mit α 0,5:** Der Arm ist ebenfalls ruhiger (keine Umkehrungen), C2 steht aber 12–16 mm daneben und 36–41°
+  verdreht. Das ist der bekannte Drehbias von C2, den die Glättung nicht behebt.
+- **Zeit:** Vorhersage 97–114 ms, Chunk-Verzug 2 Takte, Überläufe 7–32. Die Fahrten sind gültig.
+
+**Fazit:** Die Glättung mit α 0,5 beseitigt an der Anlage das Pendeln vollständig, mit wenig Verzug. Sie sollte der
+neue Standard für die Inferenz werden (Vorschlag: als Default in `bc_policy.json`/`inference_defaults` bzw. in
+der GUI). Belegt ist das bisher an **einer** Lage mit G2. Es fehlen noch:
+- eine zweite und dritte Lage,
+- der echte Griff, der zeigt, ob der feste Versatz von ~4 mm stört.
+
+### 6. Glättung 0,5 gegen 0,25 auf vielen Lagen, erste echte Griffe (23.11., 16:13–16:50)
+
+G2, DDIM 10, Probegriff „objekt“ mit Experte, der nach jeder Fahrt umlegt (neue Lage, PICK nachgeführt). Danach
+Probeabstand 7 → 4 → 1 mm ohne Experte und vier Griffversuche (Probegriff „tisch“). Skript
+`skripte/glaettung_lagen_2026-11-23.py`. Die Glättung wurde je Episode aus dem Log geschätzt, sie stimmt mit den
+Einstellungen überein. 16:15:36 und 16:22:20 haben kein summary.json, die Zuordnung kommt aus policy_test.csv.
+
+| Probefahrten | Fahrten / Lagen | Ist → Soll unter 60 mm (max) | seitl. Spannweite (max) | Umkehrungen/s (max) | Tempo Transit / Endanflug | Takte | xy am Ende (max), Mittel dx/dy | Gier am Ende (max) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| α 0,50 | 17 / 15 | 0,23 mm (0,5) | 4,9 mm (24) | 0 (1,3) | 130 / 16 mm/s | 89 | 2,8 mm (7,9), −1,1/−2,1 | 0,6° (2,4) |
+| α 0,25 | 26 / 24 | 0,11 mm (0,2) | 2,3 mm (5,0) | 0 (0) | 104 / 14 mm/s | 111 | 2,9 mm (9,1), +0,3/−1,7 | 0,4° (2,1) |
+| Demos 19.11. | – | – | – | 0 | ~150 / ~19 mm/s | – | – | – |
+
+- **Beide Glättungen sind auf vielen Lagen ruhig.** Das Pendeln vom Vormittag kommt nicht mehr vor, auch nicht bei
+  Drehungen von 60–147° gegen die Startstellung.
+- **α 0,25 ist noch ruhiger** (Spannweite halb so groß, keine einzige Umkehrung), aber langsamer: Transit 104 statt
+  130 mm/s, 25 % mehr Takte. Am Ende liegen beide gleich nah am Ziel (median 2,8 / 2,9 mm).
+- **Ausreißer bei α 0,5:** 16:24:40 Ep. 13 mit 24 mm Spannweite und sehr langsamem Transit (32 mm/s); die Fahrt endet
+  trotzdem 2,1 mm neben PICK.
+- **Der feste Versatz vom Nachmittag ist kleiner geworden**, mit beiden Glättungen etwa −2 mm in y. An der Lage
+  222/−156 waren es −4 mm. Er hängt also von der Lage ab und ist kein reiner Fehler des geteachten PICK.
+- **Beide Glättungen sind im Endanflug langsamer als die Demos** (14–16 statt ~19 mm/s). Die Policy setzt ihr Ziel
+  immer ein Stück vor die Stellung, die sie gerade sieht. Hängt der Arm hinterher, setzt sie auch das nächste Ziel
+  weiter hinten an und wird so mit gebremst.
+- **Kleine Probeabstände mit α 0,25** (Lage 439/−178): 7, 4 und 1 mm verliefen ruhig. Bei 1 mm endete der TCP
+  17,8 mm über dem Tisch, 3,3 mm neben PICK.
+
+**Vergleichsgrafik:** `abbildungen_2026-11-23/seitenansicht_vergleich_glaettung.png`, Skript
+`skripte/seitenansicht_vergleich_glaettung_2026-11-23.py`. Drei Zeilen mit gleichen Achsen:
+- ohne Glättung (die 20 Fahrten vom Vormittag),
+- α 0,5 (17 Fahrten),
+- α 0,25 (26 Fahrten).
+
+Ohne Glättung fahren die Fahrten bei 40–50 mm waagrecht hin und her. Mit Glättung sinken sie gerade im Trichter ab,
+und das Tempo folgt nach PRE_PICK dem der Demos.
+
+Nicht ganz gleiche Bedingungen:
+- Vormittag Probeabstand 25 mm (Stopp ~35–45 mm über PICK), nachmittags 10–20 mm.
+- Vormittag G2/G3/G4 an 4 Lagen, nachmittags G2 an vielen Lagen.
+- Der Ausreißer bei α 0,5 (Schleife bei 140 mm, Ausschlag bis 27 mm bei 60–80 mm) ist 16:24:40 Ep. 13.
+
+**Griffversuche** (α 0,25, Probegriff „tisch“; ab 16:45 lag der PICK in der Steuerung bewusst weit weg (175/−35), die
+Lage aus der Steuerung sagt also nichts; Bezug ist die letzte Lage des Experten, 439/−178):
+
+| Lauf | Ergebnis | TCP beim Schließen über dem Tisch | xy gegen 439/−178 | Gier |
+|---|---|---:|---:|---:|
+| 16:42:10 (PICK richtig) | Griff | 7,6 mm | +3,5 / −2,8 mm | 87° |
+| 16:45:02 (PICK weit weg) | Griff | 7,3 mm | +2,9 / −2,1 mm | 87° |
+| 16:48:53 (PICK weit weg) | Griff | 7,6 mm | +16 / +20 mm | 93° |
+| 16:49:57 (PICK weit weg) | Kontakt an der Kante, „arm steht“ | 13,2 mm | +41 / −9 mm | 96° |
+
+- **Die Policy greift dort, wo das Objekt liegt, nicht dort, wo der PICK steht.** Bei 16:45:02 lag der PICK der
+  Steuerung 300 mm entfernt, gegriffen wurde trotzdem 3,6 mm neben der Objektlage. Die Richtung holt sie sich aus dem
+  Bild.
+- **Die Höhe passt:** Geschlossen wurde 7,3–7,6 mm über dem Tisch, die Demos greifen bei 6,6 mm.
+- **Die späteren Versuche lagen woanders**, weil sich das Objekt durch die vorherigen Griffe vermutlich verschoben hat
+  (Greifer zu/auf). Das kann ich aus den Daten nicht prüfen.
+- **Kontakt 16:49:57:**
+  - Das Ziel lag 7–8 mm über dem Tisch, der Arm blieb aber bei 13,2 mm stehen (5 Takte ohne Bewegung,
+    Restabstand 0,032 rad). Der Stillstandswächter hat abgebrochen.
+  - Eine Backe saß also auf etwas auf, wahrscheinlich auf der Objektkante (Oberkante 14,9 mm über dem Tisch, also ~2 mm
+    Überdeckung). Das passt zu „ein paar mm“.
+  - Der Greiferkanal der Policy stand bis zuletzt auf ~0 („offen“).
+
+**Greifer geht kurz zu und wieder auf:** Das ist der Programmablauf, nicht die Policy.
+- Im Policy-Test (`--lage-bekannt`) endet die Fahrt mit dem Schließen (Stoppgrund „griff“). Danach öffnet
+  `retreat_after_test` den Greifer bewusst, hebt senkrecht an und fährt zum Start („danach: am Start“).
+- Die Policy selbst sagte in den letzten Chunks 0,99–1,00 voraus, wollte also geschlossen bleiben.
+- G2 ist nur bis 3 Takte nach dem Griff trainiert und hat Anheben oder Halten nie gesehen.
+- Im normalen Ablauf mit `--transport-geplant` hebt nach dem Griff der Planer mit geschlossenem Greifer an.

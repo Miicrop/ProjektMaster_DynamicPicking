@@ -1175,10 +1175,12 @@ def parse_args():
     parser.add_argument("--no-ensemble", action="store_true",
                         help="Chunks nicht mitteln, sondern je --replan Takte abarbeiten (Vergleich)")
     parser.add_argument("--inference-steps", type=int, default=None, help="DDIM-Schritte")
-    parser.add_argument("--glaettung", type=float, default=1.0,
+    parser.add_argument("--glaettung", type=float, default=None,
                         help="Tiefpass auf die Ziele: alpha in (0, 1], je Takt "
-                             "z = alpha*Ziel + (1-alpha)*z_vorher. 1 = aus (Default), "
-                             "0,5 ~1 Takt Verzug, 0,3 ~2,3 Takte (bc/servo.CommandLowpass)")
+                             "z = alpha*Ziel + (1-alpha)*z_vorher. 1 = aus. Default aus "
+                             "bc_policy.json (inference_defaults), sonst "
+                             "config.POLICY_COMMAND_LOWPASS_ALPHA (0,5; Anlage 23.11.). "
+                             "0,5 ~1 Takt Verzug, 0,25 ~3 Takte (bc/servo.CommandLowpass)")
     parser.add_argument("--sync-predict", action="store_true",
                         help="Vorhersage im Takt statt im eigenen Thread (Default nur bei SimClock)")
     parser.add_argument("--device", default="auto")
@@ -1253,7 +1255,7 @@ def parse_args():
         parser.error("--dagger braucht den Experten (ohne --ohne-experte)")
     if not args.experte and not (args.lage_bekannt and args.probegriff == "objekt"):
         parser.error("--ohne-experte gilt nur mit --lage-bekannt --probegriff objekt")
-    if not 0.0 < args.glaettung <= 1.0:
+    if args.glaettung is not None and not 0.0 < args.glaettung <= 1.0:
         parser.error("--glaettung muss in (0, 1] liegen (1 = aus)")
     if args.inference_steps is not None and not 1 <= args.inference_steps <= 100:
         parser.error("--inference-steps: 1 bis 100 (trainiert mit 100 Rausch-Stufen)")
@@ -1373,6 +1375,8 @@ def main():
     replan = args.replan or defaults.get("replan_steps", config.POLICY_REPLAN_STEPS)
     decay = args.decay if args.decay is not None else defaults.get("ensemble_decay",
                                                                    config.POLICY_ENSEMBLE_DECAY)
+    if args.glaettung is None:
+        args.glaettung = float(defaults.get("glaettung", config.POLICY_COMMAND_LOWPASS_ALPHA))
     max_steps = args.max_steps or int(round(1.5 * info["episode_length_max"]))
 
     clock = SimClock() if use_sim_robot and use_sim_cameras and not args.realtime else RealClock()
