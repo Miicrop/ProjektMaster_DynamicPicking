@@ -40,21 +40,35 @@ Dadurch lässt sie sich mit gespeicherten Fotos genauso ausführen wie mit Live-
 \label{sec:m1-kalibrierung}
 
 Die Top-down-Kamera, eine Daheng VEN-161 mit $1440 \times 1080$~Pixeln und Global Shutter,
-ist an einer Stange schräg über dem Arbeitsbereich montiert. Sie wird über das Software-Paket
+ist an einer Stange schräg über dem Arbeitsbereich montiert (\cref{fig:m1-kamera}). Sie wird über das Software-Paket
 des Herstellers angesprochen und über ihre Seriennummer ausgewählt, da am selben Rechner
 eine baugleiche Handgelenkkamera für Modul~4 hängt. Dieselbe Kamera dient Modul~4 als
 Szenenkamera; vor einer Fahrt von Modul~4 gibt die Objekterkennung sie frei und öffnet sie
-beim nächsten Bild wieder (\cref{sec:m4-integration}). Die bisherigen Testbilder stammen von
-einer Smartphone-Kamera aus derselben Perspektive.
+beim nächsten Bild wieder (\cref{sec:m4-integration}). Die Kamera ist mit einer Klemme
+\SI{90}{\centi\metre} über der Platte an der Stange befestigt; die Unterkante des Objektivs
+liegt etwa \SI{94}{\centi\metre}, der Sensor etwa \SI{99}{\centi\metre} über der Platte. Die
+Testbilder aus der Entwicklung stammen von einer Smartphone-Kamera aus derselben Perspektive,
+die Messungen am Aufbau von der Daheng-Kamera.
 
-Für reproduzierbare Ergebnisse soll die Belichtung fest eingestellt werden. Derzeit regelt
-die Kamera Belichtung und Verstärkung noch automatisch. Eine Korrektur der
-Linsenverzeichnung mit einer intrinsischen Kalibrierung nach Zhang (\cref{sec:kalibrierung})
-ist vorgesehen, aber noch nicht umgesetzt. Die Verarbeitung arbeitet derzeit direkt auf dem
-unkorrigierten Bild.
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[height=0.4\textheight]{aufbau/kamera_oben.jpg}
+  \caption[Top-down-Kamera an der Stange]{Top-down-Kamera mit Kugelgelenk-Halterung an der
+  Stange; im Hintergrund der Roboter}
+  \label{fig:m1-kamera}
+\end{figure}
 
-\todo[inline]{Montagehöhe ergänzen, feste Belichtung festlegen. Intrinsische Kalibrierung
-durchführen und beschreiben, sofern sie umgesetzt wird.}
+Belichtungszeit und Verstärkung setzt das Programm beim Öffnen der Kamera fest auf
+\SI{15}{\milli\second} und \SI{0}{\deci\bel}. Mit der Belichtungsautomatik der Kamera wurde das
+Bild auf der dunklen Platte zu lange belichtet: Das Bauteil war übersteuert, und Kratzer und
+Schlieren auf der Platte gerieten in die Bauteilmaske. Mit den festen Werten erreicht die
+Platte einen Hellwert (V-Kanal) von etwa 40, das Bauteil etwa 190 bei einer Buntheit von
+etwa 40, und kein Bildbereich ist übersteuert.
+
+Auf eine intrinsische Kalibrierung nach Zhang (\cref{sec:kalibrierung}) wird verzichtet; die
+Verarbeitung arbeitet auf dem unkorrigierten Bild. Den Lagefehler, der aus Verzeichnung und
+Parallaxe entsteht, gleicht stattdessen eine empirische Korrektur aus
+(\cref{sec:m1-korrektur}).
 
 % ------------------------------------------------------------------------------
 \section{Detektion des Arbeitsbereichs}
@@ -243,7 +257,9 @@ Tischhöhe eingetragen. Das Ergebnis wird zusammen mit der Konfidenz und einem D
 
 Die Transformation wird mit dem Roboter eingemessen (\cref{sec:koordinatensysteme}).
 
-\subsection*{Parallaxe}
+% ------------------------------------------------------------------------------
+\section{Parallaxe und Positionskorrektur}
+\label{sec:m1-korrektur}
 
 Die Homographie bildet die Tischebene maßstabsgetreu ab. Die Oberseite des Bauteils liegt
 aber \SI{15}{\milli\metre} über dem Tisch, und bei der schräg blickenden Kamera sind zusätzlich
@@ -254,16 +270,43 @@ dabei stabil; drei Fotos derselben Lage weichen um höchstens \SI{0.4}{\milli\me
 voneinander ab. Sie kann aber systematisch zur Bildmitte hin oder von ihr weg verschoben sein,
 und zwar umso mehr, je weiter das Bauteil vom Punkt unter der Kamera entfernt liegt.
 
-\todo[inline]{Parallaxe am Aufbau bewerten: Versatz im Zeigetest an Rand- und Mittelpositionen
-notieren. Falls nötig korrigieren, z.\,B.\ die Oberseite statt der Tischebene entzerren.}
+Am Aufbau wurde der Versatz mit 21 Zeigetests (\cref{sec:koordinatensysteme}) an Rand- und
+Mittelpositionen des Arbeitsbereichs gemessen, zunächst ohne Korrektur. Der Versatz ist nicht
+konstant, sondern wächst mit dem Abstand von einem Punkt nahe der Bildmitte: Die erkannte
+Mitte liegt stets weiter außen als die tatsächliche, in $x$ am linken Rand um bis zu
+\SI{8}{\milli\metre}, in $y$ um bis zu \SI{\pm 3}{\milli\metre}. Das passt zur Parallaxe der
+erhöhten Oberseite; dazu kommt die nicht korrigierte Verzeichnung des Objektivs.
+
+Ein lineares Modell je Achse beschreibt den gemessenen Versatz gut. Die erkannte Position
+$(x, y)$ im Arbeitsbereich-\ac{ks} wird zu einem Bezugspunkt $(x_0, y_0)$ hin gezogen:
+\begin{equation}
+  x' = x - k_x\,(x - x_0), \qquad y' = y - k_y\,(y - y_0)
+  \label{eq:m1-korrektur}
+\end{equation}
+Die Ausgleichsrechnung über die 21 Messungen ergibt $k_x = \num{0,037}$ bei
+$x_0 = \SI{227}{\milli\metre}$ und $k_y = \num{0,020}$ bei $y_0 = \SI{164}{\milli\metre}$. Der
+verbleibende Fehler des Modells beträgt \SI{0,5}{\milli\metre} in $x$ und
+\SI{1,2}{\milli\metre} in $y$ (\acs{rms}). Bezugspunkt und Faktoren stehen in der
+Konfigurationsdatei und lassen sich dort abschalten.
+
+In elf Kontrollmessungen mit Korrektur war bei neun kein Versatz sichtbar, bei zweien betrug er
+\SI{1}{} bzw.\ \SI{2}{\milli\metre} in $y$. Auch in den vier Ecken des Arbeitsbereichs würde der
+Greifer das Bauteil fassen, teils knapp, weil die geöffneten Backen nur wenig Spiel zur
+\SI{40}{\milli\metre} breiten Seite lassen.
+
+Die Korrektur gilt nur für diese Kameraposition und diese Bauteilhöhe. Wird die Kamera
+verstellt, müssen die Zeigetests wiederholt werden. Eine allgemeinere Lösung wäre eine
+intrinsische Kalibrierung mit Entzerrung auf die Höhe der Bauteiloberseite statt auf die
+Tischebene.
 
 % ------------------------------------------------------------------------------
 \section{Zwischenfazit}
 
 Auf den Testfotos findet die Objekterkennung die Marker und das Bauteil zuverlässig und
 bestimmt die Orientierung über die Fase eindeutig. Die gemessene Größe des Bauteils zeigt den
-erwarteten Einfluss der Parallaxe. Wie stark er die Greifposition verschiebt, zeigt erst der
-Zeigetest am Aufbau mit der endgültigen Kamera.
+erwarteten Einfluss der Parallaxe. Am Aufbau mit der Daheng-Kamera verschob er die erkannte
+Position je nach Lage um bis zu \SI{8}{\milli\metre} nach außen. Eine feste Belichtung und eine
+lineare Positionskorrektur aus Zeigetests reichen aus, um diesen Versatz auf höchstens
+\SI{2}{\milli\metre} zu verringern; auf eine intrinsische Kalibrierung konnte verzichtet werden.
 
-\todo[inline]{Nach den Versuchen ergänzen: Ergebnisse mit der Daheng-Kamera, Versatz im
-Zeigetest, aufgetretene Probleme.}
+\todo[inline]{Nach den Versuchen ergänzen: Ergebnisse der Versuchsreihen mit der Daheng-Kamera.}

@@ -34,3 +34,6 @@ code/m4_behavior_cloning/data
 
 # Claude-Code-Worktrees (eigene Git-Arbeitsordner, nie committen)
 **/.claude/worktrees/
+
+# Rohfotos aus dem Labor (verkleinerte Kopien liegen in thesis/figures/)
+media/roh/

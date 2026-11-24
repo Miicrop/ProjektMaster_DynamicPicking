@@ -4,6 +4,24 @@ Neueste Einträge oben. Offenes steht in [06_offen.md](06_offen.md).
 
 ## Log
 
+### 2026-11-24 – Niklas (Fotos in der Thesis)
+- Laborfotos in `media/roh/` abgelegt, je Szene mehrere Aufnahmen. Verkleinert (1600 px) nach
+  `thesis/figures/` übernommen:
+  - Kap. 04 `fig:aufbau`: Zelle (`anlage_gesamt_1`) mit TikZ-Beschriftung. Die Ablageorte sind
+    nur mit Klebeband markiert, es gibt keine Boxen.
+  - Kap. 05 neu `fig:m1-kamera`: Top-down-Kamera an der Stange (`camera_topdown_1`).
+  - Kap. 07 `fig:m3-vorrichtung`: Prüfvorrichtung seitlich und von oben (`camera_inspection_3`, `_5`).
+  - Kap. 08 `fig:m4-kamera`: Handgelenkkamera (`camera_wrist_gripper_1`); `fig:m4-bilder`:
+    Referenzbilder der Aufnahme vom 11.11. (10-54-32_B01), auf 320×240 verkleinert.
+- Merge mit Jeremys Stand von GitHub (27 Commits), Konflikte in 06/07 gelöst, 121 Tests grün.
+- Thesis auf Laborstand 12.11. gebracht (ARS `academic-paper`, Revision):
+  - Kap. 04: Montagehöhe der Kamera oben, feste Belichtung, Logitech, Lastdaten vom Pendant.
+  - Kap. 05: feste Belichtung begründet, neuer Abschnitt 5.6 „Parallaxe und Positionskorrektur“
+    (Zeigetests, lineares Modell als Formel, Kontrollmessungen, Grenzen).
+  - Kap. 06: Offset −67° mit Begründung (Achse 6), Posentabelle auf aktuelle Config, Ablegen
+    1 mm über der Pose, Zeigetest-Ergebnis, Zwischenfazit als Liste.
+  - Kap. 07: Logitech mit festem Fokus im Code, Lochmessung an der echten Kamera.
+
 ### 2026-11-12 – Niklas (Labor)
 - **Netzwerk:** Der Laptop braucht eine eigene IP im Netz des Roboters (z. B. 192.168.2.92/24),
   nicht die .13 der Steuerung. Bei gleicher IP meldet Windows `Duplicate` und die Verbindung

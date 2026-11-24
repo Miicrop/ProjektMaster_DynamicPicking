@@ -55,18 +55,26 @@ abgeleitet. Die Position übernimmt $x$ und $y$ direkt; die Höhe ergibt sich au
 Tischhöhe plus einer festen Greifhöhe, die von Bauteil und Greifer abhängt. Der Greifer zeigt
 immer senkrecht nach unten. Dazu wird die Orientierung der Ruheposition übernommen und nur um
 die Hochachse des Roboters gedreht, und zwar um den erkannten Bauteilwinkel $\theta$ plus
-einen festen Greifer-Offset. Der Offset setzt sich aus zwei Teilen zusammen: \ang{90} sorgen
+einen festen Greifer-Offset. Der Offset setzt sich aus drei Teilen zusammen: \ang{90} sorgen
 dafür, dass sich die Greiferbacken quer zur Längsachse schließen, also an den beiden langen
 Seiten des Bauteils anliegen. Weitere \ang{23} gleichen aus, dass der Greifer gegenüber dem
-Flansch verdreht montiert ist. Der Offset beträgt damit \ang{113}. Der resultierende Winkel
+Flansch verdreht montiert ist. Zusätzlich wird das Bauteil um \ang{180} gedreht gegriffen,
+sodass beim Ablegen an der Prüfposition Fase und Seriennummer zur Seitenkamera zeigen. Der
+Offset beträgt damit $\ang{90} + \ang{23} - \ang{180} = \ang{-67}$. Der resultierende Winkel
 wird auf den Bereich \ang{-180} bis \ang{180} normiert.
+
+Die Drehung um \ang{180} beim Greifen statt an den Ablagen hat einen kinematischen Grund. An
+den Ablagen steht der Greifer bei $r_z = \ang{-157}$, Achse~6 also nahe \ang{0}. Mit
+$r_z = \ang{23}$ stünde Achse~6 bei etwa \ang{178}, nahe ihrer Bereichsgrenze; von dort fand die
+Steuerung keine Lösung der inversen Kinematik zu den Ablagen oder lieferte eine umgeklappte
+Gelenkstellung.
 
 Die Drehrichtung wurde in der \ac{vm} mit einem Achsentest geprüft: Eine positive Drehung um
 die Hochachse dreht das nach unten zeigende Werkzeug von oben gesehen gegen den Uhrzeigersinn,
 passend zur Formel.
 
-Ein erster, grober Zeigetest am realen Roboter bestätigte den Greifwinkel. Ein genauer
-Zeigetest mit der endgültigen Kamera steht noch aus.
+Zeigetests am realen Roboter mit der endgültigen Kamera bestätigten den Greifwinkel. Der dabei
+gemessene Lageversatz wird in der Objekterkennung korrigiert (\cref{sec:m1-korrektur}).
 
 % ------------------------------------------------------------------------------
 \section{Greif- und Ablegesequenz}
@@ -165,6 +173,9 @@ Neben der erkannten Bauteilpose fährt der Roboter vier feste Posen an
 (\cref{tab:m2-posen}). Die drei Ablagen wurden am realen Aufbau angefahren
 (geteacht) und in die Konfiguration übernommen. Jede Pose ist die genaue Ablegepose
 einschließlich ihrer Höhe; an der Prüfposition liegt sie auf der Auflage der Prüfvorrichtung.
+Geteacht wurde mit einem gegriffenen Bauteil, das auf der Fläche aufsitzt. Beim Ablegen öffnet
+der Greifer deshalb nur \SI{1}{\milli\metre} über der geteachten Pose. Bei größerem Abstand
+fällt das Bauteil hörbar auf die Prüfvorrichtung und kann dort verrutschen.
 Die Ruheposition ist als benannter Punkt auf der Steuerung gespeichert und wird direkt in
 Gelenkkoordinaten angefahren.
 
@@ -179,10 +190,12 @@ Gelenkkoordinaten angefahren.
     \midrule
     \texttt{home} & 420,0 & 0,0 & 237,0 & 180 & Ruheposition außerhalb der Kamerabilder;
       Start- und Endpunkt \\
-    \texttt{inspection} & 520,8 & 199,6 & 42,0 & $-157$ & Ablage an der Prüfposition im
+    \texttt{inspection} & 517,9 & 200,5 & 48,1 & $-157$ & Ablage an der Prüfposition im
       Sichtfeld der Seitenkamera \\
-    \texttt{bin\_good} & 299,7 & 185,4 & 4,0 & $-157$ & Ablage für Gutteile \\
-    \texttt{bin\_bad} & 297,7 & 319,4 & 3,0 & $-157$ & Ablage für Schlechtteile \\
+    \texttt{bin\_good} & 299,7 & 185,4 & 9,0 & $-157$ & Ablageort für Gutteile (mit Klebeband
+      markiert) \\
+    \texttt{bin\_bad} & 297,7 & 319,4 & 10,0 & $-157$ & Ablageort für Schlechtteile (mit
+      Klebeband markiert) \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -208,7 +221,14 @@ Am realen Aufbau wurde die Transformation eingemessen. Sie besteht aus einer Dre
 \ang{0.35}, einer Verschiebung um $(205{,}1;\ -319{,}7)$~\si{\milli\metre} und einer Tischhöhe
 von \SI{2,1}{\milli\metre} im Roboter-\ac{ks}.
 
-\todo[inline]{Restfehler der Kalibrierung (\acs{rms}) und Ergebnis des Zeigetests ergänzen.}
+Der Zeigetest mit dieser Transformation ergab ohne weitere Korrektur einen Versatz, der zum Rand
+des Arbeitsbereichs hin auf bis zu \SI{8}{\milli\metre} anwächst. Die Ursache liegt nicht in der
+Transformation, sondern in der Bildverarbeitung (Parallaxe und Verzeichnung). Er wird deshalb
+in der Objekterkennung ausgeglichen (\cref{sec:m1-korrektur}). Danach war in neun von elf
+Kontrollmessungen kein Versatz mehr sichtbar, in den übrigen beiden höchstens
+\SI{2}{\milli\metre}.
+
+\todo[inline]{Restfehler der Kalibrierung (\acs{rms}) ergänzen.}
 
 % ------------------------------------------------------------------------------
 \section{Sicherheitskonzept}
@@ -265,12 +285,16 @@ Die Steuerung ist im Labornetz unter der Adresse 192.168.2.13 erreichbar.
 Die Robotersteuerung ist am realen Roboter in Betrieb genommen. Werkzeug, feste Posen und
 Kalibrierung sind eingerichtet, ein vollständiger Ablauf mit Erkennung und Prüfung auf
 Testbildern lief durch, und der Roboter greift das Bauteil zuverlässig. Bei der
-Inbetriebnahme zeigten sich drei Punkte, die in die beschriebene Lösung eingeflossen sind: Der
-Greifer ist um \ang{23} verdreht montiert (Offset \ang{113}), eine durchgehend langsame
-Annäherung kostet zu viel Zeit (zweistufiges Absenken), und der Arm muss nicht in die
-Ruheposition fahren, um das Bild der Seitenkamera freizugeben (Warten über der
-Prüfvorrichtung).
+Inbetriebnahme zeigten sich mehrere Punkte, die in die beschriebene Lösung eingeflossen sind:
+\begin{itemize}
+  \item Der Greifer ist um \ang{23} verdreht montiert, und das Bauteil wird um \ang{180} gedreht
+        gegriffen, damit Fase und Seriennummer zur Seitenkamera zeigen (Offset \ang{-67}).
+  \item Eine durchgehend langsame Annäherung kostet zu viel Zeit (zweistufiges Absenken).
+  \item Der Arm muss nicht in die Ruheposition fahren, um das Bild der Seitenkamera
+        freizugeben (Warten über der Prüfvorrichtung).
+  \item Der Greifer öffnet beim Ablegen nur knapp über der geteachten Pose, damit das Bauteil
+        nicht fällt.
+\end{itemize}
 
-\todo[inline]{Nach den Versuchen mit den echten Kameras ergänzen: Greifen an der erkannten
-Pose (Einfluss der Parallaxe), Wiederholgenauigkeit an der Prüfposition, aufgetretene
-Probleme.}
+\todo[inline]{Nach den Versuchen mit den echten Kameras ergänzen: Greiferfolg an der
+korrigierten Pose, Wiederholgenauigkeit an der Prüfposition, aufgetretene Probleme.}

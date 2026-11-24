@@ -78,11 +78,34 @@ Demonstrator von einem Rechner, der über \ac{lan} mit der Robotersteuerung verb
 
 \begin{figure}[htbp]
   \centering
-  \missingfigure[figwidth=0.9\textwidth]{Foto der Roboterzelle schräg von oben: Roboter mit
-  Greifer und Handgelenkkamera, dunkle Platte mit den vier ArUco-Markern, Kamera oben an der
-  Stange, Prüfvorrichtung mit Seitenkamera, Ablagen GUT und SCHLECHT. Komponenten im Bild
-  beschriften.}
-  \caption{Aufbau des Demonstrators}
+  \begin{tikzpicture}[
+      lbl/.style={font=\small, align=center, inner sep=2pt},
+      pfeil/.style={-{Stealth[length=2.2mm]}, line width=0.8pt, white,
+                    preaction={draw, black, line width=2pt, -{Stealth[length=2.6mm]}}}]
+    \node[anchor=south west, inner sep=0] (bild)
+      {\includegraphics[height=0.55\textheight]{aufbau/anlage_gesamt.jpg}};
+    \begin{scope}[x={(bild.south east)}, y={(bild.north west)}]
+      % links
+      \node[lbl, anchor=east] (kam) at (-0.04, 0.88) {Top-down-\\Kamera};
+      \node[lbl, anchor=east] (rob) at (-0.04, 0.62) {Roboter\\LARA};
+      \node[lbl, anchor=east] (teil) at (-0.04, 0.18) {Bauteil};
+      \draw[pfeil] (kam.east) -- (0.13, 0.81);
+      \draw[pfeil] (rob.east) -- (0.46, 0.65);
+      \draw[pfeil] (teil.east) -- (0.43, 0.24);
+      % rechts
+      \node[lbl, anchor=west] (abl) at (1.04, 0.56) {Ablageorte\\(Klebeband)};
+      \node[lbl, anchor=west] (gr) at (1.04, 0.44) {Greifer mit\\Handgelenk-\\kamera};
+      \node[lbl, anchor=west] (pv) at (1.04, 0.31) {Prüfvorrichtung\\mit Seitenkamera};
+      \node[lbl, anchor=west] (aruco) at (1.04, 0.18) {ArUco-Marker};
+      \draw[pfeil] (abl.west) -- (0.655, 0.425);
+      \draw[pfeil] (gr.west) -- (0.60, 0.38);
+      \draw[pfeil] (pv.west) -- (0.76, 0.31);
+      \draw[pfeil] (aruco.west) -- (0.70, 0.235);
+    \end{scope}
+  \end{tikzpicture}
+  \caption[Aufbau des Demonstrators]{Aufbau des Demonstrators. Die Ablageorte für Gut- und
+  Schlechtteile sind nur mit Klebeband auf der Platte markiert; einer davon wird im Bild vom
+  Greifer verdeckt.}
   \label{fig:aufbau}
 \end{figure}
 
@@ -103,19 +126,24 @@ Demonstrator von einem Rechner, der über \ac{lan} mit der Robotersteuerung verb
               In der Steuerung als Werkzeug \enquote{ZimmerLWR50} mit dem \ac{tcp}
               \SI{197,5}{\milli\metre} vor dem Flansch angelegt (Greifer mit Backen
               \SI{169,5}{\milli\metre}, Adapter \SI{28}{\milli\metre}); Sollwerte der Last
-              \SI{1,75}{\kilo\gram}, Schwerpunkt etwa \SI{81}{\milli\metre} vor dem Flansch
-              \todo[inline]{Lastdaten am Bedienhandgerät mit den Sollwerten vergleichen.} \\
+              \SI{1,75}{\kilo\gram}, Schwerpunkt etwa \SI{81}{\milli\metre} vor dem Flansch.
+              Die Lastermittlung am Bedienhandgerät ergab \SI{1,16}{\kilo\gram} mit dem
+              Schwerpunkt bei $(-26;\ -58;\ 150)$~\si{\milli\metre} im Flansch-\ac{ks}
+              \todo[inline]{Klären, welche Lastdaten in der Steuerung hinterlegt sind, und die
+              Abweichung zu den Datenblattwerten (\SI{1,75}{\kilo\gram}) einordnen.} \\
     Adapter & Zimmer Group MATCH-Robotermodul LWR50F-13-05-A zwischen Roboterflansch und
               Greifer: Schnellwechsler mit integrierter elektrischer Energieübertragung,
               Anschlussflansch nach EN ISO 9409-1 (TK~50), Masse
               \SI{0,35}{\kilo\gram}~\cite{zimmer_lwr50f} \\
     Top-down-Kamera & Daheng VEN-161, $1440 \times 1080$~Pixel, Global Shutter,
-              \ac{usb}3 Vision; an einer Stange schräg über dem Arbeitsbereich montiert,
-              zugleich Szenenkamera von Modul~4
-              \todo[inline]{Montagehöhe und Objektiv angeben} \\
-    Seitenkamera & \ac{usb}-Kamera an der Prüfposition; die Testbilder haben
-              $3840 \times 2160$~Pixel
-              \todo[inline]{Kameramodell, Abstand, Beleuchtung} \\
+              \ac{usb}3 Vision; an einer Stange schräg über dem Arbeitsbereich montiert
+              (Klemme \SI{90}{\centi\metre}, Objektivunterkante etwa \SI{94}{\centi\metre},
+              Sensor etwa \SI{99}{\centi\metre} über der Platte), Belichtung fest
+              \SI{15}{\milli\second}, zugleich Szenenkamera von Modul~4
+              \todo[inline]{Objektiv (Brennweite) angeben} \\
+    Seitenkamera & \ac{usb}-Webcam von Logitech an der Prüfposition, $3840 \times 2160$~Pixel,
+              Fokus im Programm fest eingestellt
+              \todo[inline]{Genaues Kameramodell, Abstand zum Bauteil, Beleuchtung} \\
     Handgelenkkamera & Daheng VEN-161-61U3C mit Fischaugenobjektiv am Greifer, nur für
               Modul~4 (\cref{tab:m4-hardware}) \\
     Arbeitsbereich & dunkle Platte mit vier ArUco-Markern auf Papier (Kantenlänge
@@ -363,8 +391,10 @@ Bauteils, der Roboter fährt den Greifer \SI{30}{\milli\metre} über diese Pose,
 und der Bediener notiert den sichtbaren Versatz. Kalibrierung und Zeigetest stehen in der
 Bedienoberfläche und als Kommandozeilenwerkzeug zur Verfügung (\cref{sec:m2-inbetriebnahme}).
 
-\todo[inline]{Ergebnis der Kalibrierung im Labor eintragen (Restfehler je Marker, \acs{rms})
-und Versatz aus dem Zeigetest an mehreren Stellen des Arbeitsbereichs.}
+Der Zeigetest am Aufbau zeigte einen Versatz, der von der Lage des Bauteils im Arbeitsbereich
+abhängt. Er wird in der Objekterkennung empirisch korrigiert (\cref{sec:m1-korrektur}).
+
+\todo[inline]{Restfehler der Kalibrierung je Marker und als \acs{rms} eintragen.}
 
 % ------------------------------------------------------------------------------
 \section{Test- und Inbetriebnahmestrategie}

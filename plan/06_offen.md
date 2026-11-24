@@ -108,11 +108,8 @@ Nach jeder Config-Änderung in der GUI speichern (Strg+S).
 
 ## 5. Fotos und Bilder (für Thesis und Präsentation)
 
-- [ ] **N** – Fotos der Zelle aus mehreren Winkeln: Gesamtaufbau, Kameras, Greifer, Prüfstation,
-  Ablagen. Für die Thesis das Zellfoto in Kap. 04.
-- [ ] **N** – Bild der Prüfvorrichtung, aus dem CAD oder als Foto, für Kap. 07
-  (Platzhalter `fig:m3-vorrichtung`).
-- [ ] **J** – Foto der Handgelenkkamera am Greifer und Kamerabilder der Policy für Kap. 08.
+Fotos liegen in `media/roh/` (Originale), verkleinerte Kopien in `thesis/figures/`.
+
 - [ ] **N** – GUI-Screenshots mit echten Kamerabildern statt Testbildern (Kap. 09).
 - [ ] **N** – 1–2 schöne Zyklen mit „Bilder speichern“ und „+ Zwischenschritte“ aufnehmen.
 - [ ] **N** – Video eines kompletten Zyklus.
@@ -154,6 +151,20 @@ Das Konzept steht in [10_praesentation_konzept.md](10_praesentation_konzept.md).
   - Passen die ehrlichen Grenzen in 6.5 und die Aussage „mit Modell an der Anlage offen“ in 6.8?
   - Welche (k)-Szenen (6.3, 6.6, 6.7) bleiben im Vortrag?
   - Szenen in `presentation/abschluss/src/storyboard.js`, Konzept in [10_praesentation_konzept.md](10_praesentation_konzept.md).
+- [ ] **N** – **Präsentation auf den Laborstand vom 12.11. bringen** (in der Thesis am 24.11. erledigt):
+  - `python build_data.py` neu laufen lassen. `data.json` enthält noch den Offset 113° und die
+    alten Posen (inspection 520,8 / 199,6 / 42,0, Ablagen z 4/3).
+  - Szene 4.4 „23° verdreht“: Offset jetzt −67° (90° + 23° − 180°). Das Teil wird um 180°
+    gedreht gegriffen, damit Fase und Seriennummer zur M3-Kamera zeigen. Grund: Mit rz 23° an den
+    Stationen stünde Achse 6 bei 178°, ohne IK-Lösung zu den Ablagen.
+  - **Positionskorrektur M1** aufnehmen (Thesis Kap. 5.6): 21 Zeigetests, Versatz bis 8 mm nach
+    außen, lineares Modell je Achse (x 3,7 % um 227 mm, y 2,0 % um 164 mm), danach 9/11 ohne
+    Versatz, max. 2 mm. Passt an die Parallaxe-Stelle in `src/worlds/vision.js` (Akt 3).
+  - Feste Belichtung Daheng (15 ms, 0 dB) und fester Fokus Logitech (90), beides im Code.
+  - Montagehöhe Kamera oben: Klemme 90 cm, Objektiv ca. 94 cm, Sensor ca. 99 cm über der Platte (1.2/3.1).
+  - Ablegen 1 mm über der geteachten Pose; Ablageorte nur mit Klebeband markiert, keine Boxen.
+  - Lochmessung an der echten Kamera: 9,57–9,68 mm statt 10 mm, Korrekturfaktor offen.
+  - Laborfotos aus `media/roh/` für 1.2, 7.1 und die Prüfstation.
 - [ ] **T** – Offene Szenen: 7.2 Messwerte (nach der Evaluation), 7.4 Ausblick (nach der
   Entscheidung zur Pflegerobotik).
 - [ ] **N** – Fotos vom Labor für 7.1, Stand in 7.3 vor dem Vortrag prüfen.

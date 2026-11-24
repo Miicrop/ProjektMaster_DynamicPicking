@@ -41,8 +41,14 @@ Kamerazugriff getrennt, sodass sie sich mit gespeicherten Bildern testen lässt
 \section{Aufbau der Prüfstation}
 \label{sec:m3-aufbau}
 
-Die Seitenkamera, eine \ac{usb}-Kamera, ist fest neben der Prüfposition montiert; die
-bisherigen Testbilder haben $3840 \times 2160$~Pixel. Sie blickt möglichst senkrecht auf die
+Die Seitenkamera, eine \ac{usb}-Webcam von Logitech, ist fest neben der Prüfposition montiert
+und liefert $3840 \times 2160$~Pixel. Bei kleineren Auflösungen beschneidet die Kamera das
+Bildfeld, statt es zu verkleinern; deshalb wird mit voller Auflösung gearbeitet. Im
+Autofokus stellte die Kamera auf den Hintergrund scharf, und das Bauteil war unscharf. Das
+Programm schaltet den Autofokus deshalb beim Öffnen der Kamera ab und setzt einen festen
+Fokuswert (Stufe 90 auf der Skala der Kamera). Die Einstellung liegt damit in der
+Konfiguration und nicht in der Kamera, sodass sie auch nach einem Neustart oder an einem
+anderen Rechner gilt. Die Kamera blickt möglichst senkrecht auf die
 Seitenfläche des Bauteils, da eine schräge Ansicht die Längen im Bild perspektivisch verzerren
 würde. Das Bauteil liegt auf einer 3D-gedruckten Prüfvorrichtung, deren Auflage
 \SI{38}{\milli\metre} über der Platte liegt (\cref{fig:m3-vorrichtung}). Ein Halter an der
@@ -54,9 +60,17 @@ der Prüfung wartet der Roboter über der Vorrichtung, sodass der Greifer nicht 
 
 \begin{figure}[htbp]
   \centering
-  \missingfigure[figwidth=0.9\textwidth]{Prüfvorrichtung als CAD-Ansicht oder Foto: erhöhte
-  Ablagefläche mit Bauteil, Kamerahalter mit Seitenkamera und Hintergrund hinter dem Bauteil.}
-  \caption{Prüfvorrichtung mit Seitenkamera}
+  \begin{minipage}[b]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{m3/vorrichtung_seite.jpg}
+  \end{minipage}\hfill
+  \begin{minipage}[b]{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{m3/vorrichtung_oben.jpg}
+  \end{minipage}
+  \caption[Prüfvorrichtung mit Seitenkamera]{Prüfvorrichtung mit Seitenkamera: Bauteil auf der
+  erhöhten Auflage vor dem Hintergrund, davor die Kamera in ihrem Halter (links schräg von der
+  Seite, rechts von oben)}
   \label{fig:m3-vorrichtung}
 \end{figure}
 
@@ -76,7 +90,8 @@ diesen Fall mit einer verringerten Konfidenz.
   \label{fig:m3-rois}
 \end{figure}
 
-\todo[inline]{Kameramodell, Abstand und Beleuchtung der Prüfstation ergänzen.}
+\todo[inline]{Genaues Kameramodell, Abstand zum Bauteil und Beleuchtung der Prüfstation
+ergänzen.}
 
 % ------------------------------------------------------------------------------
 \section{Lokalisierung des Bauteils und Maßstab}
@@ -229,5 +244,13 @@ um \SI{\pm 1,2}{\percent} (0,647; 0,663; 0,649), was etwa \SIrange{9.7}{9.9}{\mi
 entspricht. Künstlich erzeugte Fehler, bei denen Kerbe oder Loch im Bild übermalt sind, werden
 als Schlechtteil erkannt.
 
-\todo[inline]{Nach den Versuchen ergänzen: Ergebnisse mit der Seitenkamera am Aufbau, echte
-Fehlerteile, aufgetretene Probleme.}
+An der Seitenkamera am Aufbau misst die Sichtprüfung das Loch eines Gutteils mit
+\SIrange{9,57}{9,68}{\milli\metre} statt \SI{10}{\milli\metre}. Das Verhältnis von
+Lochdurchmesser zu Bauteilhöhe liegt bei etwa 0,64 statt 0,667. Der Messwert liegt damit
+systematisch zu niedrig und genau an der unteren Toleranzgrenze von \SI{9,6}{\milli\metre}, so
+dass ein Gutteil je nach Aufnahme als Schlechtteil eingestuft werden kann. Die Toleranz wird
+deshalb nicht aufgeweitet, sondern der Maßstab mit mehreren bekannten Gutteilen nachgemessen und
+um einen Korrekturfaktor ergänzt.
+
+\todo[inline]{Korrekturfaktor des Maßstabs nach der Messung mit bekannten Gutteilen eintragen.
+Nach den Versuchen ergänzen: echte Fehlerteile, aufgetretene Probleme.}
