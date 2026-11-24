@@ -83,7 +83,7 @@ Demonstrator von einem Rechner, der über \ac{lan} mit der Robotersteuerung verb
       pfeil/.style={-{Stealth[length=2.2mm]}, line width=0.8pt, white,
                     preaction={draw, black, line width=2pt, -{Stealth[length=2.6mm]}}}]
     \node[anchor=south west, inner sep=0] (bild)
-      {\includegraphics[height=0.55\textheight]{aufbau/anlage_gesamt.jpg}};
+      {\includegraphics[height=0.5\textheight]{aufbau/anlage_gesamt.jpg}};
     \begin{scope}[x={(bild.south east)}, y={(bild.north west)}]
       % links
       \node[lbl, anchor=east] (kam) at (-0.04, 0.88) {Top-down-\\Kamera};
@@ -126,11 +126,7 @@ Demonstrator von einem Rechner, der über \ac{lan} mit der Robotersteuerung verb
               In der Steuerung als Werkzeug \enquote{ZimmerLWR50} mit dem \ac{tcp}
               \SI{197,5}{\milli\metre} vor dem Flansch angelegt (Greifer mit Backen
               \SI{169,5}{\milli\metre}, Adapter \SI{28}{\milli\metre}); Sollwerte der Last
-              \SI{1,75}{\kilo\gram}, Schwerpunkt etwa \SI{81}{\milli\metre} vor dem Flansch.
-              Die Lastermittlung am Bedienhandgerät ergab \SI{1,16}{\kilo\gram} mit dem
-              Schwerpunkt bei $(-26;\ -58;\ 150)$~\si{\milli\metre} im Flansch-\ac{ks}
-              \todo[inline]{Klären, welche Lastdaten in der Steuerung hinterlegt sind, und die
-              Abweichung zu den Datenblattwerten (\SI{1,75}{\kilo\gram}) einordnen.} \\
+              \SI{1,75}{\kilo\gram}, Schwerpunkt etwa \SI{81}{\milli\metre} vor dem Flansch \\
     Adapter & Zimmer Group MATCH-Robotermodul LWR50F-13-05-A zwischen Roboterflansch und
               Greifer: Schnellwechsler mit integrierter elektrischer Energieübertragung,
               Anschlussflansch nach EN ISO 9409-1 (TK~50), Masse
@@ -139,11 +135,9 @@ Demonstrator von einem Rechner, der über \ac{lan} mit der Robotersteuerung verb
               \ac{usb}3 Vision; an einer Stange schräg über dem Arbeitsbereich montiert
               (Klemme \SI{90}{\centi\metre}, Objektivunterkante etwa \SI{94}{\centi\metre},
               Sensor etwa \SI{99}{\centi\metre} über der Platte), Belichtung fest
-              \SI{15}{\milli\second}, zugleich Szenenkamera von Modul~4
-              \todo[inline]{Objektiv (Brennweite) angeben} \\
+              \SI{15}{\milli\second}, zugleich Szenenkamera von Modul~4 \\
     Seitenkamera & \ac{usb}-Webcam von Logitech an der Prüfposition, $3840 \times 2160$~Pixel,
-              Fokus im Programm fest eingestellt
-              \todo[inline]{Genaues Kameramodell, Abstand zum Bauteil, Beleuchtung} \\
+              Fokus im Programm fest eingestellt \\
     Handgelenkkamera & Daheng VEN-161-61U3C mit Fischaugenobjektiv am Greifer, nur für
               Modul~4 (\cref{tab:m4-hardware}) \\
     Arbeitsbereich & dunkle Platte mit vier ArUco-Markern auf Papier (Kantenlänge
@@ -394,7 +388,13 @@ Bedienoberfläche und als Kommandozeilenwerkzeug zur Verfügung (\cref{sec:m2-in
 Der Zeigetest am Aufbau zeigte einen Versatz, der von der Lage des Bauteils im Arbeitsbereich
 abhängt. Er wird in der Objekterkennung empirisch korrigiert (\cref{sec:m1-korrektur}).
 
-\todo[inline]{Restfehler der Kalibrierung je Marker und als \acs{rms} eintragen.}
+Als Maß für die Güte der Kalibrierung gibt das Werkzeug den Restfehler jedes Markers nach der
+Ausgleichsrechnung aus sowie dessen quadratisches Mittel (\acs{rms}). Bei korrekt zugeordneten
+und eingemessenen Markern liegt der \acs{rms} im Bereich weniger Millimeter; ab
+\SI{3}{\milli\metre} warnt das Werkzeug, da dann meist Marker-IDs vertauscht oder die
+Markerpositionen falsch eingemessen sind. Der \acs{rms} bewertet allerdings nur die Kalibrierung
+selbst. Die Genauigkeit der gesamten Kette aus Erkennung, Kalibrierung und Roboter zeigt erst der
+Zeigetest, weshalb die Bewertung in dieser Arbeit auf den Zeigetests beruht.
 
 % ------------------------------------------------------------------------------
 \section{Test- und Inbetriebnahmestrategie}
