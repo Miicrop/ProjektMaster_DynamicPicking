@@ -124,6 +124,14 @@ class ComparisonTab(ModeTab):
         self.lagen.setValue(3)
         self.lagen.setToolTip("Nach jeder Lage legt der Experte das Teil an eine neue.")
         form.addRow("Lagen", self.lagen)
+        self.lagen_wahl = QComboBox()
+        self.lagen_wahl.addItem("Raster (systematisch)", vergleich_module.LAGEN_RASTER)
+        self.lagen_wahl.addItem("Zufall wie Experte", vergleich_module.LAGEN_ZUFALL)
+        self.lagen_wahl.setToolTip(
+            "Raster: Lagen gleichmäßig über den Tisch, Abstand nach der Lagenzahl (mehr Lagen = "
+            "engeres Raster), Drehungen gleichmäßig über den Drehbereich, Reihenfolge Reihe für "
+            "Reihe. Zufall: wie der Experte beim Aufnehmen (seltenstes Feld).")
+        form.addRow("Lagenwahl", self.lagen_wahl)
         self.probe_gap = block_wheel(QDoubleSpinBox())
         self.probe_gap.setRange(1.0, 100.0)
         self.probe_gap.setDecimals(1)
@@ -148,6 +156,7 @@ class ComparisonTab(ModeTab):
         for widget in (self.fahrten, self.lagen):
             widget.valueChanged.connect(self._update_plan_text)
         self.lagen.valueChanged.connect(self._drop_stale_plan)
+        self.lagen_wahl.currentIndexChanged.connect(self._drop_stale_plan)
         column.addWidget(box)
         column.addStretch(1)
 
@@ -370,8 +379,7 @@ class ComparisonTab(ModeTab):
 
     def _drop_stale_plan(self, *_):
         """Plan passt nicht mehr zu Modellen/Lagen -> nicht mehr zeigen."""
-        if self._plan_key is not None and self._plan_key != (tuple(self.selected_models()),
-                                                             self.lagen.value()):
+        if self._plan_key is not None and self._plan_key != self._plan_key_now():
             self._plan, self._plan_xy, self._plan_key = [], [], None
         if hasattr(self, "pick_view") and not self._steps:
             self._show_pick()
@@ -381,6 +389,9 @@ class ComparisonTab(ModeTab):
             step = self._steps[self._index]
             return step.lage + 1 if step.kind == vergleich_module.UMLEGEN else step.lage
         return None
+
+    def _plan_key_now(self):
+        return (tuple(self.selected_models()), self.lagen.value(), self.lagen_wahl.currentData())
 
     def plan_lagen(self, quiet=False):
         """Alle Lagen vorab planen (vergleich.plan_poses) -- braucht die Steuerung."""
@@ -424,9 +435,17 @@ class ComparisonTab(ModeTab):
 
             history = known_pose.placement_history(known_pose.placements_file(
                 self.workdir / config.TOUCHUP_BACKUP_ROOT))
-            planned = vergleich_module.plan_poses(known, self.lagen.value() - 1,
-                                                  np.random.default_rng(), history=history,
-                                                  center_shift_deg=center, reachable=reachable)
+            if self.lagen_wahl.currentData() == vergleich_module.LAGEN_RASTER:
+                planned = vergleich_module.plan_grid_poses(known, self.lagen.value() - 1,
+                                                           center_shift_deg=center,
+                                                           reachable=reachable)
+                if planned:
+                    self.output.append_record("Lagen im Raster: %d mm Abstand, %d Lagen"
+                                              % (round(planned[0]["raster_mm"]), len(planned)))
+            else:
+                planned = vergleich_module.plan_poses(known, self.lagen.value() - 1,
+                                                      np.random.default_rng(), history=history,
+                                                      center_shift_deg=center, reachable=reachable)
         except Exception as exc:
             log.warning("Vergleich: Lagen nicht planbar: %s", exc)
             if not quiet:
@@ -437,7 +456,7 @@ class ComparisonTab(ModeTab):
                           float(yaw_deg(known.pick, known.table)))]
         self._plan_xy += [(p["xy"], float(yaw_deg(np.asarray(p["pose"]), known.table)))
                           for p in planned]
-        self._plan_key = (tuple(models), self.lagen.value())
+        self._plan_key = self._plan_key_now()
         if len(planned) < self.lagen.value() - 1:
             self.output.append_record("Nur %d von %d Lagen planbar -- den Rest wählt der "
                                       "Experte beim Umlegen selbst."
@@ -542,6 +561,7 @@ class ComparisonTab(ModeTab):
                       "fahrten_je_lage": self.fahrten.value(), "lagen": self.lagen.value(),
                       "probe_abstand_mm": gap, "glaettung": self.glaettung.value(),
                       "nachgreifen": self.regrasp.isChecked(),
+                      "lagenwahl": self.lagen_wahl.currentData(),
                       "backend": status.text}
         self.stats.clear()
         self.runs.clear()
@@ -549,7 +569,7 @@ class ComparisonTab(ModeTab):
         self.folder_line.setText("Protokoll: %s" % self._root)
         self.headline.setStyleSheet("font-weight:bold")
         self.read_pick(quiet=True)          # Tischpunkte fuer die Ansicht, falls verbunden
-        if self._plan_key != (tuple(models), self.lagen.value()):
+        if self._plan_key != self._plan_key_now():
             self._plan, self._plan_xy, self._plan_key = [], [], None
             if self.session.robot is not None:
                 self.plan_lagen(quiet=True)
@@ -654,7 +674,7 @@ class ComparisonTab(ModeTab):
 
     def _set_running(self, running):
         for widget in (self.btn_start, self.btn_rescan, self.models, self.cameras,
-                       self.fahrten, self.lagen, self.probe_gap, self.glaettung, self.regrasp,
+                       self.fahrten, self.lagen, self.lagen_wahl, self.probe_gap, self.glaettung, self.regrasp,
                        self.btn_up, self.btn_down, self.btn_read_pick, self.btn_plan):
             widget.setEnabled(not running)
         self.btn_stop.setEnabled(running)

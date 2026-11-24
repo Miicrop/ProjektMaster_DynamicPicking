@@ -567,14 +567,24 @@ def weighted_sampler(path, train_ds, train_eps, drop_n_last_frames, seed, n_epis
     weights = list(spec["gewichte"])
     if len(weights) != n_episodes:
         raise SystemExit("--episoden-gewichte: %d Gewichte fuer %d Episoden" % (len(weights), n_episodes))
+    # optional je Takt: {"takt_gewichte": {"<episode>": [w je Takt der Episode]}}; Frame-Gewicht =
+    # Episoden-Gewicht x Takt-Gewicht (z. B. 0 fuer Takte, deren Chunk ein zu weites Label enthaelt)
+    takt = {int(k): v for k, v in (spec.get("takt_gewichte") or {}).items()}
     starts = train_ds.meta.episodes["dataset_from_index"]
     ends = train_ds.meta.episodes["dataset_to_index"]
     rel = train_ds.absolute_to_relative_idx
     frames, frame_w = [], []
+    takt_null = 0
     for ep in train_eps:
+        tw = takt.get(int(ep))
+        if tw is not None and len(tw) != int(ends[ep]) - int(starts[ep]):
+            raise SystemExit("--episoden-gewichte: takt_gewichte[%d] hat %d Werte fuer %d Takte"
+                             % (ep, len(tw), int(ends[ep]) - int(starts[ep])))
         for absolute in range(int(starts[ep]), int(ends[ep]) - int(drop_n_last_frames)):
+            w = float(weights[ep]) * (float(tw[absolute - int(starts[ep])]) if tw is not None else 1.0)
+            takt_null += int(w == 0.0 and weights[ep] > 0)
             frames.append(rel[absolute] if rel is not None else absolute)
-            frame_w.append(float(weights[ep]))
+            frame_w.append(w)
     klasse = spec.get("klasse") or [None] * n_episodes
     mass = {}
     for ep in train_eps:
@@ -587,6 +597,7 @@ def weighted_sampler(path, train_ds, train_eps, drop_n_last_frames, seed, n_epis
         "regel": spec.get("regel"),
         "train_episoden_mit_gewicht": int(sum(1 for ep in train_eps if weights[ep] > 0)),
         "train_episoden": len(train_eps),
+        "takte_gewicht_null": takt_null,
         "anteil_frames_gewichtet": {str(k): round(v / total, 3) for k, v in sorted(mass.items(), key=str)},
     }
     return WeightedFrameSampler(frames, frame_w, seed=seed), info

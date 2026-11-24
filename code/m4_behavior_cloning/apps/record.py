@@ -49,6 +49,7 @@ der Daheng testen (auch ohne VM, der SimRobot laeuft dann in Echtzeit):
 """
 
 import argparse
+import dataclasses
 import json
 import sys
 import time
@@ -63,6 +64,7 @@ import numpy as np
 from bc import config, metrics, obstacles, preview
 from bc import execution as execution_module
 from bc import camera_settings as camera_settings_module, grip_heights
+from bc import korrektur_halt
 from bc.servo import substeps_for
 from bc.adapters import (
     CAMERA_MODES,
@@ -606,6 +608,42 @@ def resolve_points(sequence, robot, use_sim_robot):
         raise SystemExit("Ablauf nicht aufloesbar: %s%s" % (exc, hint))
 
 
+def _zweistufig_kwargs(args):
+    """Planer-Argumente des zweistufigen Endanflugs (``--anflug-zweistufig``)."""
+    v_d = getattr(args, "anflug_zweistufig", None)
+    if not v_d:
+        return {}
+    return {"approach_fast_speed": v_d[0], "approach_slow_m": v_d[1]}
+
+
+def _plan_korrektur(args, waypoints, robot, kin, workspace, seed_joints, rng, scale, korr, kh,
+                    speeds, ep, tries=5):
+    """V7 Korrektur-Halt (bc/korrektur_halt.py): Idealbahn = L-Bahn dieser Episode,
+    Rauschen obendrauf, Backen-Pruefung auf Ideal- und verrauschter Bahn. Scheitert
+    die Planung, wird die Korrektur neu gezogen (hoechstens ``tries`` mal)."""
+    pick = waypoints[korrektur_halt._pick_index(waypoints)].pose_quat
+    grund = None
+    for _ in range(tries):
+        wps = korrektur_halt.waypoints_mit_halt(waypoints, korr, kh)
+        ideal_k = build_ideal_trajectory(wps, fk=robot.fk, **speeds)
+        frei = korrektur_halt.clearance(ideal_k.poses_quat, pick, korrektur_halt.grasp_index(ideal_k), kh)
+        if frei >= 0:
+            try:
+                plan = generate_plan(kin, workspace, ideal_k, seed_joints, rng=rng, noise_scale=scale,
+                                     path_check=korrektur_halt.path_check(ideal_k, pick, kh))
+                plan.korrektur = {"versatz_m": [float(korr[0]), float(korr[1])],
+                                  "drehung_grad": float(np.degrees(korr[2])),
+                                  "freiraum_ideal_mm": round(1e3 * frei, 2)}
+                return plan
+            except PlanRejected as exc:
+                grund = str(exc)[:160]
+        else:
+            grund = "Idealbahn %.1f mm zu tief" % (-1e3 * frei)
+        korr = korrektur_halt.sample(rng, dataclasses.replace(kh, share=1.0))
+    print("Episode %d: Korrektur-Halt nicht planbar (%s)" % (ep, grund))
+    return None
+
+
 def plan_all(args, waypoints, robot, kin, scales, rng, table=None, keepouts=(),
              slow_put_back=True):
     """Alle Bahnen des Aufrufs EINMAL vorab planen (Schritte 2-3, AP 2.4).
@@ -631,7 +669,9 @@ def plan_all(args, waypoints, robot, kin, scales, rng, table=None, keepouts=(),
     speeds = dict(transit_speed=args.transit_speed,
                   approach_speed=args.approach_speed,
                   ptp_joint_speed=args.ptp_speed)
-    ideal = build_ideal_trajectory(waypoints, fk=robot.fk, **speeds)
+    # Zweistufiger Endanflug nur fuer die Aufnahmebahn, nicht fuers Zuruecklegen
+    ideal = build_ideal_trajectory(waypoints, fk=robot.fk, **speeds,
+                                   **_zweistufig_kwargs(args))
     z_min = min(wp.pose_quat[2] for wp in waypoints)
     table_z = args.table_z if args.table_z is not None else z_min - 0.15
     workspace = default_workspace(table_height_m=table_z)
@@ -665,7 +705,14 @@ def plan_all(args, waypoints, robot, kin, scales, rng, table=None, keepouts=(),
         raise SystemExit("Abbruch vor jeder Bewegung: %s" % exc)
 
     plans = []
+    kh = getattr(args, "korrektur_halt", None)
     for ep, scale in enumerate(scales):
+        korr = korrektur_halt.sample(rng, kh) if kh is not None else None
+        if korr is not None:
+            # Sim-Versuch V7: eigene Idealbahn (L-Bahn) fuer diese Episode
+            plans.append(_plan_korrektur(args, waypoints, robot, kin, workspace, seed_joints,
+                                         rng, scale, korr, kh, speeds, ep))
+            continue
         try:
             offset = sample_approach_offset(
                 rng, getattr(args, "anflug_anteil", 0.0), getattr(args, "anflug_versatz", None),
@@ -1073,7 +1120,9 @@ def parse_args():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--sim", action="store_true", help="hardwarefreier Lauf (= --robot sim)")
-    parser.add_argument("--robot", choices=("sim", "neura"), default=None)
+    parser.add_argument("--robot", choices=("sim", "neura", "mujoco"), default=None,
+                        help="mujoco = Taktiksimulation (bc/sim_mujoco) mit Folgemodell, Greifer "
+                             "und Objekt; Kameras dazu: --camera wrist=mujoco --camera scene=mujoco")
     parser.add_argument(
         "--sequence", default=None,
         help="Ablaufdatei (bc/sequence.py): Punktnamen, Koordinaten live je Episode",
@@ -1154,6 +1203,12 @@ def parse_args():
         help="TCP-Geschwindigkeit im Endanflug (Greifen/Absetzen) in m/s (Default %(default)g)",
     )
     planner.add_argument(
+        "--anflug-zweistufig", default=None, metavar="V,D",
+        help="zweistufiger Endanflug (Sim-Versuch V3b): mit V m/s anfahren, die letzten "
+             "D m vor dem Greifpunkt mit --approach-speed, z. B. 0.05,0.02 "
+             "(Default aus = einstufig)",
+    )
+    planner.add_argument(
         "--ptp-speed", type=float, default=config.PTP_JOINT_SPEED_RADS,
         help="hoechste Gelenkgeschwindigkeit in PTP-Segmenten in rad/s (Default %(default)g)",
     )
@@ -1227,6 +1282,20 @@ def parse_args():
         help="Anteil Ausreisser je Groesse (seitlich bis %.0f mm, Drehung bis %.0f Grad; "
              "Default %%(default)g)" % (1e3 * config.APPROACH_OFFSET_OUTLIER_MAX_M,
                                        config.APPROACH_YAW_OUTLIER_MAX_DEG),
+    )
+    parser.add_argument(
+        "--anflug-versatz-nah", dest="anflug_versatz_nah", default=None,
+        help="Sim-Versuch V6: Anflug-Versatz voll bis FULL, null ab FREE vor dem Griff, mit "
+             "Backen-Pruefung gegen die Objektoberkante OBERKANTE ueber PICK -- 'FULL,FREE,OBERKANTE' "
+             "in mm (Default aus: %.0f/%.0f mm, ohne Pruefung)"
+             % (1e3 * config.APPROACH_OFFSET_FULL_M, 1e3 * config.APPROACH_OFFSET_FREE_M),
+    )
+    parser.add_argument(
+        "--korrektur-halt", dest="korrektur_halt", default=None,
+        help="Sim-Versuch V7: in ANTEIL der Episoden versetzt (MIN..MAX mm) anfliegen, in "
+             "HOEHE mm ueber PICK abbremsen, seitlich korrigieren, senkrecht absenken -- als "
+             "Idealbahn (Label folgt der Korrektur); Backen-Pruefung gegen OBERKANTE mm ueber "
+             "PICK. 'ANTEIL,MIN,MAX,HOEHE,OBERKANTE', z. B. 0.4,10,20,14,8.4 (Default aus)",
     )
     parser.add_argument(
         "--hindernisse", choices=("auto", "an", "aus"), default="auto",
@@ -1377,6 +1446,45 @@ def parse_args():
         parser.error(str(exc))
     problems = planner_speed_problems(
         args.transit_speed, args.approach_speed, args.ptp_speed)
+    if args.anflug_zweistufig:
+        try:
+            v, d = (float(x) for x in args.anflug_zweistufig.split(","))
+        except ValueError:
+            parser.error("--anflug-zweistufig erwartet V,D (z. B. 0.05,0.02)")
+        lo, hi = config.PLANNER_APPROACH_SPEED_RANGE_MS
+        if not (lo <= v <= hi and args.approach_speed < v <= args.transit_speed and 0.0 < d <= 0.05):
+            parser.error("--anflug-zweistufig: V in %g..%g m/s, schneller als --approach-speed und "
+                         "hoechstens Transit; D in 0..0.05 m" % (lo, hi))
+        args.anflug_zweistufig = (v, d)
+    if getattr(args, "anflug_versatz_nah", None):
+        # Sim-Versuch V6: Versatz naeher am Objekt abbauen, mit Backen-Pruefung
+        try:
+            full, free, top = (float(x) / 1000.0 for x in args.anflug_versatz_nah.split(","))
+        except ValueError:
+            parser.error("--anflug-versatz-nah erwartet FULL,FREE,OBERKANTE in mm (z. B. 25,12,8.4)")
+        if not (0.005 <= free < full <= config.APPROACH_OFFSET_HOLD_M and 0.0 < top <= 0.03):
+            parser.error("--anflug-versatz-nah: 5 mm <= FREE < FULL <= %.0f mm, OBERKANTE 0..30 mm"
+                         % (1e3 * config.APPROACH_OFFSET_HOLD_M))
+        config.APPROACH_OFFSET_FULL_M = full
+        config.APPROACH_OFFSET_FREE_M = free
+        config.APPROACH_TIP_CHECK = {
+            "top_above_pick_m": top, "overshoot_m": config.APPROACH_TIP_OVERSHOOT_M,
+            "reserve_m": config.APPROACH_TIP_RESERVE_M, "eps_m": config.APPROACH_TIP_EPS_M,
+            "lever_m": config.APPROACH_TIP_LEVER_M}
+        args.anflug_versatz_nah = (full, free, top)
+    if getattr(args, "korrektur_halt", None):
+        try:
+            anteil, lo, hi, hold, top = (float(x) for x in args.korrektur_halt.split(","))
+        except ValueError:
+            parser.error("--korrektur-halt erwartet ANTEIL,MIN,MAX,HOEHE,OBERKANTE (z. B. 0.4,10,20,14,8.4)")
+        kh = korrektur_halt.KorrekturHalt(share=anteil, offset_range_m=(lo / 1e3, hi / 1e3),
+                                          hold_m=hold / 1e3, top_above_pick_m=top / 1e3)
+        need = kh.top_above_pick_m + kh.reserve_m + kh.overshoot_m
+        if not (0 < anteil <= 1 and 0 < lo <= hi <= 30 and 0 < top <= 30 and need <= kh.hold_m <= 0.04):
+            parser.error("--korrektur-halt: ANTEIL 0..1, 0 < MIN <= MAX <= 30 mm, HOEHE >= OBERKANTE + "
+                         "%.1f mm Reserve + %.1f mm Nachlauf (hier %.1f mm) und <= 40 mm"
+                         % (1e3 * kh.reserve_m, 1e3 * kh.overshoot_m, 1e3 * need))
+        args.korrektur_halt = kh
     if problems:
         parser.error("; ".join(problems))
     if (not 0 <= args.online_vorlauf <= 5 or not 0.5 <= args.online_tempo <= 3.0
@@ -1438,7 +1546,8 @@ def main():
 
 def run(args):
     robot_kind = args.robot or ("sim" if args.sim else "neura")
-    use_sim_robot = robot_kind == "sim"
+    # MuJoCo-Taktiksimulation zaehlt als Simulation (SimClock, keine Probefahrt)
+    use_sim_robot = robot_kind in ("sim", "mujoco")
     # Gegen den SimRobot gibt es nichts, woran der Arm stossen koennte.
     args.probefahrt = not args.ohne_probefahrt and not use_sim_robot
     camera_mode = resolve_camera_mode(args.cameras, use_sim_robot)
@@ -1457,7 +1566,7 @@ def run(args):
         print("Kamera %s" % note)
     # Der Modus sagt nur, WOMIT begonnen wird -- nach den Zuordnungen kann
     # trotzdem ueberall ein Platzhalter stehen (oder eben nicht mehr).
-    use_sim_cameras = all(c.backend == "sim" for c in cam_cfgs)
+    use_sim_cameras = all(c.backend in ("sim", "mujoco") for c in cam_cfgs)
     if not use_sim_cameras:
         # VOR jeder Hardware-Aktion: eine falsch konfigurierte Kamera faellt
         # im fertigen Datensatz nicht auf, deshalb hier hart nachfragen.
@@ -1487,7 +1596,14 @@ def run(args):
 
     # Echte Kameras stempeln mit der Host-Uhr -- dann auch der SimRobot.
     clock = SimClock() if use_sim_robot and use_sim_cameras else RealClock()
-    if use_sim_robot:
+    if robot_kind == "mujoco":
+        robot = open_robot("mujoco", clock=clock, seed=args.seed).connect()
+        robot_info = {"robot": "mujoco", "in_simulation": True, "tool": robot.tool_name,
+                      "gripper_mode": robot.gripper_mode,
+                      "timestamp_source": "sim" if isinstance(clock, SimClock) else "host"}
+        print("MuJoCo-Taktiksimulation: Punkte %s, Objekt an PICK"
+              % ", ".join(sorted(robot.point_names())))
+    elif use_sim_robot:
         robot = open_robot("sim", clock=clock, seed=args.seed).connect()
         robot_info = {"robot": "sim", "in_simulation": True}
     else:
@@ -1705,6 +1821,26 @@ def run(args):
         "segment_ramp_s": config.SEGMENT_RAMP_S,
         "gripper_dwell_s": config.GRIPPER_DWELL_S,
     }
+    if args.anflug_zweistufig:
+        planner_meta["approach_fast_speed_ms"], planner_meta["approach_slow_m"] = args.anflug_zweistufig
+        print("Endanflug zweistufig: %.3f m/s, die letzten %.0f mm mit %.3f m/s"
+              % (args.anflug_zweistufig[0], 1e3 * args.anflug_zweistufig[1], args.approach_speed))
+    if getattr(args, "korrektur_halt", None):
+        planner_meta["korrektur_halt"] = args.korrektur_halt.as_dict()
+        kh = args.korrektur_halt
+        print("Korrektur-Halt: %.0f %% der Episoden %.0f-%.0f mm versetzt, Halt %.1f mm ueber PICK "
+              "(Oberkante %.1f + Reserve %.1f + Nachlauf %.1f mm), dann senkrecht"
+              % (100 * kh.share, 1e3 * kh.offset_range_m[0], 1e3 * kh.offset_range_m[1],
+                 1e3 * kh.hold_m, 1e3 * kh.top_above_pick_m, 1e3 * kh.reserve_m, 1e3 * kh.overshoot_m))
+    if getattr(args, "anflug_versatz_nah", None):
+        planner_meta["approach_offset_full_m"] = config.APPROACH_OFFSET_FULL_M
+        planner_meta["approach_offset_free_m"] = config.APPROACH_OFFSET_FREE_M
+        planner_meta["approach_tip_check"] = dict(config.APPROACH_TIP_CHECK)
+        print("Anflug-Versatz nah: voll bis %.0f mm, null ab %.0f mm vor dem Griff; Backen-Pruefung: "
+              "Oberkante %.1f mm ueber PICK, Nachlauf %.1f mm, Reserve %.1f mm"
+              % (1e3 * config.APPROACH_OFFSET_FULL_M, 1e3 * config.APPROACH_OFFSET_FREE_M,
+                 1e3 * args.anflug_versatz_nah[2], 1e3 * config.APPROACH_TIP_OVERSHOOT_M,
+                 1e3 * config.APPROACH_TIP_RESERVE_M))
     object_points = [p.strip() for p in args.object_points.split(",") if p.strip()]
     if not use_sim_robot and not args.block:
         print("Hinweis: ohne --block (Objektlage) -- an der Anlage Pflicht (AP 5.2).")
@@ -2015,7 +2151,9 @@ def run(args):
                     episode, resolved.table if resolved is not None else None, plan.rate_hz)
                 episode.metadata["greifer_hoehen"] = height_events
                 if use_sim_robot and not episode.discarded:
-                    episode.success = True  # Sim: Bahn vollstaendig == Erfolg
+                    # Sim: Bahn vollstaendig == Erfolg; MuJoCo: das Objekt haengt am Greifer
+                    episode.success = (robot.griff_haelt() if hasattr(robot, "griff_haelt")
+                                       else True)
                 if args.ask_label and not episode.discarded:
                     # VOR dem Ablegen fragen: Verwerfen muss sich noch auf die
                     # Episode auswirken koennen, nicht erst auf die Datei.

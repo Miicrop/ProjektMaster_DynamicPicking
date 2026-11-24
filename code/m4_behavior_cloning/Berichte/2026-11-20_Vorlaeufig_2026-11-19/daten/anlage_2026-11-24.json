@@ -1,0 +1,2792 @@
+[
+ {
+  "quelle": "einzeln",
+  "zeit": "10-35",
+  "modell": "G2",
+  "xy": 3.7821868405500667,
+  "quer": 0.20755557703560967,
+  "laengs": 3.7764875187496,
+  "yaw": 0.8742515514528435,
+  "rest": 2.2280096031354337,
+  "hoehe": 18.468635249441075,
+  "wb": null,
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_10-35-12"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-36",
+  "modell": "G2",
+  "xy": 3.5131335689411647,
+  "quer": 0.04287657182058968,
+  "laengs": 3.5128719123831145,
+  "yaw": 0.7513070697266784,
+  "rest": 2.408780381050885,
+  "hoehe": 14.562158288928915,
+  "wb": null,
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_10-36-13"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-38",
+  "modell": "G2",
+  "xy": 2.390373239838573,
+  "quer": 0.07430134725366355,
+  "laengs": 2.3892181849995713,
+  "yaw": 0.8493821024583212,
+  "rest": 2.3645188678954296,
+  "hoehe": 10.257515649770024,
+  "wb": null,
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_10-38-16"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-39",
+  "modell": "G2",
+  "xy": 2.3274311709500246,
+  "quer": 0.017807862505820893,
+  "laengs": 2.327363043348153,
+  "yaw": 0.6533069890279819,
+  "rest": 2.4466763056753185,
+  "hoehe": 9.207003743876715,
+  "wb": null,
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_10-39-16"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-43",
+  "modell": "G2",
+  "xy": 3.2051745193084282,
+  "quer": 2.8364329545439424,
+  "laengs": 1.49257890699324,
+  "yaw": 28.839758888881292,
+  "rest": -3.9041453136268243,
+  "hoehe": 10.504291892883696,
+  "wb": null,
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_10-43-33"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-45",
+  "modell": "G2",
+  "xy": 4.4881046984487165,
+  "quer": 3.954706030799259,
+  "laengs": 2.1221178087461148,
+  "yaw": 29.44008888619686,
+  "rest": -5.091055082894693,
+  "hoehe": 9.602818284858941,
+  "wb": null,
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_10-45-39"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-46",
+  "modell": "G2",
+  "xy": 3.9275587770165727,
+  "quer": 3.506870415554877,
+  "laengs": 1.76849592462801,
+  "yaw": 29.389645020841172,
+  "rest": -4.6374676089355695,
+  "hoehe": 9.416176649604438,
+  "wb": null,
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_10-46-36"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "11-09",
+  "modell": "G2",
+  "xy": 3.9164847856698417,
+  "quer": 3.8310604781893414,
+  "laengs": 0.8135285421169933,
+  "yaw": 29.380220358432922,
+  "rest": -4.960582708565512,
+  "hoehe": 9.341788582764506,
+  "wb": null,
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_11-09-23"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "12-54",
+  "modell": "G2",
+  "xy": 5.5694014968187435,
+  "quer": 4.101615292988823,
+  "laengs": 3.767623258910991,
+  "yaw": 29.564647281732903,
+  "rest": -5.252154860528552,
+  "hoehe": 9.114126142629589,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_12-54-07"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "12-54",
+  "modell": "G2",
+  "xy": 303.3486019267909,
+  "quer": 38.948205010823244,
+  "laengs": 300.8378493763268,
+  "yaw": 21.531455377522946,
+  "rest": -39.15079479049867,
+  "hoehe": 390.1204334343634,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_12-54-07"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "12-58",
+  "modell": "G2",
+  "xy": 2.855433550487014,
+  "quer": 2.1899613580510535,
+  "laengs": 1.8323673243894243,
+  "yaw": 0.2607409008014798,
+  "rest": 0.3259078556534054,
+  "hoehe": 9.520545182154908,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_12-58-35"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "12-58",
+  "modell": "G2",
+  "xy": 303.6221947320911,
+  "quer": 39.12667170358117,
+  "laengs": 301.0905855308864,
+  "yaw": 21.452971605990584,
+  "rest": -39.319702325955674,
+  "hoehe": 389.89725160326105,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_12-58-35"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "12-59",
+  "modell": "G2",
+  "xy": 1.7209915624139704,
+  "quer": 1.6792116687326795,
+  "laengs": 0.3769086487361206,
+  "yaw": 0.4283873307595627,
+  "rest": 0.8147130832576841,
+  "hoehe": 9.892925972943848,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_12-59-21"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "12-59",
+  "modell": "G2",
+  "xy": 303.83708712593847,
+  "quer": 39.24584905196076,
+  "laengs": 301.29178356763373,
+  "yaw": 21.479183522585657,
+  "rest": -39.442072803628854,
+  "hoehe": 389.87478133287254,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_12-59-21"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-00",
+  "modell": "G2",
+  "xy": 1.5122429187271356,
+  "quer": 1.4988993757018767,
+  "laengs": 0.2004477656669933,
+  "yaw": 0.3838057340481811,
+  "rest": 1.0008609469240077,
+  "hoehe": 9.545972294813007,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_13-00-41"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-00",
+  "modell": "G2",
+  "xy": 303.6126093056031,
+  "quer": 39.13407469631544,
+  "laengs": 301.0799573651823,
+  "yaw": 21.470483298404886,
+  "rest": -39.32923865248695,
+  "hoehe": 389.86112334605707,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_13-00-41"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-15",
+  "modell": "G2",
+  "xy": 2.58747421940272,
+  "quer": 1.3555114845510081,
+  "laengs": 2.2039989680859735,
+  "yaw": -0.31072927449027077,
+  "rest": 1.1538143479155158,
+  "hoehe": 9.258283697408967,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_13-15-16"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-15",
+  "modell": "G2",
+  "xy": 150.16770480107397,
+  "quer": 21.652371545563593,
+  "laengs": 148.59850057007762,
+  "yaw": -10.77747806943242,
+  "rest": -20.50483540184123,
+  "hoehe": 392.2163731047602,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_13-15-16"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-00",
+  "modell": "G2",
+  "xy": 6.8588254406784905,
+  "quer": 1.8908195726001487,
+  "laengs": 6.593048442835126,
+  "yaw": -1.7865470058879396,
+  "rest": 0.42535986465922015,
+  "hoehe": 10.411974252380825,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-00-29"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-00",
+  "modell": "G2",
+  "xy": 3.788625005932177,
+  "quer": 1.9055929208090912,
+  "laengs": 3.2745068416078884,
+  "yaw": -0.8122124652369394,
+  "rest": 0.5380922769027771,
+  "hoehe": 10.889010528328491,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-00-29"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-04",
+  "modell": "G2",
+  "xy": 403.71905221036013,
+  "quer": 80.54882077046577,
+  "laengs": 395.6020229853722,
+  "yaw": 29.74935676774409,
+  "rest": -81.72037144640545,
+  "hoehe": 389.10509223475106,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-04-02"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-13",
+  "modell": "G2",
+  "xy": 1.8870375221031235,
+  "quer": 1.8863552127869596,
+  "laengs": 0.050740723453272185,
+  "yaw": -1.252199783502789,
+  "rest": 0.49974526711186595,
+  "hoehe": 9.837999196744295,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-13-23"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-13",
+  "modell": "G2",
+  "xy": 5.258856145968973,
+  "quer": 2.115285511678043,
+  "laengs": 4.814679134488674,
+  "yaw": -0.7960325243086146,
+  "rest": 0.33051742675924994,
+  "hoehe": 13.203381623437505,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-13-23"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-16",
+  "modell": "G2",
+  "xy": 5.345414718416824,
+  "quer": 0.2663700245032974,
+  "laengs": 5.338773784485847,
+  "yaw": -1.0846945930922374,
+  "rest": 2.1416522664757514,
+  "hoehe": 8.913855853312247,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-16-18"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-17",
+  "modell": "G2",
+  "xy": 0.7968627244902485,
+  "quer": 0.4137783670715218,
+  "laengs": 0.68101223529805,
+  "yaw": 0.6670040565739015,
+  "rest": 2.048912978173497,
+  "hoehe": 10.72103895749012,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-17-14"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-17",
+  "modell": "G2",
+  "xy": 1.6833370938155887,
+  "quer": 0.4416265113793382,
+  "laengs": 1.6243736626350562,
+  "yaw": 0.7918624865378803,
+  "rest": 2.004722231319697,
+  "hoehe": 10.485118812825949,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-17-14"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-19",
+  "modell": "G2",
+  "xy": 0.994741896285426,
+  "quer": 0.11556039921869234,
+  "laengs": 0.9880066975268648,
+  "yaw": 1.07176744157033,
+  "rest": 2.2941537523096778,
+  "hoehe": 10.189848690724356,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-19-40"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-20",
+  "modell": "G2",
+  "xy": 4.673607111402321,
+  "quer": 0.019929232067090297,
+  "laengs": 4.673564620015386,
+  "yaw": -1.6743429272973742,
+  "rest": 2.3109309842425336,
+  "hoehe": 10.091569643554406,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-20-23"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-31",
+  "modell": "G2",
+  "xy": 0.3487315015785821,
+  "quer": 0.13140409033717707,
+  "laengs": 0.3230272824947015,
+  "yaw": 0.727410982132497,
+  "rest": 2.323380592630771,
+  "hoehe": 10.703279997442554,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-31-25"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-31",
+  "modell": "G2",
+  "xy": 1.3063080193926706,
+  "quer": 0.15131039936577437,
+  "laengs": 1.297515242520631,
+  "yaw": 0.3860071330911552,
+  "rest": 2.3481617673016095,
+  "hoehe": 9.540498850717197,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-31-25"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-33",
+  "modell": "G2",
+  "xy": 0.11377389545910285,
+  "quer": 0.018936724143504412,
+  "laengs": 0.11218689659069675,
+  "yaw": 0.9532826687643592,
+  "rest": 2.4062846233813184,
+  "hoehe": 9.944897910779625,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-33-43"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-34",
+  "modell": "G2",
+  "xy": 5.457694099869098,
+  "quer": 0.6077723621376236,
+  "laengs": 5.423747564513638,
+  "yaw": -0.123587001620308,
+  "rest": 1.926050149725015,
+  "hoehe": 10.139492202605366,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-34-44"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-34",
+  "modell": "G2",
+  "xy": 4.819217056174171,
+  "quer": 0.2936954937991729,
+  "laengs": 4.810259451572452,
+  "yaw": -0.41108981412429557,
+  "rest": 2.2024934370574445,
+  "hoehe": 10.16148396694232,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2_licht_langsam_nur_griff\\policy\\rollouts\\2026-11-24_14-34-44"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "12-56",
+  "modell": "G2b",
+  "xy": 4.615728943710004,
+  "quer": 4.553362117280097,
+  "laengs": 0.7562057330652674,
+  "yaw": 29.669423055884636,
+  "rest": -5.715824892931707,
+  "hoehe": 10.11418452928596,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_12-56-48"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "12-56",
+  "modell": "G2b",
+  "xy": 302.8420844885271,
+  "quer": 38.654157663763755,
+  "laengs": 300.36508490945,
+  "yaw": 21.517800976145395,
+  "rest": -38.85508473685672,
+  "hoehe": 390.9174405256157,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_12-56-48"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-02",
+  "modell": "G2b",
+  "xy": 2.001980128726674,
+  "quer": 1.9505550802028115,
+  "laengs": 0.450842893823861,
+  "yaw": 0.953712153779918,
+  "rest": 0.4746100556496139,
+  "hoehe": 9.390928542820879,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_13-02-50"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-02",
+  "modell": "G2b",
+  "xy": 301.85087193869333,
+  "quer": 38.22412083283861,
+  "laengs": 299.4208835013116,
+  "yaw": 21.038755369099036,
+  "rest": -38.366615954278586,
+  "hoehe": 392.1755986578619,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_13-02-50"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-05",
+  "modell": "G2b",
+  "xy": 28.161665184880935,
+  "quer": 26.900620136270547,
+  "laengs": 8.332827987508814,
+  "yaw": 59.34576142903083,
+  "rest": -30.802568348302195,
+  "hoehe": 9.972244492079493,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_13-05-32"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-05",
+  "modell": "G2b",
+  "xy": 303.79709599035897,
+  "quer": 39.233317319997965,
+  "laengs": 301.2530868625975,
+  "yaw": 21.55013145419501,
+  "rest": -39.438181046220144,
+  "hoehe": 389.85683050812867,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_13-05-32"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-14",
+  "modell": "G2b",
+  "xy": 4.04614507604919,
+  "quer": 0.30371352574946586,
+  "laengs": 4.034730235184744,
+  "yaw": 0.6656361129948891,
+  "rest": 2.159156870782754,
+  "hoehe": 10.738981841066776,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_13-14-04"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-14",
+  "modell": "G2b",
+  "xy": 150.37068183670806,
+  "quer": 21.65881205846049,
+  "laengs": 148.8026808100337,
+  "yaw": -10.775433092556725,
+  "rest": -20.51101294877136,
+  "hoehe": 392.1562973465631,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_13-14-04"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-01",
+  "modell": "G2b",
+  "xy": 403.71151050290865,
+  "quer": 80.51185706840286,
+  "laengs": 395.601851087602,
+  "yaw": 29.751895280414985,
+  "rest": -81.68369623678649,
+  "hoehe": 389.1405303158379,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_14-01-41"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-02",
+  "modell": "G2b",
+  "xy": 403.7081564700546,
+  "quer": 80.51567128211028,
+  "laengs": 395.59765201330663,
+  "yaw": 29.751111699701156,
+  "rest": -81.68742140026421,
+  "hoehe": 389.1325567360953,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_14-02-17"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-02",
+  "modell": "G2b",
+  "xy": 403.711981518056,
+  "quer": 80.5278933485518,
+  "laengs": 395.5990677618938,
+  "yaw": 29.750226257683195,
+  "rest": -81.69954283958451,
+  "hoehe": 389.1227312481533,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_14-02-57"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-14",
+  "modell": "G2b",
+  "xy": 4.588538753226983,
+  "quer": 2.6475041379106536,
+  "laengs": 3.7477206045290785,
+  "yaw": -1.2521878998914104,
+  "rest": -0.26140210282221815,
+  "hoehe": 8.94959509616677,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_14-14-17"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-14",
+  "modell": "G2b",
+  "xy": 4.532808100608526,
+  "quer": 0.7754866204842472,
+  "laengs": 4.465979151137207,
+  "yaw": -0.8391102568495796,
+  "rest": 1.6646780301462074,
+  "hoehe": 8.828505433988216,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_14-14-17"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-18",
+  "modell": "G2b",
+  "xy": 0.3831044234325367,
+  "quer": 0.2093961645571629,
+  "laengs": 0.32081497085130856,
+  "yaw": 1.7431525858605283,
+  "rest": 2.112460894363612,
+  "hoehe": 8.785316915470814,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_14-18-02"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-18",
+  "modell": "G2b",
+  "xy": 1.9185597712884808,
+  "quer": 0.3243540107231229,
+  "laengs": 1.8909431698848942,
+  "yaw": 1.3831389020633793,
+  "rest": 2.0446111147476986,
+  "hoehe": 10.1059501771605,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_14-18-02"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-32",
+  "modell": "G2b",
+  "xy": 2.273233846091167,
+  "quer": 0.23604987961995114,
+  "laengs": 2.2609450619919644,
+  "yaw": 1.6624025944526153,
+  "rest": 2.096372660025897,
+  "hoehe": 9.868591885379528,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_14-32-08"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-32",
+  "modell": "G2b",
+  "xy": 1.6417992091495965,
+  "quer": 0.018425580944973714,
+  "laengs": 1.6416958126069154,
+  "yaw": 1.8688656708915516,
+  "rest": 2.286983851172674,
+  "hoehe": 9.49052742836931,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2b_580_dagger_nur_griff\\policy\\rollouts\\2026-11-24_14-32-08"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-40",
+  "modell": "G2c",
+  "xy": 6.114896421184954,
+  "quer": 6.113571018552831,
+  "laengs": 0.1273092413435042,
+  "yaw": 1.3258126231635288,
+  "rest": -3.737103997749389,
+  "hoehe": 22.884696750112163,
+  "wb": null,
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_10-40-10"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-40",
+  "modell": "G2c",
+  "xy": 6.680564902686864,
+  "quer": 6.660728576615886,
+  "laengs": 0.5144339099087984,
+  "yaw": 1.2652563181179204,
+  "rest": -4.276336780679839,
+  "hoehe": 19.184615953675447,
+  "wb": null,
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_10-40-47"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-41",
+  "modell": "G2c",
+  "xy": 8.512928035711736,
+  "quer": 8.062363333822399,
+  "laengs": 2.7328083018468496,
+  "yaw": 1.3460032934493995,
+  "rest": -5.688538547196459,
+  "hoehe": 12.67648436783693,
+  "wb": null,
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_10-41-19"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-41",
+  "modell": "G2c",
+  "xy": 9.850813702054515,
+  "quer": 8.740435086730306,
+  "laengs": 4.543492608912084,
+  "yaw": -1.1489643530523779,
+  "rest": -6.340824089020091,
+  "hoehe": 9.055946995105076,
+  "wb": null,
+  "erfolg": false,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_10-41-56"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-42",
+  "modell": "G2c",
+  "xy": 16.31197748648416,
+  "quer": 12.860311592729731,
+  "laengs": 10.034589939677028,
+  "yaw": 29.98619860241942,
+  "rest": -14.05874692356674,
+  "hoehe": 10.442773901370675,
+  "wb": null,
+  "erfolg": false,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_10-42-57"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "10-44",
+  "modell": "G2c",
+  "xy": 12.793644713733737,
+  "quer": 10.152598000330372,
+  "laengs": 7.7847349925951175,
+  "yaw": 30.65410411867964,
+  "rest": -11.426502873401208,
+  "hoehe": 10.349865920298726,
+  "wb": null,
+  "erfolg": false,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_10-44-22"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "11-07",
+  "modell": "G2c",
+  "xy": 14.8359661008849,
+  "quer": 11.30486793927675,
+  "laengs": 9.60759340428801,
+  "yaw": 30.650127339036544,
+  "rest": -12.578324986348408,
+  "hoehe": 10.230163824333768,
+  "wb": null,
+  "erfolg": false,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_11-07-43"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "12-56",
+  "modell": "G2c",
+  "xy": 7.316575907354444,
+  "quer": 6.084203887592924,
+  "laengs": 4.06383391174869,
+  "yaw": 29.149522342070057,
+  "rest": -7.187382070579041,
+  "hoehe": 9.376186979074427,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_12-56-00"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "12-56",
+  "modell": "G2c",
+  "xy": 7.165654111761893,
+  "quer": 6.2788230878107845,
+  "laengs": 3.4529667651722877,
+  "yaw": 29.656800831283277,
+  "rest": -7.439850144351925,
+  "hoehe": 9.828443055461253,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_12-56-00"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-01",
+  "modell": "G2c",
+  "xy": 2.4170192499658927,
+  "quer": 1.8684651993843613,
+  "laengs": 1.5332383550496136,
+  "yaw": 0.7189654594125443,
+  "rest": 0.5874249118597978,
+  "hoehe": 10.430646730911084,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-01-17"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-01",
+  "modell": "G2c",
+  "xy": 303.4171641670017,
+  "quer": 38.96894162787527,
+  "laengs": 300.90429890506465,
+  "yaw": 21.439719390370826,
+  "rest": -39.16035765003222,
+  "hoehe": 389.9673687023215,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-01-17"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-02",
+  "modell": "G2c",
+  "xy": 1.7480867013053856,
+  "quer": 0.2553018049400335,
+  "laengs": 1.7293432579089396,
+  "yaw": 1.948547515094873,
+  "rest": 2.0396830861013715,
+  "hoehe": 17.655795559907634,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-02-07"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-02",
+  "modell": "G2c",
+  "xy": 303.6850487119022,
+  "quer": 39.1727807698676,
+  "laengs": 301.1479736905203,
+  "yaw": 21.443046177620943,
+  "rest": -39.364602129088695,
+  "hoehe": 390.0516899772566,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-02-07"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-16",
+  "modell": "G2c",
+  "xy": 3.7019750076900357,
+  "quer": 0.15323799808530622,
+  "laengs": 3.698802113320534,
+  "yaw": 0.564211291187064,
+  "rest": 2.322908110221541,
+  "hoehe": 11.108865181461532,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-16-15"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-16",
+  "modell": "G2c",
+  "xy": 150.5430227039797,
+  "quer": 21.68558292287302,
+  "laengs": 148.97294109383134,
+  "yaw": -10.781501942746715,
+  "rest": -20.538564208506884,
+  "hoehe": 392.4308030090702,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-16-15"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-19",
+  "modell": "G2c",
+  "xy": 3.1381184506275392,
+  "quer": 0.45197753142171526,
+  "laengs": 3.1053991243089705,
+  "yaw": 0.502820103130631,
+  "rest": 2.032204315839468,
+  "hoehe": 9.701989241184592,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-19-48"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-19",
+  "modell": "G2c",
+  "xy": 3.8103109525602847,
+  "quer": 0.44351500157503254,
+  "laengs": 3.7844106540621048,
+  "yaw": 0.3399085248192364,
+  "rest": 2.061991337564469,
+  "hoehe": 9.374905566498335,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-19-48"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-21",
+  "modell": "G2c",
+  "xy": 3.988699373471715,
+  "quer": 0.23839587170820659,
+  "laengs": 3.9815687988889676,
+  "yaw": 0.5129994054209845,
+  "rest": 2.244453560355025,
+  "hoehe": 11.060522242259864,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-21-52"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-21",
+  "modell": "G2c",
+  "xy": 149.9822837360777,
+  "quer": 21.63444679130241,
+  "laengs": 148.41373301256058,
+  "yaw": -10.75204237045402,
+  "rest": -20.48363971433622,
+  "hoehe": 391.9791864792667,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-21-52"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-22",
+  "modell": "G2c",
+  "xy": 6.642161977540521,
+  "quer": 3.140677917494187,
+  "laengs": 5.85273081171938,
+  "yaw": 33.785860844781084,
+  "rest": -4.761356911451166,
+  "hoehe": 8.851526309419762,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-22-33"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-22",
+  "modell": "G2c",
+  "xy": 7.715434749956925,
+  "quer": 2.873005125196156,
+  "laengs": 7.160570852344072,
+  "yaw": 34.2130149031331,
+  "rest": -4.540039403518854,
+  "hoehe": 10.515828454267265,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-22-33"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-23",
+  "modell": "G2c",
+  "xy": 8.882310490790385,
+  "quer": 4.6775377219136915,
+  "laengs": 7.550899318285167,
+  "yaw": 32.306085785784504,
+  "rest": -6.135853678546852,
+  "hoehe": 12.557128676905835,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-23-56"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "13-23",
+  "modell": "G2c",
+  "xy": 150.42745326508822,
+  "quer": 21.637861312631884,
+  "laengs": 148.86309701747984,
+  "yaw": -10.725230418180644,
+  "rest": -20.483606023007436,
+  "hoehe": 392.3094055543533,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_13-23-56"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-03",
+  "modell": "G2c",
+  "xy": 403.71807625082624,
+  "quer": 80.54015959960759,
+  "laengs": 395.60279041399303,
+  "yaw": 29.75029383721693,
+  "rest": -81.71181677082888,
+  "hoehe": 389.1104113945191,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "arm steht: 5 Takte ohne Bewegung (< 1e-0",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_14-03-26"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-15",
+  "modell": "G2c",
+  "xy": 4.489282620204224,
+  "quer": 0.29237137789800327,
+  "laengs": 4.479751937490929,
+  "yaw": 0.13862887226208898,
+  "rest": 2.2394821628625365,
+  "hoehe": 10.809201674746467,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_14-15-13"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-15",
+  "modell": "G2c",
+  "xy": 7.3710615360935305,
+  "quer": 1.1051567909584947,
+  "laengs": 7.287741531934008,
+  "yaw": 0.09908536831014203,
+  "rest": 1.4318729711248122,
+  "hoehe": 10.505977164995734,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_14-15-13"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-18",
+  "modell": "G2c",
+  "xy": 1.4376446311594968,
+  "quer": 1.2181507950551038,
+  "laengs": 0.7634990019694484,
+  "yaw": 1.231465811024421,
+  "rest": 1.1706631180164282,
+  "hoehe": 9.056359803095258,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_14-18-47"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-18",
+  "modell": "G2c",
+  "xy": 1.4723788741007289,
+  "quer": 1.161713785822663,
+  "laengs": 0.904610760895373,
+  "yaw": 1.2571469201024428,
+  "rest": 1.2237392706703918,
+  "hoehe": 10.028744448847675,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_14-18-47"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-32",
+  "modell": "G2c",
+  "xy": 0.8178894824828682,
+  "quer": 0.8103826882348739,
+  "laengs": 0.11055814834426836,
+  "yaw": 1.0227607000706485,
+  "rest": 1.6057453589918527,
+  "hoehe": 9.88281767339505,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_14-32-53"
+ },
+ {
+  "quelle": "einzeln",
+  "zeit": "14-32",
+  "modell": "G2c",
+  "xy": 1.5265774339739744,
+  "quer": 0.9442740400451257,
+  "laengs": 1.1994937262092789,
+  "yaw": 1.1359332579495742,
+  "rest": 1.4570423849405962,
+  "hoehe": 10.346566952469187,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "checkpoints\\G2c_579_nur_griff\\policy\\rollouts\\2026-11-24_14-32-53"
+ },
+ {
+  "quelle": "vergleich 15-00",
+  "zeit": "15-00",
+  "modell": "G2",
+  "xy": 4.097083493298918,
+  "quer": 0.3671306394904963,
+  "laengs": 4.080601456232863,
+  "yaw": -0.5907113727512296,
+  "rest": 2.1055467924606295,
+  "hoehe": 10.202863557515807,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-00-27\\lage_01\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-00",
+  "zeit": "15-00",
+  "modell": "G2",
+  "xy": 5.242960545411789,
+  "quer": 0.8644553586875747,
+  "laengs": 5.171204135748367,
+  "yaw": -0.669543543972452,
+  "rest": 1.5979035910450066,
+  "hoehe": 9.646586619439363,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-00-27\\lage_01\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-00",
+  "zeit": "15-00",
+  "modell": "G2b",
+  "xy": 0.6098602206211426,
+  "quer": 0.42794243169893126,
+  "laengs": 0.4345051942700737,
+  "yaw": 0.27446846248639645,
+  "rest": 2.0861298679867106,
+  "hoehe": 9.680530744520345,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-00-27\\lage_01\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-00",
+  "zeit": "15-00",
+  "modell": "G2b",
+  "xy": 0.6914621086061098,
+  "quer": 0.33464793992704667,
+  "laengs": 0.6050872696897459,
+  "yaw": 0.2246325333091903,
+  "rest": 2.1859478055514683,
+  "hoehe": 9.520565621575873,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-00-27\\lage_01\\G2b_580_dagger_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-00",
+  "zeit": "15-00",
+  "modell": "G2c",
+  "xy": 4.019168107826276,
+  "quer": 1.375154477052687,
+  "laengs": 3.776594026793164,
+  "yaw": 0.6221885557647937,
+  "rest": 1.0934028321339093,
+  "hoehe": 9.352490503361667,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-00-27\\lage_01\\G2c_579_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-00",
+  "zeit": "15-00",
+  "modell": "G2c",
+  "xy": 4.149707758238445,
+  "quer": 1.8791220390296686,
+  "laengs": 3.699861462435765,
+  "yaw": 0.4721943155246038,
+  "rest": 0.6090685692925909,
+  "hoehe": 10.267358303949832,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-00-27\\lage_01\\G2c_579_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-05",
+  "zeit": "15-05",
+  "modell": "G2",
+  "xy": 4.623074899241605,
+  "quer": 0.23647289255369386,
+  "laengs": 4.61702307716618,
+  "yaw": -0.7911848081066637,
+  "rest": 2.2099645495799205,
+  "hoehe": 9.342969124419666,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-05-50\\lage_01\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-05",
+  "zeit": "15-05",
+  "modell": "G2",
+  "xy": 2.850899625890847,
+  "quer": 0.4076928010263321,
+  "laengs": 2.821597997039244,
+  "yaw": -0.8700442484318955,
+  "rest": 2.028423050019472,
+  "hoehe": 9.083299549213459,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-05-50\\lage_01\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-05",
+  "zeit": "15-05",
+  "modell": "G2b",
+  "xy": 0.8854002982009832,
+  "quer": 0.32245084283048003,
+  "laengs": 0.8245963509574264,
+  "yaw": 0.30978018610127833,
+  "rest": 2.1869992231942432,
+  "hoehe": 10.106711736727798,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-05-50\\lage_01\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-05",
+  "zeit": "15-05",
+  "modell": "G2b",
+  "xy": 0.962130171710056,
+  "quer": 0.4768489520538732,
+  "laengs": 0.8356491753361244,
+  "yaw": 0.22029638507846983,
+  "rest": 2.0443143896221434,
+  "hoehe": 10.396925096921768,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-05-50\\lage_01\\G2b_580_dagger_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-05",
+  "zeit": "15-05",
+  "modell": "G2c",
+  "xy": 4.118758977485507,
+  "quer": 1.426261038276138,
+  "laengs": 3.8639299897012798,
+  "yaw": 0.4752959812088733,
+  "rest": 1.061523576836114,
+  "hoehe": 9.581301530124282,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-05-50\\lage_01\\G2c_579_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-05",
+  "zeit": "15-05",
+  "modell": "G2c",
+  "xy": 2.800155579287945,
+  "quer": 0.8729327243294028,
+  "laengs": 2.660612660086442,
+  "yaw": 0.07277177020866077,
+  "rest": 1.667541475786879,
+  "hoehe": 9.997771179291949,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-05-50\\lage_01\\G2c_579_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2",
+  "xy": 4.86447649943966,
+  "quer": 0.3316511632184971,
+  "laengs": 4.853157644208205,
+  "yaw": -0.7562824797603298,
+  "rest": 2.1193545663655096,
+  "hoehe": 10.481772375010623,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_01\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2",
+  "xy": 5.929601377093782,
+  "quer": 0.6021519808463833,
+  "laengs": 5.898947828485624,
+  "yaw": -0.7134027791820188,
+  "rest": 1.8544662266527885,
+  "hoehe": 11.956364166994433,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_01\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2b",
+  "xy": 0.8892515755464238,
+  "quer": 0.0005228533619812681,
+  "laengs": 0.8892514218353316,
+  "yaw": 0.36068870135402165,
+  "rest": 2.5022634178828027,
+  "hoehe": 10.256569079289946,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_01\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2b",
+  "xy": 0.7639214213536147,
+  "quer": 0.11898970620021904,
+  "laengs": 0.7545975005400645,
+  "yaw": 0.16735399316526411,
+  "rest": 2.4091037384710106,
+  "hoehe": 10.189628824786347,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_01\\G2b_580_dagger_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2c",
+  "xy": 2.7256637138087427,
+  "quer": 0.9126430872908072,
+  "laengs": 2.568331223965081,
+  "yaw": 0.15961000707999062,
+  "rest": 1.6164640386614122,
+  "hoehe": 10.055556474752803,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_01\\G2c_579_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2c",
+  "xy": 3.0632014771242106,
+  "quer": 0.5914106498974048,
+  "laengs": 3.0055676223708354,
+  "yaw": 0.07742865780785735,
+  "rest": 1.9484539655814355,
+  "hoehe": 10.038222738789338,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_01\\G2c_579_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2",
+  "xy": 3.785762195669944,
+  "quer": 1.8991970918327672,
+  "laengs": 3.274911572628744,
+  "yaw": -0.5513053708725693,
+  "rest": 0.5786383174429072,
+  "hoehe": 9.058198317607939,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_02\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2",
+  "xy": 2.8791805131248025,
+  "quer": 1.5526606928427142,
+  "laengs": 2.424649500455433,
+  "yaw": -0.28259486758977914,
+  "rest": 0.9603478754725547,
+  "hoehe": 10.12148213156917,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_02\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2b",
+  "xy": 1.3491645365784166,
+  "quer": 1.2439383573819915,
+  "laengs": 0.5223622400161081,
+  "yaw": 0.19297660470425626,
+  "rest": 1.280801111891511,
+  "hoehe": 9.15611169839346,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_02\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2b",
+  "xy": 0.9200618817928803,
+  "quer": 0.907734645044353,
+  "laengs": 0.15010556456860125,
+  "yaw": 0.3242627237663669,
+  "rest": 1.5998196902572879,
+  "hoehe": 9.177914202725024,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_02\\G2b_580_dagger_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2c",
+  "xy": 3.0300041719769526,
+  "quer": 2.1708904127911017,
+  "laengs": 2.113802284474453,
+  "yaw": 0.4365577289924545,
+  "rest": 0.32196486703887617,
+  "hoehe": 9.741392942629723,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_02\\G2c_579_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-12",
+  "zeit": "15-12",
+  "modell": "G2c",
+  "xy": 2.2934784098801866,
+  "quer": 1.5761074830643964,
+  "laengs": 1.6661117664835579,
+  "yaw": 0.26609890980404316,
+  "rest": 0.939060376314446,
+  "hoehe": 10.431147133814582,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-12-23\\lage_02\\G2c_579_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 5.3194716613944015,
+  "quer": 0.10222452189887754,
+  "laengs": 5.318489344118371,
+  "yaw": -0.7456973192316241,
+  "rest": 2.350166682935464,
+  "hoehe": 10.911345786816563,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_01\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 3.3847511652062243,
+  "quer": 0.9127291610218873,
+  "laengs": 3.2593658783550485,
+  "yaw": -0.8788332834194392,
+  "rest": 1.5222363420201201,
+  "hoehe": 9.392970635030323,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_01\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 4.4999668935618695,
+  "quer": 0.35550384237111254,
+  "laengs": 4.485902257206707,
+  "yaw": 0.21925528698294272,
+  "rest": 2.165795777724357,
+  "hoehe": 10.853715610476645,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_01\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 3.364682617031465,
+  "quer": 0.1438845522734289,
+  "laengs": 3.361604728246732,
+  "yaw": 0.19326611480657618,
+  "rest": 2.380817020431571,
+  "hoehe": 10.804645957527965,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_01\\G2b_580_dagger_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 2.943558509874274,
+  "quer": 0.06745287593120497,
+  "laengs": 2.942785552938213,
+  "yaw": -0.10356932811994568,
+  "rest": 2.468989938103554,
+  "hoehe": 10.15707923818009,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_01\\G2c_579_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 3.496386113919972,
+  "quer": 0.27298725670645196,
+  "laengs": 3.4857128130826105,
+  "yaw": -0.2566896225588806,
+  "rest": 2.243412262673471,
+  "hoehe": 9.685264655278292,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_01\\G2c_579_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 2.3462756100170603,
+  "quer": 0.8919912436702616,
+  "laengs": 2.170106186198387,
+  "yaw": 0.25311621793106553,
+  "rest": 1.6248760286524684,
+  "hoehe": 9.587568803277694,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_02\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 2.050804964900104,
+  "quer": 1.0451325966158753,
+  "laengs": 1.7645109406149557,
+  "yaw": 0.22383957032482726,
+  "rest": 1.4755669466796397,
+  "hoehe": 9.628658560513989,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_02\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 1.4803424545643513,
+  "quer": 1.0476063432370746,
+  "laengs": 1.0459133484161358,
+  "yaw": 0.149371533262169,
+  "rest": 1.4828409909301565,
+  "hoehe": 9.170095992951108,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_02\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 1.070719541998155,
+  "quer": 0.9685962420294362,
+  "laengs": 0.45635694093898965,
+  "yaw": 0.32144980212390806,
+  "rest": 1.5393262980084053,
+  "hoehe": 10.006839595481274,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_02\\G2b_580_dagger_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 3.675312193949808,
+  "quer": 1.678863565463605,
+  "laengs": 3.2694551306838555,
+  "yaw": -0.4167823682020071,
+  "rest": 0.8165802312532614,
+  "hoehe": 9.687831604595306,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_02\\G2c_579_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 3.593491634907876,
+  "quer": 1.5118840767446993,
+  "laengs": 3.259967587053391,
+  "yaw": -0.2624927231494354,
+  "rest": 1.0037558263411286,
+  "hoehe": 9.934240250244512,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_02\\G2c_579_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 7.8764832922117325,
+  "quer": 3.201321486568582,
+  "laengs": 7.196563748909954,
+  "yaw": 2.6336998302907233,
+  "rest": -0.9959505947810071,
+  "hoehe": 10.294526098931877,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_03\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 10.331812280455603,
+  "quer": 3.998997423769664,
+  "laengs": 9.52650852113495,
+  "yaw": 3.024316456583634,
+  "rest": -1.844695714656264,
+  "hoehe": 9.356801198999413,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_03\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 6.814134795855181,
+  "quer": 2.4492317546565436,
+  "laengs": 6.3587496277229185,
+  "yaw": 3.267195515133011,
+  "rest": -0.3266749096976727,
+  "hoehe": 11.602849418083416,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_03\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 6.0421080394294115,
+  "quer": 2.1663390141289574,
+  "laengs": 5.640394031980417,
+  "yaw": 3.418672921777926,
+  "rest": -0.06357676967572223,
+  "hoehe": 9.412329789461815,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_03\\G2b_580_dagger_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 7.900156963158364,
+  "quer": 3.361497833459413,
+  "laengs": 7.149322510433226,
+  "yaw": 2.0511103500827517,
+  "rest": -1.0799302073133115,
+  "hoehe": 9.999257759781154,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_03\\G2c_579_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 7.674696130886062,
+  "quer": 3.4987156312086567,
+  "laengs": 6.830808856451313,
+  "yaw": 2.01023375245515,
+  "rest": -1.2118006313138228,
+  "hoehe": 9.461021544076258,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": false,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_03\\G2c_579_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 3.1698074191210592,
+  "quer": 2.5464433168589733,
+  "laengs": 1.8876719811289202,
+  "yaw": -0.17127576385730947,
+  "rest": -0.01886322852929303,
+  "hoehe": 10.202391898039407,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_04\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 3.031331195548802,
+  "quer": 2.281373137121122,
+  "laengs": 1.9960725002688302,
+  "yaw": -0.20383400172032395,
+  "rest": 0.24194511072964872,
+  "hoehe": 9.32171084198464,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_04\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 2.2320346768329538,
+  "quer": 1.576054686353929,
+  "laengs": 1.580515872810712,
+  "yaw": -0.14178034862796096,
+  "rest": 0.9553863283501374,
+  "hoehe": 9.706050227481509,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_04\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 2.270704648947592,
+  "quer": 1.837685090070272,
+  "laengs": 1.333796503401334,
+  "yaw": 0.29237908250553346,
+  "rest": 0.6740427436312513,
+  "hoehe": 10.187012395064151,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_04\\G2b_580_dagger_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 1.9267930216138447,
+  "quer": 1.5286015561883421,
+  "laengs": 1.1729913173414324,
+  "yaw": -0.2489649155562148,
+  "rest": 0.9888091151284544,
+  "hoehe": 10.067416147199756,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_04\\G2c_579_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 2.3224982231768485,
+  "quer": 1.3791094898148628,
+  "laengs": 1.8687040995733404,
+  "yaw": -0.09206559688017535,
+  "rest": 1.1588391569208603,
+  "hoehe": 10.053400264824411,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_04\\G2c_579_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 3.202173047968149,
+  "quer": 2.021738056657718,
+  "laengs": 2.4832413212161835,
+  "yaw": 0.15317076403832175,
+  "rest": 0.5082119610972411,
+  "hoehe": 10.339400510957008,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_05\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 4.557572648573768,
+  "quer": 4.358282595886281,
+  "laengs": 1.3329820934365397,
+  "yaw": -0.14198597517054168,
+  "rest": -1.8268684975511673,
+  "hoehe": 9.941721480886633,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_05\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 1.7364768344715726,
+  "quer": 0.7598665742118433,
+  "laengs": 1.5613950768629863,
+  "yaw": 0.9848758837575105,
+  "rest": 1.6612198227080355,
+  "hoehe": 9.650384406369405,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_05\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 1.4285164730931457,
+  "quer": 0.640472439723659,
+  "laengs": 1.2768924652659297,
+  "yaw": 1.5204430811459702,
+  "rest": 1.7105253844524362,
+  "hoehe": 8.841065415077436,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_05\\G2b_580_dagger_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 5.323317892416941,
+  "quer": 4.251413465505467,
+  "laengs": 3.203622469805881,
+  "yaw": 0.6174426203744616,
+  "rest": -1.7822349511793152,
+  "hoehe": 10.323852181305947,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_05\\G2c_579_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 5.244963681268743,
+  "quer": 4.263014330260393,
+  "laengs": 3.0555446057655073,
+  "yaw": -0.36269657067927596,
+  "rest": -1.7604908832587327,
+  "hoehe": 10.065088509046204,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_05\\G2c_579_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 3.646520859098506,
+  "quer": 1.983621658526448,
+  "laengs": 3.0597972958458035,
+  "yaw": 1.3673256496665829,
+  "rest": 0.38741282060334153,
+  "hoehe": 9.932495729979898,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_06\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 3.9154625105791117,
+  "quer": 2.184325913672813,
+  "laengs": 3.249548733994908,
+  "yaw": 1.480416565177066,
+  "rest": 0.1719095726242917,
+  "hoehe": 9.750668182246518,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_06\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 3.157727799243884,
+  "quer": 2.524315432199569,
+  "laengs": 1.8971232044537132,
+  "yaw": 1.353312248852177,
+  "rest": -0.1514471201704287,
+  "hoehe": 10.198858393647956,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_06\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 2.334359161688025,
+  "quer": 2.2025709146214667,
+  "laengs": 0.7732490296278264,
+  "yaw": 1.2705491226080738,
+  "rest": 0.18112822445747145,
+  "hoehe": 9.166065545733796,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_06\\G2b_580_dagger_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 1.9826877962905654,
+  "quer": 1.4194870505611117,
+  "laengs": 1.3842353162843573,
+  "yaw": 0.38650769038159183,
+  "rest": 1.0799195947990874,
+  "hoehe": 9.288825631193186,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_06\\G2c_579_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 2.2164660709326283,
+  "quer": 1.4127717230251946,
+  "laengs": 1.7078635490623795,
+  "yaw": 0.9217954804371828,
+  "rest": 1.0165707359810954,
+  "hoehe": 10.10698080382669,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_06\\G2c_579_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 4.383948004987068,
+  "quer": 2.118562063983971,
+  "laengs": 3.838058739972341,
+  "yaw": -0.5308657524336411,
+  "rest": 0.3619487657679009,
+  "hoehe": 10.334541981668648,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_07\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 4.522865721790369,
+  "quer": 2.12063934391914,
+  "laengs": 3.994897133890749,
+  "yaw": -0.6308613661564237,
+  "rest": 0.3467827649158087,
+  "hoehe": 9.454993162926733,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_07\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 5.4797153003966255,
+  "quer": 5.426227390148864,
+  "laengs": 0.7637644164263744,
+  "yaw": -0.5547931732676972,
+  "rest": -2.9488485118703935,
+  "hoehe": 9.58743688091691,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_07\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 5.957991392830756,
+  "quer": 5.053879719925128,
+  "laengs": 3.155306833506828,
+  "yaw": -0.3551153883087892,
+  "rest": -2.5503639179422435,
+  "hoehe": 11.511528873328357,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_07\\G2b_580_dagger_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 3.7779703441233594,
+  "quer": 2.453582203466806,
+  "laengs": 2.872802515298701,
+  "yaw": -0.2962913572849146,
+  "rest": 0.05763352142109183,
+  "hoehe": 11.055749821095622,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_07\\G2c_579_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2c",
+  "xy": 3.7302725659697926,
+  "quer": 2.3227207731631445,
+  "laengs": 2.9188870526869075,
+  "yaw": 0.024897490762796792,
+  "rest": 0.22402015301970502,
+  "hoehe": 9.384191151440051,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_07\\G2c_579_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 3.139749355137291,
+  "quer": 0.20275462961615998,
+  "laengs": 3.133195904065727,
+  "yaw": 0.04675998999260855,
+  "rest": 2.341124502686523,
+  "hoehe": 10.59800416362342,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_08\\G2_licht_langsam_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2",
+  "xy": 2.3391708140769225,
+  "quer": 0.533805374938125,
+  "laengs": 2.277448554658581,
+  "yaw": -0.14392714056918976,
+  "rest": 1.9973546262314315,
+  "hoehe": 8.830658201100299,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab: tool an Tischebene (Res",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_08\\G2_licht_langsam_nur_griff_fahrt2"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 2.789617299856486,
+  "quer": 0.1967877194911669,
+  "laengs": 2.782667654089517,
+  "yaw": 0.6595562157207411,
+  "rest": 2.266878480515535,
+  "hoehe": 10.528420006550748,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_08\\G2b_580_dagger_nur_griff_fahrt1"
+ },
+ {
+  "quelle": "vergleich 15-39",
+  "zeit": "15-39",
+  "modell": "G2b",
+  "xy": 2.1439827510239735,
+  "quer": 0.3427496954161219,
+  "laengs": 2.116408439545751,
+  "yaw": 0.876674463347058,
+  "rest": 2.0924983633523513,
+  "hoehe": 9.639404103402171,
+  "wb": [
+   2.64,
+   1.0,
+   2.61
+  ],
+  "erfolg": true,
+  "stopp": "kollision vorab (Nachlauf): tool an Tisc",
+  "ordner": "vergleiche\\2026-11-24_15-39-34\\lage_08\\G2b_580_dagger_nur_griff_fahrt2"
+ }
+]

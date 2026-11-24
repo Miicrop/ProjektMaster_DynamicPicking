@@ -152,6 +152,109 @@ def plan_poses(known, count, rng, history=(), center_shift_deg=None, reachable=N
     return out
 
 
+#: Lagenwahl im Vergleich: Raster (systematisch, Anwender 2026-11-24) oder Zufall wie der Experte
+LAGEN_RASTER, LAGEN_ZUFALL = "raster", "zufall"
+#: kleinster Rasterabstand -- darunter wird nicht weiter verdichtet
+GRID_MIN_SPACING_M = 0.005
+#: Schrittweite der Ersatzdrehungen, wenn die Wunschdrehung nicht geht (Kamera/IK)
+GRID_TURN_STEP_DEG = 5.0
+_GOLDEN = (np.sqrt(5.0) - 1.0) / 2.0
+
+
+def plan_grid_poses(known, count, center_shift_deg=None, reachable=None, yaw_range_deg=None):
+    """``count`` Lagen systematisch auf einem Raster (Anwender 2026-11-24).
+
+    Bereich wie beim Experten (Tischpunkte minus Randabstand, ohne Sperrzonen).
+    Der Rasterabstand richtet sich nach ``count``: vom Wert, bei dem ``count``
+    Punkte die Flaeche gleichmaessig fuellen, wird so lange verkleinert, bis
+    genug erlaubte Punkte da sind -- mehr Lagen, engeres Raster. Sind es mehr
+    Punkte als noetig, bleiben die am weitesten auseinander liegenden
+    (beginnend weit weg von der Startlage, ``known.pick``). Reihenfolge
+    schlangenfoermig Reihe fuer Reihe (kurze Umlegewege). Drehung gleichmaessig
+    ueber den Drehbereich (Goldener-Schnitt-Folge), deterministisch; geht die
+    Wunschdrehung nicht (Kamera am Rand, ``reachable``), die naechste im
+    Raster ``GRID_TURN_STEP_DEG``. Rueckgabe wie :func:`plan_poses` plus
+    ``raster_mm``.
+    """
+    from ..auto_layout import Coverage, place_pose
+    from ..table import align_pose, yaw_deg
+    from .. import config
+
+    count = int(count)
+    if count <= 0:
+        return []
+    if not known.region or len(known.region) < 3:
+        raise ValueError("Raster braucht mindestens drei Tischpunkte")
+    reference = np.asarray(known.pick, dtype=float)
+    height = known.pick_above_table_m
+    yaw_range = float(config.AUTO_YAW_RANGE_DEG if yaw_range_deg is None else yaw_range_deg)
+    cov = Coverage(known.region, yaw_deg(reference, known.table), keepouts=known.keepouts or (),
+                   yaw_range_deg=yaw_range, rng=np.random.default_rng(0), camera_guard=True,
+                   center_shift_deg=center_shift_deg)
+    upright = align_pose(reference, known.table, height)
+    hull = np.asarray(cov.hull, dtype=float)
+    x_lo, x_hi = hull[:, 0].min() + cov.margin, hull[:, 0].max() - cov.margin
+    y_lo, y_hi = hull[:, 1].min() + cov.margin, hull[:, 1].max() - cov.margin
+    area = max(1e-6, (x_hi - x_lo) * (y_hi - y_lo))
+    centre = cov.center_shift
+    steps = int(np.floor(yaw_range / GRID_TURN_STEP_DEG))
+    offsets = sorted((k * GRID_TURN_STEP_DEG for k in range(-steps, steps + 1)), key=abs)
+
+    def wish_turn(k):
+        return centre + yaw_range * (2.0 * ((0.5 + k * _GOLDEN) % 1.0) - 1.0)
+
+    def pose_for(xy, k):
+        want = wish_turn(k)
+        for off in [0.0] + [o for o in offsets if o != 0.0]:
+            turn = want + off
+            if abs(turn - centre) > yaw_range + 1e-6:
+                continue
+            pose = place_pose(upright, known.table, xy, turn, height)
+            if cov.camera_blocked(pose) or (reachable is not None and not reachable(pose)):
+                continue
+            return pose, turn
+        return None
+
+    spacing = 1.2 * np.sqrt(area / count)
+    while spacing >= GRID_MIN_SPACING_M:
+        nx = int(np.floor((x_hi - x_lo) / spacing)) + 1
+        ny = int(np.floor((y_hi - y_lo) / spacing)) + 1
+        x0 = x_lo + 0.5 * ((x_hi - x_lo) - (nx - 1) * spacing)
+        y0 = y_lo + 0.5 * ((y_hi - y_lo) - (ny - 1) * spacing)
+        cand = [(i, j, np.array([x0 + i * spacing, y0 + j * spacing]))
+                for j in range(ny) for i in range(nx)]
+        cand = [c for c in cand if cov.allowed(c[2])]
+        bad = set()
+        while len(cand) - len(bad) >= count:
+            pool = [c for n, c in enumerate(cand) if n not in bad]
+            pts = np.array([c[2] for c in pool])
+            # am weitesten auseinander, beginnend weit weg von der Startlage
+            dist = np.linalg.norm(pts - reference[:2], axis=1)
+            chosen = []
+            for _ in range(count):
+                k = int(np.argmax(dist))
+                chosen.append(k)
+                dist = np.minimum(dist, np.linalg.norm(pts - pts[k], axis=1))
+                dist[chosen] = -1.0
+            sel = sorted((pool[k] for k in chosen),
+                         key=lambda c: (c[1], c[0] if c[1] % 2 == 0 else -c[0]))
+            out, failed = [], None
+            for k, (i, j, xy) in enumerate(sel):
+                got = pose_for(xy, k)
+                if got is None:
+                    failed = (i, j)
+                    break
+                pose, turn = got
+                out.append({"pose": [float(v) for v in pose], "xy": (float(xy[0]), float(xy[1])),
+                            "turn_deg": float(turn), "raster_mm": round(1e3 * spacing, 1)})
+            if failed is None:
+                return out
+            bad.add(next(n for n, c in enumerate(cand) if (c[0], c[1]) == failed))
+        spacing *= 0.93
+    raise ValueError("Kein Raster mit %d erlaubten Lagen (Bereich zu klein, Sperrzonen, "
+                     "Erreichbarkeit?)" % count)
+
+
 def training_xy(info):
     """Greiflagen (x, y) aller Trainingsepisoden eines Modells, oder None.
 

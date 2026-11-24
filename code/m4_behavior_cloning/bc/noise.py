@@ -296,15 +296,55 @@ def sample_approach_offset(rng, share=config.APPROACH_OFFSET_SHARE,
     return np.array([size * np.cos(angle), size * np.sin(angle), 0.0, yaw])
 
 
-def approach_rest(ideal, poses_noisy, free_m=config.APPROACH_OFFSET_FREE_M):
+def approach_rest(ideal, poses_noisy, free_m=None):
     """Groesster seitlicher Abstand (m) der gefahrenen Bahn zur Idealbahn auf
-    den letzten ``free_m`` vor dem Greifen -- dort tauchen die Backen ums Objekt."""
+    den letzten ``free_m`` vor dem Greifen -- dort tauchen die Backen ums Objekt.
+    ``free_m`` None = ``config.APPROACH_OFFSET_FREE_M`` zur Laufzeit (V6 setzt ihn um)."""
+    if free_m is None:
+        free_m = config.APPROACH_OFFSET_FREE_M
     d = distance_to_grasp(ideal)
     near = np.isfinite(d) & (d <= free_m)
     if not near.any():
         return 0.0
     diff = np.asarray(poses_noisy)[near, :2] - np.asarray(ideal.poses_quat)[near, :2]
     return float(np.max(np.linalg.norm(diff, axis=1)))
+
+
+def approach_tip_clearance(ideal, poses_noisy, check, substeps=4):
+    """Backen-Freiheit im Anflug (``config.APPROACH_TIP_CHECK``, Sim-Versuch V6).
+
+    Solange die gefahrene Bahn seitlich oder gedreht neben der Idealbahn liegt
+    (Versatz an den Backenspitzen > ``eps_m``: xy-Abstand + Drehwinkel x
+    ``lever_m``), muessen die Backenspitzen (= TCP) auch nach ``overshoot_m``
+    Nachlauf nach unten noch ``reserve_m`` ueber der Objektoberkante bleiben
+    (``top_above_pick_m`` ueber dem Greifpunkt). Geprueft je Takt und linear
+    dazwischen (``substeps``, wie der 60-Hz-Sollwertstrom).
+
+    Rueckgabe: kleinster Freiraum (m) unter diesen Bedingungen -- negativ =
+    verletzt, ``inf`` = kein Versatz unterhalb der Grenze.
+    """
+    d = distance_to_grasp(ideal)
+    idx = np.flatnonzero(np.isfinite(d))
+    if not len(idx):
+        return np.inf
+    k = int(idx[-1])
+    ideal_q = np.asarray(ideal.poses_quat, dtype=float)
+    noisy = np.asarray(poses_noisy, dtype=float)
+    z_pick = ideal_q[min(k + 1, len(ideal_q) - 1), 2]
+    f = np.linspace(0.0, 1.0, int(substeps), endpoint=False)
+    a, b = np.arange(0, k), np.arange(1, k + 1)
+    n = (noisy[a, None, :] * (1 - f)[None, :, None] + noisy[b, None, :] * f[None, :, None]).reshape(-1, 7)
+    i = (ideal_q[a, None, :] * (1 - f)[None, :, None] + ideal_q[b, None, :] * f[None, :, None]).reshape(-1, 7)
+    lat = np.linalg.norm(n[:, :2] - i[:, :2], axis=1)
+    qn = n[:, 3:7] / np.linalg.norm(n[:, 3:7], axis=1, keepdims=True)
+    qi = i[:, 3:7] / np.linalg.norm(i[:, 3:7], axis=1, keepdims=True)
+    rot = 2.0 * np.arccos(np.clip(np.abs(np.sum(qn * qi, axis=1)), 0.0, 1.0))
+    on = lat + float(check["lever_m"]) * rot > float(check["eps_m"])
+    if not on.any():
+        return np.inf
+    free = (n[on, 2] - z_pick - float(check["overshoot_m"])) \
+        - (float(check["top_above_pick_m"]) + float(check["reserve_m"]))
+    return float(np.min(free))
 
 
 def sample_noisy_poses(
@@ -393,6 +433,8 @@ class TrajectoryPlan:
     rejects: int = 0  # verworfene Samples bis zur gueltigen Bahn
     #: fester Versatz im Anflug (3,) oder None (config.APPROACH_OFFSET_*)
     approach_offset: object = None
+    #: verworfene Samples je Grund, z. B. {"backen": 1} (leer ohne Verwerfen)
+    reject_kinds: dict = None
 
     def __len__(self):
         return len(self.joints_ideal)
@@ -472,8 +514,13 @@ def generate_plan(
     joints_ideal=None,
     max_joint_speed=config.PLAN_MAX_JOINT_SPEED_RADS,
     approach_offset=None,
+    path_check=None,
 ):
     """Vollstaendige Episodengenerierung mit Rejection Sampling (AP 2.4).
+
+    ``path_check``: optionale zusaetzliche Pruefung der verrauschten Bahn,
+    ``path_check(poses_noisy) -> None`` (ok) oder ein Grund (str) -- dann wird
+    neu gezogen (Grund ``pfad``; Sim-Versuch V7, bc/korrektur_halt.py).
 
     1. Ideale Bahn einmalig per IK loesen (Warm-Start, vier Absicherungen)
        und gegen das Kollisionsmodell pruefen -- schlaegt DAS fehl, sind
@@ -518,6 +565,18 @@ def generate_plan(
         if rest > config.APPROACH_REST_MAX_M:
             reasons.append(("anflug", "%.1f mm neben der Idealbahn vor dem Greifen" % (1e3 * rest)))
             continue
+        tip_check = getattr(config, "APPROACH_TIP_CHECK", None)
+        if tip_check:
+            frei = approach_tip_clearance(ideal, poses_noisy, tip_check)
+            if frei < 0:
+                reasons.append(("backen", "Backen %.1f mm zu tief ueber der Objektoberkante, solange "
+                                "noch versetzt" % (-1e3 * frei)))
+                continue
+        if path_check is not None:
+            grund = path_check(poses_noisy)
+            if grund:
+                reasons.append(("pfad", grund))
+                continue
         try:
             joints_noisy = kin.solve_path(poses_noisy, seed_joints)
         except IKFailure as exc:
@@ -549,6 +608,7 @@ def generate_plan(
             rate_hz=ideal.rate_hz,
             rejects=attempt,
             approach_offset=None if approach_offset is None else [float(v) for v in approach_offset],
+            reject_kinds={kind: sum(1 for r in reasons if r[0] == kind) for kind in {r[0] for r in reasons}},
         )
 
     raise PlanRejected(

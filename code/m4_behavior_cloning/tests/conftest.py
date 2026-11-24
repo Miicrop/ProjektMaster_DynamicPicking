@@ -4,6 +4,7 @@
     pytest --robot=neura         # Contract-Tests gegen die Anlage
     pytest --camera=daheng       # Contract-Tests gegen die Daheng-Kamera
     pytest --camera=uvc --uvc-device=2   # gegen eine bestimmte Webcam
+    pytest tests/contract --robot=mujoco --camera=mujoco   # Taktiksimulation
 
 Die Contract-Suite ist die Abnahmeliste der Adapter: dieselben Tests, die
 heute gegen die Simulation laufen, werden am Hardwaretag unveraendert
@@ -17,8 +18,8 @@ import _fixtures
 
 
 def pytest_addoption(parser):
-    parser.addoption("--robot", default="sim", choices=("sim", "neura"))
-    parser.addoption("--camera", default="sim", choices=("sim", "uvc", "daheng"))
+    parser.addoption("--robot", default="sim", choices=("sim", "neura", "mujoco"))
+    parser.addoption("--camera", default="sim", choices=("sim", "uvc", "daheng", "mujoco"))
     parser.addoption("--uvc-device", default=None, type=int)
 
 

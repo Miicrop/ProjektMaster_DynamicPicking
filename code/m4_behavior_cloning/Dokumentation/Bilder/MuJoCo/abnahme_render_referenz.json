@@ -1,0 +1,18 @@
+{
+ "scene": {
+  "marker_px": 0.36753945472103017,
+  "marker_gemeinsam": 4,
+  "ref": 4,
+  "sim": 4
+ },
+ "wrist": {
+  "marker_px": 0.5467160665718134,
+  "marker_gemeinsam": 4,
+  "ref": 4,
+  "sim": 4
+ },
+ "wrist_licht": {
+  "helligkeit_an": 66.70558159722222,
+  "helligkeit_aus": 47.63000434027778
+ }
+}

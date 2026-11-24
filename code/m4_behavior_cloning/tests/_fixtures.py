@@ -38,6 +38,11 @@ def make_robot(kind="sim", clock=None, **kwargs):
         from bc.adapters.sim_robot import SimRobot
 
         return SimRobot(clock=clock or SimClock(), **kwargs).connect()
+    if kind == "mujoco":
+        # Taktiksimulation (bc/sim_mujoco): je Roboter eine frische Welt
+        from bc.adapters.mujoco_robot import MujocoRobot
+
+        return MujocoRobot(clock=clock or SimClock(), **kwargs).connect()
     if kind == "neura":
         from bc.adapters.neura import NeuraRobot
 
@@ -55,6 +60,14 @@ def make_camera(kind="sim", name="wrist", clock=None, **kwargs):
 
         cfg = config.CameraConfig(name=name, backend="sim")
         return SimCamera(cfg, clock=clock or SimClock(), **kwargs)
+    if kind == "mujoco":
+        from bc import sim_mujoco
+        from bc.adapters import camera_config_for
+        from bc.adapters.cam_mujoco import MujocoCamera
+
+        clock = clock or SimClock()
+        return MujocoCamera(camera_config_for(name, "mujoco"), clock=clock,
+                            welt=sim_mujoco.welt(clock=clock, neu=True), **kwargs)
     if kind == "uvc":
         from bc.adapters.cam_uvc import UvcCamera
 

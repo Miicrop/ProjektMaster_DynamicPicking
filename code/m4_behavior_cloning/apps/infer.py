@@ -31,6 +31,14 @@ Ausfuehren (aus dem Ordner "Behavior Cloning"):
     python apps/infer.py --robot neura --cameras sim --checkpoint checkpoints/vm/policy
     python apps/infer.py --sim --hold --steps 45        # Verdrahtung ohne Modell
     python apps/infer.py --robot neura --checkpoint <policy> --replay data_vm/2026-11-11 --replay-episode 0,5,9
+    python apps/infer.py --robot mujoco --camera wrist=mujoco --camera scene=mujoco --checkpoint <policy> --testlagen
+
+``--robot mujoco`` (Taktiksimulation, bc/sim_mujoco): geschlossene Testfahrt --
+die Kameras rendern aus der Stellung, die der Arm (Folgemodell) gerade hat.
+``--testlagen [DATEI]``: vor jeder Fahrt liegt das Objekt an der naechsten Lage
+des festen Satzes (Default bc/sim_mujoco/testlagen_v1.json, Auswahl mit
+``--testlagen-auswahl 0-4``); danach Sim-Auswertung (bc/sim_mujoco/auswertung.py)
+nach ``sim_auswertung.json``/``.csv`` im Protokollordner.
 
 ``--replay``: statt der Kameras die Bilder einer Aufnahme einspielen (je Takt
 ein Bild, bc/adapters/cam_replay.py), vor jeder Fahrt an die Startstellung
@@ -1204,7 +1212,12 @@ def check_against_recording(info, args, robot_kind, cam_cfgs):
         now = {c.name: c.backend for c in cam_cfgs
                if c.name in info["cameras"] and c.backend != "replay"}
         differ = {k: (backends.get(k), v) for k, v in now.items() if backends.get(k) != v}
-        if differ:
+        if differ and robot_kind == "mujoco":
+            # Taktiksimulation: echte Policy auf Sim-Bildern ist erlaubt (Verdrahtung,
+            # Vergleich) -- das Ergebnis sagt dann nichts ueber die Policy
+            print("Hinweis: Kamera-Backends Aufzeichnung/jetzt: %s -- Policy kennt die "
+                  "MuJoCo-Bilder nicht" % differ)
+        elif differ:
             problems.append("Kamera-Backends Aufzeichnung/jetzt: %s (--cameras pruefen)" % differ)
     if info["schema_version"] != config.SCHEMA_VERSION:
         problems.append("Schema v%s, Code v%s" % (info["schema_version"], config.SCHEMA_VERSION))
@@ -1264,7 +1277,15 @@ def parse_args():
     parser.add_argument("--hold", action="store_true",
                         help="HoldPolicy statt Modell (Verdrahtungstest)")
     parser.add_argument("--sim", action="store_true", help="= --robot sim")
-    parser.add_argument("--robot", choices=("sim", "neura"), default=None)
+    parser.add_argument("--robot", choices=("sim", "neura", "mujoco"), default=None,
+                        help="mujoco = Taktiksimulation (bc/sim_mujoco), Kameras dazu "
+                             "--camera wrist=mujoco --camera scene=mujoco")
+    parser.add_argument("--testlagen", nargs="?", const="", default=None, metavar="DATEI",
+                        help="nur --robot mujoco: fester Testlagen-Satz (Default "
+                             "bc/sim_mujoco/testlagen_v1.json), eine Fahrt je Lage, danach "
+                             "Sim-Auswertung")
+    parser.add_argument("--testlagen-auswahl", dest="testlagen_auswahl", default=None,
+                        help="Lagen aus dem Satz, z. B. '0-4' oder '0,7,12' (Default alle)")
     parser.add_argument("--cameras", choices=CAMERA_MODES, default="auto",
                         help="wie apps/record.py -- muss zur Aufzeichnung passen")
     parser.add_argument("--uvc-device", type=int, default=None,
@@ -1434,6 +1455,19 @@ def parse_args():
             parser.error("--replay: %s" % exc)
         if not args.replay_episodes:
             parser.error("--replay-episode: keine Episode ausgewaehlt")
+    args.testlagen_liste = None
+    if args.testlagen is not None:
+        if args.robot != "mujoco":
+            parser.error("--testlagen nur mit --robot mujoco")
+        from bc.sim_mujoco import testlagen as testlagen_module
+
+        try:
+            data = testlagen_module.laden(args.testlagen or testlagen_module.DATEI)
+            args.testlagen_liste = testlagen_module.auswahl(data, args.testlagen_auswahl)
+        except (OSError, ValueError, IndexError) as exc:
+            parser.error("--testlagen: %s" % exc)
+        if args.episodes is None:
+            args.episodes = len(args.testlagen_liste)
     if args.episodes is None:
         args.episodes = len(args.replay_episodes) or 1
     # Siehe apps/record.py: lieber hier scheitern als nach dem Bestromen.
@@ -1449,7 +1483,8 @@ def main():
         sys.stdout.reconfigure(line_buffering=True)  # Fortschritt auch in Logdateien
     args = parse_args()
     robot_kind = args.robot or ("sim" if args.sim else "neura")
-    use_sim_robot = robot_kind == "sim"
+    # MuJoCo-Taktiksimulation zaehlt als Simulation (SimClock, keine Hardware)
+    use_sim_robot = robot_kind in ("sim", "mujoco")
     camera_mode = resolve_camera_mode(args.cameras, use_sim_robot)
     try:
         cam_cfgs = camera_configs(camera_mode, uvc_device=args.uvc_device,
@@ -1550,7 +1585,10 @@ def main():
     else:
         executor = ChunkEnsembler(policy, replan_steps=replan, decay=decay,
                                   asynchronous=asynchronous)
-    if use_sim_robot:
+    if robot_kind == "mujoco":
+        robot = open_robot("mujoco", clock=clock, seed=args.seed).connect()
+        robot_info = {"robot": "mujoco", "in_simulation": True, "tool": robot.tool_name}
+    elif use_sim_robot:
         robot = open_robot("sim", clock=clock, seed=args.seed).connect()
         robot_info = {"robot": "sim"}
     else:
@@ -1791,6 +1829,14 @@ def main():
                               % str(exc).splitlines()[0][:120])
 
     results = []
+    sim_rows, sim_plane = [], None
+    if args.testlagen_liste is not None:
+        from bc.sim_mujoco import auswertung as sim_auswertung
+        from bc.table import TablePlane
+
+        sim_plane = TablePlane.from_dict(robot.welt.punkte["table"])
+        print("Testlagen: %d Fahrt(en), Lagen %s"
+              % (args.episodes, [l["id"] for l in args.testlagen_liste][:args.episodes]))
     try:
         for ep in range(args.episodes):
             if robot.stop_requested and getattr(robot, "in_simulation", True) is not True:
@@ -1859,6 +1905,14 @@ def main():
                           % exc)
             if ep_start_gripper is not None:
                 robot.gripper_command(ep_start_gripper > config.GRIPPER_THRESHOLD)
+            testlage = None
+            if args.testlagen_liste is not None:
+                # Sim-Haken: Objekt an die Testlage (Greifer ist schon offen)
+                testlage = args.testlagen_liste[ep % len(args.testlagen_liste)]
+                robot.objekt_fuer_griff(testlage["pick_joints"])
+                print("Fahrt %d: Testlage %d -- Objekt x %.0f y %.0f mm, Gier %.0f Grad"
+                      % (ep, testlage["id"], 1e3 * testlage["objekt"]["x_m"],
+                         1e3 * testlage["objekt"]["y_m"], testlage["objekt"]["gier_grad"]))
             if ep_start is not None and not args.no_start_move:
                 away = float(np.max(np.abs(robot.read_state().joints - ep_start)))
                 if away > config.START_POSE_TOL_RAD:
@@ -1932,6 +1986,11 @@ def main():
                 wall_s=wall,
                 **robot_info,
             )
+            if testlage is not None:
+                sim = sim_auswertung.bewerte(log, testlage, robot.welt, sim_plane)
+                summary["sim"] = sim
+                sim_rows.append(sim)
+                print("   %s" % sim_auswertung.zeile(sim))
             if replay_arrays is not None:
                 cmp = replay.compare_rollout(log, replay_arrays)
                 summary["replay"] = dict(root=str(args.replay), episode=replay_ep, **cmp)
@@ -2054,6 +2113,23 @@ def main():
         "episodes": results,
         "success_rate": float(np.mean([r["success"] for r in results])) if results else None,
     }
+    if sim_rows:
+        report["sim_zusammenfassung"] = sim_auswertung.zusammenfassen(sim_rows)
+        (out / "sim_auswertung.json").write_text(json.dumps(
+            {"zusammenfassung": report["sim_zusammenfassung"], "fahrten": sim_rows,
+             "testlagen": args.testlagen or "bc/sim_mujoco/testlagen_v1.json",
+             "checkpoint": report["checkpoint"]}, indent=1, ensure_ascii=False), encoding="utf-8")
+        keys = [k for k in sim_rows[0] if not isinstance(sim_rows[0][k], (list, dict))]
+        with open(out / "sim_auswertung.csv", "w", encoding="utf-8") as fh:
+            fh.write(";".join(keys) + "\n")
+            for r in sim_rows:
+                fh.write(";".join("" if r.get(k) is None else str(r.get(k)) for k in keys) + "\n")
+        z = report["sim_zusammenfassung"]
+        print("\nSim-Auswertung: Griff %d/%d, Greif-xy median %s mm, Gier |median| %s Grad, "
+              "Tisch min median %s mm, Abbrueche %s -> %s"
+              % (round(z["griff_quote"] * z["fahrten"]), z["fahrten"], z["greif_xy_mm_median"],
+                 z["gier_fehler_grad_median_abs"], z["tisch_min_mm_median"], z["abbruch"],
+                 out / "sim_auswertung.json"))
     (out / "summary.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     if results:
         print("\nErfolg %d/%d (Uebergabepunkt erreicht, Greifer wie aufgezeichnet) -> %s"

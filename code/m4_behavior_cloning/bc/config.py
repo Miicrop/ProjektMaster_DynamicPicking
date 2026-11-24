@@ -784,6 +784,18 @@ APPROACH_OFFSET_RAMP_M = 0.050
 #: Idealbahn, sonst neu ziehen. Spiel je Backe 2,5 mm (Objekt 39,7 +-0,1 mm,
 #: Backen 44,8 mm); 1 mm bleibt fuer Teach- und Ablagefehler.
 APPROACH_REST_MAX_M = 0.0015
+#: Sim-Versuch V6 (Versatz naeher am Objekt, apps/record.py --anflug-versatz-nah):
+#: Backen-Pruefung jeder geplanten Bahn (bc/noise.approach_tip_clearance) -- solange
+#: noch versetzt (> eps_m an den Backenspitzen), muessen die Backenspitzen nach
+#: overshoot_m Nachlauf noch reserve_m ueber der Objektoberkante liegen. None = aus
+#: (Standard); record.py setzt ein dict mit top_above_pick_m, overshoot_m,
+#: reserve_m, eps_m, lever_m. Nachlauf 2,4 mm = Maximum des Experten im Abstieg
+#: (Anlage 19.11., 0,02 m/s).
+APPROACH_TIP_CHECK = None
+APPROACH_TIP_OVERSHOOT_M = 0.0024
+APPROACH_TIP_RESERVE_M = 0.001
+APPROACH_TIP_EPS_M = 0.0001
+APPROACH_TIP_LEVER_M = 0.029
 
 #: Maximale Zahl an Rejection-Sampling-Versuchen, bevor die Generierung
 #: einer verrauschten Trajektorie als fehlgeschlagen gilt.

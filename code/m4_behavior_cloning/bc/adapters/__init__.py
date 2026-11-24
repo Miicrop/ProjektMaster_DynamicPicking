@@ -5,7 +5,9 @@ hier erst verzoegert beim Verbinden, damit sich alles ohne installierte
 SDKs importieren laesst.
 
 Kamera-Backends werden ueber :func:`open_camera` anhand von
-``CameraConfig.backend`` aufgeloest ("daheng" | "uvc" | "sim" | "replay").
+``CameraConfig.backend`` aufgeloest ("daheng" | "uvc" | "sim" | "replay" |
+"mujoco"). "mujoco" rendert aus der Taktiksimulation (bc/sim_mujoco) und
+gehoert zum Roboter ``open_robot("mujoco")`` -- beide teilen eine Welt.
 
 Welches GERAET an welchem Platz haengt, ist davon getrennt: :func:`list_devices`
 sagt, was angeschlossen ist, und :func:`camera_config_for` baut daraus die
@@ -39,8 +41,12 @@ def open_camera(cfg):
         from .cam_replay import ReplayCamera
 
         return ReplayCamera(cfg)
+    if cfg.backend == MUJOCO_BACKEND:
+        from .cam_mujoco import MujocoCamera
+
+        return MujocoCamera(cfg)
     raise CameraError(
-        "Unbekanntes Kamera-Backend '%s' (bekannt: daheng, uvc, sim, replay)" % cfg.backend
+        "Unbekanntes Kamera-Backend '%s' (bekannt: daheng, uvc, sim, replay, mujoco)" % cfg.backend
     )
 
 
@@ -51,8 +57,13 @@ def open_camera(cfg):
 #: Backends, die ein Geraet haben koennen. "sim" steht immer zur Verfuegung.
 CAMERA_BACKENDS = ("sim", "uvc", "daheng")
 
+#: MuJoCo-Taktiksimulation (bc/sim_mujoco): kein Geraet, rendert aus der Welt
+#: des MujocoRobot. Bewusst NICHT in CAMERA_BACKENDS (das ist die Liste der
+#: Geraete fuer die Oberflaeche), auf der Kommandozeile aber zuordenbar.
+MUJOCO_BACKEND = "mujoco"
+
 #: Backends ohne Geraet: synchron gelesen, jede Uhr erlaubt.
-SOFT_BACKENDS = ("sim", "replay")
+SOFT_BACKENDS = ("sim", "replay", MUJOCO_BACKEND)
 
 #: Wie viele OpenCV-Indizes probeweise geoeffnet werden. Fuer UVC gibt es
 #: keine saubere Enumeration -- man muss aufmachen, um zu wissen, ob da was
@@ -236,6 +247,12 @@ def parse_device(backend, text):
         return None
     if text in (None, ""):
         return None
+    if backend == MUJOCO_BACKEND:
+        from .cam_mujoco import LIGHT_MODES
+
+        if text not in LIGHT_MODES:
+            raise ValueError("MuJoCo-Kamera: Licht %r unbekannt (%s)" % (text, ", ".join(LIGHT_MODES)))
+        return str(text)
     if backend == "uvc":
         try:
             return int(text)
@@ -300,9 +317,9 @@ def parse_camera_spec(text):
     if name not in known:
         raise ValueError("Unbekannter Kameraplatz '%s' (bekannt: %s)"
                          % (name, ", ".join(known)))
-    if backend not in CAMERA_BACKENDS:
+    if backend not in CAMERA_BACKENDS + (MUJOCO_BACKEND,):
         raise ValueError("Unbekanntes Backend '%s' (bekannt: %s)"
-                         % (backend, ", ".join(CAMERA_BACKENDS)))
+                         % (backend, ", ".join(CAMERA_BACKENDS + (MUJOCO_BACKEND,))))
     return name, backend, parse_device(backend, device)
 
 
@@ -324,6 +341,11 @@ def camera_config_for(name, backend, device=None):
             if cfg.name == name:
                 return cfg
         return config.CameraConfig(name=name, backend="sim", fps=30.0)
+    if backend == MUJOCO_BACKEND:
+        # Schemagroesse direkt gerendert; 60 fps wie die Daheng an der Anlage
+        # (nur Metadaten -- gerendert wird je Abgriff)
+        return config.CameraConfig(name=name, backend=MUJOCO_BACKEND, device=device,
+                                   width=config.IMAGE_WIDTH, height=config.IMAGE_HEIGHT, fps=60.0)
 
     base = known[name]
     if base.backend == backend:
@@ -476,6 +498,12 @@ def start_cameras(mode, clock, seed=0, uvc_device=None, specs=None, cfgs=None):
                 from .cam_replay import ReplayCamera
 
                 cap = capture.DirectCapture(ReplayCamera(cfg, clock=clock))
+            elif cfg.backend == MUJOCO_BACKEND:
+                # synchron im Hauptthread: der OpenGL-Kontext des Renderers
+                # gehoert dem Thread, der ihn angelegt hat
+                from .cam_mujoco import MujocoCamera
+
+                cap = capture.DirectCapture(MujocoCamera(cfg, clock=clock))
             else:
                 cap = capture.ThreadedCapture(open_camera(cfg))
             cap.start()
@@ -506,7 +534,7 @@ def replay_configs(root, episode, names=None):
 
 
 def open_robot(kind="neura", **kwargs):
-    """Fabrikfunktion fuer den Roboter ("neura" | "sim")."""
+    """Fabrikfunktion fuer den Roboter ("neura" | "sim" | "mujoco")."""
     if kind == "neura":
         from .neura import NeuraRobot
 
@@ -515,4 +543,8 @@ def open_robot(kind="neura", **kwargs):
         from .sim_robot import SimRobot
 
         return SimRobot(**kwargs)
-    raise ValueError("Unbekannter Roboter-Typ '%s' (bekannt: neura, sim)" % kind)
+    if kind == MUJOCO_BACKEND:
+        from .mujoco_robot import MujocoRobot
+
+        return MujocoRobot(**kwargs)
+    raise ValueError("Unbekannter Roboter-Typ '%s' (bekannt: neura, sim, mujoco)" % kind)

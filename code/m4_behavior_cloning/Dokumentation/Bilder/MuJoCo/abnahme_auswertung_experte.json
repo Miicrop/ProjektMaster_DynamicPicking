@@ -1,0 +1,3834 @@
+{
+ "zusammenfassung": {
+  "fahrten": 60,
+  "griff_quote": 1.0,
+  "greifbefehl_quote": 1.0,
+  "annaeherung_mm_median": 0.0,
+  "greif_xy_mm_median": 0.1,
+  "greif_xy_mm_p90": 0.1,
+  "gier_fehler_grad_median_abs": 0.0,
+  "gier_fehler_ueber_90": 0,
+  "tisch_min_mm_median": 6.5,
+  "unter_tisch": 0,
+  "unter_tisch_10": 0,
+  "fahrten_mit_sprung_je_gelenk": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "quer_p95_mm_median": 1.3,
+  "welligkeit_mm_median": 0.2,
+  "abbruch": {
+   "endstellung": 60
+  }
+ },
+ "fahrten": [
+  {
+   "lage": 0,
+   "takte": 155,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.7,
+   "greifer_ereignisse": [
+    [
+     1007.6,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 113,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.022,
+    0.072,
+    0.036,
+    0.003,
+    0.049,
+    0.096
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.9,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 1,
+   "takte": 184,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.0,
+   "greifer_ereignisse": [
+    [
+     1007.6,
+     "angeheftet"
+    ],
+    [
+     1010.267,
+     "abgelegt"
+    ],
+    [
+     1020.14,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 107,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.014,
+    0.075,
+    0.035,
+    0.002,
+    0.051,
+    0.098
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.7,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 2,
+   "takte": 142,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.1,
+   "greifer_ereignisse": [
+    [
+     1007.6,
+     "angeheftet"
+    ],
+    [
+     1010.267,
+     "abgelegt"
+    ],
+    [
+     1020.14,
+     "angeheftet"
+    ],
+    [
+     1025.14,
+     "abgelegt"
+    ],
+    [
+     1034.011,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 92,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.5,
+   "sprung_max_rad": [
+    0.014,
+    0.067,
+    0.041,
+    0.003,
+    0.061,
+    0.102
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.6,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 3,
+   "takte": 145,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.1,
+   "greifer_ereignisse": [
+    [
+     1010.267,
+     "abgelegt"
+    ],
+    [
+     1020.14,
+     "angeheftet"
+    ],
+    [
+     1025.14,
+     "abgelegt"
+    ],
+    [
+     1034.011,
+     "angeheftet"
+    ],
+    [
+     1037.211,
+     "abgelegt"
+    ],
+    [
+     1046.413,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.3,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 97,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.4,
+   "sprung_max_rad": [
+    0.036,
+    0.074,
+    0.037,
+    0.004,
+    0.056,
+    0.101
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.0,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 4,
+   "takte": 301,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1025.14,
+     "abgelegt"
+    ],
+    [
+     1034.011,
+     "angeheftet"
+    ],
+    [
+     1037.211,
+     "abgelegt"
+    ],
+    [
+     1046.413,
+     "angeheftet"
+    ],
+    [
+     1049.48,
+     "abgelegt"
+    ],
+    [
+     1063.95,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 176,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.0,
+   "greif_laengs_mm": -0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.03,
+    0.029,
+    0.04,
+    0.007,
+    0.06,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.6,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 5,
+   "takte": 150,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1037.211,
+     "abgelegt"
+    ],
+    [
+     1046.413,
+     "angeheftet"
+    ],
+    [
+     1049.48,
+     "abgelegt"
+    ],
+    [
+     1063.95,
+     "angeheftet"
+    ],
+    [
+     1072.15,
+     "abgelegt"
+    ],
+    [
+     1081.554,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 100,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.04,
+    0.071,
+    0.037,
+    0.004,
+    0.056,
+    0.1
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.7,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 6,
+   "takte": 209,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1049.48,
+     "abgelegt"
+    ],
+    [
+     1063.95,
+     "angeheftet"
+    ],
+    [
+     1072.15,
+     "abgelegt"
+    ],
+    [
+     1081.554,
+     "angeheftet"
+    ],
+    [
+     1084.754,
+     "abgelegt"
+    ],
+    [
+     1095.424,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 119,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": -0.1,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.036,
+    0.045,
+    0.038,
+    0.002,
+    0.057,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.3,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 7,
+   "takte": 195,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.7,
+   "greifer_ereignisse": [
+    [
+     1072.15,
+     "abgelegt"
+    ],
+    [
+     1081.554,
+     "angeheftet"
+    ],
+    [
+     1084.754,
+     "abgelegt"
+    ],
+    [
+     1095.424,
+     "angeheftet"
+    ],
+    [
+     1101.291,
+     "abgelegt"
+    ],
+    [
+     1112.095,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.7,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 121,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.8,
+   "sprung_max_rad": [
+    0.015,
+    0.062,
+    0.035,
+    0.004,
+    0.05,
+    0.105
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.4,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 8,
+   "takte": 155,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.7,
+   "greifer_ereignisse": [
+    [
+     1084.754,
+     "abgelegt"
+    ],
+    [
+     1095.424,
+     "angeheftet"
+    ],
+    [
+     1101.291,
+     "abgelegt"
+    ],
+    [
+     1112.095,
+     "angeheftet"
+    ],
+    [
+     1116.895,
+     "abgelegt"
+    ],
+    [
+     1126.966,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 110,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.014,
+    0.075,
+    0.035,
+    0.003,
+    0.05,
+    0.1
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.7,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 9,
+   "takte": 201,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1101.291,
+     "abgelegt"
+    ],
+    [
+     1112.095,
+     "angeheftet"
+    ],
+    [
+     1116.895,
+     "abgelegt"
+    ],
+    [
+     1126.966,
+     "angeheftet"
+    ],
+    [
+     1129.833,
+     "abgelegt"
+    ],
+    [
+     1140.905,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.7,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 125,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.8,
+   "sprung_max_rad": [
+    0.029,
+    0.034,
+    0.041,
+    0.003,
+    0.06,
+    0.103
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.9,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 10,
+   "takte": 139,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.2,
+   "greifer_ereignisse": [
+    [
+     1116.895,
+     "abgelegt"
+    ],
+    [
+     1126.966,
+     "angeheftet"
+    ],
+    [
+     1129.833,
+     "abgelegt"
+    ],
+    [
+     1140.905,
+     "angeheftet"
+    ],
+    [
+     1145.838,
+     "abgelegt"
+    ],
+    [
+     1155.108,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.2,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 98,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.2,
+   "sprung_max_rad": [
+    0.02,
+    0.074,
+    0.037,
+    0.003,
+    0.056,
+    0.102
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.2,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 11,
+   "takte": 219,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.2,
+   "greifer_ereignisse": [
+    [
+     1129.833,
+     "abgelegt"
+    ],
+    [
+     1140.905,
+     "angeheftet"
+    ],
+    [
+     1145.838,
+     "abgelegt"
+    ],
+    [
+     1155.108,
+     "angeheftet"
+    ],
+    [
+     1157.708,
+     "abgelegt"
+    ],
+    [
+     1169.179,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.3,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 131,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.4,
+   "sprung_max_rad": [
+    0.009,
+    0.043,
+    0.036,
+    0.004,
+    0.055,
+    0.105
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.7,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 12,
+   "takte": 208,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.0,
+   "greifer_ereignisse": [
+    [
+     1145.838,
+     "abgelegt"
+    ],
+    [
+     1155.108,
+     "angeheftet"
+    ],
+    [
+     1157.708,
+     "abgelegt"
+    ],
+    [
+     1169.179,
+     "angeheftet"
+    ],
+    [
+     1174.912,
+     "abgelegt"
+    ],
+    [
+     1185.383,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 116,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": -0.1,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.5,
+   "sprung_max_rad": [
+    0.008,
+    0.061,
+    0.035,
+    0.002,
+    0.052,
+    0.107
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.2,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 13,
+   "takte": 160,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.0,
+   "greifer_ereignisse": [
+    [
+     1157.708,
+     "abgelegt"
+    ],
+    [
+     1169.179,
+     "angeheftet"
+    ],
+    [
+     1174.912,
+     "abgelegt"
+    ],
+    [
+     1185.383,
+     "angeheftet"
+    ],
+    [
+     1191.383,
+     "abgelegt"
+    ],
+    [
+     1200.387,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 94,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.039,
+    0.068,
+    0.04,
+    0.003,
+    0.06,
+    0.105
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.4,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 14,
+   "takte": 176,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.8,
+   "greifer_ereignisse": [
+    [
+     1174.912,
+     "abgelegt"
+    ],
+    [
+     1185.383,
+     "angeheftet"
+    ],
+    [
+     1191.383,
+     "abgelegt"
+    ],
+    [
+     1200.387,
+     "angeheftet"
+    ],
+    [
+     1204.653,
+     "abgelegt"
+    ],
+    [
+     1214.923,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.8,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 113,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.9,
+   "sprung_max_rad": [
+    0.038,
+    0.036,
+    0.043,
+    0.008,
+    0.062,
+    0.107
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.9,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 15,
+   "takte": 164,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.8,
+   "greifer_ereignisse": [
+    [
+     1191.383,
+     "abgelegt"
+    ],
+    [
+     1200.387,
+     "angeheftet"
+    ],
+    [
+     1204.653,
+     "abgelegt"
+    ],
+    [
+     1214.923,
+     "angeheftet"
+    ],
+    [
+     1218.99,
+     "abgelegt"
+    ],
+    [
+     1229.593,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.4,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 118,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.5,
+   "sprung_max_rad": [
+    0.02,
+    0.071,
+    0.046,
+    0.003,
+    0.048,
+    0.042
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 2.0,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 16,
+   "takte": 208,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1204.653,
+     "abgelegt"
+    ],
+    [
+     1214.923,
+     "angeheftet"
+    ],
+    [
+     1218.99,
+     "abgelegt"
+    ],
+    [
+     1229.593,
+     "angeheftet"
+    ],
+    [
+     1232.526,
+     "abgelegt"
+    ],
+    [
+     1243.132,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 118,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": -0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.033,
+    0.048,
+    0.037,
+    0.002,
+    0.056,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.3,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 17,
+   "takte": 225,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.0,
+   "greifer_ereignisse": [
+    [
+     1218.99,
+     "abgelegt"
+    ],
+    [
+     1229.593,
+     "angeheftet"
+    ],
+    [
+     1232.526,
+     "abgelegt"
+    ],
+    [
+     1243.132,
+     "angeheftet"
+    ],
+    [
+     1248.999,
+     "abgelegt"
+    ],
+    [
+     1260.736,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 135,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.009,
+    0.046,
+    0.035,
+    0.004,
+    0.052,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.9,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 18,
+   "takte": 191,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1232.526,
+     "abgelegt"
+    ],
+    [
+     1243.132,
+     "angeheftet"
+    ],
+    [
+     1248.999,
+     "abgelegt"
+    ],
+    [
+     1260.736,
+     "angeheftet"
+    ],
+    [
+     1266.603,
+     "abgelegt"
+    ],
+    [
+     1277.274,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 119,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.019,
+    0.068,
+    0.036,
+    0.006,
+    0.048,
+    0.106
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.8,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 19,
+   "takte": 218,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1248.999,
+     "abgelegt"
+    ],
+    [
+     1260.736,
+     "angeheftet"
+    ],
+    [
+     1266.603,
+     "abgelegt"
+    ],
+    [
+     1277.274,
+     "angeheftet"
+    ],
+    [
+     1281.94,
+     "abgelegt"
+    ],
+    [
+     1293.412,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 131,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.023,
+    0.047,
+    0.035,
+    0.006,
+    0.053,
+    0.106
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.1,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 20,
+   "takte": 152,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.6,
+   "greifer_ereignisse": [
+    [
+     1266.603,
+     "abgelegt"
+    ],
+    [
+     1277.274,
+     "angeheftet"
+    ],
+    [
+     1281.94,
+     "abgelegt"
+    ],
+    [
+     1293.412,
+     "angeheftet"
+    ],
+    [
+     1299.078,
+     "abgelegt"
+    ],
+    [
+     1309.216,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 111,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.014,
+    0.075,
+    0.037,
+    0.003,
+    0.049,
+    0.075
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.8,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 21,
+   "takte": 142,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.1,
+   "greifer_ereignisse": [
+    [
+     1281.94,
+     "abgelegt"
+    ],
+    [
+     1293.412,
+     "angeheftet"
+    ],
+    [
+     1299.078,
+     "abgelegt"
+    ],
+    [
+     1309.216,
+     "angeheftet"
+    ],
+    [
+     1311.816,
+     "abgelegt"
+    ],
+    [
+     1321.289,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.3,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 101,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.3,
+   "sprung_max_rad": [
+    0.024,
+    0.075,
+    0.036,
+    0.003,
+    0.054,
+    0.102
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.5,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 22,
+   "takte": 143,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1299.078,
+     "abgelegt"
+    ],
+    [
+     1309.216,
+     "angeheftet"
+    ],
+    [
+     1311.816,
+     "abgelegt"
+    ],
+    [
+     1321.289,
+     "angeheftet"
+    ],
+    [
+     1323.889,
+     "abgelegt"
+    ],
+    [
+     1333.36,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.4,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 101,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.5,
+   "sprung_max_rad": [
+    0.055,
+    0.075,
+    0.036,
+    0.002,
+    0.054,
+    0.041
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.3,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 23,
+   "takte": 198,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.2,
+   "greifer_ereignisse": [
+    [
+     1311.816,
+     "abgelegt"
+    ],
+    [
+     1321.289,
+     "angeheftet"
+    ],
+    [
+     1323.889,
+     "abgelegt"
+    ],
+    [
+     1333.36,
+     "angeheftet"
+    ],
+    [
+     1336.027,
+     "abgelegt"
+    ],
+    [
+     1346.831,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.4,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 121,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.4,
+   "sprung_max_rad": [
+    0.021,
+    0.046,
+    0.037,
+    0.003,
+    0.056,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.9,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 24,
+   "takte": 262,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.0,
+   "greifer_ereignisse": [
+    [
+     1323.889,
+     "abgelegt"
+    ],
+    [
+     1333.36,
+     "angeheftet"
+    ],
+    [
+     1336.027,
+     "abgelegt"
+    ],
+    [
+     1346.831,
+     "angeheftet"
+    ],
+    [
+     1351.831,
+     "abgelegt"
+    ],
+    [
+     1364.702,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 152,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.013,
+    0.039,
+    0.035,
+    0.003,
+    0.051,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.9,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 25,
+   "takte": 152,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.7,
+   "greifer_ereignisse": [
+    [
+     1336.027,
+     "abgelegt"
+    ],
+    [
+     1346.831,
+     "angeheftet"
+    ],
+    [
+     1351.831,
+     "abgelegt"
+    ],
+    [
+     1364.702,
+     "angeheftet"
+    ],
+    [
+     1371.902,
+     "abgelegt"
+    ],
+    [
+     1381.839,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 108,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.024,
+    0.073,
+    0.035,
+    0.003,
+    0.051,
+    0.103
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.8,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 26,
+   "takte": 192,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.2,
+   "greifer_ereignisse": [
+    [
+     1351.831,
+     "abgelegt"
+    ],
+    [
+     1364.702,
+     "angeheftet"
+    ],
+    [
+     1371.902,
+     "abgelegt"
+    ],
+    [
+     1381.839,
+     "angeheftet"
+    ],
+    [
+     1384.639,
+     "abgelegt"
+    ],
+    [
+     1394.644,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.4,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 109,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.4,
+   "sprung_max_rad": [
+    0.014,
+    0.051,
+    0.039,
+    0.002,
+    0.059,
+    0.105
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.7,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 27,
+   "takte": 170,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.8,
+   "greifer_ereignisse": [
+    [
+     1371.902,
+     "abgelegt"
+    ],
+    [
+     1381.839,
+     "angeheftet"
+    ],
+    [
+     1384.639,
+     "abgelegt"
+    ],
+    [
+     1394.644,
+     "angeheftet"
+    ],
+    [
+     1400.044,
+     "abgelegt"
+    ],
+    [
+     1410.181,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 111,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.016,
+    0.075,
+    0.035,
+    0.003,
+    0.049,
+    0.101
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.7,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 28,
+   "takte": 152,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.6,
+   "greifer_ereignisse": [
+    [
+     1384.639,
+     "abgelegt"
+    ],
+    [
+     1394.644,
+     "angeheftet"
+    ],
+    [
+     1400.044,
+     "abgelegt"
+    ],
+    [
+     1410.181,
+     "angeheftet"
+    ],
+    [
+     1413.981,
+     "abgelegt"
+    ],
+    [
+     1423.853,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.7,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 107,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.8,
+   "sprung_max_rad": [
+    0.045,
+    0.075,
+    0.035,
+    0.003,
+    0.051,
+    0.039
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.6,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 29,
+   "takte": 139,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1400.044,
+     "abgelegt"
+    ],
+    [
+     1410.181,
+     "angeheftet"
+    ],
+    [
+     1413.981,
+     "abgelegt"
+    ],
+    [
+     1423.853,
+     "angeheftet"
+    ],
+    [
+     1426.72,
+     "abgelegt"
+    ],
+    [
+     1435.925,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 97,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.051,
+    0.066,
+    0.039,
+    0.008,
+    0.059,
+    0.102
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.6,
+   "welligkeit_mm": 0.4
+  },
+  {
+   "lage": 30,
+   "takte": 194,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.2,
+   "greifer_ereignisse": [
+    [
+     1413.981,
+     "abgelegt"
+    ],
+    [
+     1423.853,
+     "angeheftet"
+    ],
+    [
+     1426.72,
+     "abgelegt"
+    ],
+    [
+     1435.925,
+     "angeheftet"
+    ],
+    [
+     1438.591,
+     "abgelegt"
+    ],
+    [
+     1449.461,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.4,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 122,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.5,
+   "sprung_max_rad": [
+    0.015,
+    0.035,
+    0.041,
+    0.004,
+    0.061,
+    0.105
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.3,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 31,
+   "takte": 156,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.2,
+   "greifer_ereignisse": [
+    [
+     1426.72,
+     "abgelegt"
+    ],
+    [
+     1435.925,
+     "angeheftet"
+    ],
+    [
+     1438.591,
+     "abgelegt"
+    ],
+    [
+     1449.461,
+     "angeheftet"
+    ],
+    [
+     1454.128,
+     "abgelegt"
+    ],
+    [
+     1463.131,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.4,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 94,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.4,
+   "sprung_max_rad": [
+    0.013,
+    0.074,
+    0.038,
+    0.003,
+    0.058,
+    0.1
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.8,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 32,
+   "takte": 218,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.1,
+   "greifer_ereignisse": [
+    [
+     1438.591,
+     "abgelegt"
+    ],
+    [
+     1449.461,
+     "angeheftet"
+    ],
+    [
+     1454.128,
+     "abgelegt"
+    ],
+    [
+     1463.131,
+     "angeheftet"
+    ],
+    [
+     1467.131,
+     "abgelegt"
+    ],
+    [
+     1478.068,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 123,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": -0.1,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.5,
+   "sprung_max_rad": [
+    0.014,
+    0.037,
+    0.04,
+    0.002,
+    0.06,
+    0.105
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.6,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 33,
+   "takte": 241,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.1,
+   "greifer_ereignisse": [
+    [
+     1454.128,
+     "abgelegt"
+    ],
+    [
+     1463.131,
+     "angeheftet"
+    ],
+    [
+     1467.131,
+     "abgelegt"
+    ],
+    [
+     1478.068,
+     "angeheftet"
+    ],
+    [
+     1484.268,
+     "abgelegt"
+    ],
+    [
+     1496.538,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.4,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 143,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.5,
+   "sprung_max_rad": [
+    0.009,
+    0.037,
+    0.036,
+    0.006,
+    0.054,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.6,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 34,
+   "takte": 183,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.7,
+   "greifer_ereignisse": [
+    [
+     1467.131,
+     "abgelegt"
+    ],
+    [
+     1478.068,
+     "angeheftet"
+    ],
+    [
+     1484.268,
+     "abgelegt"
+    ],
+    [
+     1496.538,
+     "angeheftet"
+    ],
+    [
+     1502.938,
+     "abgelegt"
+    ],
+    [
+     1512.742,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.7,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 106,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.8,
+   "sprung_max_rad": [
+    0.029,
+    0.072,
+    0.035,
+    0.002,
+    0.052,
+    0.099
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.8,
+   "welligkeit_mm": 0.4
+  },
+  {
+   "lage": 35,
+   "takte": 225,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.2,
+   "greifer_ereignisse": [
+    [
+     1484.268,
+     "abgelegt"
+    ],
+    [
+     1496.538,
+     "angeheftet"
+    ],
+    [
+     1502.938,
+     "abgelegt"
+    ],
+    [
+     1512.742,
+     "angeheftet"
+    ],
+    [
+     1517.742,
+     "abgelegt"
+    ],
+    [
+     1529.813,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 140,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.012,
+    0.03,
+    0.048,
+    0.006,
+    0.061,
+    0.103
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.3,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 36,
+   "takte": 141,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1502.938,
+     "abgelegt"
+    ],
+    [
+     1512.742,
+     "angeheftet"
+    ],
+    [
+     1517.742,
+     "abgelegt"
+    ],
+    [
+     1529.813,
+     "angeheftet"
+    ],
+    [
+     1535.346,
+     "abgelegt"
+    ],
+    [
+     1544.949,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.3,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 103,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.4,
+   "sprung_max_rad": [
+    0.018,
+    0.075,
+    0.035,
+    0.003,
+    0.053,
+    0.101
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.5,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 37,
+   "takte": 214,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.1,
+   "greifer_ereignisse": [
+    [
+     1517.742,
+     "abgelegt"
+    ],
+    [
+     1529.813,
+     "angeheftet"
+    ],
+    [
+     1535.346,
+     "abgelegt"
+    ],
+    [
+     1544.949,
+     "angeheftet"
+    ],
+    [
+     1547.349,
+     "abgelegt"
+    ],
+    [
+     1558.287,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 123,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": -0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.5,
+   "sprung_max_rad": [
+    0.015,
+    0.032,
+    0.043,
+    0.002,
+    0.061,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.3,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 38,
+   "takte": 140,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.7,
+   "greifer_ereignisse": [
+    [
+     1535.346,
+     "abgelegt"
+    ],
+    [
+     1544.949,
+     "angeheftet"
+    ],
+    [
+     1547.349,
+     "abgelegt"
+    ],
+    [
+     1558.287,
+     "angeheftet"
+    ],
+    [
+     1564.221,
+     "abgelegt"
+    ],
+    [
+     1573.824,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 103,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.04,
+    0.072,
+    0.036,
+    0.006,
+    0.054,
+    0.101
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.7,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 39,
+   "takte": 142,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1547.349,
+     "abgelegt"
+    ],
+    [
+     1558.287,
+     "angeheftet"
+    ],
+    [
+     1564.221,
+     "abgelegt"
+    ],
+    [
+     1573.824,
+     "angeheftet"
+    ],
+    [
+     1576.157,
+     "abgelegt"
+    ],
+    [
+     1585.429,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 98,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.058,
+    0.062,
+    0.039,
+    0.005,
+    0.059,
+    0.084
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.8,
+   "welligkeit_mm": 0.4
+  },
+  {
+   "lage": 40,
+   "takte": 179,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.8,
+   "greifer_ereignisse": [
+    [
+     1564.221,
+     "abgelegt"
+    ],
+    [
+     1573.824,
+     "angeheftet"
+    ],
+    [
+     1576.157,
+     "abgelegt"
+    ],
+    [
+     1585.429,
+     "angeheftet"
+    ],
+    [
+     1588.229,
+     "abgelegt"
+    ],
+    [
+     1598.498,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.7,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 113,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.042,
+    0.056,
+    0.036,
+    0.008,
+    0.055,
+    0.108
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.5,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 41,
+   "takte": 204,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.0,
+   "greifer_ereignisse": [
+    [
+     1576.157,
+     "abgelegt"
+    ],
+    [
+     1585.429,
+     "angeheftet"
+    ],
+    [
+     1588.229,
+     "abgelegt"
+    ],
+    [
+     1598.498,
+     "angeheftet"
+    ],
+    [
+     1602.765,
+     "abgelegt"
+    ],
+    [
+     1613.302,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 117,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": -0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.041,
+    0.045,
+    0.038,
+    0.002,
+    0.058,
+    0.105
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.3,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 42,
+   "takte": 204,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.2,
+   "greifer_ereignisse": [
+    [
+     1588.229,
+     "abgelegt"
+    ],
+    [
+     1598.498,
+     "angeheftet"
+    ],
+    [
+     1602.765,
+     "abgelegt"
+    ],
+    [
+     1613.302,
+     "angeheftet"
+    ],
+    [
+     1618.969,
+     "abgelegt"
+    ],
+    [
+     1630.173,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.4,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 127,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.4,
+   "sprung_max_rad": [
+    0.02,
+    0.035,
+    0.04,
+    0.003,
+    0.06,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.4,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 43,
+   "takte": 175,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.1,
+   "greifer_ereignisse": [
+    [
+     1602.765,
+     "abgelegt"
+    ],
+    [
+     1613.302,
+     "angeheftet"
+    ],
+    [
+     1618.969,
+     "abgelegt"
+    ],
+    [
+     1630.173,
+     "angeheftet"
+    ],
+    [
+     1635.173,
+     "abgelegt"
+    ],
+    [
+     1644.776,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 103,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.013,
+    0.045,
+    0.043,
+    0.002,
+    0.061,
+    0.107
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.4,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 44,
+   "takte": 151,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.5,
+   "greifer_ereignisse": [
+    [
+     1618.969,
+     "abgelegt"
+    ],
+    [
+     1630.173,
+     "angeheftet"
+    ],
+    [
+     1635.173,
+     "abgelegt"
+    ],
+    [
+     1644.776,
+     "angeheftet"
+    ],
+    [
+     1649.442,
+     "abgelegt"
+    ],
+    [
+     1659.512,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.7,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 110,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.8,
+   "sprung_max_rad": [
+    0.029,
+    0.072,
+    0.035,
+    0.003,
+    0.05,
+    0.031
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.9,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 45,
+   "takte": 157,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.4,
+   "greifer_ereignisse": [
+    [
+     1635.173,
+     "abgelegt"
+    ],
+    [
+     1644.776,
+     "angeheftet"
+    ],
+    [
+     1649.442,
+     "abgelegt"
+    ],
+    [
+     1659.512,
+     "angeheftet"
+    ],
+    [
+     1662.112,
+     "abgelegt"
+    ],
+    [
+     1672.184,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.9,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 110,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 7.0,
+   "sprung_max_rad": [
+    0.043,
+    0.075,
+    0.035,
+    0.003,
+    0.05,
+    0.053
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.7,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 46,
+   "takte": 141,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.8,
+   "greifer_ereignisse": [
+    [
+     1649.442,
+     "abgelegt"
+    ],
+    [
+     1659.512,
+     "angeheftet"
+    ],
+    [
+     1662.112,
+     "abgelegt"
+    ],
+    [
+     1672.184,
+     "angeheftet"
+    ],
+    [
+     1675.184,
+     "abgelegt"
+    ],
+    [
+     1684.723,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 102,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.049,
+    0.076,
+    0.035,
+    0.004,
+    0.053,
+    0.052
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.3,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 47,
+   "takte": 199,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1662.112,
+     "abgelegt"
+    ],
+    [
+     1672.184,
+     "angeheftet"
+    ],
+    [
+     1675.184,
+     "abgelegt"
+    ],
+    [
+     1684.723,
+     "angeheftet"
+    ],
+    [
+     1687.19,
+     "abgelegt"
+    ],
+    [
+     1697.462,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.6,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 113,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.013,
+    0.066,
+    0.035,
+    0.002,
+    0.051,
+    0.105
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.3,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 48,
+   "takte": 208,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.7,
+   "greifer_ereignisse": [
+    [
+     1675.184,
+     "abgelegt"
+    ],
+    [
+     1684.723,
+     "angeheftet"
+    ],
+    [
+     1687.19,
+     "abgelegt"
+    ],
+    [
+     1697.462,
+     "angeheftet"
+    ],
+    [
+     1703.062,
+     "abgelegt"
+    ],
+    [
+     1713.599,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.8,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 117,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": -0.1,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.8,
+   "sprung_max_rad": [
+    0.028,
+    0.057,
+    0.035,
+    0.002,
+    0.053,
+    0.106
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.5,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 49,
+   "takte": 130,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.1,
+   "greifer_ereignisse": [
+    [
+     1687.19,
+     "abgelegt"
+    ],
+    [
+     1697.462,
+     "angeheftet"
+    ],
+    [
+     1703.062,
+     "abgelegt"
+    ],
+    [
+     1713.599,
+     "angeheftet"
+    ],
+    [
+     1719.533,
+     "abgelegt"
+    ],
+    [
+     1728.67,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.3,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 96,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.4,
+   "sprung_max_rad": [
+    0.027,
+    0.074,
+    0.052,
+    0.004,
+    0.057,
+    0.021
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.3,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 50,
+   "takte": 231,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.3,
+   "greifer_ereignisse": [
+    [
+     1703.062,
+     "abgelegt"
+    ],
+    [
+     1713.599,
+     "angeheftet"
+    ],
+    [
+     1719.533,
+     "abgelegt"
+    ],
+    [
+     1728.67,
+     "angeheftet"
+    ],
+    [
+     1730.803,
+     "abgelegt"
+    ],
+    [
+     1741.94,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.2,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 126,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": -0.1,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.3,
+   "sprung_max_rad": [
+    0.009,
+    0.046,
+    0.036,
+    0.002,
+    0.055,
+    0.105
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.8,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 51,
+   "takte": 133,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.0,
+   "greifer_ereignisse": [
+    [
+     1719.533,
+     "abgelegt"
+    ],
+    [
+     1728.67,
+     "angeheftet"
+    ],
+    [
+     1730.803,
+     "abgelegt"
+    ],
+    [
+     1741.94,
+     "angeheftet"
+    ],
+    [
+     1748.807,
+     "abgelegt"
+    ],
+    [
+     1758.011,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.4,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 97,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.4,
+   "sprung_max_rad": [
+    0.037,
+    0.074,
+    0.037,
+    0.003,
+    0.057,
+    0.102
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.0,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 52,
+   "takte": 176,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.9,
+   "greifer_ereignisse": [
+    [
+     1730.803,
+     "abgelegt"
+    ],
+    [
+     1741.94,
+     "angeheftet"
+    ],
+    [
+     1748.807,
+     "abgelegt"
+    ],
+    [
+     1758.011,
+     "angeheftet"
+    ],
+    [
+     1760.277,
+     "abgelegt"
+    ],
+    [
+     1770.481,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 112,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.015,
+    0.074,
+    0.035,
+    0.002,
+    0.049,
+    0.1
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.8,
+   "welligkeit_mm": 0.3
+  },
+  {
+   "lage": 53,
+   "takte": 186,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.2,
+   "greifer_ereignisse": [
+    [
+     1748.807,
+     "abgelegt"
+    ],
+    [
+     1758.011,
+     "angeheftet"
+    ],
+    [
+     1760.277,
+     "abgelegt"
+    ],
+    [
+     1770.481,
+     "angeheftet"
+    ],
+    [
+     1774.615,
+     "abgelegt"
+    ],
+    [
+     1784.353,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.4,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 105,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": -0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.4,
+   "sprung_max_rad": [
+    0.025,
+    0.066,
+    0.036,
+    0.002,
+    0.055,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.4,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 54,
+   "takte": 216,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.1,
+   "greifer_ereignisse": [
+    [
+     1760.277,
+     "abgelegt"
+    ],
+    [
+     1770.481,
+     "angeheftet"
+    ],
+    [
+     1774.615,
+     "abgelegt"
+    ],
+    [
+     1784.353,
+     "angeheftet"
+    ],
+    [
+     1789.619,
+     "abgelegt"
+    ],
+    [
+     1801.09,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 131,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.5,
+   "sprung_max_rad": [
+    0.02,
+    0.036,
+    0.039,
+    0.004,
+    0.059,
+    0.103
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.7,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 55,
+   "takte": 135,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.2,
+   "greifer_ereignisse": [
+    [
+     1774.615,
+     "abgelegt"
+    ],
+    [
+     1784.353,
+     "angeheftet"
+    ],
+    [
+     1789.619,
+     "abgelegt"
+    ],
+    [
+     1801.09,
+     "angeheftet"
+    ],
+    [
+     1806.623,
+     "abgelegt"
+    ],
+    [
+     1815.694,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.3,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 95,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.4,
+   "sprung_max_rad": [
+    0.056,
+    0.073,
+    0.039,
+    0.004,
+    0.058,
+    0.042
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.9,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 56,
+   "takte": 225,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.1,
+   "greifer_ereignisse": [
+    [
+     1789.619,
+     "abgelegt"
+    ],
+    [
+     1801.09,
+     "angeheftet"
+    ],
+    [
+     1806.623,
+     "abgelegt"
+    ],
+    [
+     1815.694,
+     "angeheftet"
+    ],
+    [
+     1818.227,
+     "abgelegt"
+    ],
+    [
+     1829.563,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 129,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.1,
+   "greif_laengs_mm": -0.1,
+   "gier_fehler_grad": -0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.011,
+    0.031,
+    0.045,
+    0.002,
+    0.062,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.3,
+   "welligkeit_mm": 0.1
+  },
+  {
+   "lage": 57,
+   "takte": 292,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.8,
+   "greifer_ereignisse": [
+    [
+     1806.623,
+     "abgelegt"
+    ],
+    [
+     1815.694,
+     "angeheftet"
+    ],
+    [
+     1818.227,
+     "abgelegt"
+    ],
+    [
+     1829.563,
+     "angeheftet"
+    ],
+    [
+     1835.83,
+     "abgelegt"
+    ],
+    [
+     1850.033,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.8,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 172,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": -0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.8,
+   "sprung_max_rad": [
+    0.027,
+    0.03,
+    0.042,
+    0.007,
+    0.061,
+    0.104
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.6,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 58,
+   "takte": 189,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 143.0,
+   "greifer_ereignisse": [
+    [
+     1818.227,
+     "abgelegt"
+    ],
+    [
+     1829.563,
+     "angeheftet"
+    ],
+    [
+     1835.83,
+     "abgelegt"
+    ],
+    [
+     1850.033,
+     "angeheftet"
+    ],
+    [
+     1857.9,
+     "abgelegt"
+    ],
+    [
+     1868.57,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.7,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 119,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": -0.1,
+   "greif_laengs_mm": 0.0,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.7,
+   "sprung_max_rad": [
+    0.029,
+    0.036,
+    0.041,
+    0.007,
+    0.061,
+    0.106
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 0.7,
+   "welligkeit_mm": 0.2
+  },
+  {
+   "lage": 59,
+   "takte": 149,
+   "stop_reason": "endstellung",
+   "abbruch": "endstellung",
+   "sprung_gelenk_abbruch": null,
+   "griff": true,
+   "objekt_hub_mm": 142.6,
+   "greifer_ereignisse": [
+    [
+     1835.83,
+     "abgelegt"
+    ],
+    [
+     1850.033,
+     "angeheftet"
+    ],
+    [
+     1857.9,
+     "abgelegt"
+    ],
+    [
+     1868.57,
+     "angeheftet"
+    ],
+    [
+     1873.103,
+     "abgelegt"
+    ],
+    [
+     1883.173,
+     "angeheftet"
+    ]
+   ],
+   "annaeherung_mm": 0.0,
+   "tisch_min_mm": 6.5,
+   "unter_tisch": false,
+   "unter_tisch_10": false,
+   "greifbefehl": true,
+   "greif_takt": 110,
+   "greif_xy_mm": 0.1,
+   "greif_quer_mm": 0.0,
+   "greif_laengs_mm": 0.1,
+   "gier_fehler_grad": 0.0,
+   "greif_hoehe_mm": 6.6,
+   "sprung_max_rad": [
+    0.02,
+    0.073,
+    0.035,
+    0.003,
+    0.05,
+    0.056
+   ],
+   "sprung_takte": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "quer_p95_mm": 1.8,
+   "welligkeit_mm": 0.3
+  }
+ ]
+}

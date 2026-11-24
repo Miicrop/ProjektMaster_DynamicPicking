@@ -132,6 +132,8 @@ def build_ideal_trajectory(
     fk=None,
     ptp_joint_speed=config.PTP_JOINT_SPEED_RADS,
     ramp_s=config.SEGMENT_RAMP_S,
+    approach_fast_speed=None,
+    approach_slow_m=0.0,
 ):
     """Wegpunkte -> dichte Soll-Bahn mit Greifer-Dwell und Ueberschleifen.
 
@@ -140,6 +142,15 @@ def build_ideal_trajectory(
     brauchen ``fk`` (Gelenkwinkel -> Quaternion-Pose, z. B.
     ``robot.fk``). Damit ist das Tempo ueber alle Episoden und
     Datenquellen konsistent (AP 2.6).
+
+    Zweistufiger Endanflug (``approach_fast_speed`` > ``approach_speed``
+    und ``approach_slow_m`` > 0, Standard aus): Jedes LIN-Segment zu einem
+    ``approach``-Punkt faehrt mit ``approach_fast_speed`` an, geht ueber
+    ``ramp_s`` (Sinus) auf ``approach_speed`` herunter und faehrt die
+    letzten ``approach_slow_m`` (inklusive Bremsen) langsam
+    (:class:`_TwoSpeedProfile`). Ein Segment, keine Zwischenpunkte, kein
+    Halt beim Tempowechsel. Ist das Segment dafuer zu kurz, faehrt es wie
+    bisher einstufig mit ``approach_speed``.
     """
     if len(waypoints) < 2:
         raise ValueError("Mindestens zwei Wegpunkte noetig")
@@ -148,11 +159,21 @@ def build_ideal_trajectory(
     dof = next((len(wp.joints) for wp in waypoints if wp.joints is not None), None)
     nan_row = None if dof is None else np.full(dof, np.nan)
 
-    segments = [
-        _Segment(prev, wp, approach_speed if wp.approach else transit_speed,
-                 fk, ptp_joint_speed)
-        for prev, wp in zip(waypoints[:-1], waypoints[1:])
-    ]
+    two_stage = bool(approach_fast_speed and approach_slow_m and approach_slow_m > 0.0
+                     and float(approach_fast_speed) > float(approach_speed))
+    segments = []
+    for prev, wp in zip(waypoints[:-1], waypoints[1:]):
+        split = two_stage and wp.approach and wp.motion == MOTION_LIN
+        seg = _Segment(prev, wp, (float(approach_fast_speed) if split else
+                                  approach_speed if wp.approach else transit_speed),
+                       fk, ptp_joint_speed)
+        if split and not _TwoSpeedProfile.fits(seg.length, float(approach_fast_speed),
+                                               float(approach_speed), float(approach_slow_m),
+                                               ramp_s):
+            seg = _Segment(prev, wp, approach_speed, fk, ptp_joint_speed)
+            split = False
+        seg.two_speed = (float(approach_speed), float(approach_slow_m)) if split else None
+        segments.append(seg)
     n_wp = len(waypoints)
     change = [False] + [
         waypoints[k].gripper_closed != waypoints[k - 1].gripper_closed
@@ -169,6 +190,11 @@ def build_ideal_trajectory(
 
     # -- Profile: Rampen, die an ueberschliffenen Punkten verlaengert werden --
     for k, seg in enumerate(segments):
+        if seg.two_speed is not None:
+            seg.profile = _TwoSpeedProfile(
+                seg.length, seg.tcp_speed, seg.two_speed[0], seg.two_speed[1], ramp_s,
+                _blend_ramp(ramp_s, radii[k], seg.tcp_speed))
+            continue
         seg.profile = _Profile(
             seg.nominal,
             _blend_ramp(ramp_s, radii[k], seg.tcp_speed),
@@ -239,6 +265,7 @@ def build_ideal_trajectory(
         rate_hz=rate_hz,
         blend_applied=tuple(radii),
     )
+
 
 
 def joint_derivatives(joints, rate_hz=config.CONTROL_RATE_HZ):
@@ -349,6 +376,7 @@ class _Segment(object):
             self.nominal = self.length / speed
         self.tcp_speed = self.length / self.nominal if self.nominal > 0 else 0.0
         self.profile = None
+        self.two_speed = None
 
     def pose(self, s):
         if s >= 1.0:
@@ -446,6 +474,79 @@ class _Profile(object):
             s = self.peak * (self.r_in / 2.0 + (t - self.r_in))
         else:
             s = 1.0 - self._ramp_dist(min(self.total - t, self.r_out), self.r_out)
+        return float(min(1.0, max(0.0, s)))
+
+
+class _TwoSpeedProfile(object):
+    """Bahnparameter s(t) fuer den zweistufigen Endanflug (ein LIN-Segment).
+
+    Phasen (Sinus-Uebergaenge wie :class:`_Profile`): Anfahren auf v1,
+    Fahrt mit v1, Uebergang v1 -> v2 in ``ramp_s``, Fahrt mit v2, Bremsen
+    in ``ramp_s``. Die letzten ``slow_m`` (Fahrt v2 + Bremsen) liegen fest,
+    die schnelle Fahrt fuellt den Rest. Gleiche Schnittstelle wie
+    :class:`_Profile` (``total``, ``r_in``, ``r_out``, ``peak``,
+    ``stretch``, ``at``); das Segment endet immer im Stillstand (Greifen).
+    """
+
+    @staticmethod
+    def _lengths(length, v1, v2, slow_m, ramp_s, r_in=None):
+        r_in = ramp_s if r_in is None else r_in
+        slow = max(float(slow_m), 0.5 * v2 * ramp_s)
+        rest = length - slow - 0.5 * (v1 + v2) * ramp_s - 0.5 * v1 * r_in
+        return slow, rest
+
+    @classmethod
+    def fits(cls, length, v1, v2, slow_m, ramp_s):
+        return cls._lengths(length, v1, v2, slow_m, ramp_s)[1] >= 0.0
+
+    def __init__(self, length, v1, v2, slow_m, ramp_s, ramp_in):
+        slow, rest = self._lengths(length, v1, v2, slow_m, ramp_s, ramp_in)
+        rest = max(rest, 0.0)
+        L = float(length)
+        # (Dauer, v_anfang, v_ende) in s-Einheiten je Sekunde
+        self.phases = [
+            [float(ramp_in), 0.0, v1 / L],
+            [rest / v1, v1 / L, v1 / L],
+            [float(ramp_s), v1 / L, v2 / L],
+            [(slow - 0.5 * v2 * ramp_s) / v2, v2 / L, v2 / L],
+            [float(ramp_s), v2 / L, 0.0],
+        ]
+        self._update()
+
+    def _update(self):
+        self.r_in = self.phases[0][0]
+        self.r_out = self.phases[-1][0]
+        self.peak = self.phases[1][1]
+        self.total = float(sum(p[0] for p in self.phases))
+
+    def stretch(self, new_total):
+        if self.total <= 0.0 or new_total <= 0.0:
+            return
+        f = new_total / self.total
+        for p in self.phases:
+            p[0] *= f
+            p[1] /= f
+            p[2] /= f
+        self._update()
+
+    @staticmethod
+    def _dist(tau, r, va, vb):
+        if r <= 0.0:
+            return 0.0
+        return va * tau + (vb - va) * (tau / 2.0 - r / (2.0 * np.pi) * np.sin(np.pi * tau / r))
+
+    def at(self, t):
+        if t >= self.total:
+            return 1.0
+        if t <= 0.0:
+            return 0.0
+        s = 0.0
+        for r, va, vb in self.phases:
+            if t <= r:
+                s += self._dist(t, r, va, vb)
+                break
+            s += self._dist(r, r, va, vb)
+            t -= r
         return float(min(1.0, max(0.0, s)))
 
 

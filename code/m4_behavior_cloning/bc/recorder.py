@@ -449,6 +449,8 @@ class EpisodeRecorder(object):
                 "servo_j_ms": _ms_stats(servo_s),
                 "read_state_ms": _ms_stats(read_s),
                 "noise_rejects": plan.rejects,
+                "noise_reject_kinds": getattr(plan, "reject_kinds", None) or {},
+                "korrektur_halt": getattr(plan, "korrektur", None),
                 "anflug_versatz_m": (None if getattr(plan, "approach_offset", None) is None
                                      else list(plan.approach_offset[:3])),
                 "anflug_drehung_grad": (None if getattr(plan, "approach_offset", None) is None

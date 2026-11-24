@@ -326,3 +326,29 @@ def test_relocate_only_in_the_simulation_approaches_by_ptp(tmp_path):
     second = json.loads((tmp_path / "out2" / "summary.json").read_text(encoding="utf-8"))["umlegen"]
     assert second["ok"], second
     assert np.allclose(second["placed_xy"], target["xy"], atol=1e-4)
+
+
+def test_grid_poses_spacing_follows_lage_count():
+    from test_known_pose import _down, _known
+
+    known = _known()
+    known.region = [_down(x, y, 0.0) for x, y in ((0.2, -0.3), (0.6, -0.3), (0.6, 0.1),
+                                                  (0.2, 0.1))]
+    few, many = v.plan_grid_poses(known, 10), v.plan_grid_poses(known, 100)
+    assert len(few) == 10 and len(many) == 100
+    assert many[0]["raster_mm"] < few[0]["raster_mm"]
+
+    def nearest(planned):
+        xy = np.array([p["xy"] for p in planned])
+        return min(np.min(np.delete(np.linalg.norm(xy - xy[k], axis=1), k)) for k in range(len(xy)))
+
+    # Raster: kein Paar enger als der Rasterabstand (gleichmaessig, nicht gehaeuft)
+    assert nearest(few) >= 0.999e-3 * few[0]["raster_mm"]
+    assert nearest(many) >= 0.999e-3 * many[0]["raster_mm"]
+    # deterministisch, Drehungen ueber den ganzen Bereich
+    assert v.plan_grid_poses(known, 10) == few
+    turns = [p["turn_deg"] for p in many]
+    assert max(turns) - min(turns) > 60
+    # nicht erreichbare Lagen werden ersetzt, nicht weggelassen
+    left = v.plan_grid_poses(known, 4, reachable=lambda pose: pose[1] < -0.1)
+    assert len(left) == 4 and all(p["xy"][1] < -0.1 for p in left)

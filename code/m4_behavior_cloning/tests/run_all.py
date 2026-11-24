@@ -162,7 +162,7 @@ def main(argv=None):
     modules = modules or MODULES
 
     for key, value in BACKENDS.items():
-        if value != "sim":
+        if value not in ("sim", "mujoco"):
             print("!! %s-Backend: %s (HARDWARE)" % (key, value))
     if BACKENDS["camera"] == "uvc":
         # Index mit ausgeben: sonst bleibt unbemerkt, wenn die Suite gegen

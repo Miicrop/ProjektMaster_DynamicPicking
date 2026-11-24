@@ -29,6 +29,14 @@ Regeln (kombinierbar):
     nahe 0). Befund 2026-11-10: bei Objekten mit 0-90 Grad greift die
     Haelfte der Demos gedreht -- zwei gleichwertige Loesungen fuer dasselbe Bild.
 
+``--label-kappen RAD``
+    Gelenk-Label (Action 0..5, ideale Gelenke t+1) auf hoechstens RAD Abstand
+    zur Ist-Stellung desselben Takts begrenzen. Grund: Mit Drehversatz im
+    Anflug liegt das Label (Idealbahn) an Gelenk 6 teils > 0,35 rad neben der
+    Ist-Stellung -- die Inferenz lehnt solche Ziele ab
+    (``config.SERVO_MAX_TARGET_GAP_RAD``). Gekappt zeigt das Label weiter zur
+    Idealbahn, nur in kleineren Schritten. Greifer-Label bleibt unveraendert.
+
 Ausfuehren (aus dem Ordner "Behavior Cloning" bzw. m4_behavior_cloning):
     python tools/export_variante.py --data data/2026-11-02 data/2026-11-03 data/2026-11-09 data/2026-11-11 \
         --ohne-lagen Berichte/Versuchsreihe_Policy-Varianten/testlagen.json --out datasets/var_A
@@ -70,10 +78,14 @@ def parse_args():
                         help="Episode N Takte nach dem Schliessbefehl beenden")
     parser.add_argument("--eine-drehung", action="store_true",
                         help="nur Demos ohne 180-Grad-Drehung des Werkzeugs gegen das Objekt")
+    parser.add_argument("--ohne-episoden", action="append", default=[], metavar="ORDNER=I,J",
+                        help="einzelne Episoden eines Aufzeichnungsordners weglassen (z. B. Testfahrten), mehrfach moeglich")
     parser.add_argument("--dagger-gewicht", type=int, default=1, metavar="K",
                         help="DAgger-Episoden (apps/infer.py --dagger, metadata mode 'dagger') "
                              "K-mal in den Datensatz -- wenige Korrekturen neben vielen Demos "
                              "haetten sonst kaum Gewicht (Default %(default)s)")
+    parser.add_argument("--label-kappen", type=float, default=None, metavar="RAD",
+                        help="Gelenk-Label auf hoechstens RAD Abstand zur Ist-Stellung begrenzen")
     add_export_arguments(parser)
     args = parser.parse_args()
     if not args.check and not args.out:
@@ -107,6 +119,18 @@ def keep_mask(arrays, pause_keep=None, cut_after=None):
     if cut_after is not None:
         keep[c + cut_after + 1:] = False
     return keep, removed
+
+
+def clip_labels(arrays, limit):
+    """Gelenk-Label auf +-limit um die Ist-Stellung kappen. Gibt (arrays, gekappte Takte je Gelenk)."""
+    act = np.array(arrays["action"], dtype=np.float32, copy=True)
+    q = np.asarray(arrays["observation.state"], dtype=np.float32)[:, :6]
+    gap = act[:, :6] - q
+    hit = np.abs(gap) > limit
+    act[:, :6] = q + np.clip(gap, -limit, limit)
+    out = dict(arrays)
+    out["action"] = act
+    return out, hit.sum(axis=0)
 
 
 def apply_mask(arrays, keep):
@@ -151,6 +175,10 @@ def main():
         spec = json.loads(Path(args.ohne_lagen).read_text(encoding="utf-8"))
         test = (Path(spec["aufnahme"]).resolve(), set(spec["testlagen"]))
 
+    skip = {}
+    for spec in args.ohne_episoden:
+        folder, idx = spec.rsplit("=", 1)
+        skip.setdefault(Path(folder).resolve(), set()).update(int(x) for x in idx.split(",") if x.strip())
     stats = Counter()
     trimmed = []
     orig_scan = lerobot_io.scan_sources
@@ -161,6 +189,9 @@ def main():
         kept = []
         for root, i, meta in scan["episodes"]:
             block = (meta.get("metadata") or {}).get("block")
+            if i in skip.get(Path(root).resolve(), ()):
+                stats["weggelassen: --ohne-episoden"] += 1
+                continue
             if test and Path(root).resolve() == test[0] and block in test[1]:
                 stats["weggelassen: Testlage"] += 1
                 continue
@@ -181,13 +212,22 @@ def main():
         scan["episodes"] = kept
         return scan
 
+    clipped = np.zeros(6, dtype=int)
+    clipped_eps = Counter()
+
     def load_episode(root, index):
+        nonlocal clipped
         ep = orig_load(root, index)
-        if args.pause_behalten is None and args.abschneiden_nach is None:
-            return ep
-        keep, removed = keep_mask(ep.arrays, args.pause_behalten, args.abschneiden_nach)
-        trimmed.append((len(keep), int(keep.sum()), removed))
-        return replace(ep, arrays=apply_mask(ep.arrays, keep))
+        arrays = ep.arrays
+        if args.pause_behalten is not None or args.abschneiden_nach is not None:
+            keep, removed = keep_mask(arrays, args.pause_behalten, args.abschneiden_nach)
+            trimmed.append((len(keep), int(keep.sum()), removed))
+            arrays = apply_mask(arrays, keep)
+        if args.label_kappen is not None:
+            arrays, hit = clip_labels(arrays, args.label_kappen)
+            clipped = clipped + hit
+            clipped_eps["Episoden mit gekapptem Label"] += int(hit.sum() > 0)
+        return ep if arrays is ep.arrays else replace(ep, arrays=arrays)
 
     lerobot_io.scan_sources = scan_sources
     lerobot_io.dataset.load_episode = load_episode
@@ -198,6 +238,8 @@ def main():
         "abschneiden_nach": args.abschneiden_nach,
         "eine_drehung": bool(args.eine_drehung),
         "dagger_gewicht": int(args.dagger_gewicht),
+        "ohne_episoden": list(args.ohne_episoden),
+        "label_kappen": args.label_kappen,
     }
     print("Quellen: %s" % ", ".join(map(str, sources)))
     print("Regeln: %s" % rules)
@@ -220,20 +262,33 @@ def main():
     info = json.loads(path.read_text(encoding="utf-8"))
     if args.abschneiden_nach is not None:
         # Die Episoden enden am Griff; Endstellung fuer apps/infer.py
-        # --transport-geplant ist die Station (PRE_PLACE) der Aufnahmen.
-        station = [ep["metadata"]["points"]["PRE_PLACE"]["joints"] for ep in info["episodes"]
-                   if "PRE_PLACE" in (ep["metadata"].get("points") or {})]
+        # --transport-geplant ist die Station (PRE_PLACE) der Aufnahmen. Ablauf
+        # pick_bis_griff (ab 2026-11-19) hat keine Station, die Episoden enden
+        # an UEBER_TISCH -- dann ist das die Endstellung (wie beim Modell ohne
+        # Abschneiden).
+        station, end_point = [], None
+        for name in ("PRE_PLACE", "UEBER_TISCH"):
+            station = [ep["metadata"]["points"][name]["joints"] for ep in info["episodes"]
+                       if name in (ep["metadata"].get("points") or {})]
+            if station:
+                end_point = name
+                break
         if not station:
-            raise SystemExit("--abschneiden-nach: kein PRE_PLACE in den Metadaten")
+            raise SystemExit("--abschneiden-nach: weder PRE_PLACE noch UEBER_TISCH in den Metadaten")
         info["end_joints_policy"] = info["end_joints"]
         info["end_joints"] = np.median(np.asarray(station, dtype=float), axis=0).tolist()
         info["end_gripper"] = float(config.GRIPPER_CLOSED)
-        print("Endstellung = Station (PRE_PLACE, Median aus %d Episoden, Spannweite %.4f rad)"
-              % (len(station), float(np.max(np.ptp(np.asarray(station, dtype=float), axis=0)))))
+        print("Endstellung = %s (Median aus %d Episoden, Spannweite %.4f rad)"
+              % (end_point, len(station), float(np.max(np.ptp(np.asarray(station, dtype=float), axis=0)))))
     info["variante"] = dict(regeln=rules, auswahl=dict(stats),
                             takte_vorher=int(sum(t[0] for t in trimmed)) or None,
                             takte_nachher=int(sum(t[1] for t in trimmed)) or None,
                             pause_entfernt=int(sum(t[2] for t in trimmed)) or None)
+    if args.label_kappen is not None:
+        info["variante"]["label_gekappt_takte_je_gelenk"] = clipped.tolist()
+        info["variante"]["label_gekappt_episoden"] = int(clipped_eps["Episoden mit gekapptem Label"])
+        print("Label gekappt (> %.3f rad): Takte je Gelenk %s, Episoden %d"
+              % (args.label_kappen, clipped.tolist(), clipped_eps["Episoden mit gekapptem Label"]))
     path.write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
     report(stats, trimmed)
     print("LeRobotDataset %s: %d Episoden" % (args.out, len(info["episodes"])))

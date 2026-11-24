@@ -1,0 +1,245 @@
+{
+  "_hinweis": "Parameter der MuJoCo-Taktiksimulation (bc/sim_mujoco). Abschnitte mit _quelle 'angepasst' werden von kalibrierung.py bzw. folgemodell.py neu geschrieben.",
+  "werkzeug": {
+    "tcp_versatz_m": [
+      0.0,
+      0.0,
+      0.1975
+    ],
+    "_quelle": "local_fk_check.tool_offset_m der Aufnahmen 2026-11-19 (Tool ZimmerLWR50, TCP = Spitze der Greiferbacken)"
+  },
+  "greifer": {
+    "_quelle": "geschaetzt: Zimmer LWR50 mit Fingern, nur Optik und Anheften (kein Kontakt). Masse nach dem Wrist-Referenzbild (B66) gewaehlt: Finger 60 x 8 x 14 mm, Gehaeuse quer 60 mm -- breitere/tiefere Gehaeuse erscheinen als Band quer durchs Wrist-Bild, das es im Original nicht gibt. backen_drehung_grad: Greifer um die Werkzeugachse verdreht montiert (config/system.yaml nennt 23 Grad Montagewinkel); 28 Grad = Kamerarichtung aus der Kalibrierung (118-119 Grad) minus 90, weil die Backen im Wrist-Referenzbild symmetrisch links und rechts oben liegen",
+    "flansch_scheibe": {
+      "radius_m": 0.032,
+      "laenge_m": 0.03
+    },
+    "gehaeuse_m": [
+      0.085,
+      0.06,
+      0.1075
+    ],
+    "backen_laenge_m": 0.06,
+    "backen_breite_m": 0.014,
+    "backen_dicke_m": 0.008,
+    "backen_drehung_grad": 28.0,
+    "abstand_offen_m": 0.056,
+    "abstand_zu_leer_m": 0.02,
+    "schliesszeit_s": 0.25,
+    "anheften_quer_toleranz_m": 0.012,
+    "anheften_hoehe_min_m": 0.003
+  },
+  "objekt": {
+    "_quelle": "config/system.yaml (inspection: 60 x 40 x 15 mm), Fase wie m1_vision_topdown/tests (10 mm); Farbe lila geschaetzt aus den Referenzbildern",
+    "laenge_m": 0.06,
+    "breite_m": 0.04,
+    "hoehe_m": 0.015,
+    "fase_m": 0.01,
+    "rgba": [
+      0.62,
+      0.36,
+      0.78,
+      1.0
+    ]
+  },
+  "tisch": {
+    "_quelle": "Ebene aus den Tischpunkten ID0-8 (Metadaten 'table'), Platte dunkel wie im Referenzbild; Ausdehnung aus dem Szenen-Referenzbild (Plattenrand gegen die Marker) geschaetzt",
+    "x_m": [
+      0.12,
+      0.7
+    ],
+    "y_m": [
+      -0.39,
+      0.32
+    ],
+    "dicke_m": 0.02,
+    "rgba": [
+      0.16,
+      0.13,
+      0.13,
+      1.0
+    ]
+  },
+  "kameras": {
+    "wrist": {
+      "start_versatz_werkzeug_m": [
+        -0.0175,
+        0.0574,
+        -0.06
+      ],
+      "_start_quelle": "einstellungen/hindernisse.json kamera_versatz_werkzeug_m, Hoehe geraten (Objektiv ueber den Backenspitzen)",
+      "modell": "pinhole",
+      "f_px": 1147.0,
+      "k1": -0.51046,
+      "k2": 0.24667,
+      "bild_px": [
+        1440,
+        1080
+      ],
+      "rest_px": 1.15,
+      "bilder": 5,
+      "marker_drehung": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0
+      },
+      "versatz_werkzeug_m": [
+        -0.02218,
+        0.03928,
+        -0.07186
+      ],
+      "quat_werkzeug_wxyz": [
+        0.966547,
+        0.15847,
+        0.045471,
+        0.196487
+      ],
+      "bezug": "CLEAR_FOV (2026-11-19)",
+      "objektiv": "3.6 mm F8.0 (Anwender 2026-11-20), nominal f 1043 px",
+      "modellvergleich": [
+        {
+          "modell": "fisheye",
+          "k2": false,
+          "f_fest": false,
+          "f_px": 1133.7,
+          "k1": -0.17784,
+          "k2_wert": 0.0,
+          "rest_px": 1.24
+        },
+        {
+          "modell": "pinhole",
+          "k2": false,
+          "f_fest": false,
+          "f_px": 1079.4,
+          "k1": -0.31304,
+          "k2_wert": 0.0,
+          "rest_px": 2.29
+        },
+        {
+          "modell": "pinhole",
+          "k2": true,
+          "f_fest": false,
+          "f_px": 1147.0,
+          "k1": -0.51046,
+          "k2_wert": 0.24667,
+          "rest_px": 1.15
+        },
+        {
+          "modell": "pinhole",
+          "k2": true,
+          "f_fest": true,
+          "f_px": 1043.5,
+          "k1": -0.38047,
+          "k2_wert": 0.12122,
+          "rest_px": 1.85
+        }
+      ],
+      "c2": {
+        "_quelle": "Versuch V4 (2026-11-21): Wrist dunkel und verrauscht wie die C2-Daten (02./03./09.11.). Real: Bildmittel C2 14,7 gegen 19.11. 34,5 Grauwerte (Verhaeltnis 0,426), Kontrast im selben Verhaeltnis, zeitliches Rauschen im Stillstand 0,4-0,65 Grauwerte bei Mittel 5-18 (~5 %). Sim: Licht aus gibt 0,692 des Licht-an-Bildes, Verstaerkung 0,616 bringt es auf 0,426; Rauschen 5 % der Zielhelligkeit (~34) = 1,7.",
+        "verstaerkung": 0.616,
+        "rauschen_sigma": 1.7
+      }
+    },
+    "scene": {
+      "modell": "fisheye",
+      "f_px": 1337.22,
+      "k1": -0.05221,
+      "k2": 0.0,
+      "bild_px": [
+        1440,
+        1080
+      ],
+      "pos_m": [
+        0.43031,
+        -0.28452,
+        0.80918
+      ],
+      "quat_wxyz": [
+        -0.0756,
+        0.714083,
+        -0.687353,
+        -0.109158
+      ],
+      "rest_px": 2.2,
+      "bilder": 7,
+      "marker_drehung": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0
+      }
+    }
+  },
+  "licht": {
+    "_quelle": "grob: Decke (gerichtet) + Fensterlicht (Umgebung); Wrist-Licht als Spot an der Wrist-Kamera, schaltbar",
+    "decke_diffus": [
+      0.55,
+      0.5,
+      0.48
+    ],
+    "umgebung": [
+      0.35,
+      0.32,
+      0.3
+    ],
+    "wrist_diffus": [
+      0.9,
+      0.85,
+      0.8
+    ],
+    "wrist_oeffnung_grad": 60
+  },
+  "folgemodell": {
+    "_quelle": "angepasst (folgemodell.py --anpassen, zweite Ordnung) an jede 6. Episode von data/2026-11-19 (67 Ep.): aux.joints_command gegen observation.state, Override 0,5. Vergleich ueber 399 Episoden: Dokumentation/MuJoCo-Taktiksimulation-Stand.md",
+    "verzug_s": [
+      0.0004,
+      0.0296,
+      0.0314,
+      0.0395,
+      0.0268,
+      0.0
+    ],
+    "v_max_rads": [
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0
+    ],
+    "a_max_rads2": [
+      7.8995,
+      8.1,
+      8.1,
+      8.1,
+      8.1,
+      8.1218
+    ],
+    "dt_s": 0.0020833,
+    "omega_rads": [
+      14.0668,
+      20.9114,
+      23.3236,
+      20.3394,
+      22.1385,
+      9.739
+    ],
+    "zeta": [
+      0.7798,
+      0.734,
+      0.6403,
+      0.7335,
+      0.6426,
+      0.5969
+    ],
+    "rest_rms_rad": [
+      0.0113,
+      0.0043,
+      0.0026,
+      0.0051,
+      0.0024,
+      0.0182
+    ]
+  }
+}

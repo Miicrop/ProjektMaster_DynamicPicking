@@ -140,7 +140,9 @@ def load(sequence_path, robot, planner=None):
         resolved.waypoints, fk=robot.fk,
         transit_speed=planner.get("transit_speed_ms") or config.TRANSIT_SPEED_MS,
         approach_speed=planner.get("approach_speed_ms") or config.APPROACH_SPEED_MS,
-        ptp_joint_speed=planner.get("ptp_joint_speed_rads") or config.PTP_JOINT_SPEED_RADS)
+        ptp_joint_speed=planner.get("ptp_joint_speed_rads") or config.PTP_JOINT_SPEED_RADS,
+        approach_fast_speed=planner.get("approach_fast_speed_ms"),
+        approach_slow_m=planner.get("approach_slow_m") or 0.0)
     return from_resolved(resolved, ideal), resolved
 
 
