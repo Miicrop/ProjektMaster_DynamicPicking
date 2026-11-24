@@ -308,6 +308,50 @@ M4_TIMING = {"cycle_ms": 1000 / 15, "servo_ms": 1000 / 60, "rpc_median_ms": 10, 
              "hang_ms": 210, "predict_ms": 77}
 
 
+LAB2_DAY = "2026-11-12"
+LAB2_PHOTOS = (("aufbau/anlage_gesamt.jpg", "anlage"), ("aufbau/kamera_oben.jpg", "kamera_oben"),
+               ("m3/vorrichtung_seite.jpg", "vorrichtung"), ("m4/handgelenkkamera.jpg", "handgelenk"),
+               ("m1/aufbau_erkennung.jpg", "m1_live"), ("m3/aufbau_pruefung.jpg", "m3_live"))
+
+
+def export_lab2(cfg: dict) -> dict | None:
+    """Labortag 12.11.: Zeigetests (logs/point_tests.csv), Zyklen (logs/cycles_20261112.csv) und Laborfotos
+    aus thesis/figures. logs/ ist nicht im Repo: fehlen die Dateien, bleibt der Stand aus dem alten data.json."""
+    pt_file, cy_file = CODE / "logs" / "point_tests.csv", CODE / "logs" / f"cycles_{LAB2_DAY.replace('-', '')}.csv"
+    if not (pt_file.exists() and cy_file.exists()):
+        old = OUT_DATA / "data.json"
+        prev = json.loads(old.read_text(encoding="utf-8")).get("lab2") if old.exists() else None
+        print("  Labortag 12.11.: logs fehlen, alter Stand aus data.json" if prev else "  Labortag 12.11.: keine Daten")
+        return prev
+    with open(pt_file, encoding="utf-8") as fh:
+        rows = [r for r in csv.DictReader(fh, delimiter=";") if r["time"].startswith(LAB2_DAY)]
+    pt = lambda r: {"x": float(r["x_ws_mm"]), "y": float(r["y_ws_mm"]), "dx": float(r["dx_mm"]), "dy": float(r["dy_mm"])}
+    # Notizen „nach Korrektur 2“ = mit der linearen Positionskorrektur, alle anderen ohne
+    after = [pt(r) for r in rows if "Korrektur 2" in r["note"]]
+    before = [pt(r) for r in rows if "Korrektur 2" not in r["note"]]
+    with open(cy_file, encoding="utf-8") as fh:
+        cycles = [{"x": float(r["x_mm"]), "y": float(r["y_mm"]), "theta": float(r["theta_deg"]), "ok": r["ok"] == "True",
+                   "error": r["error"], "duration_s": float(r["duration_s"]), "serial": r["serial"],
+                   "hole_mm": float(r["hole_mm"]) if r["hole_mm"] else None, "notch": r["notch"] == "True",
+                   "good": r["good"] == "True"} for r in csv.DictReader(fh, delimiter=";")]
+    dst = OUT_IMG / "lab"
+    dst.mkdir(parents=True, exist_ok=True)
+    photos = {}
+    for rel, name in LAB2_PHOTOS:
+        f = ROOT / "thesis" / "figures" / rel
+        if f.exists():
+            shutil.copy2(f, dst / f"{name}.jpg")
+            h, w = cv2.imread(str(f)).shape[:2]
+            photos[name] = {"url": f"img/lab/{name}.jpg", "w": w, "h": h}
+    ic = cfg["inspection"]
+    print(f"  Labortag 12.11.: {len(before)} Zeigetests ohne, {len(after)} mit Korrektur, {len(cycles)} Zyklen")
+    return {"date": LAB2_DAY, "points_before": before, "points_after": after, "cycles": cycles, "photos": photos,
+            "correction": cfg["part_topdown"].get("position_correction"),
+            "workspace_mm": cfg["workspace"]["size_mm"] if "workspace" in cfg else 330,
+            "hole_nominal_mm": ic["hole_nominal_mm"], "hole_tolerance_mm": ic["hole_tolerance_mm"],
+            "exposure_us": cfg["topdown_camera"].get("exposure_us"), "focus": cfg["inspection_camera"].get("focus")}
+
+
 def export_m4() -> dict:
     """M4: geteachte Punkte der Anlage (TCP im Basis-KS, mm/°) und echte Rauschbahnen aus bc/noise.py.
 
@@ -408,7 +452,8 @@ def main() -> None:
     print("M2 robot_check …")
     m2 = {"check": export_m2_check()}
     data = {"part": PART, "config": export_config(cfg), "m1": m1, "m2": m2, "m3": m3, "logs": export_logs(),
-            "figures": copy_figures(), "tests": export_tests(), "lab": export_lab(), "m4": export_m4()}
+            "figures": copy_figures(), "tests": export_tests(), "lab": export_lab(), "lab2": export_lab2(cfg),
+            "m4": export_m4()}
     (OUT_DATA / "data.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"→ {OUT_DATA / 'data.json'}")
 

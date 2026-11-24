@@ -133,9 +133,9 @@ export function createCell(ctx) {
   const fixture = keep(box(70, 90, insp[2] - TZ - 4, '#3A3F45', insp[0], insp[1], TZ));
   const bins = [['bin_good', 'GUT', T.good], ['bin_bad', 'SCHLECHT', T.signal]].map(([k, label, hex]) => {
     const p = P[k];
-    const floor = keep(box(110, 100, 3, '#E2DDD2', p[0], p[1], TZ));
-    const walls = [[110, 4, 0, 48], [110, 4, 0, -48], [4, 100, 53, 0], [4, 100, -53, 0]].map(([sx, sy, dx, dy]) => keep(box(sx, sy, 22, hex, p[0] + dx, p[1] + dy, TZ)));
-    return { k, label, hex, p, floor, walls };
+    // Ablageort: nur mit Klebeband auf der Platte markiert (keine Kiste), Rahmen in der Farbe des Urteils
+    const walls = [[110, 12, 0, 44], [110, 12, 0, -44], [12, 100, 49, 0], [12, 100, -49, 0]].map(([sx, sy, dx, dy]) => keep(box(sx, sy, 0.8, hex, p[0] + dx, p[1] + dy, TZ)));
+    return { k, label, hex, p, floor: null, walls };
   });
   // Kamera M1 an der Stange (Lage angenommen), schaut auf die Arbeitsraummitte
   const [wcx, wcy] = ws2r(WSW / 2, WSH / 2);
@@ -158,13 +158,18 @@ export function createCell(ctx) {
   const PL = data.part.length_mm / 1000;
   const PWd = data.part.width_mm / 1000;
   const PHt = data.part.height_mm / 1000;
-  const CH = 0.012; // Fase (Draufsicht), Maß angenommen
+  const CH = 0.009; // Fase (Draufsicht), Maß aus dem Foto geschätzt
+  // Fase an der Ecke +x/−y: auf derselben Längsseite wie Etikett und Loch (Fotos vom Aufbau, 12.11.)
   partShape.moveTo(-PL / 2, -PWd / 2);
-  partShape.lineTo(PL / 2, -PWd / 2);
-  partShape.lineTo(PL / 2, PWd / 2 - CH);
-  partShape.lineTo(PL / 2 - CH, PWd / 2);
+  partShape.lineTo(PL / 2 - CH, -PWd / 2);
+  partShape.lineTo(PL / 2, -PWd / 2 + CH);
+  partShape.lineTo(PL / 2, PWd / 2);
   partShape.lineTo(-PL / 2, PWd / 2);
   partShape.closePath();
+  // Merkmale auf der Seitenfläche −y (Etikett links, Loch, Kerbe auf der Fasenfläche)
+  const LABEL_X = -0.012, HOLE_X = 0.011;
+  const CHAMFER_C = new THREE.Vector3(PL / 2 - CH / 2, -PWd / 2 + CH / 2, 0);
+  const CHAMFER_N = new THREE.Vector3(1, -1, 0).normalize();
   const partGeo = new THREE.ExtrudeGeometry(partShape, { depth: PHt, bevelEnabled: false });
   partGeo.translate(0, 0, -PHt / 2);
   function makePart() {
@@ -179,15 +184,19 @@ export function createCell(ctx) {
       g.add(m);
       return m;
     };
-    face(0.026, 0.011, '#F7F5F0', -0.014);
+    face(0.026, 0.011, '#F7F5F0', LABEL_X);
     const hole = new THREE.Mesh(new THREE.CircleGeometry(0.005, 32), new THREE.MeshBasicMaterial({ color: color('#1E2328') }));
     hole.rotation.x = Math.PI / 2;
-    hole.position.set(0.012, -PWd / 2 - 0.0005, 0);
+    hole.position.set(HOLE_X, -PWd / 2 - 0.0005, 0);
     g.add(hole);
-    face(0.005, 0.005, '#4B2F66', 0.025);
+    // Kerbe auf der Fasenfläche (Normale +x/−y): erst Rx (Normale −y), dann Rz 45°
+    const notch = new THREE.Mesh(new THREE.PlaneGeometry(0.005, 0.005), new THREE.MeshBasicMaterial({ color: color('#4B2F66') }));
+    notch.rotation.set(Math.PI / 2, 0, Math.PI / 4, 'ZYX');
+    notch.position.copy(CHAMFER_C).addScaledVector(CHAMFER_N, 0.0005);
+    g.add(notch);
     const serial = text(data.part.serial, { font: 'monoMedium', size: 0.0075, hex: T.ink, anchorX: 'center', anchorY: 'middle' });
     serial.rotation.x = Math.PI / 2;
-    serial.position.set(-0.014, -PWd / 2 - 0.0008, 0);
+    serial.position.set(LABEL_X, -PWd / 2 - 0.0008, 0);
     g.add(serial);
     cell.add(g);
     return g;
@@ -532,7 +541,7 @@ export function createCell(ctx) {
     [5, 'Handgelenkkamera M4 (Daheng, Fisheye)', worldOf(wristCam), v3(-2.6, -0.8, 0.9)],
     [6, 'Arbeitsraum mit ArUco-Markern', W(...ws2r(WSW, 0), TZ), v3(1.6, -1.4, 0.4)],
     [7, 'Prüfposition', W(insp[0], insp[1], insp[2] - 10), v3(2.8, -1.2, 0.3)],
-    [8, 'Ablagen GUT / SCHLECHT', W(bin('bin_good')[0] - 55, bin('bin_good')[1], TZ + 20), v3(-3.0, 0.6, 1.0)],
+    [8, 'Ablageorte GUT / SCHLECHT (Klebeband)', W(bin('bin_good')[0] - 55, bin('bin_good')[1], TZ + 2), v3(-3.0, 0.6, 1.0)],
   ];
 
   // Seitenkamera M3 vor der Etikettseite des abgelegten Bauteils (Lage angenommen)
@@ -543,15 +552,20 @@ export function createCell(ctx) {
   camM3.position.copy(sideCamPos).setZ(sideCamPos.z + 0.02);
   camM3.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), faceN.clone().negate());
   cell.add(camM3);
+  // Hintergrund der Prüfvorrichtung hinter dem Teil (zwischen Teil und Roboter), damit sich das Loch abhebt
+  const backdrop = keep(solid(new THREE.BoxGeometry(0.075, 0.004, 0.05), '#1E2328'));
+  backdrop.position.set(insp[0] / 1000, insp[1] / 1000, (insp[2] - 4 + 25) / 1000).addScaledVector(faceN, -0.03);
+  backdrop.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), faceN);
+  cell.add(backdrop);
   C3[3][2] = worldOf(camM3);
   const callouts = C3.map(([n, label, at, off]) => callout(n, label, at, off));
 
   // ---------- 1.3 Bauteil-Notizen ----------
   const partNoteDefs = [
-    ['Fase: macht den Winkel eindeutig', new THREE.Vector3(PL / 2 - CH / 2, PWd / 2 - CH / 2, PHt / 2), v3(0.4, 0.5, 0.45)],
-    [`Seriennummer ${data.part.serial}`, new THREE.Vector3(-0.014, -PWd / 2, 0), v3(-0.9, -0.4, 0.35)],
-    [`Loch Ø ${data.part.hole_mm} mm`, new THREE.Vector3(0.012, -PWd / 2, 0), v3(-0.2, -0.8, -0.25)],
-    ['Kerbe', new THREE.Vector3(0.025, -PWd / 2, 0), v3(0.6, -0.6, -0.2)],
+    ['Fase: macht den Winkel eindeutig', CHAMFER_C.clone().setZ(PHt / 2), v3(0.6, 0.3, 0.45)],
+    [`Seriennummer ${data.part.serial}`, new THREE.Vector3(LABEL_X, -PWd / 2, 0), v3(-0.9, -0.4, 0.35)],
+    [`Loch Ø ${data.part.hole_mm} mm`, new THREE.Vector3(HOLE_X, -PWd / 2, 0), v3(-0.2, -0.8, -0.25)],
+    ['Kerbe', CHAMFER_C.clone(), v3(0.6, -0.6, -0.2)],
   ];
   const partNotes = partNoteDefs.map(([label, local, off]) => {
     const at = local.clone().applyMatrix4(tablePose(shotA)).multiplyScalar(U);
@@ -665,7 +679,7 @@ export function createCell(ctx) {
     [2, 'Zielpose', 'as_target()', M2C, 0, [
       `z    Tisch ${f1(TZ)} + Greifhöhe ${f1(gPB[2] - TZ, 0)} = ${f1(gPB[2])} mm`,
       `rx   ${f1(P.home[3], 0)}°   ry ${f1(P.home[4], 0)}°   wie Home`,
-      [`rz   ${f1(P.home[5], 0)}° + ${f1(thB)}° + ${f1(OFF, 0)}°${rzWrap ? ` ${rzWrap < 0 ? '-' : '+'} ${Math.abs(rzWrap)}°` : ''} = ${f1(gPB[5])}°`, 'monoMedium', M2C],
+      [`rz   ${f1(P.home[5], 0)}° + ${f1(thB)}° ${OFF < 0 ? '-' : '+'} ${f1(Math.abs(OFF), 0)}°${rzWrap ? ` ${rzWrap < 0 ? '-' : '+'} ${Math.abs(rzWrap)}°` : ''} = ${f1(gPB[5])}°`, 'monoMedium', M2C],
       [`     Home + Bauteilwinkel + Greifer-Offset`, 'mono', T.inkSoft],
     ]],
     [3, 'Für die Steuerung', 'to_neura()', M2C, 0, [
@@ -743,7 +757,7 @@ export function createCell(ctx) {
   const skTexts = [
     skLabel('Basis x', skAt(0, 1.42), T.inkSoft),
     skLabel(`Winkel ${f1(thB)}° (M1)`, skAt(thB / 2, 0.88), MODULE_COLOR.M1),
-    skLabel(`+ ${f1(OFF, 0)}° Greifer-Offset`, skAt(thB + OFF / 2, 1.2), M2C, 'right'),
+    skLabel(`${OFF < 0 ? '-' : '+'} ${f1(Math.abs(OFF), 0)}° Greifer-Offset`, skAt(thB + OFF / 2, 1.2), M2C, 'right'),
   ];
   // Gelenkwinkel an den Positionsnummern (laufen während der Fahrt mit)
   const qTexts = lara.pivots.map((_, i) => {
@@ -762,7 +776,8 @@ export function createCell(ctx) {
   const SCL = 40; // Skizze im Maßstab 40:1 (mm → Papier ×0,04)
   const sk = (x, y) => DG.clone().add(v3((x * SCL) / 1000, (y * SCL) / 1000, 0));
   const rotXY = (x, y, a) => [Math.cos(a) * x - Math.sin(a) * y, Math.sin(a) * x + Math.cos(a) * y];
-  const outline = [[-30, -20], [30, -20], [30, 8], [18, 20], [-30, 20]].map(([x, y]) => sk(...rotXY(x, y, thA)));
+  // Fase an der Ecke +x/−y wie am Bauteil (Etikettseite = Fasenseite)
+  const outline = [[-30, -20], [21, -20], [30, -11], [30, 20], [-30, 20]].map(([x, y]) => sk(...rotXY(x, y, thA)));
   const angLines = [
     new InkLine(outline, { width: 2.4, hex: T.part, closed: true, progress: 0 }),
     new InkLine([sk(-48, 0), sk(62, 0)], { width: 1, dashed: true, dash: 0.08, gap: 0.06, progress: 0 }),
@@ -786,9 +801,12 @@ export function createCell(ctx) {
     scene.add(t);
     return t;
   });
+  const offTxt = `${rc.gripper_angle_offset_deg < 0 ? '-' : '+'} ${Math.abs(rc.gripper_angle_offset_deg)}°`;
   const formula = text(
-    `rz = home.rz + Winkel + ${rc.gripper_angle_offset_deg}°  =  ${P.home[5]}° + ${shotA.robot.theta.toFixed(1).replace('.', ',')}° + ${rc.gripper_angle_offset_deg}°  →  ${rzGrip.toFixed(1).replace('.', ',')}°\n` +
-      `${rc.gripper_angle_offset_deg}° = 90° (quer zur langen Seite) + 23° (Greifer verdreht montiert, Labor 06.10.: vorher 90°)`,
+    `rz = home.rz + Winkel + Offset  =  ${P.home[5]}° + ${shotA.robot.theta.toFixed(1).replace('.', ',')}° ${offTxt}  →  ${rzGrip.toFixed(1).replace('.', ',')}°\n` +
+      `Offset ${rc.gripper_angle_offset_deg}° = 90° (quer zur langen Seite) + 23° (Greifer verdreht montiert) - 180°\n` +
+      `- 180°: Teil gedreht greifen, damit Seriennummer und Fase an der Prüfung zur Seitenkamera zeigen.\n` +
+      `Die Ablage zu drehen ging nicht: Achse 6 käme an ihre Grenze (keine IK-Lösung).`,
     { font: 'mono', size: 0.17, anchorX: 'left', anchorY: 'top', lineHeight: 1.5, maxWidth: 10.5, opacity: 0 },
   );
   formula.position.set(DG.x - 5.4, DG.y - 2.6, 0.03);
@@ -1733,7 +1751,7 @@ export const CELL_SCENES = [
     cams: [C.m4, C.m4top],
   },
   {
-    id: '7.4', world: 'cell',
+    id: '7.5', world: 'cell',
     steps: [
       (tl, S) => {
         tl.to(S, { m4back: 1, duration: CELL.M4BACK, ease: 'none' }, 0);
@@ -1745,10 +1763,10 @@ export const CELL_SCENES = [
     cams: [C.game, C.game, C.game],
   },
   {
-    id: '7.5', world: 'cell',
+    id: '7.6', world: 'cell',
     steps: [
       (tl, S, ctx) => {
-        // Rückbau aus 7.4: Spielfeld weg, Teil B zurück in den Greifer, dann der Schlechtfall
+        // Rückbau aus dem Ausblick (7.5): Spielfeld weg, Teil B zurück in den Greifer, dann der Schlechtfall
         tl.to(S, { unboard: 1, duration: CELL.BACK, ease: 'none' }, 0.2);
         const t0 = 0.5 + CELL.BACK;
         tl.to(S, { cycle2: 1, duration: CELL.T2, ease: 'none' }, t0);

@@ -11,7 +11,9 @@ fs.mkdirSync(out, { recursive: true });
 const W = +(process.env.SHOT_W ?? 1600);
 const H = +(process.env.SHOT_H ?? 900);
 
-const browser = await chromium.launch({ channel: 'msedge', headless: true, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+// SHOT_BROWSER = Pfad zu einem Chromium-Browser, falls Edge nicht installiert ist
+const launchOpts = process.env.SHOT_BROWSER ? { executablePath: process.env.SHOT_BROWSER } : { channel: 'msedge' };
+const browser = await chromium.launch({ ...launchOpts, headless: true, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: W, height: H } });
 const errors = [];
 const external = [];

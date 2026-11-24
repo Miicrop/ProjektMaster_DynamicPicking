@@ -456,7 +456,7 @@ function sheet71(api) {
   const rows = [
     ['Posen geteacht', 'Prüfplatz und Ablagen direkt am Roboter angefahren und übernommen'],
     ['Arbeitsraum → Roboter kalibriert', `Drehung ${fmt(w.rotation_deg, 2)}°, Verschiebung ${w.translation_mm.map((v) => fmt(v)).join(' / ')} mm, Tisch z ${fmt(w.table_z_mm)} mm`],
-    ['Greifer 23° verdreht montiert', `Offset 90° → ${fmt(cfg.robot.gripper_angle_offset_deg, 0)}°, Werkzeug ${lab.tool.after} statt ${lab.tool.before}`],
+    ['Greifer 23° verdreht montiert', `Offset 90° → 113°, Werkzeug ${lab.tool.after} statt ${lab.tool.before}`],
     ['Erster vollständiger Ablauf', 'im Automatikbetrieb – ehrlich: noch ohne Greiferansteuerung und ohne Arbeitsraumkamera, M1/M3 mit Testbildern'],
   ];
   rows.forEach(([t, b], i) => api.row(0, i + 1, t, b, 2.3 - i * 1.5, { x: X0 + 0.7, width: 6.4, size: 0.3, delay: 0.1 + i * 0.15 }));
@@ -480,20 +480,164 @@ function sheet71(api) {
   api.text(1, `Quelle: system.yaml vor/nach Commit ${lab.commit} (${lab.date.split('-').reverse().join('.')})`, { font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, -3.85], { delay: 1.0 });
 }
 
-// ---------------------------------------------------------------- 7.3 Was noch fehlt
-function sheet73(api) {
+// Pfeil als drei Tuschestriche (Schaft + Spitze)
+function arrow(api, step, [x0, y0], [x1, y1], opts, timing) {
+  const a = Math.atan2(y1 - y0, x1 - x0);
+  const len = Math.hypot(x1 - x0, y1 - y0);
+  const h = Math.min(0.13, len * 0.45);
+  const head = (s) => [x1 - h * Math.cos(a + s * 0.45), y1 - h * Math.sin(a + s * 0.45)];
+  api.line(step, [[x0, y0], [x1, y1]], opts, timing);
+  return [api.line(step, [head(1), [x1, y1], head(-1)], opts, timing)];
+}
+const dot = (api, step, [x, y], r, opts, timing) =>
+  api.line(step, Array.from({ length: 13 }, (_, i) => [x + r * Math.cos((i / 12) * 2 * Math.PI), y + r * Math.sin((i / 12) * 2 * Math.PI)]), opts, timing);
+const median = (xs) => { const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+// ---------------------------------------------------------------- 3.6 Positionskorrektur
+function sheet36(api) {
+  const L = api.ctx.data.lab2;
+  if (!L) return;
+  const WS = Array.isArray(L.workspace_mm) ? L.workspace_mm[0] : L.workspace_mm;
+  // Arbeitsraum als Quadrat links, x nach rechts, y nach oben (Arbeitsraum-KS)
+  const SQ = 5.9, OX = X0 + 0.9, OY = -3.75, k = SQ / WS;
+  const P = (x, y) => [OX + x * k, OY + y * k];
+  const AK = 0.075; // Pfeillänge je mm Versatz
+  api.line(0, [P(0, 0), P(WS, 0), P(WS, WS), P(0, WS), P(0, 0)], { width: 1.6 }, { delay: 0.05 });
+  api.text(0, `Arbeitsraum ${fmt(WS, 0)} × ${fmt(WS, 0)} mm (Draufsicht)`, { font: 'mono', size: 0.14, hex: T.inkSoft }, [OX, OY + SQ + 0.32], { delay: 0.1 });
+  const c = L.correction;
+  if (c) {
+    const [cx, cy] = P(...c.center_mm);
+    api.line(0, [[cx - 0.14, cy], [cx + 0.14, cy]], { width: 1.2, hex: T.inkSoft }, { delay: 0.2 });
+    api.line(0, [[cx, cy - 0.14], [cx, cy + 0.14]], { width: 1.2, hex: T.inkSoft }, { delay: 0.2 });
+  }
+  // Schritt 0: ohne Korrektur – Pfeil zeigt, wohin die erkannte Mitte gegenüber der echten verschoben ist
+  const before = [];
+  L.points_before.forEach((p, i) => {
+    const s = P(p.x, p.y);
+    const timing = { delay: 0.3 + i * 0.04, dur: 0.4 };
+    before.push(dot(api, 0, s, 0.05, { width: 1.4, hex: T.ink }, timing));
+    if (p.dx || p.dy) before.push(...arrow(api, 0, s, [s[0] - p.dx * AK, s[1] - p.dy * AK], { width: 2.2, hex: T.signal }, timing));
+  });
+  api.text(0, 'Pfeil: erkannte Mitte gegenüber der echten, 7,5-fach vergrößert', { font: 'mono', size: 0.13, hex: T.inkSoft }, [OX, OY - 0.28], { delay: 1.2 });
+  const n = L.points_before.length, maxX = Math.max(...L.points_before.map((p) => Math.abs(p.dx))), maxY = Math.max(...L.points_before.map((p) => Math.abs(p.dy)));
+  const RX = 0.6;
+  api.row(0, 1, 'Ohne Korrektur: Versatz wächst nach außen', `${n} Zeigetests: bis ${fmt(maxX, 0)} mm in x, bis ${fmt(maxY, 0)} mm in y. Die 15 mm hohe Oberseite liegt über der entzerrten Tischebene (Parallaxe), dazu das unkorrigierte Objektiv.`, 2.6, { x: RX, width: 6.6, size: 0.3, delay: 0.4 });
+  if (c) {
+    const pct = (v) => `${fmt(v * 100, 1)} %`;
+    api.row(0, 2, 'Lineares Modell je Achse', `x' = x − ${pct(c.scale[0])} · (x − ${fmt(c.center_mm[0], 0)} mm)\ny' = y − ${pct(c.scale[1])} · (y − ${fmt(c.center_mm[1], 0)} mm)\nRestfehler des Modells 0,5 mm (x) / 1,2 mm (y)`, 0.75, { x: RX, width: 6.6, size: 0.3, delay: 0.9 });
+  }
+  // Schritt 1: mit Korrektur
+  api.fade(1, before, { dur: 0.5 });
+  const after = L.points_after;
+  after.forEach((p, i) => {
+    const s = P(p.x, p.y);
+    const off = p.dx || p.dy;
+    const timing = { delay: 0.4 + i * 0.05, dur: 0.4 };
+    dot(api, 1, s, 0.07, { width: 2.2, hex: off ? T.signal : T.good }, timing);
+    if (off) arrow(api, 1, s, [s[0] - p.dx * AK, s[1] - p.dy * AK], { width: 2.2, hex: T.signal }, timing);
+  });
+  const zero = after.filter((p) => !p.dx && !p.dy).length;
+  const worst = Math.max(...after.map((p) => Math.hypot(p.dx, p.dy)));
+  api.row(1, 3, 'Mit Korrektur', `${zero} von ${after.length} Kontrollmessungen ohne sichtbaren Versatz, sonst höchstens ${fmt(worst, 0)} mm. Gegriffen hätte der Greifer überall, in den Ecken knapp.`, -1.4, { x: RX, width: 6.6, size: 0.3, delay: 0.5 });
+  api.stamp(1, `HÖCHSTENS ${fmt(worst, 0)} mm`, [RX + 3.4, -3.35], { size: 0.32, rot: -0.04, hex: T.good, sub: 'gilt nur für diese Kameraposition' }, { delay: 1.0 });
+}
+
+// ---------------------------------------------------------------- 7.2 Labortag 12.11.
+function sheet72(api) {
+  const L = api.ctx.data.lab2;
+  if (!L) return;
+  const rows = [
+    ['Kameras live, fest eingestellt', `Kamera oben: Belichtung ${fmt((L.exposure_us ?? 15000) / 1000, 0)} ms statt Automatik (Teil war übersteuert). Seitenkamera: Fokus fest ${L.focus ?? 90}, im Programm gesetzt.`],
+    ['Greifer im Ablauf', 'über die Digitalausgänge der Steuerung: auf, zu, Freigabe, Reset'],
+    ['Zeigetests', 'Versatz bis 8 mm am Rand → lineare Positionskorrektur (3.6)'],
+    ['Teil gedreht greifen', 'Seriennummer und Fase zeigen zur Seitenkamera; Offset −67° (4.4)'],
+    ['Veraltete Bilder', 'beide Kameras gaben nach einer Pause ein altes Bild aus dem Puffer – jetzt wird er vor jeder Aufnahme geleert'],
+    ['Sanft ablegen', 'Greifer öffnet 1 mm über der geteachten Pose, sonst fällt das Teil auf die Prüfung'],
+  ];
+  rows.forEach(([t, b], i) => api.row(0, i + 1, t, b, 2.65 - i * 1.15, { x: X0 + 0.7, width: 7.0, size: 0.27, delay: 0.1 + i * 0.1 }));
+  const ph = L.photos ?? {};
+  const pick = [['anlage', 3.0, 0.25, 4.1, 0.04], ['vorrichtung', 5.6, 1.35, 3.3, -0.05], ['handgelenk', 5.4, -2.0, 2.6, 0.06]];
+  pick.forEach(([name, x, y, w, rot], i) => {
+    const f = ph[name];
+    if (!f) return;
+    const card = new PhotoCard(f.url, { width: w, aspect: f.h / f.w });
+    card.object.position.set(x, y, 0.05 + i * 0.05);
+    card.object.rotation.z = rot;
+    card.opacity = 0;
+    api.add(1, card, { delay: i * 0.2, dur: 0.6 });
+  });
+  api.stamp(1, 'ERSTER ZYKLUS MIT KAMERAS', [X0 + 4.2, -4.05], { size: 0.26, rot: -0.03, hex: MODULE_COLOR.M2 }, { delay: 0.9 });
+}
+
+// ---------------------------------------------------------------- 7.3 Messwerte
+function sheet73m(api) {
+  const L = api.ctx.data.lab2;
+  if (!L) return;
+  const cy = L.cycles;
+  const full = cy.filter((c) => c.ok);
+  const good = full.filter((c) => c.good).length;
+  const readOk = full.filter((c) => c.serial && c.notch).length;
+  const dur = median(full.map((c) => c.duration_s));
+  const after = L.points_after;
+  const worst = Math.max(...after.map((p) => Math.hypot(p.dx, p.dy)));
+  const maxBefore = Math.max(...L.points_before.map((p) => Math.hypot(p.dx, p.dy)));
+  const figs = [
+    [`${cy.length} / ${cy.length}`, 'gegriffen und an der\nPrüfung abgelegt', T.ink],
+    [`${readOk} / ${full.length}`, 'Seriennummer und Kerbe\nrichtig erkannt', T.ink],
+    [`${good} / ${full.length}`, 'als Gutteil sortiert\n(Rest: Loch zu klein)', T.signal],
+    [`${fmt(maxBefore, 0)} → ${fmt(worst, 0)} mm`, 'Versatz im Zeigetest\nohne / mit Korrektur', T.good],
+    [`${fmt(dur, 0)} s`, 'Zykluszeit (Median),\nbewusst langsam', T.ink],
+  ];
+  figs.forEach(([big, small, hex], i) => {
+    const x = X0 + 0.7 + i * 3.0;
+    api.text(0, big, { font: 'title', size: 0.58, hex }, [x, 2.15], { delay: 0.1 + i * 0.12 });
+    api.text(0, small, { font: 'sans', size: 0.2, hex: T.inkSoft, anchorY: 'top', lineHeight: 1.3 }, [x, 1.6], { delay: 0.18 + i * 0.12 });
+  });
+  api.text(0, `${cy.length} Zyklen am ${L.date.split('-').reverse().join('.')} mit dem Gutteil · die ersten zwei brachen bei der Prüfung ab (veraltetes Bild, danach behoben)`, { font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, 0.55], { delay: 0.8 });
+  // Schritt 1: Lochdurchmesser gegen die Toleranz
+  const nom = L.hole_nominal_mm, tol = L.hole_tolerance_mm;
+  const A0 = 9.3, A1 = 10.6, AX = X0 + 0.9, AW = 7.6, AY = -1.9;
+  const X = (v) => AX + ((v - A0) / (A1 - A0)) * AW;
+  api.text(1, 'LOCHDURCHMESSER JE ZYKLUS (mm)', { font: 'mono', size: 0.15, hex: T.inkSoft, letterSpacing: 0.06 }, [AX, -0.35], { delay: 0.05 });
+  api.line(1, [[X(nom - tol), AY], [X(nom + tol), AY]], { width: 26, hex: '#D6EBD8' }, { delay: 0.1 });
+  api.line(1, [[X(A0), AY - 0.45], [X(A1), AY - 0.45]], { width: 1.2 }, { delay: 0.1 });
+  [9.4, 9.6, 9.8, 10.0, 10.2, 10.4].forEach((v) => {
+    api.line(1, [[X(v), AY - 0.52], [X(v), AY - 0.38]], { width: 1.2 }, { delay: 0.15 });
+    api.text(1, fmt(v, 1), { font: 'mono', size: 0.15, anchorX: 'center', anchorY: 'top' }, [X(v), AY - 0.62], { delay: 0.15 });
+  });
+  api.text(1, `Toleranz ${fmt(nom, 0)} ± ${fmt(tol, 1)} mm`, { font: 'sans', size: 0.18, hex: T.good, anchorX: 'center' }, [X(nom), AY + 0.35], { delay: 0.2 });
+  full.forEach((c, i) => {
+    const y = AY + 0.18 - (i % 3) * 0.17;
+    dot(api, 1, [X(c.hole_mm), y], 0.07, { width: 2.6, hex: c.good ? T.good : T.signal }, { delay: 0.3 + i * 0.1, dur: 0.3 });
+  });
+  const holes = full.map((c) => c.hole_mm);
+  const lo = Math.min(...holes), hi = Math.max(...holes);
+  api.text(1, `Alle ${holes.length} Messungen ${fmt(lo, 2)}–${fmt(hi, 2)} mm: gut wiederholbar, aber rund ${fmt((1 - (lo + hi) / 2 / nom) * 100, 0)} % zu klein – drei liegen knapp unter der Grenze.`, { font: 'sans', size: 0.21, anchorY: 'top', maxWidth: 7.6, lineHeight: 1.3 }, [AX, AY - 1.05], { delay: 0.8 });
+  const f = L.photos?.m3_live;
+  if (f) {
+    const card = new PhotoCard(f.url, { width: 5.6, aspect: f.h / f.w });
+    card.object.position.set(4.6, -1.75, 0.05);
+    card.object.rotation.z = -0.03;
+    card.opacity = 0;
+    api.add(1, card, { delay: 0.4, dur: 0.6 });
+  }
+  api.stamp(1, 'SPIEGELUNG IM LOCH', [4.6, -3.95], { size: 0.26, rot: 0.04, hex: T.signal, sub: 'Fensterlicht · Abhilfe: Faktor + Abschirmung' }, { delay: 1.0 });
+}
+
+// ---------------------------------------------------------------- 7.4 Was noch fehlt
+function sheet74(api) {
   const t = api.ctx.data.tests;
   const done = [
     ['Ablauf ohne Hardware', `Testfotos + Simulator der Steuerung, ${t.total} automatische Tests, GUI mit Logbuch`],
-    ['Roboter am Aufbau', 'Posen geteacht, kalibriert, erster vollständiger Ablauf; der Greifer öffnet und schließt'],
-    ['Prüfung M3', 'Seriennummer, Loch und Kerbe auf allen Testbildern richtig, Fehler erkannt'],
-    ['M4 eingebunden', 'eigener Reiter, Policy greift im Ablauf; Übergabe M2 → M4 → M2 in der Neura-VM getestet'],
+    ['Kameras und Greifer am Aufbau', 'feste Belichtung und Fokus, Positionskorrektur, Greifer über Digitalausgänge'],
+    ['Vollständiger Zyklus', 'erkannt, gegriffen, geprüft und sortiert – mit echten Kameras'],
+    ['M4 eingebunden', 'eigener Reiter, Policy greift im Ablauf; Übergabe M4 → M2 in der Neura-VM getestet'],
   ];
   const open = [
-    ['Kameras live', 'Kamera oben und Seitenkamera montieren; M1 misst das Bauteil noch zu groß (64–69 statt 60 mm)'],
-    ['Greifen im Ablauf', 'Greiferansteuerung im automatischen Ablauf am echten Roboter'],
-    ['M4 mit Modell', 'echter Datensatz, Training auf echten Bildern, dann die Policy an der Anlage (Jeremy)'],
-    ['Messreihen', 'Greiferfolg, Posengenauigkeit, Prüfquote, Vergleich M2/M4 – Grundlage der Evaluation'],
+    ['Lochmaßstab und Licht', 'Korrekturfaktor mit bekannten Gutteilen, Prüfstation gegen Fensterlicht abschirmen'],
+    ['Kalibrierte Kamera', 'intrinsische Kalibrierung und Entzerrung auf Bauteilhöhe statt empirischer Korrektur'],
+    ['M4 an der Anlage', 'Ergebnisse und Vergleich mit dem klassischen Greifen (Jeremy)'],
+    ['Größere Messreihe', 'mehr Zyklen, echte Fehlerteile, wechselndes Licht'],
   ];
   const col = (step, items, x, n0, label, hex) => {
     api.stamp(step, label, [x + 1.2, 2.4], { size: 0.26, rot: -0.04, hex }, { delay: 0.05 });
@@ -501,7 +645,7 @@ function sheet73(api) {
   };
   col(0, done, X0 + 0.7, 1, 'ERLEDIGT', T.good);
   col(1, open, 0.9, 5, 'OFFEN', T.signal);
-  api.text(1, 'Stand 01.11. · Quelle: plan/06_offen.md, plan/07_erledigt.md',{ font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, -3.85], { delay: 0.7 });
+  api.text(1, 'Stand 24.11. · Quelle: plan/06_offen.md, plan/07_erledigt.md',{ font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, -3.85], { delay: 0.7 });
 }
 
 // ---------------------------------------------------------------- A.1 Konfiguration
@@ -580,8 +724,11 @@ export function sheetScenes(storyboard) {
     sheetScene(e('6.5'), 2, sheetSim),
     sheetScene(e('6.6'), 2, sheetJitter),
     sheetScene(e('6.7'), 2, sheetTiming),
+    sheetScene(e('3.6'), 2, sheet36),
     sheetScene(e('7.1'), 2, sheet71),
-    sheetScene(e('7.3'), 2, sheet73),
+    sheetScene(e('7.2'), 2, sheet72),
+    sheetScene(e('7.3'), 2, sheet73m),
+    sheetScene(e('7.4'), 2, sheet74),
     sheetScene(e('A.1'), 2, sheetA1),
     sheetScene(e('A.2'), 1, stepsSheet('steps_m1', 5, 2.7)),
     sheetScene(e('A.3'), 1, stepsSheet('steps_m3', 5, 2.7)),
