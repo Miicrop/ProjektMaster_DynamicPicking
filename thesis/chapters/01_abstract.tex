@@ -33,8 +33,14 @@ sodass sich die Module unabhängig voneinander entwickeln und schrittweise in Be
 lassen. Die eingesetzten Verfahren der Bildverarbeitung sind bewusst einfach und
 nachvollziehbar gehalten.
 
-Am realen Roboter lief ein erster vollständiger Ablauf durch, mit Erkennung und Prüfung auf
-Testbildern. Die Erprobung an der realen Anlage umfasst
-wiederholte Durchläufe mit einem Gutteil in zufälliger Lage sowie gezielt fehlerhafte Bauteile
-ohne Kerbe, mit abweichendem Lochdurchmesser und ohne Seriennummer.
-\todo[inline]{Ergebnisse der Versuche in ein bis zwei Sätzen ergänzen.}
+Am realen Aufbau mit beiden Kameras arbeitet die Kette aus Erkennen, Greifen, Prüfen und
+Sortieren durchgängig. Eine lineare Positionskorrektur, die aus Zeigetests bestimmt wurde,
+verringert den Lageversatz durch Parallaxe von bis zu \SI{8}{\milli\metre} auf höchstens
+\SI{2}{\milli\metre}. In allen sieben Arbeitszyklen der Evaluation wurde das Bauteil gegriffen
+und an der Prüfstation abgelegt; in den fünf vollständigen Zyklen wurden Seriennummer und Kerbe
+stets richtig erkannt. Der Lochdurchmesser wurde dagegen systematisch um etwa
+\SI{4}{\percent} zu klein gemessen, vermutlich durch Spiegelungen des Fensterlichts, sodass das
+Gutteil in drei von fünf Zyklen als Schlechtteil eingestuft wurde. Der Demonstrator zeigt damit,
+dass sich ein solcher Ablauf mit einfachen, nachvollziehbaren Verfahren umsetzen lässt; für einen
+zuverlässigen Betrieb der Sichtprüfung sind ein kalibrierter Maßstab und eine abgeschirmte
+Beleuchtung erforderlich.
