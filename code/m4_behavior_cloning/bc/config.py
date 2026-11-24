@@ -999,9 +999,17 @@ CAMERAS = (WRIST_CAMERA, SCENE_CAMERA)
 #: 2,68. Gemessen im Lauf 2026-11-17 ep_00006 mit dem neuen Standardlicht
 #: (Decke + Kameralicht, Fenster offen). Ueberschreibbar je Kamera in
 #: einstellungen/kameras.local.json ("white_balance_ratios").
+#:
+#: Befund 2026-11-24: gemessen waren (1,156/1,0/2,641) und (1,074/1,0/2,383),
+#: gesetzt wurde wegen eines Fehlers in cam_daheng aber nur der LETZTE Wert
+#: in den Rot-Kanal; Blau blieb, was in der Kamera stand. Die Aufnahmen ab
+#: 17.11. (G2, G2c) haben deshalb einen Rotstich. Damit neue Aufnahmen dazu
+#: passen, gelten hier die Werte, die die Kamera damals zurueckgemeldet hat
+#: (Anwender 2026-11-24: Rotstich vorerst behalten; neutral erst mit einem
+#: neuen Datensatz).
 CAMERA_WHITE_BALANCE = {
-    "daheng:EBK24100633": (1.156, 1.0, 2.641),   # wrist
-    "daheng:EBK24100634": (1.074, 1.0, 2.383),   # scene
+    "daheng:EBK24100633": (2.641, 1.0, 2.609),   # wrist
+    "daheng:EBK24100634": (2.383, 1.0, 2.352),   # scene
 }
 
 #: NUR ZUM TESTEN: beliebige USB-Webcam als Ersatz fuer die Wrist-Kamera

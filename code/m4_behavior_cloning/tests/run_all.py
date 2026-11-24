@@ -49,6 +49,8 @@ MODULES = [
     "test_put_back",
     "test_probe",
     "test_camera_rate",
+    "test_camera_white_balance",
+    "test_operation_gui",
     "test_computed_points",
     "test_reload",
     "test_points_panel",

@@ -6,6 +6,8 @@ Ausserdem blieb nach dem Tauschen der Plaetze in der Oberflaeche die
 30-fps-Begrenzung in der Kamera stehen, weil "nativ" nichts gesetzt hat.
 """
 
+import contextlib
+import io
 from types import SimpleNamespace
 
 import _paths  # noqa: F401
@@ -151,3 +153,64 @@ def test_rate_findings_name_the_hub_case():
     assert len(findings) == 1 and "Latenzbudget" in findings[0]
     # ohne zurueckgelesene Moeglichkeit (Webcam): nur gegen die Anforderung
     assert camera_rate_findings("scene", 12.0, 30.0, None)
+
+
+class _WbCamera(object):
+    """Weissabgleich wie gxipy: Kanalwahl nur mit Enum-Wert (int), ein Text
+    wird abgelehnt -- so schlug die Wahl bis 2026-11-24 still fehl."""
+
+    def __init__(self, ratios=(1.0, 1.0, 1.0)):
+        self.ratios, self.selected = list(ratios), 0
+        cam = self
+
+        class Selector(object):
+            def set(self, value):
+                if not isinstance(value, int):
+                    raise TypeError("Expected enum_value type is int, not %s" % type(value))
+                cam.selected = value
+
+        class Ratio(object):
+            def set(self, value):
+                cam.ratios[cam.selected] = float(value)
+
+            def get(self):
+                return cam.ratios[cam.selected]
+
+        self.BalanceRatioSelector, self.BalanceRatio = Selector(), Ratio()
+
+
+_GX_WB = SimpleNamespace(
+    GxSwitchEntry=SimpleNamespace(OFF=0, ON=1),
+    GxAutoEntry=SimpleNamespace(OFF=0, CONTINUOUS=1, ONCE=2),
+    GxBalanceRatioSelectorEntry=SimpleNamespace(RED=0, GREEN=1, BLUE=2),
+)
+
+
+def test_white_balance_is_set_per_channel():
+    log = []
+    camera = DahengCamera(config.CameraConfig(name="wrist", backend="daheng",
+                                              white_balance_ratios=(2.641, 1.0, 2.609)))
+    cam = _fake_camera(log)
+    wb = _WbCamera(ratios=(1.5, 1.0, 1.898))
+    cam.BalanceRatioSelector, cam.BalanceRatio = wb.BalanceRatioSelector, wb.BalanceRatio
+    camera._cam, camera._gx = cam, _GX_WB
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        camera._configure(_GX_WB)
+    assert wb.ratios == [2.641, 1.0, 2.609]
+    assert "WARNUNG" not in out.getvalue()
+    assert camera.settings()["white_balance_ratios"] == [2.641, 1.0, 2.609]
+
+
+def test_white_balance_mismatch_is_reported():
+    log = []
+    camera = DahengCamera(config.CameraConfig(name="wrist", backend="daheng",
+                                              white_balance_ratios=(2.641, 1.0, 2.609)))
+    cam = _fake_camera(log)
+    wb = _WbCamera()
+    cam.BalanceRatioSelector, cam.BalanceRatio = wb.BalanceRatioSelector, wb.BalanceRatio
+    camera._cam = cam
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        camera._configure(_GX)  # gxipy ohne Enum fuer die Kanalwahl
+    assert "WARNUNG wrist: Weissabgleich" in out.getvalue()

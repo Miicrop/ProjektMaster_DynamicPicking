@@ -104,14 +104,46 @@ def apply(cfgs, root=None, default_wb=True):
 
 
 def recorded_white_balance(recorded, camera):
-    """Fester Weissabgleich der Aufnahme fuer ``camera`` -- nur wenn alle
-    Episoden denselben hatten (neue Datensaetze, config.CAMERA_WHITE_BALANCE),
-    sonst None (aeltere Aufnahmen mit "Once": je Sitzung anders)."""
-    seen = ((recorded or {}).get(camera) or {}).get("white_balance_ratios") or []
-    distinct = {tuple(round(float(v), 2) for v in r) for r in seen if r}
-    if len(distinct) != 1:
-        return None
-    return tuple(float(v) for v in seen[0])
+    """Fester Weissabgleich der Aufnahme fuer ``camera`` oder None.
+
+    Ein Wert: der. Mehrere, aber jede Episode mit festem Weissabgleich ("Off",
+    z. B. G2c: zwei Aufnahmetage mit verschiedenem Blau): der haeufigste
+    (Episodenzahl aus :func:`collect`; aeltere Exporte ohne Zaehlung: der
+    erste, also der aelteste Teil). Bis 2026-11-24 fiel die Inferenz hier auf
+    "Once" zurueck -- die Kamera neutralisierte dann den Rotstich, den die
+    Policy im Training gesehen hatte, und G2c griff um 10-14 mm daneben.
+    None nur noch fuer Aufnahmen mit "Once" (je Sitzung anders) oder ohne Wert.
+    """
+    return _white_balance_choice(recorded, camera)[0]
+
+
+def recorded_white_balance_note(recorded, camera):
+    """Textzeile, wenn die Aufnahme mehrere feste Weissabgleiche hatte, sonst None."""
+    return _white_balance_choice(recorded, camera)[1]
+
+
+def _white_balance_choice(recorded, camera):
+    slot = (recorded or {}).get(camera) or {}
+    seen = [r for r in slot.get("white_balance_ratios") or [] if r]
+    if not seen:
+        return None, None
+    distinct = {tuple(round(float(v), 2) for v in r) for r in seen}
+    if len(distinct) == 1:
+        return tuple(float(v) for v in seen[0]), None
+    modes = {str(m).lower() for m in slot.get("white_balance_auto") or []}
+    if not modes or modes != {"off"}:
+        return None, None  # "Once"-Aufnahmen: je Sitzung anders, nichts festsetzen
+    counts = slot.get("white_balance_episodes") or []
+    if len(counts) == len(seen):
+        pick = max(range(len(seen)), key=lambda i: counts[i])
+        how = "haeufigster (%s Episoden)" % "/".join(str(c) for c in counts)
+    else:
+        pick, how = 0, "erster (keine Episodenzahl im Export)"
+    chosen = tuple(float(v) for v in seen[pick])
+    note = ("Kamera %s: Aufnahme mit %d festen Weissabgleichen %s -- gesetzt %s, der %s"
+            % (camera, len(seen), ", ".join("/".join("%.2f" % v for v in r) for r in seen),
+               "/".join("%.2f" % v for v in chosen), how))
+    return chosen, note
 
 
 def describe(values):
@@ -150,6 +182,13 @@ def collect(per_episode):
                 v = (values or {}).get(key)
                 if v is not None and v not in slot.setdefault(key, []):
                     slot[key].append(v)
+            # Episoden je Weissabgleich, parallel zu "white_balance_ratios"
+            # (recorded_white_balance waehlt bei mehreren den haeufigsten)
+            wb = (values or {}).get("white_balance_ratios")
+            if wb is not None:
+                counts = slot.setdefault("white_balance_episodes", [])
+                counts.extend([0] * (len(slot["white_balance_ratios"]) - len(counts)))
+                counts[slot["white_balance_ratios"].index(wb)] += 1
     return out
 
 

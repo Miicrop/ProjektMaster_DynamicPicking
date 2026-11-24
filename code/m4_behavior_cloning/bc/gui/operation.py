@@ -21,6 +21,7 @@ import json
 import re
 from pathlib import Path
 
+from .. import camera_check as camera_check_module
 from .. import config
 
 CHECKPOINT_ROOT = "checkpoints"
@@ -484,6 +485,8 @@ class RolloutProgress(object):
         self.predict_ms = None
         #: Kamerapruefung: Kamera -> Text, "gesamt" -> "OK ..."/"WARNUNG ..."
         self.camera_check = {}
+        #: ... und getrennt nach Licht/Kameralage (Zeile KAMERAPRUEFUNG_JSON)
+        self.camera_groups = None
 
     def feed(self, line):
         """Eine Ausgabezeile einlesen. Liefert True, wenn sich etwas geaendert hat."""
@@ -520,6 +523,14 @@ class RolloutProgress(object):
         if known is not None:
             if self.rollouts:
                 self.rollouts[-1].known = known
+            return True
+
+        if line.startswith(camera_check_module.JSON_PREFIX):
+            try:
+                self.camera_groups = json.loads(line[len(camera_check_module.JSON_PREFIX):])
+            except ValueError:
+                return False
+            self.last_event = "Kamerapruefung"
             return True
 
         match = _CAMERA_CHECK.match(line)
@@ -658,6 +669,62 @@ def camera_check_summary(progress):
     lines += ["  %s: %s" % (name, text) for name, text in sorted(progress.camera_check.items())
               if name != "gesamt"]
     return "\n".join(lines), level
+
+
+#: Anzeigenamen der Kameraplaetze in der Tabelle
+CAMERA_NAMES = {"wrist": "Wrist", "scene": "Szene"}
+
+
+def camera_check_table(progress):
+    """Kamerapruefung als Tabelle (Anwender 2026-11-24).
+
+    Liste ``{camera, label, groups: {licht|lage: {level, short, detail}}}``,
+    eine Zeile je Kamera; ``level`` "ok"/"warnung". Leer, solange nichts
+    geprueft ist. Aeltere Protokolle ohne KAMERAPRUEFUNG_JSON: aus den
+    Textzeilen -- dort stehen bei einer Warnung nur die auffaelligen Werte.
+    """
+    groups_by_camera = progress.camera_groups
+    if groups_by_camera is None:
+        groups_by_camera = _groups_from_text(progress.camera_check)
+    rows = []
+    for camera in sorted(groups_by_camera, key=lambda c: (c not in CAMERA_NAMES, c)):
+        groups = {}
+        for key in (camera_check_module.LIGHT, camera_check_module.POSE):
+            group = (groups_by_camera[camera] or {}).get(key) or {}
+            checks = group.get("checks") or []
+            level = group.get("level") or camera_check_module.OK
+            bad = [c["text"] for c in checks if c.get("level") == camera_check_module.WARN]
+            short = "; ".join(_short(t) for t in bad) if bad else "OK"
+            detail = "\n".join(("! " if c.get("level") == camera_check_module.WARN else "   ")
+                               + c["text"] for c in checks) or "keine Einzelwerte im Protokoll"
+            groups[key] = {"level": level, "short": short, "detail": detail}
+        rows.append({"camera": camera, "label": CAMERA_NAMES.get(camera, camera),
+                     "groups": groups})
+    return rows
+
+
+def _short(text):
+    """"Farbe R/G 0.98 (Training 1.40..1.55)" -> "Farbe R/G 0.98"."""
+    return text.split(" (Training")[0]
+
+
+def _groups_from_text(lines):
+    out = {}
+    for camera, text in (lines or {}).items():
+        if camera == "gesamt" or not (text.startswith("OK") or text.startswith("WARNUNG")):
+            continue
+        level = camera_check_module.WARN if text.startswith("WARNUNG") else camera_check_module.OK
+        items = ([t.strip() for t in text.split(" -- ", 1)[1].split(";") if t.strip()]
+                 if " -- " in text else [])
+        groups = {key: {"level": camera_check_module.OK, "checks": []}
+                  for key in (camera_check_module.LIGHT, camera_check_module.POSE)}
+        for item in items:
+            group = groups[camera_check_module.group_of(item)]
+            group["checks"].append({"level": level, "text": item})
+            if level == camera_check_module.WARN:
+                group["level"] = camera_check_module.WARN
+        out[camera] = groups
+    return out
 
 
 def read_summary(path):

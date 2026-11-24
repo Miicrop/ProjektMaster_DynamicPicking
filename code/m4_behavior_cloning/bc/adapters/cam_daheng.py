@@ -242,13 +242,22 @@ class DahengCamera(CameraPort):
         # war, und schwankt damit zwischen Sessions. Vor der echten
         # Datenaufzeichnung sind feste Ratios zu messen und in der Config
         # zu pinnen (siehe white_balance_ratios).
+        # Befund 2026-11-24: bis dahin wurde der Kanal als Text ("Red")
+        # gewaehlt -- gxipy verlangt den Enum-Wert, die Wahl schlug still fehl
+        # und alle drei Ratios landeten im gerade gewaehlten Kanal. Daher der
+        # Rotstich der Aufnahmen ab 17.11. (config.CAMERA_WHITE_BALANCE).
         if self.cfg.white_balance_ratios:
             _try(lambda: cam.BalanceWhiteAuto.set(gx.GxAutoEntry.OFF))
-            for channel, ratio in zip(
-                ("Red", "Green", "Blue"), self.cfg.white_balance_ratios
-            ):
-                _try(lambda c=channel: cam.BalanceRatioSelector.set(c))
-                _try(lambda r=ratio: cam.BalanceRatio.set(float(r)))
+            wanted = tuple(float(r) for r in self.cfg.white_balance_ratios)
+            for channel, ratio in zip(WB_CHANNELS, wanted):
+                if _try(lambda c=channel: _select_wb_channel(cam, gx, c)):
+                    _try(lambda r=ratio: cam.BalanceRatio.set(r))
+            got = self._read_white_balance(gx)
+            if got is None or any(abs(g - w) > WB_TOLERANCE for g, w in zip(got, wanted)):
+                print("[cam_daheng] WARNUNG %s: Weissabgleich gesetzt %s, Kamera meldet %s"
+                      % (self.name, "/".join("%.3f" % v for v in wanted),
+                         "nicht lesbar" if got is None
+                         else "/".join("%.3f" % v for v in got)))
         else:
             _try(lambda: cam.BalanceWhiteAuto.set(gx.GxAutoEntry.ONCE))
 
@@ -294,6 +303,17 @@ class DahengCamera(CameraPort):
                 _try(lambda: cam.Gain.set(float(values["gain_db"])))
         return self.settings()
 
+    def _read_white_balance(self, gx):
+        """Weissabgleich (R, G, B) aus der Kamera; None, wenn nicht lesbar."""
+        ratios = []
+        for channel in WB_CHANNELS:
+            try:
+                _select_wb_channel(self._cam, gx, channel)
+                ratios.append(round(float(self._cam.BalanceRatio.get()), 3))
+            except Exception:
+                return None
+        return tuple(ratios)
+
     def settings(self):
         """Tatsaechlich wirksame Einstellungen, aus der Kamera zurueckgelesen.
 
@@ -334,16 +354,8 @@ class DahengCamera(CameraPort):
         # "Once" haengt er davon ab, was beim Oeffnen im Bild war -- die
         # Ratios stehen deshalb je Episode in den Metadaten.
         out["white_balance_auto"] = value(cam.BalanceWhiteAuto)
-        ratios = []
-        for channel in ("Red", "Green", "Blue"):
-            try:
-                entries = getattr(self._gx, "GxBalanceRatioSelectorEntry", None)
-                cam.BalanceRatioSelector.set(getattr(entries, channel.upper(), channel))
-                ratios.append(round(float(cam.BalanceRatio.get()), 3))
-            except Exception:
-                ratios = None
-                break
-        out["white_balance_ratios"] = ratios
+        ratios = self._read_white_balance(self._gx)
+        out["white_balance_ratios"] = list(ratios) if ratios is not None else None
         for key in ("exposure_us", "gain_db", "rate_set_fps", "rate_possible_fps"):
             if out[key] is not None:
                 out[key] = round(float(out[key]), 2)
@@ -438,6 +450,22 @@ class DahengCamera(CameraPort):
             _try(self._cam.close_device)
             self._cam = None
         self._open = False
+
+
+#: Kanaele des Weissabgleichs in der Reihenfolge von white_balance_ratios
+WB_CHANNELS = ("Red", "Green", "Blue")
+#: Abweichung gesetzt/zurueckgelesen, ab der gewarnt wird
+WB_TOLERANCE = 0.02
+
+
+def _select_wb_channel(cam, gx, channel):
+    """Kanal des Weissabgleichs waehlen -- mit dem Enum-Wert, den gxipy
+    verlangt (ein Text wie "Red" wird abgelehnt, Befund 2026-11-24)."""
+    entries = getattr(gx, "GxBalanceRatioSelectorEntry", None)
+    entry = getattr(entries, channel.upper(), None)
+    if entry is None:
+        raise RuntimeError("gxipy ohne GxBalanceRatioSelectorEntry.%s" % channel.upper())
+    cam.BalanceRatioSelector.set(entry)
 
 
 def _try(fn):

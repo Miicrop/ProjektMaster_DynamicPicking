@@ -728,6 +728,7 @@ def camera_check_before_run(robot, captures, info, start, start_gripper, args,
     results = camera_check.compare(reference, frames)
     for line in camera_check.format_lines(results):
         print(line)
+    print(camera_check.to_json_line(results))   # fuer die Tabelle in der Oberflaeche
     try:
         import cv2
         for name, image in frames.items():
@@ -1446,11 +1447,15 @@ def main():
             else ""))
 
     # Fester Weissabgleich der Aufnahme (neue Datensaetze, Anwender 2026-11-17):
-    # hatte jede Episode denselben, gilt er hier auch; sonst wie bisher "Once"
+    # derselbe wie im Training, bei mehreren der haeufigste; "Once" nur noch
+    # fuer alte Aufnahmen, die selbst "Once" hatten (Befund 2026-11-24, G2c)
     from dataclasses import replace as _replace
     rec_cams = ((info or {}).get("recording") or {}).get("camera_settings")
     for k, cfg in enumerate(cam_cfgs):
         wb = camera_settings_module.recorded_white_balance(rec_cams, cfg.name)
+        note = camera_settings_module.recorded_white_balance_note(rec_cams, cfg.name)
+        if note and cfg.backend == "daheng":
+            print("Hinweis: %s" % note)
         if wb is not None and cfg.backend == "daheng" and not cfg.white_balance_ratios:
             cam_cfgs[k] = _replace(cfg, white_balance_ratios=wb)
             print("Kamera %s: Weissabgleich fest wie in der Aufnahme %s"
@@ -1852,6 +1857,9 @@ def main():
         "created": datetime.now().isoformat(timespec="seconds"),
         "args": vars(args),
         "robot": robot_info,
+        # was die Kameras wirklich eingestellt hatten (Befund 2026-11-24:
+        # Weissabgleich der Fahrten war nicht nachvollziehbar)
+        "camera_settings": now_settings or None,
         "replan_steps": replan,
         "ensemble_decay": None if args.no_ensemble else decay,
         "episodes": results,

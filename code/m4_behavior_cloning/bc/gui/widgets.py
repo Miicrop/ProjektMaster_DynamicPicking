@@ -20,6 +20,35 @@ from . import requirements as requirements_module
 
 log = logging.getLogger(__name__)
 
+#: Gemerkte Anordnung der Reiter (Auf/Zu der Kaesten, Aufteilung), relativ
+#: zum Arbeitsordner, nicht eingecheckt. Aufnahme: Schluessel "offen" und
+#: "anordnung"; Betrieb: Schluessel "betrieb".
+LAYOUT_FILE = "einstellungen/oberflaeche.local.json"
+
+
+def load_layout_state(workdir):
+    """Gemerkte Anordnung (:data:`LAYOUT_FILE`); leer, wenn nicht lesbar."""
+    import json
+    from pathlib import Path
+
+    try:
+        data = json.loads((Path(workdir) / LAYOUT_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_layout_state(workdir, state):
+    import json
+    from pathlib import Path
+
+    path = Path(workdir) / LAYOUT_FILE
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+    except OSError as exc:
+        log.warning("Anordnung nicht gespeichert: %s", exc)
+
 
 def system_dark():
     """Dunkles Farbschema? Fusion folgt unter Windows der Systemeinstellung.
@@ -332,6 +361,94 @@ class QtLogHandler(logging.Handler):
             pass                                     # Fenster schon zu
 
 
+class CameraShare(QObject):
+    """Eine Kamerazuordnung fuer alle Reiter (Anwender 2026-11-24).
+
+    Bis dahin hatten Aufnahme und Betrieb je eine eigene Zuordnung, eigene
+    Bildraten und eine eigene Geraetesuche -- was in einem Reiter gewaehlt
+    war, galt im anderen nicht. Jetzt haengen alle ``CameraAssignmentView``
+    eines TaskRunner an einem gemeinsamen Stand: Aenderung oder Suchergebnis
+    in einem Reiter erscheint sofort im anderen.
+
+    Ausserdem: wer die Geraete gerade offen hat. Eine Daheng laesst sich nur
+    einmal oeffnen; die Vorschau im Reiter Aufnahme blockierte so eine Fahrt
+    im Reiter Betrieb. ``claim(besitzer, freigeben)`` meldet die Geraete an,
+    ``freigeben`` ist eine Funktion, die sie schliesst (Vorschau), oder None,
+    wenn das nicht von aussen geht (laufender Unterprozess).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._views = []
+        self.state = None
+        self._holders = {}
+
+    @classmethod
+    def of(cls, runner):
+        share = getattr(runner, "_camera_share", None)
+        if share is None:
+            share = cls()
+            try:
+                runner._camera_share = share
+            except AttributeError:      # Attrappe ohne Attribute: je View eigener Stand
+                pass
+        return share
+
+    def register(self, view):
+        self._views.append(view)
+        if self.state is None:
+            self.publish(view)
+        else:
+            view._adopt(self.state)
+
+    def publish(self, source):
+        """Stand von ``source`` uebernehmen und an alle anderen Ansichten geben."""
+        self.state = {"inventory": source.inventory, "assignment": source.assignment(),
+                      "fps": source.fps(), "notes": source.notes.text()}
+        alive = []
+        for view in self._views:
+            try:
+                if view is not source:
+                    view._adopt(self.state)
+                alive.append(view)
+            except RuntimeError:        # Qt-Objekt schon geloescht
+                pass
+        self._views = alive
+
+    # -- wer hat die Geraete offen ------------------------------------------
+
+    def claim(self, owner, release=None):
+        self._holders[owner] = release
+
+    def free(self, owner):
+        self._holders.pop(owner, None)
+
+    def holders(self, except_owner=None):
+        """``[(besitzer, freigeben | None)]`` ausser ``except_owner``."""
+        return [(o, r) for o, r in self._holders.items() if o != except_owner]
+
+    def take_over(self, owner):
+        """Fuer ``owner`` freimachen: Vorschauen anderer Reiter schliessen.
+
+        Rueckgabe ``(geschlossen, blockiert)`` -- Listen von Besitzern. Ist
+        ``blockiert`` nicht leer (laufende Aufnahme oder Fahrt), bleibt alles,
+        wie es ist, und der Aufrufer darf nicht oeffnen.
+        """
+        others = self.holders(owner)
+        blocked = [o for o, release in others if release is None]
+        if blocked:
+            return [], blocked
+        closed = []
+        for other, release in others:
+            try:
+                release()
+            except Exception:
+                log.exception("Kameras von %s nicht freigegeben", other)
+            self.free(other)
+            closed.append(other)
+        return closed, []
+
+
 class CameraAssignmentView(QGroupBox):
     """Welches Geraet liegt auf welchem Platz -- gemeinsam fuer Aufnahme und Betrieb.
 
@@ -356,6 +473,11 @@ class CameraAssignmentView(QGroupBox):
         #: Zugleich Kennung: ein Ergebnis, das zu einem anderen Signal
         #: gehoert, stammt aus einer abgebrochenen Suche und wird verworfen.
         self._search_cancel = None
+        #: gemeinsamer Stand aller Reiter (CameraShare); waehrend _adopt
+        #: nicht zuruecksenden
+        self.share = CameraShare.of(runner)
+        self._registered = False
+        self._adopting = False
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
@@ -408,6 +530,8 @@ class CameraAssignmentView(QGroupBox):
         layout.addWidget(self.notes)
 
         self._fill(cameras_module.default_assignment(self.inventory))
+        self._registered = True
+        self.share.register(self)
 
     # -- Suche --------------------------------------------------------------
 
@@ -527,6 +651,29 @@ class CameraAssignmentView(QGroupBox):
 
     def _on_changed(self):
         self.changed.emit()
+        self._publish()
+
+    def _publish(self):
+        if self._registered and not self._adopting:
+            self.share.publish(self)
+
+    def _adopt(self, state):
+        """Stand eines anderen Reiters uebernehmen (CameraShare)."""
+        self._adopting = True
+        try:
+            self.inventory = state["inventory"]
+            for slot, rate in self._rates.items():
+                wanted = (state.get("fps") or {}).get(slot)
+                for index in range(rate.count()):
+                    if rate.itemData(index) == wanted:
+                        rate.blockSignals(True)
+                        rate.setCurrentIndex(index)
+                        rate.blockSignals(False)
+                        break
+            self.notes.setText(state.get("notes") or "")
+            self._fill(state.get("assignment") or {})   # meldet changed an den eigenen Reiter
+        finally:
+            self._adopting = False
 
 
 def find_data(combo, value):
