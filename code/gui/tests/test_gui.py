@@ -387,7 +387,7 @@ def test_m4_tab_sits_between_m3_and_settings(store):
     assert titles[3:] == ["M3 Prüfung", "M4 Behavior Cloning", "Einstellungen"]
     assert w.tabs.currentWidget() is w.tab_m4
     assert [w.tab_m4.tabs.tabText(i) for i in range(w.tab_m4.tabs.count())] == \
-        ["Systemcheck", "Aufnahme", "Training", "Betrieb", "Konsole"]
+        ["Systemcheck", "Aufnahme", "Training", "Vergleich", "Betrieb", "Konsole"]
     assert w.tab_m4.bar is not None and not w.tab_m4.session.connected
     store.dirty = False
     w.close()
