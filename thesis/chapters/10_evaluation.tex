@@ -99,11 +99,52 @@ Fehlerteilen ebenso sicher erkannt werden, wie es die Testbilder zeigen, bleibt 
 \section{Vergleich klassischer und KI-basierter Ansatz}
 \label{sec:eval-vergleich}
 
-Beide Varianten des Greifens lassen sich im Reiter \enquote{Ablauf} umschalten. Die Übergabe von
-Modul~4 an Modul~2 wurde in der \ac{vm} der Steuerung geprüft (\cref{sec:m4-integration}).
+Beide Varianten des Greifens lassen sich im Reiter \enquote{Ablauf} umschalten. Eine gemeinsame
+Versuchsreihe, in der beide Varianten dieselben Lagen greifen, wurde im Projekt nicht gefahren.
+Der Vergleich stützt sich deshalb auf die Messungen der beiden Module, die unter ähnlichen
+Bedingungen am selben Aufbau entstanden sind, aber mit unterschiedlichen Verfahren
+(\cref{tab:eval-vergleich}).
 
-\todo[inline]{Nach Klärung mit Jeremy ergänzen: Ergebnisse von Modul~4 an der Anlage und, falls
-vorhanden, Vergleich mit dem klassischen Greifen.}
+\begin{table}[htbp]
+  \centering
+  \caption[Klassisches und lernbasiertes Greifen im Vergleich]{Klassisches und lernbasiertes
+  Greifen im Vergleich (Messungen am realen Aufbau)}
+  \label{tab:eval-vergleich}
+  \begin{tabularx}{\textwidth}{@{}l X X@{}}
+    \toprule
+    & Modul~2 (Objekterkennung und Greifsequenz) & Modul~4 (Diffusion Policy) \\
+    \midrule
+    Lage des Bauteils & aus der Objekterkennung (Pose) & aus den Kamerabildern, implizit
+      in der Policy \\
+    Abweichung vom Greifpunkt & höchstens \SI{2}{\milli\metre} nach Positionskorrektur
+      (11 Zeigetests, \cref{sec:eval-greifposition}) & im Median \SI{8.7}{\milli\metre},
+      \SIrange{1.0}{18.0}{\milli\metre} (8 Probegriffe, \cref{sec:m4-ergebnisse}) \\
+    Greifen im Zyklus & 7 von 7 gegriffen (\cref{sec:eval-zyklus}) & nicht geprüft: Probegriffe
+      wurden vor dem Schließen angehalten \\
+    Vorbereitung & Teachen der festen Posen, Kalibrierung, Zeigetests & Teachen von drei
+      Punkten, über 900 Demonstrationen, Training \\
+    Reaktion auf neue Lagen & jede Lage im Arbeitsbereich, sofern die Erkennung das Bauteil
+      findet & gut innerhalb der aufgenommenen Lagen, Fehler im Endanflug und bei der Drehung \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Für die Aufgabe dieses Demonstrators, ein bekanntes Bauteil flach auf einem ebenen Tisch, ist das
+klassische Greifen genauer und erprobter: Es greift das Bauteil in allen Zyklen, und seine
+Genauigkeit lässt sich mit Zeigetests direkt messen und korrigieren. Die Policy erreicht an der
+Anlage eine Genauigkeit von knapp einem Zentimeter. Das reicht bei einem Spiel von etwa
+\SI{2.5}{\milli\metre} je Backe noch nicht für einen sicheren Griff, zeigt aber, dass sie das
+Bauteil allein aus den Bildern findet, ohne Objekterkennung, Kalibrierung zwischen Kamera und
+Roboter oder eine programmierte Greifsequenz. Ihr Fehler entsteht in Zuständen, die die
+Demonstrationen nicht abdecken, und ist damit über die Daten adressierbar
+(\cref{sec:m4-fazit}).
+
+Die beiden Ansätze haben damit unterschiedliche Stärken. Der klassische Weg ist bei bekannter
+Geometrie überlegen, braucht aber für jedes neue Bauteil angepasste Erkennungsschritte. Der
+lernbasierte Weg verlagert diesen Aufwand in die Datenaufnahme und ist dann im Vorteil, wenn
+sich die Aufgabe schlecht in Regeln fassen lässt, etwa bei wechselnden Bauteilen oder beim Greifen
+aus einer Kiste. Ein direkter Vergleich mit derselben Versuchsreihe und dem Greiferfolg beider
+Varianten im Zyklus bleibt offen.
 
 \section{Grenzen der Evaluation}
 \label{sec:eval-grenzen}
