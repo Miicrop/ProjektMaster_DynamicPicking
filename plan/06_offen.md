@@ -89,9 +89,12 @@ Logs vom 12.11. liegen in `code/logs/` (Kopie von `I:\logs`).
 
 ## C – Nur wenn Zeit bleibt
 
-- [ ] **T** – Vorprojekt GROB (Kap. 02b): Abschnitt „Alternative Verfahren“ und die übrigen `\todo`s
-  oder kürzen.
-- [ ] **T** – Quellen für die Motivation (Kap. 1) und Normen zu Cobots (ISO 10218, ISO/TS 15066).
+- [ ] **N** – Vorprojekt GROB (Kap. 02b): Kommilitonen fragen, ob er noch etwas ergänzt. Die
+  `\todo`s sind entfernt (24.11.).
+- [ ] **T** – Quellen für die Motivation (Kap. 1) und Normen zu Cobots (ISO 10218, ISO/TS 15066):
+  vorerst weggelassen, `\todo`s entfernt.
+- [ ] **N** – GUI-Screenshots mit echten Bildern (Kap. 09), falls noch ein Labortermin; sonst das
+  `\todo` entfernen.
 - [ ] **N** – Video eines kompletten Zyklus.
 - [ ] **N** – `public/urdf/collision/` (15 MB) aus `public/` der Präsentation nehmen.
 - [ ] **J/N** – M4 im Gesamtablauf mit trainiertem Modell (im Ausblick als Dauerlauf-Inferenz erwähnt).
