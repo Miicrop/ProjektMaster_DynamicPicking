@@ -10,10 +10,40 @@
 die Grenzen, welche Probleme traten auf?}
 
 \section{Ausblick}
-\todo[inline]{Offen, ob und welche Punkte hier genannt werden. Kandidaten aus dem aktuellen
-Stand: Ansteuerung des Greifers über IO-Link und Auswertung der Greiferrückmeldung;
-intrinsische Kalibrierung der Top-down-Kamera; Korrektur der Parallaxe durch die Bauteilhöhe;
-eine dauerhaft laufende Inferenz von Modul~4, die nicht in jedem Zyklus neu startet;
-Werkzeugkugeln und Schutzräume für die Robotersteuerung (\cref{sec:vp-bedeutung}); Nutzung
-von Zyklen des klassischen Ablaufs als zusätzliche Demonstrationen für Modul~4;
-Weiterverwendung im Pflegerobotik-Projekt (Entscheidung des Teams).}
+\label{sec:ausblick}
+
+\paragraph{Kalibrierung der Top-down-Kamera.} Den Lageversatz durch Parallaxe und Verzeichnung
+gleicht derzeit eine lineare Korrektur aus, die aus Zeigetests angepasst wurde
+(\cref{sec:m1-korrektur}). Sie gilt nur für die aktuelle Kameraposition und Bauteilhöhe.
+Korrekter wäre eine intrinsische Kalibrierung der Kamera, mit der die Verzeichnung entfernt
+wird, kombiniert mit einer Entzerrung auf die Höhe der Bauteiloberseite statt auf die
+Tischebene. Die empirische Korrektur würde dann entfallen, und ein Verstellen der Kamera
+erforderte nur eine neue Kalibrierung statt einer neuen Messreihe.
+
+\paragraph{Rückmeldung des Greifers.} Der Greifer wird über Digitalausgänge geöffnet und
+geschlossen; ob ein Bauteil tatsächlich gegriffen wurde, meldet er nicht zurück. Über die
+IO-Link-Schnittstelle des Greifers ließe sich die Backenposition auslesen und ein Fehlgriff
+erkennen, bevor der Roboter mit leerem Greifer zur Prüfstation fährt.
+
+\paragraph{Schutzräume und Werkzeugkugeln.} Die Robotersteuerung prüft Zielposen gegen
+Arbeitsraumgrenzen. Die im Vorprojekt untersuchten Werkzeugkugeln und Schutzräume
+(\cref{sec:vp-bedeutung}) könnten zusätzlich Kollisionen des Greifers mit der Prüfvorrichtung
+und der Kamerastange ausschließen.
+
+\paragraph{Lernbasiertes Greifen.} Die Fehler der Policy entstehen in Zuständen, die die
+Demonstrationen nicht abdecken. Diese Zustände lassen sich mit dem DAgger-Verfahren gezielt
+sammeln: Fahrten der Policy werden aufgezeichnet und nachträglich mit den Aktionen des Planers
+beschriftet. Zusätzlich könnten Zyklen des klassischen Ablaufs als weitere Demonstrationen
+dienen. Im Gesamtsystem startet die Inferenz derzeit in jedem Zyklus neu; eine dauerhaft
+laufende Inferenz, die zwischen den Zyklen auf das Startsignal wartet, würde die Zykluszeit
+verkürzen. Längerfristig bietet sich die Übertragung auf weitere Bauteile und auf das Greifen
+aus einer Kiste an.
+
+\paragraph{Übertragung auf ein Spiel mit Senioren.} Die Bausteine des Demonstrators lassen sich
+mit wenig Aufwand auf eine andere Anwendung übertragen: Ein Roboter spielt mit Senioren
+\enquote{Mensch ärgere dich nicht}. Eine solche Umsetzung gibt es bereits, allerdings mit einer
+einfacheren Kinematik. Für den Arbeitsbereich dieses Projekts wurden bewusst dieselben
+ArUco-Marker verwendet wie für das Spielfeld. Die Objekterkennung würde statt des Bauteils die
+Spielfiguren finden, und die Greif- und Ablegesequenz der Robotersteuerung setzt sie auf die
+Spielfelder statt auf die Ablageorte. Erkennung, Kalibrierung, Ablaufsteuerung und
+Bedienoberfläche blieben weitgehend unverändert.

@@ -4,154 +4,36 @@
 [07_erledigt.md](07_erledigt.md). Die Moduldateien (02–05) enthalten nur Wissen, keine Aufgaben.
 
 > **Zum Abhaken mit Teilschritten und Notizen:** https://claude.ai/artifact/5sR6LYytTSzEgksksYpZ1q
-> (Stand 30.10., gleiche Punkte wie hier).
 
 `[ ]` offen · `[~]` angefangen · Wer: N = Niklas, J = Jeremy, T = Team, P1–P3 = Person des Moduls
 
-## Stand (2026-10-30)
+## Stand (2026-11-24)
 
-- Alle vier Module laufen im Code, in einer GUI und im automatischen Ablauf. M4 greift wahlweise
-  statt M2. 118 Tests grün.
-- Am echten Roboter gab es einen ersten vollständigen Ablauf, noch mit Testbildern statt Kameras.
-  Posen sind geteacht, die Kalibrierung ist eingemessen, Öffnen und Schließen des Greifers funktioniert.
-- Die Übergabe M4 → M2 ist in der Neura-VM getestet.
-- Die Thesis entspricht dem Code-Stand, Kap. 08 (M4) ist entworfen.
-- **Fehlt vor allem:** Kameras am Aufbau, ein vollständiger Zyklus mit echtem Teil, Messreihen,
-  M4 mit trainiertem Modell und die Durchsicht der Thesis.
+- **Die Deadline ist früher als geplant.** Deshalb ist die Liste nach Priorität sortiert:
+  A = ohne das keine Abgabe, B = wichtig, C = nur wenn Zeit bleibt.
+- Alle vier Module laufen am echten Aufbau: Kameras angebunden, feste Belichtung und fester
+  Fokus, Positionskorrektur M1 aus Zeigetests, Greifer über Digitalausgänge. Das Teil wurde
+  mehrfach an verschiedenen Positionen gegriffen und geprüft. 121 Tests grün.
+- M4: echter Datensatz (602 Episoden), Anlagentest am 16.11., erste Griffe am 23.11. Jeremy
+  hat eine eigene ausführliche Doku (`code/m4_behavior_cloning/Dokumentation/LaTeX/Ausfuehrlich`, 77 S.).
+- Thesis: Laborfotos eingebaut, Kap. 04–07 auf Laborstand, Ausblick geschrieben.
+- **Fehlt vor allem:** kleine Versuchsreihe mit Zahlen, Kap. 08 aus Jeremys Doku, Evaluation,
+  Fazit und Kurzfassung, Durchsicht, Präsentation auf den Laborstand.
 
-## 1. Code und Repo
+## A – Ohne das keine Abgabe
 
-Zurzeit nichts offen (Stand 12.11. und 30.10. sind committet, das Team nutzt GitHub;
-`resources/` bleibt draußen, weil es Passwort-Hashes enthält).
-
-## 2. Labor: Kameras und Inbetriebnahme
-
-Die Befehle laufen im Ordner `code` mit aktivierter venv. Die Anleitung steht in
-[ANLEITUNG_NEURA.md](../code/m2_robot_control/ANLEITUNG_NEURA.md), Abschnitte 1, 3, 4, 7a und 7b.
-Nach jeder Config-Änderung in der GUI speichern (Strg+S).
-
-**Mitnehmen:** Maßband, Lineal, Klebeband, Gut- und Schlechtteile, Netzteil, USB-Hub, LAN-Kabel.
-
-- [~] **N** – **Kameras anbinden.** Kamera oben (`EBK24100634`) und Seitenkamera (Index 1) sind
-  eingetragen (12.11.).
-  - Seriennummer der Handgelenkkamera bei M4 eintragen.
-  - USB-Bandbreite mit allen drei Kameras gleichzeitig prüfen.
-- [~] **P1** – **M1 live.** Marker, Erkennung und feste Belichtung (15000 µs) laufen (12.11.).
-  Die Belichtung bei anderem Licht prüfen (direkte Sonne).
-- [ ] **P3** – **M3 live.** Seitenkamera und Licht an der Prüfvorrichtung aufbauen. Im Tab M3 mit
-  einem Teil prüfen, ob die ROIs passen und die OCR liest. Prüfen, ob an der Prüfstation eine
-  Beleuchtung vorhanden ist oder gebraucht wird.
-- [~] **N** – **Kalibrierung Arbeitsbereich → Roboter.** Sie ist eingemessen
-  (0,35°, [205,1, −319,7] mm). Der Restfehler (RMS) fehlt im Repo. Mit `robot_check calib`
-  wiederholen, RMS und Ausgabe notieren. Ab 3 mm warnt das Werkzeug.
-- [ ] **P1** – **Positionskorrektur ablösen.** Die lineare Korrektur ist nur empirisch angepasst.
-  Sauber wäre eine intrinsische Kalibrierung (Schachbrett/ChArUco, `calibration_file` wird noch nicht
-  verwendet) plus eine Höhenkorrektur, bei der die Oberseite statt der Tischebene entzerrt wird.
-  Danach `position_correction` auf `null` setzen und den Zeigetest wiederholen. Für die Thesis
-  (Kap. 05/06): Messdaten liegen in `logs/point_tests.csv`.
-- [ ] **P2** – Spielraum der Greiferbacken zum 40-mm-Teil prüfen: Selbst mit 0 mm Versatz ist es
-  teils knapp.
-- [ ] **P3** – **Maßstab der Bohrung.** M3 misst ein 10-mm-Teil mit 9,57–9,68 mm, das Verhältnis
-  Bohrung zu Teilhöhe ist 0,64 statt 0,667. Mit 2–3 bekannten Gutteilen je 3 Aufnahmen messen, dann
-  einen Korrekturfaktor eintragen. Die Toleranz nicht aufweiten.
-- [ ] **N** – `code/logs/point_tests.csv` (Zeigetests vom 12.11.) für die Thesis sichern. `logs/`
-  ist nicht im Repo.
-- [ ] **N** – **Werkzeuglast** von `ZimmerLWR50` am Pendant ablesen und mit dem Soll vergleichen:
-  1,75 kg, Schwerpunkt z ≈ 81 mm (ANLEITUNG_NEURA Abschnitt 4).
-- [ ] **N** – Klären, ob der Wechsel in den Automatikmodus am Pendant bestätigt werden muss
-  (Schlüsselschalter).
-- [ ] **P2** – **Greiftest** `robot_check pick-test` mit Greifer. Den Übergang von schnell auf
-  langsam ca. 20 mm über jedem Ziel beobachten.
-- [ ] **P2** – Greifer-Rückmeldung auswerten (Teil gegriffen?), z. B. über IO-Link.
-- [ ] **P2** – Wiederholgenauigkeit an der Prüfposition messen. Das ist wichtig für M3.
-- [ ] **T** – **Erster vollständiger Zyklus** mit echten Kameras, Greifer und echtem Teil
-  (Tab Ablauf, „1 Zyklus“, Geschwindigkeit 20 %). Der Greifer darf im M3-Bild nicht zu sehen sein.
-- [ ] **T** – Fehlerbehandlung und Reset am realen System erproben (STOPP, Quittieren, Neustart).
-
-**Worauf achten**
-- **Marker-Zuordnung:** Passt die Zuordnung von ID zu Ecke nicht zur Config, wird das Bild ohne
-  Fehlermeldung falsch entzerrt. Test: Ein Teil nahe der Ecke unten links muss kleine x/y ergeben.
-- **Verschobene Marker:** neu ausmessen und neu kalibrieren. Eine bewegte Kamera ist dagegen
-  unkritisch.
-- **Fase nicht gefunden** (Konfidenz 0,5): Das Teil kann an der Prüfstation um 180° verdreht liegen.
-
-## 3. M4 und Rücksprache Jeremy
-
-- [ ] **J** – Kap. 08 der Thesis durchsehen, übernehmen oder umschreiben und die `\todo{Jeremy}`
-  füllen: Totzeit des Greifers, Zwischenfazit.
-- [ ] **J/N** – **Zykluszeit.** Im Ablauf startet `apps/infer.py` je Zyklus neu: torch und Modell
-  laden, Kameras öffnen, verbinden. Das dauert geschätzt mehrere bis ~30 s, gemessen ist es nicht.
-  Klären, ob ein Dauerlauf-Modus sinnvoll ist, der zwischen den Zyklen auf das Startsignal wartet.
-- [ ] **J** – **Freigabe echte Anlage.** Im Ablauf ersetzt die Rückfrage „Automatischer Ablauf mit
-  dem echten Roboter – M4 Behavior Cloning greift“ das Eintippen von „ANLAGE“, wie in seinem
-  Betrieb-Reiter. Mit Jeremy bestätigen.
-- [ ] **N** – In der Neura-VM das Werkzeug `ZimmerLWR50` anlegen. Dort heißt es `RobotiQ`, deshalb
-  scheitert `test_neura_vm.py` an `set_tool`.
-- [ ] **J** – Echter Datensatz und Training auf echten Bildern. Die erste echte Aufnahme wurde
-  wegen der Bildrate verworfen.
-- [ ] **J/N** – M4 mit trainiertem Modell im Ablauf laufen lassen, erst in der VM, dann im Labor.
-  Der Hold-Lauf in der VM erreicht PRE_PLACE nicht, und die VM meldet viele Overruns.
-  Das an der Anlage prüfen.
-- [ ] **J** – Greifversuche mit der Policy für den Vergleich M2/M4 durchführen (Kap. 10).
-
-## 4. Versuche und Evaluation
-
-- [ ] **T** – Festlegen, wie viele Durchläufe je Versuchsreihe und welche Kennzahlen.
-- [ ] **T** – Klären, wie viele Gut- und Schlechtteile es gibt und welche Fehlerarten: fehlende
-  Kerbe, falscher Durchmesser, fehlendes oder unlesbares Etikett.
-- [ ] **T** – **Versuchsreihe 1:** wiederholte Durchläufe mit einem Gutteil in zufälliger Lage.
-  Auswerten: Greiferfolg, Positionsgenauigkeit, Zykluszeit (`cycles_*.csv`).
-- [ ] **P3** – **Versuchsreihe 2:** gezielt fehlerhafte Teile. Daraus Konfusionsmatrix und
-  Messwiederholbarkeit am festen Aufbau ermitteln.
-- [ ] **P1** – Genauigkeitsmessung M1: N Ablagen an bekannten Positionen, Fehlerstatistik.
-- [ ] **J/T** – Vergleich PICK mit M2 und PICK mit M4.
-
-## 5. Fotos und Bilder (für Thesis und Präsentation)
-
-Fotos liegen in `media/roh/` (Originale), verkleinerte Kopien in `thesis/figures/`.
-
-- [ ] **N** – GUI-Screenshots mit echten Kamerabildern statt Testbildern (Kap. 09).
-- [ ] **N** – 1–2 schöne Zyklen mit „Bilder speichern“ und „+ Zwischenschritte“ aufnehmen.
-- [ ] **N** – Video eines kompletten Zyklus.
-
-## 6. Thesis: Inhalte nachtragen
-
-Wie man weiterschreibt, steht in [../thesis/blueprint.md](../thesis/blueprint.md) §7.
-
-- [ ] **N** – Kameradaten: Montagehöhe und Objektiv der Kamera oben, Modell, Abstand und Licht der
-  Seitenkamera (Kap. 04/05/07).
-- [ ] **N** – RMS der Kalibrierung und Versatz aus dem Zeigetest (Kap. 04/06).
-- [ ] **P1–P3** – Kapitel 05–07 durchsehen und die Zwischenfazits nach den Labortests ergänzen.
-- [ ] **T** – Evaluation (Kap. 10) mit Messdaten, dann den Ergebnissatz in der Kurzfassung.
-- [ ] **T** – Vorprojekt GROB (Kap. 02b): Wer schreibt den Abschnitt „Alternative Verfahren“?
-
-## 7. Entscheidungen im Team
-
-- [ ] Pflegerobotik-Projekt („Mensch ärgere dich nicht“ mit Senioren) erwähnen? Wenn ja: in der
-  Einleitung, im Fazit oder im Ausblick? Das betrifft auch Szene 7.4 der Präsentation.
-- [ ] Welche offenen Punkte nennt der Ausblick? Die Kandidaten stehen als `\todo` in Kap. 11.
-- [ ] Englisches Abstract zusätzlich zur Kurzfassung?
-- [ ] Quellen für die Motivation (Kap. 1) und Normen zu Cobots (ISO 10218, ISO/TS 15066) aufnehmen?
-
-## 8. Thesis: Durchsicht und Abschluss
-
-- [ ] **N** – Gesamte Arbeit durchsehen.
-- [ ] **N** – Danach `/ars-reviewer` für ein simuliertes Gutachten, dann die Befunde mit
-  `/ars-revision` einarbeiten.
-- [ ] **T** – Fazit, Korrekturlesen, Abgabe.
-
-## 9. Präsentation
-
-Das Konzept steht in [10_praesentation_konzept.md](10_praesentation_konzept.md).
-
-- [ ] **J** – Akt 6 prüfen (6.1–6.8, Entwurf aus deiner Doku):
-  - Zahlen: Rauschen 15 mm, Trichter 20/150 mm, Tischgrenze 2 mm, 89,5 M Parameter, 16/8 Takte,
-    10 DDIM-Schritte, Durchstich 10/10, Zitterwerte (6.6), Takt und Schutzschichten (6.7).
-  - Stimmt die Darstellung der Diffusion Policy (6.4, Schema mit einem Gelenk)?
-  - Passen die ehrlichen Grenzen in 6.5 und die Aussage „mit Modell an der Anlage offen“ in 6.8?
-  - Welche (k)-Szenen (6.3, 6.6, 6.7) bleiben im Vortrag?
-  - Szenen in `presentation/abschluss/src/storyboard.js`, Konzept in [10_praesentation_konzept.md](10_praesentation_konzept.md).
-- [ ] **N** – **Präsentation auf den Laborstand vom 12.11. bringen** (in der Thesis am 24.11. erledigt):
+- [ ] **T** – **Deadline, Umfang der Ausarbeitung und Vortragsdauer** festhalten.
+- [ ] **T** – **Kleine Versuchsreihe** (ein Labortag, siehe unten). Vorher festlegen:
+  Anzahl Durchläufe, welche Fehlerteile es gibt.
+- [ ] **N** – **Kap. 08 (M4) aus Jeremys Doku übernehmen.** Seine Fassung ersetzt den Entwurf
+  vom 30.10., gekürzt auf Kapitellänge; die ausführliche Doku als Anhang oder eigenes Dokument.
+  Danach mit Jeremy abstimmen, was aus „Verwendung offen“-Berichten rein darf.
+- [ ] **T** – **Evaluation (Kap. 10)** mit den Zahlen der Versuchsreihe, M2/M4-Vergleich mit
+  Jeremys Anlagenergebnissen.
+- [ ] **N** – **Fazit (Zusammenfassung, Diskussion) und Ergebnissatz der Kurzfassung.**
+- [ ] **N** – Gesamte Arbeit durchsehen, dann `/ars-reviewer`, Befunde mit `/ars-revision` einarbeiten.
+- [ ] **T** – Korrekturlesen, Abgabe.
+- [ ] **N** – **Präsentation auf den Laborstand vom 12.11. bringen** (in der Thesis erledigt):
   - `python build_data.py` neu laufen lassen. `data.json` enthält noch den Offset 113° und die
     alten Posen (inspection 520,8 / 199,6 / 42,0, Ablagen z 4/3).
   - Szene 4.4 „23° verdreht“: Offset jetzt −67° (90° + 23° − 180°). Das Teil wird um 180°
@@ -163,16 +45,61 @@ Das Konzept steht in [10_praesentation_konzept.md](10_praesentation_konzept.md).
   - Feste Belichtung Daheng (15 ms, 0 dB) und fester Fokus Logitech (90), beides im Code.
   - Montagehöhe Kamera oben: Klemme 90 cm, Objektiv ca. 94 cm, Sensor ca. 99 cm über der Platte (1.2/3.1).
   - Ablegen 1 mm über der geteachten Pose; Ablageorte nur mit Klebeband markiert, keine Boxen.
-  - Lochmessung an der echten Kamera: 9,57–9,68 mm statt 10 mm, Korrekturfaktor offen.
+  - Lochmessung an der echten Kamera: 9,57–9,68 mm statt 10 mm; vereinzelt Fehlurteil durch
+    Spiegelung/Fensterlicht.
   - Laborfotos aus `media/roh/` für 1.2, 7.1 und die Prüfstation.
-- [ ] **T** – Offene Szenen: 7.2 Messwerte (nach der Evaluation), 7.4 Ausblick (nach der
-  Entscheidung zur Pflegerobotik).
-- [ ] **N** – Fotos vom Labor für 7.1, Stand in 7.3 vor dem Vortrag prüfen.
-- [ ] **T** – Generalprobe und Zeitbudget, ggf. (k)-Szenen streichen. Montageort der Kamera oben
-  in 1.2/3.1 bestätigen.
-- [ ] **N** – `public/urdf/collision/` (15 MB) aus `public/` nehmen, dann hat `dist/` ~22 MB.
-- [ ] **T** – Endgültigen Titel festlegen.
+  - Ausblick 7.4: Pflegerobotik-Idee wie in Thesis Kap. 11 (gleiche ArUco-Marker wie das Spiel).
+- [ ] **T** – Präsentation: 7.2 Messwerte nach der Versuchsreihe, Generalprobe und Zeitbudget,
+  ggf. (k)-Szenen streichen, endgültigen Titel festlegen.
+- [ ] **J** – Akt 6 der Präsentation prüfen (6.1–6.8) gegen seinen aktuellen Stand.
 
-## 10. Organisation
+### Labortag (alles an einem Tag)
 
-- [ ] **T** – Abgabetermin, Umfang der Ausarbeitung und Vortragsdauer klären.
+- [ ] **P3** – Lochmaßstab: 2–3 bekannte Gutteile je 3 Aufnahmen, Korrekturfaktor eintragen.
+  Toleranz nicht aufweiten. Zuerst, sonst fallen Gutteile in der Versuchsreihe durch.
+- [ ] **T** – **Versuchsreihe 1:** Gutteil in zufälliger Lage, z. B. 10 Zyklen. Greiferfolg,
+  Prüfurteil, Zykluszeit (`cycles_*.csv`).
+- [ ] **P3** – **Versuchsreihe 2:** je Fehlerart (Kerbe, Loch, Etikett) wenige Teile, je 3 Durchläufe.
+  Daraus eine kleine Konfusionsmatrix.
+- [ ] **N** – Kalibrierung mit `robot_check calib` wiederholen, RMS notieren (Kap. 04/06).
+- [ ] **P2** – Wiederholgenauigkeit an der Prüfposition (z. B. 5× ablegen, Lage im M3-Bild vergleichen).
+- [ ] **N** – GUI-Screenshots mit echten Kamerabildern (Kap. 09), 1–2 Zyklen mit „Bilder speichern“.
+- [ ] **N** – `code/logs/point_tests.csv` (Zeigetests vom 12.11.) vom Laborlaptop sichern.
+- [ ] **N** – Ablesen für Kap. 04/07: Brennweite des Objektivs oben, genaues Logitech-Modell,
+  Abstand Seitenkamera–Bauteil, Licht an der Prüfstation.
+- [ ] **N** – Klären, welche Lastdaten für `ZimmerLWR50` in der Steuerung stehen: Datenblatt
+  1,75 kg, Lastermittlung am Pendant 1,16 kg (Schwerpunkt −26 / −58 / 150 mm).
+
+**Worauf achten**
+- **Marker-Zuordnung:** Passt die Zuordnung von ID zu Ecke nicht zur Config, wird das Bild ohne
+  Fehlermeldung falsch entzerrt. Test: Ein Teil nahe der Ecke unten links muss kleine x/y ergeben.
+- **Fase nicht gefunden** (Konfidenz 0,5): Das Teil kann an der Prüfstation um 180° verdreht liegen.
+- **Fensterlicht** an der Prüfstation: kann das Loch kleiner wirken lassen.
+
+## B – Wichtig
+
+- [ ] **J** – Kap. 08 der Thesis (nach der Übernahme) durchsehen und freigeben; Totzeit des
+  Greifers und Override 0,5 (Sicherheitsthema) mit dem Betreuer klären.
+- [ ] **P1–P3** – Kapitel 05–07 durchsehen, Zwischenfazits mit den Zahlen der Versuchsreihe ergänzen.
+- [ ] **J** – Freigabe echte Anlage: Im Ablauf ersetzt die Rückfrage „Automatischer Ablauf mit
+  dem echten Roboter – M4 Behavior Cloning greift“ das Eintippen von „ANLAGE“. Bestätigen.
+- [ ] **T** – Fehlerbehandlung am realen System kurz erproben (STOPP, Quittieren, Neustart).
+
+## C – Nur wenn Zeit bleibt
+
+- [ ] **T** – Vorprojekt GROB (Kap. 02b): Abschnitt „Alternative Verfahren“ und die übrigen `\todo`s
+  oder kürzen.
+- [ ] **T** – Quellen für die Motivation (Kap. 1) und Normen zu Cobots (ISO 10218, ISO/TS 15066).
+- [ ] **N** – Video eines kompletten Zyklus.
+- [ ] **N** – `public/urdf/collision/` (15 MB) aus `public/` der Präsentation nehmen.
+- [ ] **J/N** – M4 im Gesamtablauf mit trainiertem Modell (im Ausblick als Dauerlauf-Inferenz erwähnt).
+
+## Verworfen (2026-11-24)
+
+- Intrinsische Kalibrierung / Positionskorrektur ablösen: wäre korrekter, wird nicht mehr
+  gemacht; steht im Ausblick.
+- Greifer-Rückmeldung (IO-Link): nicht umgesetzt; steht im Ausblick.
+- Alles zum Robotiq-Standardgreifer in der Neura-VM. Das Werkzeug `ZimmerLWR50` ist in der VM angelegt.
+- USB-Bandbreite aller drei Kameras, Schlüsselschalter Automatikmodus, Belichtung bei Sonne,
+  Genauigkeitsmessung M1 (Zeigetest deckt das ab), Spielraum der Greiferbacken als eigener Test.
+- Englisches Abstract (nicht benötigt). Pflegerobotik: entschieden, nur im Ausblick.
