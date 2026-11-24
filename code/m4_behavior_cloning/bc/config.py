@@ -814,6 +814,13 @@ SAFETY_CHECK_PERIOD_S = 0.05
 #: Kalibriert an 1013 Rollouts (VM + Anlage bis 16.11.): beide Not-Aus-Fahrten
 #: >= 133 Takte, alle anderen < 3 Takte -- ausser drei VM-Fahrten, in denen
 #: der Arm ebenfalls 220-250 Takte stand (Haenger der VM-Software).
+#: Mindestpause zwischen deactivate_servo_interface und dem naechsten
+#: activate_servo_interface am Neura (Befund 2026-11-24): Fahrt 1 von
+#: 2026-11-23_16-40-02 (ohne Experte) startete ~0,1 s nach dem Rueckzug neu --
+#: der Arm fuhr erst nach ~0,4-0,5 s los, der Stillstandswaechter brach vorher
+#: ab ("arm steht"). Mit Experte oder als eigener Prozess lagen Sekunden
+#: dazwischen, dort trat es nicht auf. 0 = aus.
+NEURA_SERVO_REACTIVATE_PAUSE_S = 1.0
 STALL_MOVE_RAD = 1e-4
 STALL_GAP_RAD = 0.02
 STALL_STEPS = 5

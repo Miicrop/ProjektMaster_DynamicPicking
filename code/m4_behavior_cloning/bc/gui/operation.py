@@ -54,7 +54,10 @@ def find_policies(workdir, root=CHECKPOINT_ROOT):
 
     Zwischenstaende (``checkpoints/step_*``) werden mitgenommen: Nach dem
     Durchstich ist genau der Vergleich "Schritt 4000 gegen 8000" die Frage,
-    die man am Rechner stellt.
+    die man am Rechner stellt. Nicht aber der letzte, wenn er dieselbe Policy
+    ist wie ``<lauf>/policy`` (Anwender 2026-11-24: jedes Modell stand doppelt
+    in der Liste -- ``--save-every`` gleich ``--steps`` speichert den Endstand
+    zweimal, einmal mit Trainingsstand zum Fortsetzen).
     """
     from .training import relative
 
@@ -65,12 +68,29 @@ def find_policies(workdir, root=CHECKPOINT_ROOT):
     for run in sorted(base.glob("*")):
         if not run.is_dir():
             continue
-        if has_policy(run):
+        final = policy_dir(run) / POLICY_MARKER if has_policy(run) else None
+        if final is not None:
             found.append(relative(run, workdir))
         for step in sorted((run / "checkpoints").glob("step_*")):
-            if has_policy(step):
+            if has_policy(step) and not _same_file(policy_dir(step) / POLICY_MARKER, final):
                 found.append(relative(step, workdir))
     return found
+
+
+def _same_file(a, b):
+    """Dieselbe Policy? ``bc_policy.json`` gleich bis auf den Zeitstempel
+    ``created`` und das Modell gleich gross (die 360 MB nicht lesen)."""
+    if b is None:
+        return False
+    try:
+        left, right = _read_json(a), _read_json(b)
+        left.pop("created", None)
+        right.pop("created", None)
+        model = "model.safetensors"
+        return (left == right and bool(left)
+                and (a.parent / model).stat().st_size == (b.parent / model).stat().st_size)
+    except (OSError, AttributeError):
+        return False
 
 
 def describe_policy(path):

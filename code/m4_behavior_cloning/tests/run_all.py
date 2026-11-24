@@ -178,6 +178,14 @@ def main(argv=None):
         if input("   Not-Aus in Reichweite, Greifer frei? 'ANLAGE' eintippen: ").strip() != "ANLAGE":
             raise SystemExit("Abgebrochen.")
 
+    # Wie conftest._point_backups_in_tmp: PICK-Sicherungen (record.py beim
+    # Ablegen) nicht relativ zum Aufrufordner schreiben -- aus tests/ heraus
+    # gestartet landeten sie sonst ungeignort in tests/sequences/ (2026-11-24)
+    import tempfile
+
+    config.TOUCHUP_BACKUP_ROOT = str(Path(tempfile.mkdtemp(prefix="bc_tests_"))
+                                     / "punkt_sicherungen")
+
     total_passed, total_failed = 0, []
     for module_name in modules:
         print("\n== %s ==" % module_name)

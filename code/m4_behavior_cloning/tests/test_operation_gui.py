@@ -168,3 +168,20 @@ def test_operation_tab_sections_and_camera_table(tmp_path):
     finally:
         tab.shutdown()
         runner.shutdown()
+
+
+def test_final_step_is_not_listed_twice(tmp_path):
+    # --save-every = --steps: Endstand als policy/ UND checkpoints/step_* (Anwender 2026-11-24)
+    def write(folder, created, model=b"m" * 10, extra=None):
+        folder.mkdir(parents=True)
+        data = {"created": created, "step": 10000}
+        data.update(extra or {})
+        (folder / "bc_policy.json").write_text(json.dumps(data), encoding="utf-8")
+        (folder / "model.safetensors").write_bytes(model)
+
+    write(tmp_path / "checkpoints" / "G2" / "policy", "16:47:00")
+    write(tmp_path / "checkpoints" / "G2" / "checkpoints" / "step_010000", "16:46:54")
+    write(tmp_path / "checkpoints" / "G2" / "checkpoints" / "step_004000", "15:00:00",
+          extra={"step": 4000})
+    found = [str(p).replace("\\", "/") for p in operation.find_policies(tmp_path)]
+    assert found == ["checkpoints/G2", "checkpoints/G2/checkpoints/step_004000"]
