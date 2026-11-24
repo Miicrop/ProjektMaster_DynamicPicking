@@ -26,7 +26,11 @@
 - [x] **N** – **Evaluation (Kap. 10) als Funktionsnachweis** mit den Daten vom 12.11. geschrieben
   (Zeigetests, 7 Zyklen: 7/7 gegriffen, 5 vollständig, OCR und Kerbe 5/5, Urteil 2/5 gut wegen
   Lochmaßstab). Kein weiterer Labortag nötig; der Labortag unten ist nur noch optional.
-- [ ] **N** – **Kap. 08 (M4) aus Jeremys Doku übernehmen.** Seine Fassung ersetzt den Entwurf
+- [x] **N** – Kap. 08 als Grundgerüst aus Jeremys Doku (Stand 19.11.) neu geschrieben (24.11., 20 S.):
+  Punkte CLEAR_FOV/ANFLUG/PRE_PICK/PICK/PRE_PLACE, Objektiv 3,6 mm F8 statt Fischauge, Kameralicht,
+  gezielter Versatz, Tisch aus Tischpunkten, Sicherheitsstufen, Versuche bis Anlagentest C2 und Drehbias.
+  **Offen (Jeremy):** Abgleich mit seiner Endfassung, neuer Datensatz, Totzeit, Override/Betreuer.
+- [ ] ~~**N** – **Kap. 08 (M4) aus Jeremys Doku übernehmen.**~~ Seine Fassung ersetzt den Entwurf
   vom 30.10., gekürzt auf Kapitellänge; die ausführliche Doku als Anhang oder eigenes Dokument.
   Danach mit Jeremy abstimmen, was aus „Verwendung offen“-Berichten rein darf.
 - [ ] **J/N** – Kap. 10.5 M2/M4-Vergleich nach Klärung mit Jeremy ergänzen.
