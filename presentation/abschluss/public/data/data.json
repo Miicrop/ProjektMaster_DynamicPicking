@@ -18736,6 +18736,44 @@
     "h": 396
    }
   },
+  "plant": {
+   "demos": 920,
+   "lagen": 164,
+   "vm_runs": 151,
+   "vm_median_mm": 10.7,
+   "vm_le10_pct": 49,
+   "plant_median_mm": 8.7,
+   "plant_range_mm": [
+    1.0,
+    18.0
+   ],
+   "plant_le10": [
+    5,
+    8
+   ],
+   "rot_err_deg": 5,
+   "follow_mm": [
+    1,
+    7
+   ],
+   "drift_mm": [
+    10,
+    29
+   ],
+   "offset_mm": [
+    5,
+    10
+   ],
+   "offset_deg": [
+    10,
+    20
+   ],
+   "figure": {
+    "url": "img/m4/c2_versatz_hoehe.png",
+    "w": 1224,
+    "h": 612
+   }
+  },
   "timing": {
    "cycle_ms": 66.66666666666667,
    "servo_ms": 16.666666666666668,

@@ -1267,15 +1267,15 @@ export function createCell(ctx) {
   const chainG = bb(new THREE.Group());
   const CHAIN = [
     ['Vom Vorführen zur Policy', 'title', 0.24, T.ink, 0],
-    ['1  Wegpunkte teachen – Gamepad oder Touch-up', 'mono', 0.13, T.ink, 0.5],
-    ['2  Aufnahme: Bahn + Rauschen, 15 Hz,', 'mono', 0.13, MODULE_COLOR.M4, 0.3],
-    ['   Kamera oben + Handgelenkkamera', 'mono', 0.13, MODULE_COLOR.M4, 0.22],
+    ['1  3 Punkte teachen, der Rest wird berechnet', 'mono', 0.13, T.ink, 0.5],
+    ['2  Planer fährt Bahn + Rauschen, 15 Hz,', 'mono', 0.13, MODULE_COLOR.M4, 0.3],
+    ['   beide Kameras, Teil wird umgelegt', 'mono', 0.13, MODULE_COLOR.M4, 0.22],
     ['3  Export: LeRobotDataset (lerobot 0.6.1)', 'mono', 0.13, T.ink, 0.3],
     ['4  Training: Diffusion Policy, 89,5 M Param.', 'mono', 0.13, T.ink, 0.3],
     ['5  Inferenz: die Policy fährt selbst, 15 Hz', 'mono', 0.13, MODULE_COLOR.M4, 0.3],
-    ['Das Rauschen bringt Abweichungen samt', 'sans', 0.15, T.inkSoft, 0.5],
-    ['Korrektur in die Daten – die Policy lernt,', 'sans', 0.15, T.inkSoft, 0.25],
-    ['wie man zur Bahn zurückfindet.', 'sans', 0.15, T.inkSoft, 0.25],
+    ['Über 900 Demonstrationen an der Anlage.', 'sans', 0.15, T.inkSoft, 0.5],
+    ['Das Rauschen bringt Abweichungen samt', 'sans', 0.15, T.inkSoft, 0.25],
+    ['Korrektur in die Daten.', 'sans', 0.15, T.inkSoft, 0.25],
   ];
   let cy0 = -0.22;
   const chainTexts = CHAIN.map(([str, font, size, hex, dy]) => {
@@ -1299,8 +1299,8 @@ export function createCell(ctx) {
   polG.add(polT);
   plated(polT);
   onTop(polG);
-  const handLabel = label3d('ÜBERGABE an M2', 'PRE_PLACE · ~9 cm über der Prüfung · M2: reset(), dann ablegen', M4_FRONT, MODULE_COLOR.M4);
-  const vmLabel = label3d('In der Neura-VM getestet', 'Übergabe M2 → M4 → M2 läuft · mit trainiertem Modell an der Anlage noch offen · Bahn hier: Sollbahn', M4_FRONT, T.inkSoft);
+  const handLabel = label3d('ÜBERGABE an M2', 'PRE_PLACE über der Prüfung · M2: reset(), dann ablegen', M4_FRONT, MODULE_COLOR.M4);
+  const vmLabel = label3d('Übergabe in der Neura-VM getestet', 'Policy an der Anlage erprobt (Probegriffe, 8,7 mm) · nächster Schritt: Policy greift, Planer transportiert · Bahn hier: Sollbahn', M4_FRONT, T.inkSoft);
 
   // ---------- update ----------
   const tmp = new THREE.Vector3();

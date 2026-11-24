@@ -302,6 +302,11 @@ M4_JITTER = [
 M4_SIM = {"date": "2026-09-17", "success": [10, 10], "grip_mm": [1.3, 2.2], "path_p95_mm": [3.3, 4.4],
           "episodes": 50, "steps": 8000, "train_min": 32, "params_m": 89.5, "gpu": "RTX 5070 Ti",
           "predict_ms": 77, "predict_ms_load": 120, "sync_success": [8, 10], "vm_episodes": 30}
+# Ergebnisse mit echten Bildern (Jeremys Doku, Kap. 10, Stand 19.11.; Thesis Kap. 8.10):
+# VM-Test mit 151 Episoden eines unbekannten Tags, Anlagentest mit Modell C2 (Probegriff, 5 Lagen, 8 Griffe)
+M4_PLANT = {"demos": 920, "lagen": 164, "vm_runs": 151, "vm_median_mm": 10.7, "vm_le10_pct": 49,
+            "plant_median_mm": 8.7, "plant_range_mm": [1.0, 18.0], "plant_le10": [5, 8], "rot_err_deg": 5,
+            "follow_mm": [1, 7], "drift_mm": [10, 29], "offset_mm": [5, 10], "offset_deg": [10, 20]}
 # Takt an der Anlage (Labortag 16.10.): servo_j-RPC median ~10 ms, p95 ~21 ms, 1–2 Hänger à ~210 ms je Lauf
 # Quelle: Dokumentation/Labortag-2026-10-16-Uebergabe.md §1 F1; Vorhersage aus dem Durchstich-Bericht
 M4_TIMING = {"cycle_ms": 1000 / 15, "servo_ms": 1000 / 60, "rpc_median_ms": 10, "rpc_p95_ms": 21,
@@ -421,11 +426,15 @@ def export_m4() -> dict:
     (OUT_IMG / "m4").mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(OUT_IMG / "m4" / "durchstich_sim_rollouts.png"), fig)
     sim = {**M4_SIM, "figure": {"url": "img/m4/durchstich_sim_rollouts.png", "w": fig.shape[1], "h": fig.shape[0]}}
+    # 6.5 Anlage: Versatz über der Höhe im Anlagentest (Abbildung aus Jeremys Bericht, über thesis/figures/m4)
+    fig = cv2.imread(str(ROOT / "thesis" / "figures" / "m4" / "c2_versatz_hoehe.png"))
+    cv2.imwrite(str(OUT_IMG / "m4" / "c2_versatz_hoehe.png"), fig)
+    plant = {**M4_PLANT, "figure": {"url": "img/m4/c2_versatz_hoehe.png", "w": fig.shape[1], "h": fig.shape[0]}}
     return {"points": P, "joints": joints, "points_file": M4_POINTS, "rate_hz": rate, "ideal": np.round(path * 1000, 1).tolist(),
             "pick_index": int(np.argmax(dwell)), "episodes": episodes, "max_dev_mm": round(dev, 1),
             "noise": {"sigma_mm": bcc.NOISE_TRANS_AMPLITUDE_M * 1000, "tau_s": bcc.NOISE_OU_TAU_S,
                       "funnel_mm": [bcc.FUNNEL_ZERO_DIST_M * 1000, bcc.FUNNEL_START_DIST_M * 1000]},
-            "funnel": funnel, "policy": policy, "sim": sim, "timing": M4_TIMING, "jitter": M4_JITTER}
+            "funnel": funnel, "policy": policy, "sim": sim, "plant": plant, "timing": M4_TIMING, "jitter": M4_JITTER}
 
 
 def export_tests() -> dict:

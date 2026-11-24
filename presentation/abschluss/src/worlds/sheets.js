@@ -213,8 +213,9 @@ function sheetFunnel(api) {
     [0, 'Rauschfaktor je Episode', 'zufällig 0 bis 1 – von fast ideal bis volle Streuung'],
     [1, 'Asymmetrisch', `seitlich und nach oben bis ${fmt(f.limit_mm.xy, 0)} mm (dreifache Streuung), Richtung Tisch höchstens ${fmt(-f.limit_mm.z_down, 0)} mm`],
     [1, 'Rejection Sampling', `jede Bahn per IK und Kollisionsmodell geprüft, sonst neu gezogen (bis ${f.max_rejects}×)`],
+    [1, 'Neu: gezielter Versatz', 'im senkrechten Abstieg ist das Rauschen null – jede 2. Episode kommt 5–10 mm und 10–20° versetzt an, die Aktion zeigt zur Mitte'],
   ];
-  rows.forEach(([step, t, b], i) => api.row(step, i + 1, t, b, 2.45 - i * 1.5, { x: RX, width: 4.5, size: 0.26, delay: 0.3 + (i % 2) * 0.15 }));
+  rows.forEach(([step, t, b], i) => api.row(step, i + 1, t, b, 2.45 - i * 1.22, { x: RX, width: 4.9, size: 0.25, delay: 0.3 + (i % 3) * 0.15 }));
   api.text(1, 'Quelle: Bahn und Rauschen aus m4_behavior_cloning/bc/noise.py (SmoothedOUProcess, funnel_scale, NoiseLimits)', { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 1.0 });
 }
 
@@ -331,7 +332,8 @@ function sheetSim(api) {
   card.object.position.set(0, 1.0, 0.01); // unter dem Stempel
   card.opacity = 0;
   api.add(0, card, { delay: 0.1, dur: 0.6 });
-  api.text(0, 'gestrichelt: aufgezeichnete Sollbahn · grün: 10 Fahrten der trainierten Policy', { font: 'mono', size: 0.14, hex: T.inkSoft, anchorY: 'top' }, [X0 + 0.7, -0.75], { delay: 0.3 });
+  const simObjs = [card];
+  simObjs.push(api.text(0, 'Simulation mit Platzhalterbildern · gestrichelt: Sollbahn · grün: 10 Fahrten der Policy', { font: 'mono', size: 0.14, hex: T.inkSoft, anchorY: 'top' }, [X0 + 0.7, -0.75], { delay: 0.3 }));
   const d = (k) => ({ delay: 0.6 + k * 0.15 });
   const facts = [
     [`${s.success[0]} / ${s.success[1]}`, 'Fahrten erfolgreich (gegriffen und übergeben)'],
@@ -341,17 +343,40 @@ function sheetSim(api) {
   ];
   facts.forEach(([big, small], i) => {
     const x = X0 + 0.7 + i * 3.7;
-    api.text(0, big, { font: 'title', size: 0.42, hex: i === 0 ? T.good : T.ink, anchorY: 'top' }, [x, -1.15], d(i));
-    api.text(0, small, { font: 'sans', size: 0.17, hex: T.inkSoft, anchorY: 'top', maxWidth: 3.4 }, [x, -1.7], d(i));
+    simObjs.push(api.text(0, big, { font: 'title', size: 0.42, hex: i === 0 ? T.good : T.ink, anchorY: 'top' }, [x, -1.15], d(i)));
+    simObjs.push(api.text(0, small, { font: 'sans', size: 0.17, hex: T.inkSoft, anchorY: 'top', maxWidth: 3.4 }, [x, -1.7], d(i)));
   });
-  api.stamp(0, 'SIMULATION', [5.4, 3.5], { size: 0.26, rot: -0.05, hex: MODULE_COLOR.M4 }, { delay: 1.0 }); // neben dem Titel
-  // Schritt 1: ehrlich – was das noch nicht zeigt
-  const rows = [
-    ['Nur aus dem Zustand gelernt', 'in der Simulation gab es nur Platzhalterbilder – das Sehen kommt erst mit echten Aufnahmen'],
-    ['In der VM: Stillstand vor dem Greifen', 'Ankommen und Losfahren sehen im Zustand gleich aus, die Policy blieb an PRE_GRASP stehen'],
+  const simStamp = api.stamp(0, 'SIMULATION', [5.4, 3.5], { size: 0.26, rot: -0.05, hex: MODULE_COLOR.M4 }, { delay: 1.0 }); // neben dem Titel
+  simObjs.push(simStamp);
+  const p = api.ctx.data.m4.plant;
+  if (!p) return;
+  // Schritt 1: an der Anlage mit echten Bildern – Simulation blendet aus
+  api.fade(1, simObjs, { dur: 0.5 });
+  const pf = p.figure;
+  const pcard = new PhotoCard(pf.url, { width: 8.6, aspect: pf.h / pf.w, border: 0.05, bottom: 0.05 });
+  pcard.object.position.set(X0 + 0.7 + 4.3, 0.55, 0.02);
+  pcard.opacity = 0;
+  api.add(1, pcard, { delay: 0.4, dur: 0.6 });
+  api.text(1, 'Anlagentest: waagerechter Abstand zum Greifpunkt über der Höhe, je Fahrt', { font: 'mono', size: 0.13, hex: T.inkSoft, anchorY: 'top' }, [X0 + 0.7, -1.95], { delay: 0.6 });
+  const RX = 2.35;
+  const pfacts = [
+    [`${fmt(p.plant_median_mm)} mm`, `Greifpunkt an der Anlage im Median daneben, ${p.plant_le10[0]} von ${p.plant_le10[1]} Probegriffen ≤ 10 mm, Drehfehler meist < ${p.rot_err_deg}°`, T.good],
+    [`${fmt(p.vm_median_mm)} mm`, `VM-Test mit ${p.vm_runs} Fahrten eines Tags, der nicht im Training war (${p.vm_le10_pct} % ≤ 10 mm)`, T.ink],
+    [`${p.demos}`, `Demonstrationen mit echten Bildern, automatisch aufgenommen`, T.ink],
   ];
-  rows.forEach(([t, b], i) => api.row(1, i + 1, t, b, -2.6, { x: X0 + 0.7 + i * 7.3, width: 6.2, size: 0.25, delay: 0.1 + i * 0.15 }));
-  api.text(1, `Quelle: m4_behavior_cloning/Berichte/2026-09-17_Durchstich_Policy.pdf (Lauf „Sim, echte Uhr, asynchron“)`, { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 0.5 });
+  pfacts.forEach(([big, small, hex], i) => {
+    const y = 2.45 - i * 1.35;
+    api.text(1, big, { font: 'title', size: 0.46, hex, anchorY: 'top' }, [RX, y], { delay: 0.7 + i * 0.15 });
+    api.text(1, small, { font: 'sans', size: 0.18, hex: T.inkSoft, anchorY: 'top', maxWidth: 3.4, lineHeight: 1.3 }, [RX + 2.3, y - 0.02], { delay: 0.8 + i * 0.15 });
+  });
+  api.stamp(1, 'AN DER ANLAGE', [5.4, 3.5], { size: 0.26, rot: -0.05, hex: T.good }, { delay: 1.0 });
+  // Schritt 2: wo der Fehler entsteht und was daraus folgt
+  const rows = [
+    ['Bis PRE_PICK genau, darunter Drift', `bis ${p.follow_mm[1]} mm auf der Bahn, im senkrechten Abstieg ${p.drift_mm[0]}–${p.drift_mm[1]} mm zur Seite: solche Zustände fehlen in den Daten, der Trichter dämpft dort das Rauschen auf null`],
+    ['Folgerung', `gezielter Versatz im Anflug (${p.offset_mm[0]}–${p.offset_mm[1]} mm, ${p.offset_deg[0]}–${p.offset_deg[1]}°), Policy nur für den Griff – den Transport plant der Planer –, später DAgger`],
+  ];
+  rows.forEach(([t, b], i) => api.row(2, i + 1, t, b, -2.4, { x: X0 + 0.7 + i * 7.3, width: 6.4, size: 0.25, delay: 0.1 + i * 0.15 }));
+  api.text(2, 'Quelle: Doku Modul 4, Kap. 10 (Durchstich, VM-Test, Anlagentest C2)', { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 0.5 });
 }
 
 // ---------------------------------------------------------------- 6.7 Takt & Sicherheit
@@ -394,10 +419,12 @@ function sheetTiming(api) {
     ['ServoGuard (hart)', 'lehnt jeden Sollwert ab, der ein Gelenk schneller als 1,0 rad/s bewegen würde'],
     ['TargetLimiter (weich)', 'kappt Vorhersagen auf 0,8 rad/s, bevor der ServoGuard eingreift'],
     ['Zielabstand', 'Ziel mehr als 0,35 rad neben der Ist-Stellung → Fahrt endet'],
-    ['Geofence + Software-Stopp', 'Watchdog prüft den Arbeitsraum (Tisch-Quader), hält in ~100 ms'],
+    ['Zielprüfung mit Nachlauf', 'Ziel und Ziel + 1 Takt gegen Tisch, Hindernisse und Hülle der Demos – bevor gesendet wird'],
+    ['Geofence + Software-Stopp', 'Watchdog prüft alle 50 ms die gemessene Stellung, hält in ~100 ms'],
+    ['Bild zu alt, Arm steht', 'Bild > 100 ms alt oder Arm steht trotz Ziel → Fahrt endet (der Not-Halt wurde sonst nicht bemerkt)'],
   ];
-  rows.forEach(([t, b], i) => api.row(1, i + 1, t, b, -0.85 - Math.floor(i / 2) * 1.3, { x: X0 + 0.7 + (i % 2) * 7.3, width: 6.2, size: 0.25, delay: 0.1 + i * 0.12 }));
-  api.stamp(1, 'IN DER VM AUSGELÖST', [3.8, -3.1], { size: 0.24, rot: -0.04, hex: MODULE_COLOR.M4, sub: 'jede Schicht hat in den VM-Läufen korrekt gestoppt · Contract-Suite 12/12' }, { delay: 0.7 });
+  rows.forEach(([t, b], i) => api.row(1, i + 1, t, b, -0.75 - Math.floor(i / 2) * 1.05, { x: X0 + 0.7 + (i % 2) * 7.3, width: 6.2, size: 0.24, delay: 0.1 + i * 0.1 }));
+  api.stamp(1, 'IN DER VM AUSGELÖST', [5.4, 3.5], { size: 0.24, rot: -0.04, hex: MODULE_COLOR.M4, sub: 'jede Schicht hat in den VM-Läufen korrekt gestoppt' }, { delay: 0.7 });
   api.text(1, 'Quelle: Labortag-2026-10-16-Uebergabe.md, Berichte/2026-09-17_Durchstich_Policy.pdf, bc/servo.py, bc/safety.py', { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 0.9 });
 }
 
@@ -720,7 +747,7 @@ export function sheetScenes(storyboard) {
     sheetScene(e('4.7'), 2, sheet47),
     sheetScene(e('6.3'), 2, sheetFunnel),
     sheetScene(e('6.4'), 3, sheetDiffusion, { durations: [1.6, 4.0, 1.6] }),
-    sheetScene(e('6.5'), 2, sheetSim),
+    sheetScene(e('6.5'), 3, sheetSim),
     sheetScene(e('6.6'), 2, sheetJitter),
     sheetScene(e('6.7'), 2, sheetTiming),
     sheetScene(e('3.6'), 2, sheet36),
