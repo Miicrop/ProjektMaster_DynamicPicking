@@ -1105,10 +1105,10 @@ export function createCell(ctx) {
   const lookG = bb(new THREE.Group());
   const LOOK = [
     ['Ausblick: Pflegerobotik', 'title', 0.24, T.ink, 0],
-    ['Heute spielt ein kleiner Portalroboter mit', 'sans', 0.15, T.ink, 0.5],
-    ['Senioren „Mensch ärgere Dich nicht“ – auf', 'sans', 0.15, T.ink, 0.25],
-    ['einem Spielfeld so groß wie unser Arbeitsraum.', 'sans', 0.15, T.ink, 0.25],
-    ['Mit LARA und unseren Bausteinen:', 'sansMedium', 0.15, T.ink, 0.45],
+    ['„Mensch ärgere Dich nicht“ mit Senioren gibt es', 'sans', 0.15, T.ink, 0.5],
+    ['schon, mit einfacherer Kinematik. Unser Arbeits-', 'sans', 0.15, T.ink, 0.25],
+    ['raum nutzt dieselben ArUco-Marker wie das Spiel.', 'sans', 0.15, T.ink, 0.25],
+    ['Mit wenig Aufwand übertragbar:', 'sansMedium', 0.15, T.ink, 0.45],
     ['M1  Spielfeld entzerren, Figuren finden', 'mono', 0.13, MODULE_COLOR.M1, 0.3],
     ['M2  Figur greifen und setzen: PTP + LIN', 'mono', 0.13, MODULE_COLOR.M2, 0.25],
     ['M3  Würfel lesen statt Seriennummer', 'mono', 0.13, MODULE_COLOR.M3, 0.25],

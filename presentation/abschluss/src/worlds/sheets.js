@@ -486,8 +486,7 @@ function arrow(api, step, [x0, y0], [x1, y1], opts, timing) {
   const len = Math.hypot(x1 - x0, y1 - y0);
   const h = Math.min(0.13, len * 0.45);
   const head = (s) => [x1 - h * Math.cos(a + s * 0.45), y1 - h * Math.sin(a + s * 0.45)];
-  api.line(step, [[x0, y0], [x1, y1]], opts, timing);
-  return [api.line(step, [head(1), [x1, y1], head(-1)], opts, timing)];
+  return [api.line(step, [[x0, y0], [x1, y1]], opts, timing), api.line(step, [head(1), [x1, y1], head(-1)], opts, timing)];
 }
 const dot = (api, step, [x, y], r, opts, timing) =>
   api.line(step, Array.from({ length: 13 }, (_, i) => [x + r * Math.cos((i / 12) * 2 * Math.PI), y + r * Math.sin((i / 12) * 2 * Math.PI)]), opts, timing);
@@ -554,9 +553,9 @@ function sheet72(api) {
     ['Veraltete Bilder', 'beide Kameras gaben nach einer Pause ein altes Bild aus dem Puffer – jetzt wird er vor jeder Aufnahme geleert'],
     ['Sanft ablegen', 'Greifer öffnet 1 mm über der geteachten Pose, sonst fällt das Teil auf die Prüfung'],
   ];
-  rows.forEach(([t, b], i) => api.row(0, i + 1, t, b, 2.65 - i * 1.15, { x: X0 + 0.7, width: 7.0, size: 0.27, delay: 0.1 + i * 0.1 }));
+  rows.forEach(([t, b], i) => api.row(0, i + 1, t, b, 2.7 - i * 1.08, { x: X0 + 0.7, width: 6.3, size: 0.27, delay: 0.1 + i * 0.1 }));
   const ph = L.photos ?? {};
-  const pick = [['anlage', 3.0, 0.25, 4.1, 0.04], ['vorrichtung', 5.6, 1.35, 3.3, -0.05], ['handgelenk', 5.4, -2.0, 2.6, 0.06]];
+  const pick = [['anlage', 2.75, 0.3, 3.4, 0.04], ['vorrichtung', 5.75, 1.45, 3.1, -0.05], ['handgelenk', 5.6, -1.85, 2.4, 0.06]];
   pick.forEach(([name, x, y, w, rot], i) => {
     const f = ph[name];
     if (!f) return;
@@ -566,7 +565,7 @@ function sheet72(api) {
     card.opacity = 0;
     api.add(1, card, { delay: i * 0.2, dur: 0.6 });
   });
-  api.stamp(1, 'ERSTER ZYKLUS MIT KAMERAS', [X0 + 4.2, -4.05], { size: 0.26, rot: -0.03, hex: MODULE_COLOR.M2 }, { delay: 0.9 });
+  api.stamp(1, 'ERSTER ZYKLUS MIT KAMERAS', [X0 + 3.6, -4.0], { size: 0.26, rot: -0.03, hex: MODULE_COLOR.M2 }, { delay: 0.9 });
 }
 
 // ---------------------------------------------------------------- 7.3 Messwerte
@@ -585,7 +584,7 @@ function sheet73m(api) {
     [`${cy.length} / ${cy.length}`, 'gegriffen und an der\nPrüfung abgelegt', T.ink],
     [`${readOk} / ${full.length}`, 'Seriennummer und Kerbe\nrichtig erkannt', T.ink],
     [`${good} / ${full.length}`, 'als Gutteil sortiert\n(Rest: Loch zu klein)', T.signal],
-    [`${fmt(maxBefore, 0)} → ${fmt(worst, 0)} mm`, 'Versatz im Zeigetest\nohne / mit Korrektur', T.good],
+    [`${fmt(worst, 0)} mm`, `Versatz im Zeigetest mit\nKorrektur (ohne: ${fmt(maxBefore, 0)} mm)`, T.good],
     [`${fmt(dur, 0)} s`, 'Zykluszeit (Median),\nbewusst langsam', T.ink],
   ];
   figs.forEach(([big, small, hex], i) => {
@@ -621,7 +620,7 @@ function sheet73m(api) {
     card.opacity = 0;
     api.add(1, card, { delay: 0.4, dur: 0.6 });
   }
-  api.stamp(1, 'SPIEGELUNG IM LOCH', [4.6, -3.95], { size: 0.26, rot: 0.04, hex: T.signal, sub: 'Fensterlicht · Abhilfe: Faktor + Abschirmung' }, { delay: 1.0 });
+  api.stamp(1, 'SPIEGELUNG IM LOCH', [2.2, -3.95], { size: 0.26, rot: 0.04, hex: T.signal, sub: 'Fensterlicht · Abhilfe: Faktor + Abschirmung' }, { delay: 1.0 });
 }
 
 // ---------------------------------------------------------------- 7.4 Was noch fehlt
