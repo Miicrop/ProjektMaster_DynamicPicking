@@ -94,6 +94,21 @@ def restart_command(mode):
     return sys.executable, ["-m", "bc.gui", "--mode", mode]
 
 
+def closable_reasons(tabs):
+    """Was beim Neustart einfach mit geschlossen wird -- je Reiter
+    ``closable_reason()`` (z. B. offene Kameravorschau, Anwender 2026-11-03:
+    musste vorher von Hand beendet werden)."""
+    out = []
+    for tab in tabs:
+        try:
+            reason = tab.closable_reason() if hasattr(tab, "closable_reason") else None
+        except Exception:
+            reason = None
+        if reason:
+            out.append("%s: %s" % (tab.title, reason))
+    return out
+
+
 def busy_reasons(tabs):
     """Was einen Neustart gerade verbietet -- je Reiter ``busy_reason()``."""
     out = []

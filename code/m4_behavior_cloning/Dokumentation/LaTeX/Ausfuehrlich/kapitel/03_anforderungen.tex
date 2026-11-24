@@ -1,0 +1,115 @@
+\chapter{Anforderungen und Randbedingungen}
+\label{ch:anforderungen}
+
+Die Anforderungen an Modul~4 wurden zu Beginn in einem eigenen Anforderungsdokument
+festgehalten und während der Arbeit fortgeschrieben
+\quelle{Requierments/requierments.md}. Dieses Kapitel fasst sie zusammen und ordnet sie den
+Hürden aus \cref{sec:huerden} zu.
+
+% ==============================================================================
+\section{Funktionale Anforderungen}
+\label{sec:anf-funktional}
+
+\begin{description}
+  \item[F1 Aufgabe] Die Policy greift das Bauteil aus beliebiger Lage im Arbeitsbereich und
+    fährt es an den Übergabepunkt über der Prüfvorrichtung. Dort übergibt sie an Modul~2.
+  \item[F2 Beobachtung] Die Policy arbeitet mit den Bildern einer Handgelenkkamera und der
+    Draufsichtkamera sowie dem Roboterzustand. Tiefendaten stehen nicht zur Verfügung.
+  \item[F3 Aufnahme] Demonstrationen werden mit möglichst wenig Handarbeit aufgenommen.
+    Insbesondere soll eine einmal hergestellte Lage mehrfach und neue Lagen ohne erneutes
+    Teachen aufgenommen werden können.
+  \item[F4 Training] Das Training läuft lokal auf einem Rechner der Gruppe.
+  \item[F5 Ausführung] Die Policy läuft in Echtzeit mit festem Takt am realen Roboter, in der
+    \ac{vm} der Steuerung und in einer eigenen Simulation.
+  \item[F6 Einbindung] Modul~4 lässt sich aus dem Ablauf und der Bedienoberfläche des
+    Gesamtsystems starten.
+\end{description}
+
+% ==============================================================================
+\section{Nichtfunktionale Anforderungen}
+\label{sec:anf-nichtfunktional}
+
+\begin{description}
+  \item[N1 Lokal und autark] Weder Daten noch Modelle werden in einen Cloud-Dienst
+    hochgeladen. Alle Werkzeuge laufen auf eigenen Rechnern.
+  \item[N2 Hardwarefrei entwickelbar] Zu Beginn der Arbeit war weder der Roboter noch eine
+    Kamera verfügbar. Alles, was nicht zwingend an der Hardware hängt, muss ohne sie lauffähig
+    und getestet sein (\cref{ch:architektur}).
+  \item[N3 Austauschbar] Roboter und Kameras sollen ersetzt werden können, ohne Aufnahme,
+    Training oder Ausführung zu ändern.
+  \item[N4 Sicher] Jeder Befehl der gelernten Policy wird vor dem Senden geprüft. Der
+    Hardware-Not-Halt bleibt die letzte Instanz (\cref{ch:sicherheit}).
+  \item[N5 Nachvollziehbar] Jede Aufnahme, jedes Modell und jeder Versuch ist mit seinen
+    Einstellungen protokolliert, sodass Ergebnisse einem Datenstand zugeordnet werden können.
+\end{description}
+
+% ==============================================================================
+\section{Randbedingungen der Anlage}
+\label{sec:randbedingungen}
+
+Einige Eigenschaften der Anlage schränken die Lösung ein und haben Designentscheidungen
+direkt bestimmt:
+
+\begin{description}
+  \item[Binärer Greifer] Über NeuraPy lässt sich der Greifer nur öffnen und schließen; eine
+    Rückmeldung der Backenstellung gibt es nicht. Der Greiferzustand geht deshalb als
+    kommandierter Wert $\{0, 1\}$ in Zustand und Aktion ein, und nach jedem Greiferbefehl
+    wird eine feste Wartezeit von \SI{0.5}{\second} eingehalten, bevor sich der Arm weiter
+    bewegt.
+  \item[Schnittstelle zur Steuerung] NeuraPy spricht die Steuerung als Client über
+    TCP/IP an. Jeder Aufruf ist ein Netzwerk-Roundtrip mit eigener Latenz
+    (\cref{ch:ausfuehrung}).
+  \item[Kinematik in der Steuerung] Inverse und Vorwärtskinematik stehen nur als Aufruf an
+    die Steuerung zur Verfügung. Das mitgelieferte \ac{urdf}-Modell ließ sich nicht
+    verbindlich mit der Steuerung abgleichen (\cref{sec:kinematik}).
+  \item[Gemeinsam genutzte Anlage] Roboter und Draufsichtkamera werden auch von den Modulen
+    1 und 2 benutzt. Die Draufsichtkamera ist an einer Stange montiert und kann zwischen
+    Sitzungen verschoben werden; Prüfvorrichtung und Kamerastange liegen nah am
+    Arbeitsbereich.
+\end{description}
+
+% ==============================================================================
+\section{Festlegungen vor der ersten Aufnahme}
+\label{sec:unumkehrbar}
+
+Bei Behavior Cloning sind manche Entscheidungen nachträglich nicht korrigierbar, ohne alle
+Daten neu aufzunehmen, weil die Policy die Bedingungen der Aufnahme mitlernt
+(\cref{sec:weitere-huerden}). Diese Entscheidungen wurden deshalb vor der Aufnahme
+ausdrücklich getroffen und begründet (\cref{tab:unumkehrbar}).
+
+\begin{table}[htbp]
+  \centering
+  \caption[Festlegungen vor der ersten Aufnahme]{Festlegungen, die vor der ersten Aufnahme
+  getroffen werden mussten, mit Begründung und Verweis auf den Abschnitt, der sie ausführt.}
+  \label{tab:unumkehrbar}
+  \small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{30mm} >{\raggedright\arraybackslash}p{34mm} X@{}}
+    \toprule
+    Frage & Festlegung & Begründung \\
+    \midrule
+    Wie entstehen die Demonstrationen? & automatisch mit Bahnplaner und Rauschen &
+      gleichmäßiges Tempo, keine Pausen durch Zögern, Korrekturbeispiele
+      (\cref{sec:noise-umsetzung}) \\
+    Aktionsraum & Gelenkwinkel, absolut, plus Greifer &
+      entspricht 1:1 dem Befehl \code{servo_j}; absolute Sollwerte passen zu den
+      asymmetrischen Datenpaaren (\cref{eq:asymm}) \\
+    Zustandsraum & Gelenkwinkel, \acs{tcp}-Pose und Greifer (14 Werte) &
+      die \acs{tcp}-Pose kostet kaum Speicher und wird für Auswertung und
+      Kollisionsprüfung ohnehin gebraucht \\
+    Takt & \SI{15}{\hertz} &
+      im üblichen Bereich von LeRobot, mit Kameras und Steuerung sicher erreichbar \\
+    Geschwindigkeit & fester Wert des Planers &
+      die Policy lernt das Tempo aus dem Abstand zweier Aktionen mit \\
+    Kameras & Handgelenk- und Draufsichtkamera &
+      die Draufsicht liefert den Überblick, die Handgelenkkamera die Feinlage
+      (\cref{sec:kameras}) \\
+    Bildgröße & $240 \times 320$, RGB & gleich bei Aufnahme und Ausführung \\
+    Rektifizierung & keine (revidiert) & siehe \cref{sec:kameras} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Um zu verhindern, dass ein Datensatz mit abweichenden Einstellungen unbemerkt verwendet wird,
+trägt jeder Datensatz eine Schemaversion. Jede Änderung an Zustand, Aktion oder Bildgröße
+erhöht sie, und Training und Ausführung brechen ab, wenn Modell und aktuelle Einstellungen
+nicht zusammenpassen (\cref{sec:datensatz}).

@@ -28,9 +28,13 @@ def summarize(root):
     bad_frame_ratios = []
 
     for entry in index["episodes"]:
-        meta = json.loads(
-            (root / entry["dir"] / "meta.json").read_text(encoding="utf-8")
-        )
+        meta_path = root / entry["dir"] / "meta.json"
+        if not meta_path.is_file():
+            # Ordner von Hand geloescht -- zaehlt als verworfen
+            discarded += 1
+            reasons["Ordner fehlt"] = reasons.get("Ordner fehlt", 0) + 1
+            continue
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
         steps_total += meta["length"]
         if meta["discarded"]:
             discarded += 1

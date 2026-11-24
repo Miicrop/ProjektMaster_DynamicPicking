@@ -1,0 +1,147 @@
+\chapter{Modell und Training}
+\label{ch:training}
+
+% ==============================================================================
+\section{Ablauf vom Datensatz zum Modell}
+\label{sec:train-ablauf}
+
+\Cref{fig:kette} zeigt die Kette von der Aufnahme bis zur Ausführung. Jeder Schritt ist ein
+eigenes Programm, das auch aus der Bedienoberfläche aufgerufen wird, und jeder Schritt
+schreibt seine Einstellungen in die Ausgabe. Der exportierte Datensatz ist eigenständig: Er
+kann auf einen anderen Rechner kopiert und dort trainiert werden, ohne dass dort die
+Hardware-Bibliotheken installiert sind.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[font=\small, node distance=4mm and 6mm,
+      st/.style={draw, rounded corners=1.5mm, fill=blue!8, align=center, minimum height=12mm,
+                 text width=23mm},
+      da/.style={draw, fill=black!5, align=center, minimum height=9mm, text width=23mm,
+                 font=\scriptsize},
+      arr/.style={-{Stealth[length=2mm]}, thick}]
+    \node[st] (rec) {Aufnahme\\\code{record}};
+    \node[st, right=of rec] (exp) {Export\\\code{export}};
+    \node[st, right=of exp] (tr) {Training\\\code{train}};
+    \node[st, right=of tr] (inf) {Ausführung\\\code{infer}};
+    \draw[arr] (rec) -- (exp); \draw[arr] (exp) -- (tr); \draw[arr] (tr) -- (inf);
+    \node[da, below=of rec] {Episoden\\npz + json};
+    \node[da, below=of exp] {LeRobot-Datensatz\\+ Herkunft};
+    \node[da, below=of tr] {Policy\\+ \code{bc_policy.json}};
+    \node[da, below=of inf] {Fahrtprotokolle\\+ Auswertung};
+    \node[draw, densely dashed, rounded corners=1.5mm, fit=(rec)(inf), inner sep=3mm,
+          label={[font=\scriptsize]above:Prüfung der Einstellungen bei jedem Übergang}] {};
+  \end{tikzpicture}
+  \caption[Kette von der Aufnahme bis zur Ausführung]{Kette von der Aufnahme bis zur
+  Ausführung. Bei jedem Übergang wird geprüft, ob Schema, Takt, Kameras, Tempo und Override
+  zusammenpassen.}
+  \label{fig:kette}
+\end{figure}
+
+\paragraph{Prüfung beim Export.} Der Export bricht ab, wenn Schemaversion, Takt oder Kameras
+zwischen den Quellen abweichen oder wenn Override, Sollwertrate oder eine Geschwindigkeit des
+Planers nicht in allen Episoden gleich sind. Das Tempo wird mitgelernt, und ein Datensatz aus
+gemischten Geschwindigkeiten würde eine Policy mit unbestimmtem Tempo ergeben. Verworfene und
+als misslungen markierte Episoden gehen nie ein.
+
+% ==============================================================================
+\section{Netzarchitektur}
+\label{sec:netz}
+
+Verwendet wird die faltungsbasierte Diffusion Policy aus LeRobot (\cref{sec:dp},
+\cref{fig:dp-netz}). \Cref{tab:hyper} nennt die Einstellungen, die folgenden Abschnitte
+begründen die wichtigsten.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Einstellungen der Diffusion Policy}
+  \label{tab:hyper}
+  \small
+  \begin{tabularx}{\textwidth}{@{}l X@{}}
+    \toprule
+    Parameter & Wert \\
+    \midrule
+    Bildkodierer & ResNet18 je Kamera, ImageNet-Gewichte, Spatial Softmax \\
+    U-Net-Kanäle & 256, 512, 1024 (\num{89.5} Millionen Parameter gesamt) \\
+    Beobachtungen $T_o$ & 2 Takte \\
+    Vorhersagehorizont $T_p$ & 16 Aktionen, davon $T_a = 8$ nutzbar \\
+    Neuvorhersage & alle 2 Takte, überlappende Folgen ungewichtet gemittelt \\
+    Entrauschen & 100 Schritte im Training, 10 \acs{ddim}-Schritte bei der Ausführung \\
+    Vorhersageziel & Aktionsfolge direkt (\cref{eq:loss-x0}) \\
+    Bildaugmentierung & zufälliger Ausschnitt \SI{90}{\percent} im Training, Mitte bei der
+      Ausführung \\
+    Optimierer & AdamW~\cite{loshchilov2019}, Lernrate $10^{-4}$, Cosinus-Verlauf \\
+    Gewichte & gleitender Mittelwert (\acs{ema}, \num{0.999}), gespeichert werden die
+      gemittelten Gewichte \\
+    Genauigkeit & bf16 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\paragraph{Größe des U-Nets.} Die Kanalzahlen sind kleiner als die Vorgabe von LeRobot. So
+passt das Training in die \SI{16}{\giga\byte} der Grafikkarte, und die Vorhersage bleibt auf
+einem Laptop ausführbar. Auf der RTX~5070~Ti dauert ein Schritt mit Batchgröße 64 etwa
+\SI{0.21}{\second} bei \SI{5.6}{\giga\byte} Speicher; das Laden der Daten ist mit
+\SI{0.02}{\second} je Schritt nicht der Engpass.
+
+\paragraph{Horizont.} Zwei Beobachtungen geben der Policy eine Information über die Richtung
+der Bewegung, die ein einzelner Zustand nicht enthält. 16 vorhergesagte Aktionen entsprechen
+gut einer Sekunde und glätten die Bewegung, 8 davon werden höchstens ausgeführt, bevor eine
+neuere Vorhersage vorliegt.
+
+\paragraph{Vorhersageziel.} Zunächst wurde die Vorgabe von LeRobot verwendet: Das Netz sagt
+das enthaltene Rauschen voraus (\cref{eq:loss-eps}).
+\begin{description}
+  \item[Problem] Mit nur zehn Entrauschungsschritten waren die erzeugten Aktionsfolgen
+    gezackt. Der größte Sprung innerhalb einer Folge lag bei \SIrange{0.10}{0.12}{rad},
+    in den Trainingsdaten bei \SI{0.015}{rad}. Die Sicherheitsprüfung stoppte die Fahrt schon
+    in den ersten Takten. Mit 100 Schritten war die Folge glatt, die Vorhersage dauerte dann
+    aber etwa \SI{600}{\milli\second}.
+  \item[Lösung] Das Netz sagt die Aktionsfolge direkt vorher (\cref{eq:loss-x0}). Damit
+    entsprechen die Sprünge denen der Trainingsdaten. Die Validierung protokolliert seitdem
+    den Sprung innerhalb der Folge neben dem Wert der Daten.
+\end{description}
+
+\paragraph{Augmentierung.} Der zufällige Bildausschnitt deckt kleine Verschiebungen der
+Draufsichtkamera ab. Die Handgelenkkamera sitzt fest am Greifer; für sie verhindert der
+Ausschnitt vor allem, dass das Netz einzelne Pixelpositionen auswendig lernt.
+
+% ==============================================================================
+\section{Training und Validierung}
+\label{sec:validierung}
+
+Ein Teil der Episoden wird für die Validierung zurückgehalten, und zwar ganze Episoden, nicht
+einzelne Takte, weil benachbarte Takte fast gleich sind und die Validierung sonst zu
+optimistisch wäre. In festen Abständen protokolliert das Training neben dem Diffusionsverlust
+drei anschaulichere Größen: den mittleren Gelenkfehler der erzeugten Aktionsfolgen in rad,
+den Anteil richtig vorhergesagter Greiferzustände und den größten Sprung innerhalb einer
+Folge.
+
+Mit dem Modell wird eine Beschreibungsdatei gespeichert (\code{bc_policy.json}). Sie enthält
+Schema, Takt, Kameras, LeRobot-Version, Override, Sollwertrate und Tempo der Aufnahme, Start-
+und Endstellung, eine Referenzbahn, den Tisch und die Hülle der Demonstrationen. Die
+Ausführung liest daraus ihre Prüfungen ab (\cref{ch:ausfuehrung,ch:sicherheit}).
+
+\paragraph{Problem: eine Uhr im Bild.} Die erste simulierte Kamera schrieb zur Kontrolle einen
+Bildzähler ins Bild. Die Policy las ihn als Zeit: Die erste Fahrt gelang, danach fuhr sie direkt
+ans Bahnende. Platzhalterbilder sind seitdem statisch. Der Fall zeigt allgemein, dass die
+Policy jede Information nutzt, die mit dem Fortschritt der Aufgabe zusammenhängt, auch
+unbeabsichtigte.
+
+% ==============================================================================
+\section{Prüfung eines Modells ohne Anlage}
+\label{sec:replay}
+
+Ob ein Modell brauchbar ist, lässt sich in zwei Stufen prüfen, bevor es an die Anlage geht.
+
+\begin{description}
+  \item[Stufe 1, offline] Bilder und Zustand einer aufgezeichneten Episode gehen Takt für Takt
+    in die Policy, die Vorhersage wird mit der aufgezeichneten Aktion verglichen. Ist der
+    Fehler schon hier groß, liegt das Problem bei Daten oder Training.
+  \item[Stufe 2, \acs{vm}] Die Policy fährt die \ac{vm}. Die Bilder kommen aus der Aufnahme, je
+    Takt wird ein Bild weitergeschaltet, der Zustand kommt vom Roboter. Verglichen wird mit der
+    idealen Bahn der Aufnahme.
+\end{description}
+Die Grenze von Stufe~2 ist, dass die Bilder nicht auf den Arm reagieren. Weicht er ab, sieht die
+Policy trotzdem die Bilder der Aufnahme. Die Stufe eignet sich deshalb zum Vergleich von
+Modellen, nicht für absolute Aussagen über die Anlage. Auf diesem Weg wurden mehrere
+Varianten von Daten und Training verglichen (\cref{ch:versuche}).

@@ -1,0 +1,83 @@
+\chapter{Einstellungen}
+\label{ch:einstellungen}
+
+\section{Wo was eingestellt wird}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{tabularx}{\textwidth}{@{}l X@{}}
+    \toprule
+    Ort & Inhalt \\
+    \midrule
+    \pfad{bc/config.py} & alle Konstanten mit Begründung im Kommentar: Takt, Tempo, Rauschen,
+      Versatz, Lagen, Grenzwerte, Modell. Gilt für neue Aufnahmen und Trainings. \\
+    \pfad{einstellungen/hindernisse.json} & feste Hindernisse der Zelle (Kamerastange,
+      Prüfvorrichtung, Roboterbasis) mit Mindestabständen; eingecheckt \\
+    \pfad{einstellungen/oberflaeche.local.json} & zuletzt gewählte Werte der Oberfläche; lokal \\
+    \pfad{einstellungen/metadaten_auswahl.json} & Vorschlagslisten für die Metadaten \\
+    \pfad{sequences/*.json} & Ablauf: Punkte, Bewegungsart, Überschleifen, Tischpunkte,
+      Sperrzonen \\
+    \pfad{checkpoints/*/policy/bc_policy.json} & Einstellungen, mit denen ein Modell aufgenommen
+      wurde; die Ausführung übernimmt sie \\
+    \pfad{code/config/system.yaml} & Einstellungen der Gesamt-GUI, darunter \pfad{m4.checkpoint}
+      und die Kamera oben \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\hinweis{Werte, die mitgelernt werden (Tempo, Override, Sollwertrate, Kameras), nur zwischen
+Datensätzen ändern, nie mitten in einem.}
+
+\section{Einstellungen im Reiter Aufnahme}
+\label{sec:aufnahme-einst}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{40mm} l X@{}}
+    \toprule
+    Feld & Standard & Wirkung \\
+    \midrule
+    Tempo Transit / Endanflug / PTP & 0,15 / 0,02 m/s, 0,5 rad/s & Geschwindigkeit des Planers;
+      wird mitgelernt \\
+    servo\_j-Rate & 60 Hz & Rate des Sollwertstroms \\
+    Rauschen bis & 1,0 & obere Grenze des Rauschfaktors je Episode \\
+    Faktor nicht je Episode ziehen & aus & fester Faktor statt zufällig \\
+    Fahrten je Lage & -- & Wiederholungen derselben Lage mit neuem Rauschen \\
+    Lagen & -- & Anzahl automatisch umgelegter Lagen \\
+    Drehung $\pm$ & \ang{45} & Drehbereich neuer Lagen um die Startstellung \\
+    Abstand zum Rand & 4 cm & Abstand neuer Lagen zum Rand der Tischpunkte \\
+    Objekt nach jeder Episode zurücklegen & -- & Zurücklegen ohne Aufzeichnung \\
+    Am Ende an neuer Lage ablegen \dots & -- & Umlegen und \code{PICK} nachführen \\
+    Erste Lage & -- & Herkunft der ersten Lage \\
+    Varianten-Versatz / -Drehung & -- & nach jedem Griff leicht verschoben ablegen \\
+    Probefahrt vor der ersten Episode & -- & langsame Fahrt ohne Aufzeichnung \\
+    Trockenlauf ohne Greifer & -- & Test ohne Greiferbefehle; Episoden werden verworfen \\
+    Nach jeder Episode bewerten & -- & Rückfrage Erfolg ja/nein \\
+    Kameraschutz an kritischen Randfeldern & -- & keine Lagen, an denen die Kamera
+      anstoßen könnte \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Der gezielte Versatz im Anflug ist auf der Kommandozeile einstellbar: \pfad{--anflug-anteil}
+(Standard 0,5), \pfad{--anflug-versatz 5,10} (mm), \pfad{--anflug-drehung 10,20} (Grad),
+\pfad{--anflug-ausreisser}.
+
+\section{Kameraeinstellungen}
+\label{sec:kamera-einst}
+
+Fenster \knopf{Kamera \dots} im Reiter Aufnahme:
+\begin{itemize}
+  \item Belichtung und Gain je Kamera einstellen, \knopf{Übernehmen} zum Ausprobieren,
+    \knopf{Für Aufnahmen speichern} für alle folgenden Aufnahmen.
+  \item \enquote{Wie aufgezeichnet} lädt die Werte eines vorhandenen Modells, damit die Fahrt
+    mit denselben Bildern läuft.
+  \item Der Rahmen im Bild zeigt den Ausschnitt, den die Policy sieht.
+  \item Automatik vermeiden: Sie ändert die Bildhelligkeit zwischen Sitzungen.
+\end{itemize}
+Weißabgleich ist je Seriennummer fest in \pfad{config.CAMERA_WHITE_BALANCE} hinterlegt.
+
+\hinweis{Steht der Gain der Handgelenkkamera am Anschlag (24 dB), lieber die Belichtung erhöhen,
+ohne dass das Bauteil ausbrennt.}

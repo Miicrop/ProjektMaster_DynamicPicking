@@ -102,6 +102,10 @@ def describe_policy(path):
         "episode_length_max": info.get("episode_length_max"),
         "lerobot_version": info.get("lerobot_version"),
         "created": info.get("created"),
+        # Policy-Test mit bekannter Lage / Kamerapruefung
+        "sequence_file": (info.get("table_spec") or {}).get("sequence_file"),
+        "sources": list(dataset.get("sources") or []),
+        "camera_reference": bool(info.get("camera_reference")),
     }
 
 
@@ -254,8 +258,21 @@ def blocking(problems):
 def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
                override=None, max_steps=None, replan=None, device="auto",
                realtime=False, hold=False, no_ensemble=False, out=None,
-               real_robot=False, seed=None):
+               real_robot=False, seed=None, known_pose=False, probe="tisch",
+               sequence=None, camera_check="an", pick_source="steuerung",
+               photo_point=None, dagger_dir=None, probe_gap_mm=None, expert=True,
+               inference_steps=None, glaettung=None):
     """Kommandozeile fuer apps/infer.py (ohne das Python-Programm).
+
+    ``known_pose``: Policy-Test mit bekannter Lage (``--lage-bekannt``,
+    ``probe`` "tisch"/"objekt", ``sequence`` = Ablaufdatei oder None fuer die
+    der Aufnahme). ``camera_check``: ``--kamerapruefung`` (an/warnen/aus/nur).
+    ``pick_source`` "steuerung"/"m1" (``--pick-quelle``, mit ``photo_point``
+    = ``--foto-punkt``), ``dagger_dir``: ``--dagger`` (nur Probegriff objekt).
+
+    ``inference_steps``: DDIM-Schritte (``--inference-steps``, None = aus dem
+    Modell). ``glaettung``: Tiefpass alpha auf die Ziele (``--glaettung``,
+    1 = aus; None = Default von apps/infer.py, 0,5; bc/servo.CommandLowpass).
 
     ``hold`` faehrt ohne Modell (HoldPolicy) -- der Verdrahtungstest, mit dem
     man Takt, Servo-Kette und Kameras prueft, bevor eine Policy dranhaengt.
@@ -279,16 +296,55 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
         argv += ["--replan", str(int(replan))]
     if no_ensemble:
         argv.append("--no-ensemble")
+    if inference_steps and not hold:
+        argv += ["--inference-steps", str(int(inference_steps))]
+    if glaettung is not None:
+        # immer mitgeben: Default von apps/infer.py ist 0,5, "1" = aus muss also explizit hin
+        argv += ["--glaettung", "%g" % float(glaettung)]
     if device and device != "auto":
         argv += ["--device", str(device)]
     if realtime:
         argv.append("--realtime")
     if seed is not None:
         argv += ["--seed", str(int(seed))]
+    if known_pose:
+        argv += ["--lage-bekannt", "--probegriff", str(probe)]
+        if probe == "objekt" and probe_gap_mm is not None:
+            argv += ["--probe-abstand", "%g" % float(probe_gap_mm)]
+        if probe == "objekt" and not expert:
+            argv.append("--ohne-experte")
+        if sequence:
+            argv += ["--ablauf", str(sequence)]
+        if pick_source and pick_source != "steuerung":
+            argv += ["--pick-quelle", str(pick_source)]
+            if photo_point:
+                argv += ["--foto-punkt", str(photo_point)]
+        if dagger_dir and probe == "objekt" and expert:
+            argv += ["--dagger", str(dagger_dir)]
+    if camera_check and camera_check != "an":
+        argv += ["--kamerapruefung", str(camera_check)]
     if out:
         argv += ["--out", str(out)]
     if real_robot:
         argv.append("--real-robot")
+    return argv
+
+
+def offline_ddim_argv(checkpoint, data, schritte="10,20,50", glaettung="1,0.5,0.3",
+                      episodes="0-4", device="auto", out=None):
+    """Kommandozeile fuer apps/ddim_offline.py (Offline-Test DDIM/Glaettung)."""
+    if not checkpoint:
+        raise ValueError("Kein Modell ausgewaehlt.")
+    if not data:
+        raise ValueError("Keine Aufnahme fuer den Offline-Test gewaehlt.")
+    argv = ["apps/ddim_offline.py", "--checkpoint", str(checkpoint), "--data", str(data),
+            "--schritte", str(schritte).replace(" ", ""),
+            "--glaettung", str(glaettung).replace(" ", ""),
+            "--episodes", str(episodes).replace(" ", "") or "0-4"]
+    if device and device != "auto":
+        argv += ["--device", str(device)]
+    if out:
+        argv += ["--out", str(out)]
     return argv
 
 
@@ -327,6 +383,36 @@ _TICK = re.compile(r"^\s*Takt\s+(?P<step>\d+)\s+Spread\s+(?P<spread>[\d.]+)\s*ra
 _LIMITS = re.compile(r"^Fahrt: bis\s+(?P<max_steps>\d+)\s+Takte")
 
 
+#: "   Lage: Griff xy 4.2 mm, dz 1.0 mm, Drehung 2.0 Grad, Bahn p95 8.1 mm,
+#:  Tisch min 7.9 mm, Vorhersage xy - mm" (bc/known_pose.result_line)
+_KNOWN = re.compile(
+    r"^\s*Lage:\s+(?P<where>Griff|Stopp)\s+xy\s+(?P<xy>[-\d.]+)\s*mm"
+    r",\s*dz\s+(?P<dz>[-\d.]+)\s*mm"
+    r",\s*Drehung\s+(?P<yaw>[-\d.]+)\s*Grad"
+    r",\s*Bahn p95\s+(?P<path>[-\d.]+)\s*mm"
+    r",\s*Tisch min\s+(?P<table>[-\d.]+)\s*mm"
+    r",\s*Vorhersage xy\s+(?P<pred>[-\d.]+)\s*mm")
+#: "   Experte: Korrektur dx 1.0 mm, dy -2.0 mm, xy 2.2 mm, Drehung 3.0 Grad, Abstieg 10.0 mm"
+_EXPERT = re.compile(r"^\s*Experte:\s+Korrektur\s+dx\s+(?P<dx>[-\d.]+)\s*mm,\s*dy\s+(?P<dy>[-\d.]+)"
+                     r"\s*mm,\s*xy\s+(?P<xy>[-\d.]+)\s*mm,\s*Drehung\s+(?P<yaw>[-\d.]+)")
+#: "KAMERAPRUEFUNG scene: WARNUNG -- Helligkeit ..." / "KAMERAPRUEFUNG gesamt: OK (...)"
+_CAMERA_CHECK = re.compile(r"^KAMERAPRUEFUNG\s+(?P<name>[^:]+):\s*(?P<text>.*)$")
+
+
+def parse_known_line(line):
+    """Zeile "   Lage: ..." -> dict (mm, Grad; None fuer "-"), sonst None."""
+    match = _KNOWN.match((line or "").rstrip())
+    if not match:
+        return None
+    return {"where": match.group("where"),
+            "xy_mm": _maybe_float(match.group("xy")),
+            "dz_mm": _maybe_float(match.group("dz")),
+            "yaw_deg": _maybe_float(match.group("yaw")),
+            "path_p95_mm": _maybe_float(match.group("path")),
+            "table_min_mm": _maybe_float(match.group("table")),
+            "predicted_mm": _maybe_float(match.group("pred"))}
+
+
 class Rollout(object):
     """Eine gefahrene Episode, aus der Zusammenfassungszeile gelesen."""
 
@@ -342,6 +428,8 @@ class Rollout(object):
         self.predict_ms = predict_ms
         self.overruns = overruns
         self.clamped = clamped
+        self.known = None        # parse_known_line, beim Policy-Test mit bekannter Lage
+        self.expert = None       # Korrektur des Experten nach dem Probegriff
 
     def row(self):
         """Spalten fuer die Tabelle im Reiter."""
@@ -353,7 +441,21 @@ class Rollout(object):
             "-" if self.predict_ms is None else "%.1f ms" % self.predict_ms,
             str(self.overruns),
             self.stop_reason,
-        ]
+        ] + self.known_columns()
+
+    def known_columns(self):
+        """Spalten des Policy-Tests (leer ohne bekannte Lage)."""
+        k = self.known or {}
+
+        def mm(key):
+            return "-" if k.get(key) is None else "%.1f mm" % k[key]
+        if not k:
+            return []
+        e = self.expert
+        expert = "-" if not e else "%.1f mm / %.1f°" % (e["xy_mm"], e["yaw_deg"])
+        return [mm("xy_mm"), mm("dz_mm"),
+                "-" if k.get("yaw_deg") is None else "%.1f°" % k["yaw_deg"],
+                mm("table_min_mm"), mm("predicted_mm"), expert]
 
 
 class RolloutProgress(object):
@@ -380,6 +482,8 @@ class RolloutProgress(object):
         self.max_steps = None
         self.spread_rad = None
         self.predict_ms = None
+        #: Kamerapruefung: Kamera -> Text, "gesamt" -> "OK ..."/"WARNUNG ..."
+        self.camera_check = {}
 
     def feed(self, line):
         """Eine Ausgabezeile einlesen. Liefert True, wenn sich etwas geaendert hat."""
@@ -403,6 +507,25 @@ class RolloutProgress(object):
             self.current_episode = int(match.group("episode"))
             self.step = None
             self.last_event = "Fahrt beendet"
+            return True
+
+        match = _EXPERT.match(line)
+        if match:
+            if self.rollouts:
+                self.rollouts[-1].expert = {"xy_mm": float(match.group("xy")),
+                                            "yaw_deg": float(match.group("yaw"))}
+            return True
+
+        known = parse_known_line(line)
+        if known is not None:
+            if self.rollouts:
+                self.rollouts[-1].known = known
+            return True
+
+        match = _CAMERA_CHECK.match(line)
+        if match:
+            self.camera_check[match.group("name").strip()] = match.group("text").strip()
+            self.last_event = "Kamerapruefung"
             return True
 
         match = _LOADED.match(line)
@@ -522,6 +645,19 @@ class RolloutProgress(object):
         bits.append("Ende: " + ", ".join("%s (%dx)" % (k, v)
                                          for k, v in sorted(reasons.items())))
         return "  ·  ".join(bits)
+
+
+def camera_check_summary(progress):
+    """(Text, Stufe) fuer die Anzeige im Reiter: "ok", "warnung" oder None."""
+    total = progress.camera_check.get("gesamt")
+    if not total:
+        skipped = next((t for t in progress.camera_check.values()), None)
+        return (skipped, None) if skipped else ("", None)
+    level = "ok" if total.startswith("OK") else "warnung"
+    lines = ["Kameraprüfung: %s" % total.split(" (")[0]]
+    lines += ["  %s: %s" % (name, text) for name, text in sorted(progress.camera_check.items())
+              if name != "gesamt"]
+    return "\n".join(lines), level
 
 
 def read_summary(path):

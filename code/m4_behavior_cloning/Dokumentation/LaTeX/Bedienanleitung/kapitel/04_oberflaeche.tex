@@ -1,0 +1,100 @@
+\chapter{Die Oberfläche}
+\label{ch:oberflaeche}
+
+\section{Starten}
+
+\begin{itemize}
+  \item \textbf{In der Gesamt-GUI der Gruppe:} \pfad{start_gui.bat} im Repository-Ordner, Reiter
+    \enquote{M4 Behavior Cloning}. Direkt in diesen Reiter: \pfad{start_gui.bat --tab m4}.
+  \item \textbf{Eigenes Fenster:} \pfad{code\m4_behavior_cloning\BC-Oberflaeche.bat}.
+\end{itemize}
+Beides ist dieselbe Oberfläche mit denselben Reitern. In der Gesamt-GUI teilen sich Modul~2 und
+Modul~4 den Roboter, Modul~1 und Modul~4 die Draufsichtkamera automatisch: Wer verbindet,
+bekommt das Gerät, die andere Seite wird getrennt. Läuft auf der anderen Seite gerade etwas, kommt
+stattdessen eine Meldung.
+
+\section{Backend-Leiste}
+\label{sec:backend}
+
+Ganz oben, für alle Reiter gleich:
+\begin{description}
+  \item[Backend] \enquote{Simulation} (eigener SimRobot im Prozess) oder \enquote{Neura}
+    (\acs{vm} oder Anlage).
+  \item[Override] Geschwindigkeitsfaktor der Steuerung. Für Aufnahme und Fahrt \num{0.5}; das
+    Modell erzwingt den Wert seiner Aufnahme.
+  \item[Reale Anlage freigeben] Ohne diesen Haken verweigert der Adapter jede Bewegung, sobald
+    die Steuerung nicht als Simulation antwortet.
+  \item[\knopf{Verbinden} / \knopf{Trennen}] Verbindung zur Steuerung.
+\end{description}
+
+Die farbige Anzeige zeigt nicht die Auswahl, sondern die Antwort der Steuerung:
+\begin{center}
+  \small
+  \begin{tabular}{@{}l l@{}}
+    \toprule
+    Farbe & Bedeutung \\
+    \midrule
+    grau & nicht verbunden \\
+    blau & SimRobot im Prozess, keine Steuerung \\
+    grün & Steuerung meldet Simulation (\acs{vm}) \\
+    orange & Simulation nicht bestätigt, Bewegung gesperrt \\
+    \textbf{rot} & \textbf{reale Anlage, Bewegung freigegeben} \\
+    \bottomrule
+  \end{tabular}
+\end{center}
+
+\section{Reiter Systemcheck}
+
+Liste aller Prüfungen in drei Gruppen: \emph{hardwarefrei}, \emph{verbunden ohne Bewegung} und
+\emph{mit Bewegung}. Einen Punkt auswählen zeigt, was er tut; \knopf{Diesen Punkt ausführen}
+oder anhaken und \knopf{Angehakte ausführen}. Jeder Punkt endet mit
+\texttt{[OK]}, \texttt{[WARNUNG]} oder \texttt{[FEHLER]}. \knopf{Protokoll speichern} legt das
+Ergebnis unter \pfad{Berichte/} ab. \knopf{Auf Änderungen prüfen} und
+\knopf{Oberfläche neu starten} laden geänderten Code. \Cref{tab:checks} in
+\cref{ch:werkzeuge} beschreibt die Prüfungen.
+
+\section{Reiter Aufnahme}
+
+Von oben nach unten:
+\begin{description}
+  \item[1. Kameras] Plätze \texttt{wrist} und \texttt{scene} besetzen (Daheng per
+    Seriennummer, Webcam oder Simulation). \knopf{Vorschau starten} zeigt beide Bilder;
+    \knopf{Kamera \dots} öffnet die Kameraeinstellungen (\cref{sec:kamera-einst}).
+  \item[2. Ablauf] Ablaufdatei wählen. Bearbeitet wird immer eine Arbeitskopie
+    (\knopf{Aus Original zurücksetzen}). Die Punkte-Tabelle zeigt jeden Punkt mit seiner Lage;
+    daneben \knopf{Touch-up} (aktuelle Armstellung übernehmen), \knopf{Touch-up rückgängig},
+    \knopf{Teach-Serie (POINT am Arm)} und \knopf{$\blacktriangle$ Z hoch (halten, F7)}.
+  \item[3. Aufnahme] Episoden, Rauschen, Tempo, Lagen und Varianten
+    (\cref{sec:aufnahme-einst}), dann \knopf{Aufnahme starten}. Roter \knopf{STOPP} jederzeit.
+  \item[4. Metadaten] Block, Objekt, Licht, Kameralage. Sie landen in jeder Episode.
+\end{description}
+Rechts eine Abdeckungskarte der bisher aufgenommenen Lagen (optional über alle Tage).
+
+\section{Reiter Training}
+
+\begin{description}
+  \item[1. Datensatz] Aufnahmen auswählen (\knopf{Hinzufügen\dots}), Ziel angeben,
+    \knopf{Nur prüfen} oder \knopf{Exportieren}. \enquote{nur Episoden mit Erfolgs-Label} lässt
+    unbewertete weg.
+  \item[2. Hardware] Gerät, Mischgenauigkeit, Datenlader.
+  \item[3. Einstellungen] Schritte, Batchgröße, Zeitbudget; \knopf{Vorgaben wiederherstellen}.
+  \item[4. Lauf] \knopf{Training starten}, \enquote{fortsetzen} für einen abgebrochenen Lauf,
+    Fortschritt und Validierung.
+\end{description}
+
+\section{Reiter Betrieb}
+
+\begin{description}
+  \item[1. Modell] Checkpoint wählen. Die Oberfläche prüft, ob Kameras, Takt und Override zur
+    Aufnahme passen.
+  \item[2. Kameras] wie bei der Aufnahme; \knopf{Kameras prüfen} macht ein Probebild in der
+    Fotostellung.
+  \item[3. Fahrt] Anzahl Fahrten, Takte je Fahrt, \knopf{Inferenz starten}, \knopf{STOPP}.
+    \enquote{Live-Ansicht} öffnet beim Start ein Fenster mit Bildern, \acs{tcp}-Spur und
+    Vorhersagen.
+  \item[4. Policy-Test] \enquote{Lage bekannt (Policy-Test gegen PICK)} mit
+    \enquote{Abstand über Objekt} (Standard \SI{25}{\milli\metre}): Die Policy fährt an und wird
+    über dem Bauteil angehalten (\cref{sec:policy-test}). \enquote{Experte greift und legt um}
+    lässt danach den Planer greifen und an eine neue Lage legen; \enquote{DAgger-Ordner}
+    speichert diese Fahrten.
+\end{description}

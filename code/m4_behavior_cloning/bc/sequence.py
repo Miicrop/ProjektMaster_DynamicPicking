@@ -374,31 +374,48 @@ def resolve_sequence(sequence, point_source):
         if name in points:
             points[name]["computed"] = {"above": ref, "dz": dz}
 
-    # Tischpunkte: optional -- was fehlt, wird genannt, nicht verlangt
-    table_points, table_missing = {}, []
-    for name in sequence.table_points:
+    table, table_points, keepouts, keepout_points, table_missing = resolve_table(
+        sequence.table_points, sequence.keepout_points, sequence.keepout_sizes,
+        sequence.keepout_size, point_source, available)
+    return ResolvedSequence(waypoints=waypoints, points=points, skipped=skipped,
+                            table=table, table_points=table_points,
+                            table_missing=table_missing, keepouts=keepouts,
+                            keepout_points=keepout_points)
+
+
+def resolve_table(table_names, keepout_names, keepout_sizes, keepout_size, point_source,
+                  available=None):
+    """Tischflaeche und Sperrzonen aus den geteachten Punkten der Steuerung.
+
+    Gemeinsam fuer die Aufnahme (:func:`resolve_sequence`) und die Inferenz
+    (Tisch live, Anwender 2026-11-11: verschiebt er sich, wird nachgeteacht).
+    Optional -- was fehlt, wird genannt, nicht verlangt.
+
+    Rueckgabe ``(table, table_points, keepouts, keepout_points, missing)``;
+    ``table`` None mit zu wenigen Punkten (bc/table.fit_table).
+    """
+    if available is None:
+        available = set(point_source.point_names())
+    table_points, missing = {}, []
+    for name in table_names:
         if name not in available:
-            table_missing.append(name)
+            missing.append(name)
             continue
         joints, pose = point_source.get_point(name)
         table_points[name] = {"joints": [float(v) for v in joints],
                               "pose_quat": [float(v) for v in pose]}
     table = fit_table([p["pose_quat"] for p in table_points.values()])
     keepout_points, keepouts = {}, []
-    for name in sequence.keepout_points:
+    for name in keepout_names:
         if name not in available:
-            table_missing.append(name)
+            missing.append(name)
             continue
         joints, pose = point_source.get_point(name)
         keepout_points[name] = {"joints": [float(v) for v in joints],
                                 "pose_quat": [float(v) for v in pose]}
         keepouts.append(Keepout(name, (float(pose[0]), float(pose[1])),
-                                half_size=sequence.keepout_sizes.get(
-                                    name, sequence.keepout_size)))
-    return ResolvedSequence(waypoints=waypoints, points=points, skipped=skipped,
-                            table=table, table_points=table_points,
-                            table_missing=table_missing, keepouts=keepouts,
-                            keepout_points=keepout_points)
+                                half_size=keepout_sizes.get(name, keepout_size)))
+    return table, table_points, keepouts, keepout_points, missing
 
 
 def _computed_point(name, definition, lookup, robot):

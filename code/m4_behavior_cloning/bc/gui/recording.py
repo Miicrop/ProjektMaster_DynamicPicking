@@ -144,7 +144,10 @@ def record_argv(out, robot_kind="sim", episodes=1, sequence=None,
                 real_robot=False, servo_rate=None, transit_speed=None,
                 approach_speed=None, ptp_speed=None, no_gripper=False,
                 execution=None, put_back=True, probe=True, teach_after=False,
-                lagen=1, drehung=None, stop_file=None, regrip=None, margin=None):
+                lagen=1, drehung=None, stop_file=None, regrip=None, margin=None,
+                variants=True, variant_shift=None, variant_yaw=None,
+                coverage_roots=None, put_back_speed=None, final_new=False,
+                start_lage="geteacht", camera_guard=True):
     """Kommandozeile fuer apps/record.py (ohne das Python-Programm)."""
     if not out:
         raise ValueError("Kein Zielordner angegeben.")
@@ -187,6 +190,31 @@ def record_argv(out, robot_kind="sim", episodes=1, sequence=None,
         argv.append("--nach-ende-teach")
     if sequence and put_back and regrip and regrip != config.PUT_BACK_REGRIP_DEFAULT:
         argv += ["--nachgreifen", str(regrip)]
+    if (sequence and put_back and put_back_speed is not None
+            and abs(float(put_back_speed) - config.PUT_BACK_APPROACH_SPEED_MS) > 1e-9):
+        argv += ["--ablage-tempo", "%g" % float(put_back_speed)]
+    # Schluss-Lage als neuer PICK (Anwender 2026-11-03) -- braucht Tischpunkte;
+    # ohne sie bleibt record.py beim geteachten PICK
+    if sequence and put_back and final_new:
+        argv += ["--schluss-lage", "neu"]
+    if sequence and put_back and start_lage in ("auto", "m1", "pick"):
+        argv += ["--start-lage", str(start_lage)]
+    if not camera_guard:
+        argv.append("--ohne-kameraschutz")
+    # Varianten (Anwender 2026-11-01) -- in record.py Standard, sobald
+    # Tischpunkte da sind; nur Abschalten und Abweichungen anhaengen
+    if sequence and put_back:
+        if not variants:
+            argv.append("--feste-lage")
+        else:
+            for flag, value, default in (
+                    ("--varianten-versatz", variant_shift, config.AUTO_VARIANT_SHIFT_M),
+                    ("--varianten-drehung", variant_yaw, config.AUTO_VARIANT_YAW_DEG)):
+                if value is not None and abs(float(value) - default) > 1e-9:
+                    argv += [flag, "%g" % float(value)]
+        # Abdeckung auch aus frueheren Tagen (Zielordner ist data_vm/<Datum>)
+        for root in coverage_roots or []:
+            argv += ["--abdeckung", str(root)]
     # Automatische Lagen (bc/auto_layout.py) -- nur mit Zuruecklegen
     if sequence and put_back and int(lagen) > 1:
         argv += ["--lagen", str(int(lagen))]
@@ -215,6 +243,16 @@ def record_argv(out, robot_kind="sim", episodes=1, sequence=None,
     if no_gripper:
         argv.append("--no-gripper")
     return argv
+
+
+#: "PICK uebernommen: x 312 mm, ... -- Sicherung: sequences/.../2026-11-03_PICK.json"
+_ADOPTED = re.compile(r"^PICK uebernommen:.*Sicherung:\s*(?P<path>.+?)\s*$")
+
+
+def adopted_pick_backup(line):
+    """Sicherungsdatei, wenn record.py die Schluss-Lage als PICK geschrieben hat."""
+    match = _ADOPTED.match((line or "").strip())
+    return match.group("path") if match else None
 
 
 #: "Naechster freier Block: B05" -- record.py am Ende (automatische Lagen
@@ -393,6 +431,109 @@ def probe_question(line):
     return bool(_PROBE.match((line or "").strip()))
 
 
+#: Selbst gesuchter erster PICK (record.run_placement); Antworten wie PROBE_ANSWERS
+_PLACE = re.compile(r"^LAGEVORSCHLAG\s+x\s+(?P<x>-?\d+)\s+y\s+(?P<y>-?\d+)\s+"
+                    r"Drehung\s+(?P<yaw>-?\d+)")
+_INSERT = re.compile(r"^EINLEGEN\s+bereit")
+#: --start-lage m1 (record.run_first_grasp): Handlage greifen und an Lage 1 legen
+_FIRST_GRASP = re.compile(r"^ERSTER_GRIFF\s+x\s+(?P<x>-?\d+)\s+y\s+(?P<y>-?\d+)\s+->\s+"
+                          r"x\s+(?P<tx>-?\d+)\s+y\s+(?P<ty>-?\d+)")
+#: Grund eines vorzeitigen Endes (record.end_run)
+_RUN_END = re.compile(r"^LAUF_ENDE:\s*(?P<text>.+?)\s*$")
+
+
+def place_question(line):
+    """Lagevorschlag von record.py: (x mm, y mm, Drehung Grad), sonst None."""
+    match = _PLACE.match((line or "").strip())
+    return (int(match["x"]), int(match["y"]), int(match["yaw"])) if match else None
+
+
+_NEXT = re.compile(r"^NAECHSTE_LAGE\s+x\s+(?P<x>-?\d+)\s+y\s+(?P<y>-?\d+)\s+"
+                   r"Kamera\s+(?P<cam>-?\d+)")
+
+
+def next_target(line):
+    """Naechste Lage aus record.py: (x m, y m, Kamera-Blickrichtung Grad), sonst None."""
+    match = _NEXT.match((line or "").strip())
+    if not match:
+        return None
+    return (int(match["x"]) / 1000.0, int(match["y"]) / 1000.0, float(match["cam"]))
+
+
+def first_grasp_question(line):
+    """Erster Griff an der Handlage: (x, y, Ziel-x, Ziel-y) in mm, sonst None."""
+    match = _FIRST_GRASP.match((line or "").strip())
+    return (tuple(int(match[k]) for k in ("x", "y", "tx", "ty")) if match else None)
+
+
+def insert_question(line):
+    """Steht der Arm offen an der Lage und wartet auf das eingelegte Teil?"""
+    return bool(_INSERT.match((line or "").strip()))
+
+
+def run_end_reason(line):
+    """Grund aus der Zeile "LAUF_ENDE: ...", sonst None."""
+    match = _RUN_END.match((line or "").strip())
+    return match["text"] if match else None
+
+
+def coverage_folders(data_root):
+    """Aufnahmeordner im Datenordner fuer die Abdeckung (Anwender 2026-11-19):
+    Liste ``(Name, Episoden)`` der Unterordner mit index.json, sortiert."""
+    root = Path(data_root) if data_root else None
+    if root is None or not root.is_dir():
+        return []
+    out = []
+    for sub in sorted(p for p in root.iterdir() if p.is_dir()):
+        if (sub / "index.json").is_file():
+            out.append((sub.name, sum(1 for e in sub.glob("ep_*") if e.is_dir())))
+    return out
+
+
+def coverage_roots(data_root, selected=None, out=None):
+    """Ordner, die die Abdeckung zusaetzlich zum Zielordner zaehlt.
+
+    ``selected`` None: der ganze Datenordner (alle Tage, wie bisher); sonst die
+    genannten Unterordner. Der Zielordner selbst zaehlt ohnehin und faellt hier
+    weg. Rueckgabe: Pfade."""
+    if data_root is None:
+        return []
+    root = Path(data_root)
+    out_resolved = Path(out).resolve() if out is not None else None
+    if selected is None:
+        return [] if out_resolved == root.resolve() else [root]
+    paths = []
+    for name in selected:
+        path = root / name
+        if path.is_dir() and path.resolve() != out_resolved:
+            paths.append(path)
+    return paths
+
+
+#: Einstellungen der letzten Aufnahme (lokal, nicht im Repository)
+RUN_SETTINGS_FILE = "einstellungen/aufnahme.local.json"
+
+
+def load_run_settings(workdir):
+    """Gemerkte Einstellungen; leer, wenn es keine gibt oder die Datei kaputt ist."""
+    try:
+        data = json.loads((Path(workdir) / RUN_SETTINGS_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_run_settings(workdir, values):
+    """Einstellungen merken. Rueckgabe False, wenn nicht schreibbar."""
+    path = Path(workdir) / RUN_SETTINGS_FILE
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(values, indent=2, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        return False
+    return True
+
+
 #: "  Takt   90 von 129  Versatz   0 ms  ausserhalb Budget 0"
 _TICK = re.compile(r"^\s*Takt\s+(?P<step>\d+)\s+von\s+(?P<total>\d+)\s+"
                    r"Versatz\s+(?P<skew>[\d.]+)\s*ms\s+"
@@ -409,6 +550,46 @@ _SETTINGS = re.compile(r"^Lauf-Einstellungen:.*Seed\s+(?P<seed>\d+)")
 _TOTAL = re.compile(r"^\s*Episoden gesamt\s*:\s*(?P<total>\d+)")
 _USABLE = re.compile(r"^\s*davon verwendbar\s*:\s*(?P<usable>\d+)")
 _DISCARDED = re.compile(r"^\s*davon verworfen\s*:\s*(?P<discarded>\d+)")
+
+
+#: Bausteine eines Ergebnisses -> Erklaerung fuer den Tooltip in der
+#: Episodenliste (Anwender 2026-11-03: was heissen "ok", "Rausch-Rejects"?).
+#: Schluessel klein geschrieben, gesucht wird als Teilstring.
+OUTCOME_HINTS = (
+    ("nachträglich", "Bewertung nach der Fahrt geändert (Rechtsklick), steht in der "
+                     "meta.json der Episode."),
+    ("ok", "ok: Episode vollständig aufgezeichnet und gespeichert — Arm ist der Bahn "
+           "gefolgt, Kamerabilder innerhalb des Latenzbudgets. Ob der Griff gelungen "
+           "ist, sagt erst die Bewertung (unbewertet = zählt beim Export mit)."),
+    ("rausch-rejects", "Rausch-Rejects: so viele verrauschte Bahnen hat der Planer vor "
+                       "dieser verworfen und neu gezogen (Kollision mit Tisch/Sperrzone, "
+                       "Gelenkgrenze oder zu schnell). Kein Fehler — die gefahrene Bahn "
+                       "ist gültig. Viele Rejects (bis %d möglich) heißen: Rauschen nah "
+                       "an der Grenze." % config.NOISE_MAX_REJECTS),
+    ("verworfen", "VERWORFEN: Episode liegt im Ordner, geht aber nicht in den Export. "
+                  "Grund in Klammern."),
+    ("fehlgeschlagen", "FEHLGESCHLAGEN: als Fehlschlag markiert — wird beim Export "
+                       "ausgelassen, bleibt aber zur Auswertung im Ordner."),
+    ("erfolgreich", "erfolgreich: als gelungener Griff bewertet."),
+    ("schutzstopp", "schutzstopp: die Steuerung hat die Fahrt angehalten "
+                    "(Kollision, Grenze oder Not-Halt)."),
+    ("latenzbudget", "latenzbudget: zu viele Kamerabilder waren älter als erlaubt — "
+                     "Bild und Armstellung passen dann nicht zusammen."),
+    ("arm folgt nicht", "arm folgt nicht: der Arm blieb hinter dem Sollwert zurück "
+                        "(Override zu klein oder Steuerkanal weg)."),
+    ("unvollstaendig", "unvollständig: vor dem Ende der Bahn abgebrochen."),
+    ("trockenlauf", "Trockenlauf: Greifer hat nie geschaltet — nie im Datensatz."),
+    ("vom bedienenden", "Vom Bedienenden verworfen (Abfrage nach der Episode)."),
+)
+
+
+def outcome_hint(outcome):
+    """Tooltip zum Ergebnistext einer Episode (alle passenden Bausteine)."""
+    text = (outcome or "").lower()
+    lines = [hint for key, hint in OUTCOME_HINTS
+             if (key == "ok" and (text == "ok" or text.startswith("ok,")))
+             or (key != "ok" and key in text)]
+    return "\n\n".join(lines) or "Ergebnis laut apps/record.py."
 
 
 class Episode(object):

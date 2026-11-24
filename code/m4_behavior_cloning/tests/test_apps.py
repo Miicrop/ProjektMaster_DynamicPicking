@@ -250,3 +250,85 @@ def test_teach_loop_gripper_toggle():
     waypoints = teach_loop(robot, teleop, clock=robot._clock)
     assert waypoints[0]["gripper_closed"] is True
     assert waypoints[1]["gripper_closed"] is False
+
+
+def test_infer_stops_when_a_camera_freezes():
+    """ThreadedCapture liefert bei einem Kamerafehler weiter das letzte Bild.
+    Die Inferenz darf darauf nicht weiterfahren (Analyse 2026-11-11, Befund 2):
+    nach INFER_FRAME_AGE_STEPS Takten mit zu altem Bild Not-Halt."""
+    from infer import run_episode
+
+    from bc.policy import ChunkEnsembler, HoldPolicy
+
+    robot, captures, clock, workspace = _infer_setup()
+
+    class Eingefroren(object):
+        def __init__(self, cap):
+            self.cap, self.name, self.frame = cap, cap.name, None
+
+        def latest(self):
+            if self.frame is None or clock.now() < 1000.5 + 10:
+                self.frame = self.cap.latest()   # bis hierhin frisch ...
+            return self.frame                      # ... danach immer dasselbe
+
+    captures = [captures[0], Eingefroren(captures[1])]
+    start = clock.now()
+    log = run_episode(robot, captures, ChunkEnsembler(HoldPolicy(), replan_steps=2), clock,
+                      max_steps=300, workspace=workspace, threaded_watchdog=False, progress=None)
+    assert log["stop_reason"].startswith("kamera scene"), log["stop_reason"]
+    assert robot.stop_requested
+    # angehalten wenige Takte nach dem Einfrieren, nicht erst nach max_steps
+    assert clock.now() - start < 10.5 + 0.5, clock.now() - start
+
+
+def test_infer_workspace_from_recording_table_keepout_and_envelope():
+    """Tisch/Sperrzonen der Aufnahme und Huelle der Demonstrationen landen im
+    Kollisionsmodell der Inferenz (Analyse 2026-11-11). Ohne Punkte in der
+    Steuerung (SimRobot) gilt der Rueckfall aus bc_policy.json."""
+    from infer import add_recorded_workspace
+
+    from bc.collision import default_workspace
+    from bc.table import Keepout, fit_table
+
+    robot = _fixtures.make_robot("sim")
+    tcp = np.asarray(robot.read_state().tcp_quat[:3], dtype=float)
+    plane = fit_table([[tcp[0] + dx, tcp[1] + dy, tcp[2] - 0.10, 0, 1, 0, 0]
+                       for dx in (-0.1, 0.1) for dy in (-0.1, 0.1)])
+    info = {"table": plane.as_dict(),
+            "table_spec": {"points": ["ID0", "ID1"], "keepout": []},
+            "keepouts": [Keepout("IGNORE", (float(tcp[0]) + 0.3, float(tcp[1]))).as_dict()],
+            "tcp_envelope": {"lo": (tcp - 0.05).tolist(), "hi": (tcp + 0.05).tolist()}}
+    model = default_workspace(table_height_m=float(tcp[2]) - 0.5)
+    zeilen = []
+    assert add_recorded_workspace(model, info, robot, "sim", progress=zeilen.append) == "aufnahme"
+    namen = {b.name for b in model.boxes}
+    assert {"Tischebene", "Sperrzone IGNORE", "Huelle der Demonstrationen"} <= namen
+    joints = robot.read_state().joints
+    assert model.check_joints(robot, joints) == []
+    # 10 cm hoeher: ausserhalb der Huelle (5 cm + 3 cm Rand) -> Verletzung
+    pos = model.positions_for(robot, joints)
+    pos["tool"] = pos["tool"] + np.array([0.0, 0.0, 0.10])
+    assert any(v.box == "Huelle der Demonstrationen" for v in model.check_positions(pos))
+    # aeltere Policy ohne die Eintraege: nichts dazu, kein Fehler
+    leer = default_workspace(table_height_m=0.0)
+    assert add_recorded_workspace(leer, {}, robot, "sim", progress=None or (lambda *_: None)) is None
+    assert len(leer.boxes) == 1
+
+
+def test_train_detects_stale_export(tmp_path=None):
+    """train.py --data exportiert neu, wenn sich Quellen oder Episoden geaendert
+    haben (Analyse 2026-11-11, Befund 13), statt den alten Export zu nehmen."""
+    import json
+    import tempfile
+    from pathlib import Path
+
+    from train import stale_export_reason
+
+    root = Path(tempfile.mkdtemp())
+    assert stale_export_reason(root / "dataset", [root / "a"]) == "noch kein Export"
+    (root / "dataset" / "meta").mkdir(parents=True)
+    (root / "dataset" / "meta" / "bc_export.json").write_text(
+        json.dumps({"sources": [str(root / "a")], "episodes": [], "require_success": False}),
+        encoding="utf-8")
+    assert "Quellordner" in stale_export_reason(root / "dataset", [root / "a", root / "b"])
+    assert "require-success" in stale_export_reason(root / "dataset", [root / "a"], True)

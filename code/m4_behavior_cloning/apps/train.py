@@ -88,6 +88,18 @@ def parse_args(argv=None):
     tr.add_argument("--eval-every", type=int, default=2000)
     tr.add_argument("--save-every", type=int, default=10000)
     tr.add_argument("--resume", action="store_true", help="am letzten Checkpoint in --out fortsetzen")
+    tr.add_argument("--init-from", dest="init_from", default=None, metavar="POLICY",
+                    help="Gewichte einer fertigen Policy als Startpunkt (z. B. "
+                         "checkpoints/C2_nur_griff_ohne_1111/policy) -- Nachtrainieren mit DAgger-Daten. "
+                         "Gleiche Kameras/Architektur noetig; Optimierer und Schritt beginnen neu, "
+                         "Normierung aus dem neuen Datensatz")
+    tr.add_argument("--episoden-gewichte", dest="episoden_gewichte", default=None, metavar="JSON",
+                    help="Ziehgewicht je Episode (tools/drehung_ausgleich.py): Episoden werden "
+                         "mit Zuruecklegen proportional zum Gewicht gezogen, 0 = nie. Datensatz, "
+                         "Split und Normierung bleiben unveraendert (Vergleich zu var_C2)")
+    tr.add_argument("--licht-augment", action="store_true",
+                    help="Helligkeit/Kontrast/Saettigung/Farbton der Trainingsbilder zufaellig "
+                         "variieren (LICHT_AUGMENT); Geometrie und Validierung unveraendert")
 
     pol = parser.add_argument_group("Policy (Defaults: config.POLICY_*)")
     pol.add_argument("--horizon", type=int, default=config.POLICY_HORIZON)
@@ -108,6 +120,34 @@ def parse_args(argv=None):
     return args
 
 
+# Lichtrobustheit (Versuchsreihe Policy-Varianten, 2026-11-14): Die Aufnahmetage
+# unterscheiden sich vor allem im Licht (Tageslicht, Kamera-Gain auf Automatik;
+# Szenenhelligkeit 09.11. ~53, 11.11. ~104, 02./03.11. ~130 von 255). Nur
+# photometrische Aenderungen -- Lage und Ausschnitt der Kamera bleiben, denn die
+# Policy liest die Objektlage aus dem Bild. Je Kamera und Beispiel eigene
+# Zufallswerte, innerhalb des Beobachtungsstapels (n_obs_steps) dieselben.
+LICHT_AUGMENT = {
+    "brightness": (0.6, 1.5),
+    "contrast": (0.7, 1.3),
+    "saturation": (0.6, 1.4),
+    "hue": (-0.04, 0.04),
+}
+
+
+def licht_transforms(ranges=LICHT_AUGMENT):
+    """torchvision-v2-Transformation (lerobot ImageTransforms) fuer --licht-augment."""
+    from lerobot.transforms.transforms import ImageTransformConfig, ImageTransforms, ImageTransformsConfig
+
+    cfg = ImageTransformsConfig(
+        enable=True,
+        max_num_transforms=len(ranges),
+        random_order=True,
+        tfs={name: ImageTransformConfig(weight=1.0, type="ColorJitter", kwargs={name: tuple(rng)})
+             for name, rng in ranges.items()},
+    )
+    return ImageTransforms(cfg)
+
+
 def auto_workers(requested):
     if requested != "auto":
         return int(requested)
@@ -120,6 +160,31 @@ def latest_checkpoint(out):
     ckpts = sorted((Path(out) / "checkpoints").glob("step_*"))
     ckpts = [c for c in ckpts if (c / "training_state.pt").is_file()]
     return ckpts[-1] if ckpts else None
+
+
+def stale_export_reason(dataset_root, sources, require_success=False):
+    """Warum ``<out>/dataset`` nicht (mehr) zu ``--data`` passt -- leer = passt.
+
+    Bisher wurde ein vorhandener Export immer wiederverwendet, auch wenn
+    ``--data`` inzwischen andere Ordner nannte oder neue Episoden dazukamen
+    (Analyse 2026-11-11, Befund 13). Verglichen werden die Quellordner und die
+    Zahl der Episoden, die ein Export jetzt auswaehlen wuerde (nur meta.json
+    lesen, kein lerobot).
+    """
+    path = Path(dataset_root) / "meta" / lerobot_io.EXPORT_INFO
+    if not path.is_file():
+        return "noch kein Export"
+    info = lerobot_io.read_export_info(dataset_root)
+    had = sorted(str(Path(s)) for s in info.get("sources") or [])
+    now = sorted(str(Path(s)) for s in sources)
+    if had != now:
+        return "andere Quellordner (vorher %d, jetzt %d)" % (len(had), len(now))
+    if bool(info.get("require_success")) != bool(require_success):
+        return "--require-success geaendert"
+    count = len(lerobot_io.scan_sources(sources, require_success=require_success)["episodes"])
+    if count != len(info.get("episodes") or []):
+        return "Episoden %d statt %d" % (count, len(info.get("episodes") or []))
+    return ""
 
 
 def split_episodes(n_episodes, fraction, seed, groups=None):
@@ -169,9 +234,12 @@ def main(argv=None):
         from export import expand_sources
 
         dataset_root = out / "dataset"
-        if not (dataset_root / "meta" / lerobot_io.EXPORT_INFO).is_file():
+        sources = expand_sources(args.data)
+        reason = stale_export_reason(dataset_root, sources, args.require_success)
+        if reason:
+            print("Datensatz wird (neu) exportiert: %s" % reason)
             lerobot_io.export(
-                expand_sources(args.data), dataset_root,
+                sources, dataset_root,
                 require_success=args.require_success, overwrite=True,
             )
     else:
@@ -238,7 +306,10 @@ def main(argv=None):
     train_eps, val_eps = split_episodes(meta.total_episodes, args.val_fraction, args.seed,
                                         groups=repeat_groups)
     deltas = diffusion.delta_timestamps(policy_cfg, cameras)
-    train_ds = LeRobotDataset(repo_id, root=dataset_root, episodes=train_eps, delta_timestamps=deltas)
+    train_ds = LeRobotDataset(repo_id, root=dataset_root, episodes=train_eps, delta_timestamps=deltas,
+                              image_transforms=licht_transforms() if args.licht_augment else None)
+    if args.licht_augment:
+        print("Licht-Augmentierung: %s" % LICHT_AUGMENT)
     val_ds = (
         LeRobotDataset(repo_id, root=dataset_root, episodes=val_eps, delta_timestamps=deltas)
         if val_eps else None
@@ -252,6 +323,17 @@ def main(argv=None):
         raise SystemExit("--resume: kein Checkpoint unter %s/checkpoints" % out)
 
     policy = DiffusionPolicy(policy_cfg)
+    if args.init_from and resume_from is None:
+        from safetensors.torch import load_file
+
+        weights = Path(args.init_from) / "model.safetensors"
+        if not weights.is_file():
+            raise SystemExit("--init-from: %s fehlt" % weights)
+        missing, unexpected = policy.load_state_dict(load_file(str(weights)), strict=False)
+        if missing or unexpected:
+            raise SystemExit("--init-from: Architektur passt nicht (fehlend %d, ueberzaehlig %d: %s)"
+                             % (len(missing), len(unexpected), (missing or unexpected)[:3]))
+        print("Startgewichte aus %s" % weights)
     preprocessor, postprocessor = make_pre_post_processors(policy_cfg, dataset_stats=meta.stats)
     policy.to(device)
     if args.compile:
@@ -295,6 +377,12 @@ def main(argv=None):
         seed=args.seed + step,
         absolute_to_relative_idx=train_ds.absolute_to_relative_idx,
     )
+    gewichte_info = None
+    if args.episoden_gewichte:
+        sampler, gewichte_info = weighted_sampler(
+            args.episoden_gewichte, train_ds, train_eps, policy_cfg.drop_n_last_frames,
+            seed=args.seed + step, n_episodes=meta.total_episodes)
+        print("Episoden-Gewichte %s: %s" % (args.episoden_gewichte, gewichte_info))
     loader = torch.utils.data.DataLoader(
         train_ds, batch_size=args.batch_size, sampler=sampler, num_workers=workers,
         pin_memory=device.type == "cuda", drop_last=True,
@@ -318,6 +406,7 @@ def main(argv=None):
         "val_episodes": val_eps,
         "cameras": cameras,
         "parameters": sum(p.numel() for p in policy.parameters()),
+        "episoden_gewichte": gewichte_info,
     }
     (out / "train_config.json").write_text(
         json.dumps(run_info, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
@@ -439,6 +528,70 @@ def main(argv=None):
     print("Policy -> %s (Schritt %d)" % (policy_dir, step))
 
 
+class WeightedFrameSampler:
+    """Wie EpisodeAwareSampler, aber Frames mit Zuruecklegen nach Episoden-Gewicht.
+
+    Gleiche Epochenlaenge (Zahl der nutzbaren Frames) und dieselbe Seed-Logik
+    je Epoche -- nur die Ziehwahrscheinlichkeit aendert sich. Ein Frame zaehlt
+    mit dem Gewicht seiner Episode (lange Episoden ziehen also wie bisher mehr
+    Frames; das Gewicht verschiebt das Verhaeltnis der Episoden zueinander).
+    """
+
+    def __init__(self, frame_indices, frame_weights, seed=0):
+        import torch
+
+        self._indices = list(frame_indices)
+        self._weights = torch.as_tensor(frame_weights, dtype=torch.double)
+        if not len(self._indices) or float(self._weights.sum()) <= 0:
+            raise ValueError("keine Frames mit Gewicht > 0")
+        self.seed = seed
+        self._epoch = 0
+
+    def __iter__(self):
+        import torch
+
+        epoch = self._epoch
+        self._epoch += 1
+        seed = int(np.random.SeedSequence([self.seed, epoch]).generate_state(1, dtype=np.uint64)[0])
+        gen = torch.Generator().manual_seed(seed)
+        picks = torch.multinomial(self._weights, len(self._indices), replacement=True, generator=gen)
+        return iter([self._indices[int(k)] for k in picks])
+
+    def __len__(self):
+        return len(self._indices)
+
+
+def weighted_sampler(path, train_ds, train_eps, drop_n_last_frames, seed, n_episodes):
+    """WeightedFrameSampler aus einer Gewichtsdatei (tools/drehung_ausgleich.py)."""
+    spec = json.loads(Path(path).read_text(encoding="utf-8"))
+    weights = list(spec["gewichte"])
+    if len(weights) != n_episodes:
+        raise SystemExit("--episoden-gewichte: %d Gewichte fuer %d Episoden" % (len(weights), n_episodes))
+    starts = train_ds.meta.episodes["dataset_from_index"]
+    ends = train_ds.meta.episodes["dataset_to_index"]
+    rel = train_ds.absolute_to_relative_idx
+    frames, frame_w = [], []
+    for ep in train_eps:
+        for absolute in range(int(starts[ep]), int(ends[ep]) - int(drop_n_last_frames)):
+            frames.append(rel[absolute] if rel is not None else absolute)
+            frame_w.append(float(weights[ep]))
+    klasse = spec.get("klasse") or [None] * n_episodes
+    mass = {}
+    for ep in train_eps:
+        n = int(ends[ep]) - int(starts[ep]) - int(drop_n_last_frames)
+        mass[klasse[ep]] = mass.get(klasse[ep], 0.0) + float(weights[ep]) * max(n, 0)
+    total = sum(mass.values()) or 1.0
+    info = {
+        "datei": str(path),
+        "modus": spec.get("modus"),
+        "regel": spec.get("regel"),
+        "train_episoden_mit_gewicht": int(sum(1 for ep in train_eps if weights[ep] > 0)),
+        "train_episoden": len(train_eps),
+        "anteil_frames_gewichtet": {str(k): round(v / total, 3) for k, v in sorted(mass.items(), key=str)},
+    }
+    return WeightedFrameSampler(frames, frame_w, seed=seed), info
+
+
 def _cycle(loader, sampler):
     # EpisodeAwareSampler schaltet die Epoche (und damit die Permutation)
     # bei jedem __iter__ selbst weiter -- hier nicht zusaetzlich set_epoch.
@@ -546,6 +699,7 @@ def build_policy_info(export_info, dataset_root, meta, policy_cfg, cameras, args
         "recording": {
             "robot": single_value(consistency, "robot"),
             "camera_backends": single_value(consistency, "cameras"),
+            "camera_settings": export_info.get("camera_settings"),
             "in_simulation": single_value(consistency, "in_simulation"),
             "override": single_value(consistency, "override"),
             "servo_rate_hz": single_value(consistency, "servo_rate_hz"),
@@ -565,6 +719,13 @@ def build_policy_info(export_info, dataset_root, meta, policy_cfg, cameras, args
         "start_gripper": export_info.get("start_gripper"),
         "end_gripper": export_info.get("end_gripper"),
         "ideal_z_min": export_info.get("ideal_z_min"),
+        # Kollisionsmodell der Inferenz (bc/obstacles.py, bc/table.py)
+        "tcp_envelope": export_info.get("tcp_envelope"),
+        "table": export_info.get("table"),
+        "table_spec": export_info.get("table_spec"),
+        "keepouts": export_info.get("keepouts") or [],
+        # Kamerapruefung vor der Inferenz (bc/camera_check.py)
+        "camera_reference": export_info.get("camera_reference"),
         # Referenz fuer die Bewertung einer Fahrt ohne Datensatz (bc.metrics)
         "reference": {
             "path": export_info.get("reference_path"),
@@ -587,6 +748,7 @@ def build_policy_info(export_info, dataset_root, meta, policy_cfg, cameras, args
         "inference_defaults": {
             "replan_steps": config.POLICY_REPLAN_STEPS,
             "ensemble_decay": config.POLICY_ENSEMBLE_DECAY,
+            "glaettung": config.POLICY_COMMAND_LOWPASS_ALPHA,
         },
         "training": {
             "step": step,

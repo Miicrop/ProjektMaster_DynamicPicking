@@ -197,6 +197,116 @@ class NoiseLimits:
         return np.clip(offset, self.lo, self.hi)
 
 
+def _smooth_ramp(x, a, b):
+    t = np.clip((np.asarray(x, dtype=float) - a) / (b - a), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def distance_to_grasp(ideal):
+    """Bahnlaenge (m) jedes Schritts bis zum ersten Schliessen des Greifers;
+    ab dort und ohne Schliessen: inf."""
+    pos = np.asarray(ideal.poses_quat[:, :3], dtype=float)
+    grip = np.asarray(ideal.gripper, dtype=float) > config.GRIPPER_THRESHOLD
+    closing = np.flatnonzero(grip[1:] & ~grip[:-1])
+    out = np.full(len(pos), np.inf)
+    if not len(closing):
+        return out
+    c = int(closing[0]) + 1
+    cum = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(pos, axis=0), axis=1))])
+    out[:c] = cum[c] - cum[:c]
+    return out
+
+
+def approach_offset_profile(ideal, start_m=None):
+    """Anteil 0..1 des Anflug-Versatzes je Schritt (config.APPROACH_OFFSET_*).
+
+    ``start_m``: Bahnlaenge vor dem Greifen, ab der der Versatz einsetzt
+    (Default HOLD+RAMP); voll ab HOLD, null ab FREE."""
+    d = distance_to_grasp(ideal)
+    hold = config.APPROACH_OFFSET_HOLD_M
+    start = hold + config.APPROACH_OFFSET_RAMP_M if start_m is None else max(float(start_m), hold + 1e-3)
+    rise = _smooth_ramp(d, config.APPROACH_OFFSET_FREE_M, config.APPROACH_OFFSET_FULL_M)
+    fall = 1.0 - _smooth_ramp(d, hold, start)
+    return np.where(np.isfinite(d), rise * fall, 0.0)
+
+
+def smooth_limited(target, max_step, window, max_step_hard=None):
+    """Wie :func:`rate_limited`, zusaetzlich gleitend gemittelt (``window``
+    Schritte) -- begrenzt so auch die Beschleunigung (kein spitzes V). Bleibt
+    <= :func:`rate_limited` mit ``max_step_hard`` (Default 2x) und damit null,
+    wo ``target`` null ist."""
+    r = rate_limited(target, max_step)
+    window = int(window)
+    if window <= 1 or len(r) < 2:
+        return r
+    pad = window // 2
+    kernel = np.ones(2 * pad + 1) / (2 * pad + 1)
+    avg = np.convolve(np.pad(r, (pad, pad), mode="edge"), kernel, mode="valid")
+    hard = rate_limited(target, 2.0 * max_step if max_step_hard is None else max_step_hard)
+    return np.minimum(avg, hard)
+
+
+def rate_limited(target, max_step):
+    """Betrag von ``target`` (>= 0) mit hoechstens ``max_step`` Aenderung je
+    Schritt, ueberall <= ``target`` -- also null, wo ``target`` null ist, und
+    rechtzeitig vorher abgebaut (Vorwaerts- und Rueckwaertsdurchlauf)."""
+    m = np.abs(np.asarray(target, dtype=float))
+    out = m.copy()
+    for i in range(1, len(out)):
+        out[i] = min(out[i], out[i - 1] + max_step)
+    for i in range(len(out) - 2, -1, -1):
+        out[i] = min(out[i], out[i + 1] + max_step)
+    return out
+
+
+def sample_approach_offset(rng, share=config.APPROACH_OFFSET_SHARE,
+                           range_m=config.APPROACH_OFFSET_RANGE_M,
+                           yaw_range_deg=config.APPROACH_YAW_RANGE_DEG,
+                           outlier_share=config.APPROACH_OFFSET_OUTLIER_SHARE,
+                           outlier_max_m=config.APPROACH_OFFSET_OUTLIER_MAX_M,
+                           outlier_yaw_max_deg=config.APPROACH_YAW_OUTLIER_MAX_DEG):
+    """Versatz einer Episode: ``[dx, dy, 0, dyaw_rad]`` oder None (kein Versatz).
+
+    EIN fester Fehler je Episode, der im Abstieg stetig auf 0 abklingt
+    (:func:`approach_offset_profile`) -- kein Hin-und-her. Seitlich in
+    beliebiger Richtung (gleichverteilt, auch schraeg), Drehung mit zufaelligem
+    Vorzeichen. Je Groesse unabhaengig mit ``outlier_share`` ein Ausreisser
+    (seitlich bis ``outlier_max_m``, Drehung bis ``outlier_yaw_max_deg``).
+    ``yaw_range_deg`` None/(0, 0) = ohne Drehung.
+
+    Zieht nur aus ``rng``, wenn ``share`` > 0 -- abgeschaltet bleibt die
+    Zufallsfolge des Rauschens unveraendert.
+    """
+    if not share or share <= 0 or not range_m or max(range_m) <= 0:
+        return None
+    if rng.random() >= share:
+        return None
+    lo, hi = min(range_m), max(range_m)
+    if outlier_share and outlier_max_m and outlier_max_m > hi and rng.random() < outlier_share:
+        lo, hi = hi, outlier_max_m
+    size = rng.uniform(lo, hi)
+    angle = rng.uniform(0.0, 2.0 * np.pi)
+    yaw = 0.0
+    if yaw_range_deg and max(yaw_range_deg) > 0:
+        ylo, yhi = min(yaw_range_deg), max(yaw_range_deg)
+        if outlier_share and outlier_yaw_max_deg and outlier_yaw_max_deg > yhi \
+                and rng.random() < outlier_share:
+            ylo, yhi = yhi, outlier_yaw_max_deg
+        yaw = np.radians(rng.uniform(ylo, yhi)) * (1.0 if rng.random() < 0.5 else -1.0)
+    return np.array([size * np.cos(angle), size * np.sin(angle), 0.0, yaw])
+
+
+def approach_rest(ideal, poses_noisy, free_m=config.APPROACH_OFFSET_FREE_M):
+    """Groesster seitlicher Abstand (m) der gefahrenen Bahn zur Idealbahn auf
+    den letzten ``free_m`` vor dem Greifen -- dort tauchen die Backen ums Objekt."""
+    d = distance_to_grasp(ideal)
+    near = np.isfinite(d) & (d <= free_m)
+    if not near.any():
+        return 0.0
+    diff = np.asarray(poses_noisy)[near, :2] - np.asarray(ideal.poses_quat)[near, :2]
+    return float(np.max(np.linalg.norm(diff, axis=1)))
+
+
 def sample_noisy_poses(
     ideal,
     rng,
@@ -205,6 +315,7 @@ def sample_noisy_poses(
     tau=config.NOISE_OU_TAU_S,
     limits=None,
     tau_smooth=config.NOISE_SMOOTH_TAU_S,
+    approach_offset=None,
 ):
     """Erzeugt EINE verrauschte Posenbahn T_ist = T_soll + N_t.
 
@@ -212,6 +323,9 @@ def sample_noisy_poses(
     asymmetrischen Grenzen wirken innerhalb des Prozesses.
     Daempfung: Trichter (Naehe zu einem Ankerpunkt) UND Dwell-Schritte
     (Greifer schliesst -- dort wird still gehalten, Rauschen = 0).
+    ``approach_offset``: fester Versatz im Anflug, ``[dx, dy, dz]`` oder
+    ``[dx, dy, dz, dyaw_rad]`` (Drehung um die Senkrechte), verteilt nach
+    :func:`approach_offset_profile` (0 auf den letzten Zentimetern).
     """
     if limits is None:
         limits = NoiseLimits()
@@ -223,17 +337,38 @@ def sample_noisy_poses(
 
     scale = funnel_scale(ideal.dist_to_anchor)
     scale = np.where(ideal.dwell_mask, 0.0, scale)
+    offset = np.zeros((len(scale), 3))
+    yaw_offset = np.zeros(len(scale))
+    if approach_offset is not None:
+        values = np.asarray(approach_offset, dtype=float)
+        profile = approach_offset_profile(ideal)
+        # Tempo begrenzen und glaetten (config.APPROACH_*_RATE_*, _SMOOTH_S):
+        # Anstieg liegt im Transfer, Gelenk 6 verkraftet keine spitzen Umkehrungen
+        window = int(round(config.APPROACH_OFFSET_SMOOTH_S / dt))
+        size = float(np.linalg.norm(values[:3]))
+        if size > 0:
+            lateral = smooth_limited(profile * size, config.APPROACH_OFFSET_RATE_M_S * dt, window)
+            offset = (lateral / size)[:, None] * values[None, :3]
+        if len(values) > 3 and values[3]:
+            yaw_profile = approach_offset_profile(ideal, start_m=config.APPROACH_YAW_START_M)
+            yaw_offset = np.sign(values[3]) * smooth_limited(
+                yaw_profile * abs(values[3]), np.radians(config.APPROACH_YAW_RATE_DEG_S) * dt,
+                window)
 
     noisy = ideal.poses_quat.copy()
     for i in range(len(noisy)):
         n_pos = ou_pos.step() * scale[i]
         n_rot = ou_rot.step() * scale[i]
-        noisy[i, :3] = ideal.poses_quat[i, :3] + n_pos
+        noisy[i, :3] = ideal.poses_quat[i, :3] + n_pos + offset[i]
+        if yaw_offset[i]:
+            # Anflug-Drehung um die Senkrechte (Basis-z)
+            dq = geometry.quat_from_axis_angle(np.array([0.0, 0.0, 1.0]), float(yaw_offset[i]))
+            noisy[i, 3:7] = geometry.quat_normalize(geometry.quat_multiply(dq, noisy[i, 3:7]))
         angle = float(np.linalg.norm(n_rot))
         if angle > 1e-12:
             dq = geometry.quat_from_axis_angle(n_rot / angle, angle)
             noisy[i, 3:7] = geometry.quat_normalize(
-                geometry.quat_multiply(dq, ideal.poses_quat[i, 3:7])
+                geometry.quat_multiply(dq, noisy[i, 3:7])
             )
     return noisy
 
@@ -256,6 +391,8 @@ class TrajectoryPlan:
     dwell_mask: np.ndarray  # (N,)
     rate_hz: float
     rejects: int = 0  # verworfene Samples bis zur gueltigen Bahn
+    #: fester Versatz im Anflug (3,) oder None (config.APPROACH_OFFSET_*)
+    approach_offset: object = None
 
     def __len__(self):
         return len(self.joints_ideal)
@@ -334,6 +471,7 @@ def generate_plan(
     noise_scale=1.0,
     joints_ideal=None,
     max_joint_speed=config.PLAN_MAX_JOINT_SPEED_RADS,
+    approach_offset=None,
 ):
     """Vollstaendige Episodengenerierung mit Rejection Sampling (AP 2.4).
 
@@ -355,6 +493,9 @@ def generate_plan(
     -- dann entfaellt Schritt 1. Fuer Wiederholungen derselben Lage: die
     ideale Bahn ist jedes Mal dieselbe, und an der Anlage kostet jeder
     IK/FK-Schritt einen Aufruf an die Steuerung.
+    ``approach_offset``: fester Versatz im Anflug (:func:`sample_approach_offset`).
+    Jede Bahn -- mit oder ohne -- muss auf den letzten Zentimetern vor dem
+    Greifen innerhalb ``config.APPROACH_REST_MAX_M`` der Idealbahn liegen.
     """
     rng = rng if rng is not None else np.random.default_rng()
 
@@ -371,7 +512,12 @@ def generate_plan(
             sigma_pos=config.NOISE_TRANS_AMPLITUDE_M * noise_scale,
             sigma_rot=config.NOISE_ROT_AMPLITUDE_RAD * noise_scale,
             limits=limits,
+            approach_offset=approach_offset,
         )
+        rest = approach_rest(ideal, poses_noisy)
+        if rest > config.APPROACH_REST_MAX_M:
+            reasons.append(("anflug", "%.1f mm neben der Idealbahn vor dem Greifen" % (1e3 * rest)))
+            continue
         try:
             joints_noisy = kin.solve_path(poses_noisy, seed_joints)
         except IKFailure as exc:
@@ -402,6 +548,7 @@ def generate_plan(
             dwell_mask=ideal.dwell_mask,
             rate_hz=ideal.rate_hz,
             rejects=attempt,
+            approach_offset=None if approach_offset is None else [float(v) for v in approach_offset],
         )
 
     raise PlanRejected(

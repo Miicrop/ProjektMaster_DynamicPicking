@@ -187,6 +187,66 @@ Als PDF:
 python tools/report_rollouts.py --run "VM=checkpoints/vm/policy/rollouts/<Zeit>" --out Berichte/<Datum>_Policy.pdf
 ```
 
+### 4.1 Mit den Bildern einer Aufnahme prüfen (Replay)
+
+Die Frage ist: Fährt die Policy ungefähr die Posen, die der Roboter fahren soll? Um
+das ohne Anlage zu prüfen, werden statt der Kameras die **gespeicherten Bilder
+einer Aufnahme** eingespielt. Es wird kein Video verwendet: Die Arrays in
+`arrays.npz` sind schon 240×320, also genau das, was die Policy im Training sah.
+Eine Kompression würde sie verändern. Code: `bc/replay.py`,
+`bc/adapters/cam_replay.py`.
+
+**Stufe 1, offline (ohne Roboter, ohne VM):** Je Takt gehen Bilder **und**
+Zustand der Aufnahme in die Policy. Das läuft über denselben `ChunkEnsembler`
+wie in der Inferenz, nur synchron. Die vorhergesagte Action wird mit der
+aufgezeichneten verglichen.
+
+```powershell
+python apps/replay_check.py --checkpoint <policy> --data data_vm/2026-11-11 --episodes 0-4 --plot
+```
+
+Ausgabe in `<policy>/replay_check/<Zeit>`:
+
+* `summary.json` mit dem Gelenkfehler je Takt in Grad (Median/p95/max, p95 je
+  Gelenk), dem Anteil gleicher Greiferzustände und den Greiferwechseln in
+  Aufnahme und Vorhersage (Versatz in Takten).
+* `ep_XXXXX.npz`: vorhergesagte und aufgezeichnete Actions.
+* `ep_XXXXX.png` mit `--plot`: Gelenke aufgezeichnet gegen vorhergesagt.
+
+Ist der Fehler schon hier groß, verrät die VM-Fahrt nichts Neues. Dann erst
+Training, Export oder Vorverarbeitung prüfen. Episoden aus dem Training zeigen,
+wie gut die Policy angepasst ist, aber nicht, ob sie verallgemeinert.
+
+**Stufe 2, geschlossen in der VM:** Die Policy fährt die VM. Die Bilder kommen
+aus der Aufnahme, der Zustand vom Roboter.
+
+```powershell
+python apps/infer.py --robot neura --checkpoint <policy> --replay data_vm/2026-11-11 --replay-episode 0,5,9
+```
+
+* Fahrt *i* nimmt die *i*-te Episode der Liste (`'3'`, `'0,4,7'`, `'2-5'`,
+  `'alle'` = alle nicht verworfenen). Ohne `--episodes` gibt es eine Fahrt je
+  Episode.
+* Vor jeder Fahrt geht es an die Startstellung und den Greiferzustand **dieser
+  Episode**, denn die Bilder beginnen dort.
+* Je Regeltakt wird **ein** Bild weitergeschaltet, nicht nach der Uhr. Nach dem
+  letzten Bild bleibt dieses stehen.
+* Nach jeder Fahrt folgt ein Vergleich mit der **idealen** TCP-Bahn der Aufnahme
+  (`aux.pose_ideal`). Er erscheint als Zeile in der Ausgabe und unter `replay` in
+  `summary.json`. Enthalten sind: Abstand zur Bahn (zeitunabhängig: trifft der Arm
+  die Bahn?), Abstand Takt für Takt (fährt er im selben Tempo?), Greifpunkt und
+  Versatz in Takten, Endfehler, Gelenkfehler.
+* `--replay` mit `--real-robot` wird abgelehnt. Die Bilder zeigen nicht, was
+  tatsächlich vor der Anlage liegt.
+
+Zur Einordnung: In der Aufnahme vom 11.11. weicht die **Ist**-TCP wegen der
+Rauschinjektion 10–35 mm (p95) von der idealen Bahn ab. Außerdem liegt die
+aufgezeichnete Action wegen des Vorlaufs etwa 5° (p95) vor dem nächsten
+Ist-Zustand. Grenze von Stufe 2: Die Bilder reagieren nicht auf den Arm. Weicht er
+ab oder wartet er länger als in der Aufnahme, sieht die Policy trotzdem die Bilder
+der Aufnahme. Der Takt-für-Takt-Fehler wächst dann, der Bahnabstand bleibt
+aussagekräftig.
+
 ## 5. Grenzen des Standes
 
 * **Platzhalterbilder** (`--cameras sim`) haben keinen Bezug zur Szene. Die
@@ -221,3 +281,46 @@ python tools/report_rollouts.py --run "VM=checkpoints/vm/policy/rollouts/<Zeit>"
   Kandidaten: an Durchfahrpunkten nicht anhalten (Überschleifen/Rampen), längere
   Chunks offen ausführen, mehr Daten. Beim Greifer-Dwell besteht dieselbe
   Mehrdeutigkeit (Sim: 2/10 Fahrten schlossen nicht, Wartezeiten schwanken).
+
+## Live-Ansicht und Probegriff-Abstand (2026-11-17)
+
+* **Probegriff-Abstand** einstellbar: GUI-Feld „Abstand über Objekt" bzw.
+  `apps/infer.py --probe-abstand MM`, Standard 25 mm (`config.PROBE_GAP_M`).
+  Grund: an der Anlage lief der Arm nach dem abgelehnten Ziel bis 7,5 mm unter
+  die Ebene nach (Nachlauf ≈ Abstiegstempo × 50 ms). Zusätzlich prüft
+  `bc/safety.check_target` jedes Ziel um einen Takt verlängert. Unter 10 mm
+  fragt die GUI nach. Standard für „Lage bekannt" ist jetzt der Probegriff.
+* **Live-Ansicht** (`bc/live.py`, Fenster `bc/gui/live_window.py`): öffnet sich
+  beim Start einer Fahrt. Kamerabilder, Draufsicht mit PICK (grün), TCP mit Spur
+  (blau), jede gerade gemittelte Vorhersage (orange dünn) und ihr Mittel, das
+  gefahren wird (orange dick), Verlauf des Drehfehlers. Pfeile mit zwei Spitzen:
+  die Drehung zählt modulo 180°. Pfeile im Szenenbild über die ArUco-Abbildung
+  von M1; da der Arm in der Startstellung einen Marker verdeckt, wird die
+  Abbildung nach jeder M1-Lokalisierung in `einstellungen/live_szene.local.json`
+  gespeichert und sonst von dort genommen. Abschalten: `--keine-live-ansicht`.
+* **Rohe Vorhersagen** stehen im Rollout (`pred_step`, `pred_chunk`) -- damit
+  lässt sich nachträglich prüfen, ob die Policy zwischen Drehungen springt.
+
+## Standards für den neuen Datensatz (2026-11-17 bis 11-19)
+
+* **Endanflug und Ablegen 0,020 m/s** (`APPROACH_SPEED_MS`, `PUT_BACK_APPROACH_SPEED_MS`),
+  Transfer 0,15 m/s, Override 0,5. Modelle tragen ihr Tempo in `bc_policy.json`.
+* **Drehverteilung um die Startstellung** (`AUTO_YAW_CENTER_POINT = "CLEAR_FOV"`), in
+  vollen 360°: die alten Demos drehten im Median +31° gegen den Start, modulo 180 sah
+  das bei ±89° ausgeglichen aus. Prüfen: `tools/analyse_drehung.py demos <Ordner>`.
+* **Erste Lage per M1** (`--start-lage m1`): Handlage lokalisieren, unaufgezeichnet
+  greifen und an Lage 1 legen; danach nur noch PICK aus dem eigenen Ablegen.
+* **Kamera:** Kameralicht an der Handgelenkkamera, fester Weißabgleich je Gerät
+  (`CAMERA_WHITE_BALANCE`); die Inferenz übernimmt ihn nur, wenn das Modell mit
+  einheitlichem Weißabgleich aufgenommen wurde.
+* **Anflug-Versatz** (`bc/noise.py`, `APPROACH_*`): bei 50 % der Episoden EIN fester
+  Fehler je Episode -- seitlich 5–10 mm in beliebiger Richtung, Drehung ±10–20° um die
+  Senkrechte, je Größe 15 % Ausreißer bis 25 mm bzw. 35°. Voll zwischen 10 und 5 cm
+  Bahnlänge vor dem Greifen, stetig (ohne Überschwingen) auf 0 ab 2 cm. Label bleibt
+  die Idealbahn. Metadaten: `anflug_versatz_m`, `anflug_drehung_grad`.
+  Kommandozeile: `--anflug-anteil`, `--anflug-versatz min,max` (mm),
+  `--anflug-drehung min,max` (Grad), `--anflug-ausreisser`.
+* **Zu tief fahren** wird nicht in der Aufnahme erzeugt, sondern über DAgger gelernt.
+* **Policy-Test ohne Greifen:** Schalter „Experte greift und legt um" aus
+  (`--ohne-experte`): anfliegen, über dem Objekt halten, Vorhersage speichern,
+  senkrecht anheben, zurück zum Start.

@@ -1,0 +1,66 @@
+\chapter{Überblick}
+\label{ch:ueberblick}
+
+\section{Was die Software macht}
+
+Modul~4 lässt den Roboter LARA~5 ein Bauteil mit einer gelernten Policy greifen. Die Arbeit
+gliedert sich in vier Schritte, die alle in derselben Oberfläche erreichbar sind:
+
+\begin{enumerate}
+  \item \textbf{Aufnehmen:} Der Roboter fährt geteachte Bahnen mit Rauschen ab, beide Kameras
+    zeichnen auf (Reiter \emph{Aufnahme}).
+  \item \textbf{Exportieren:} Die Aufnahmen werden in einen LeRobot-Datensatz umgewandelt
+    (Reiter \emph{Training}).
+  \item \textbf{Trainieren:} Aus dem Datensatz entsteht eine Diffusion Policy
+    (Reiter \emph{Training}).
+  \item \textbf{Fahren:} Die Policy steuert den Roboter (Reiter \emph{Betrieb} oder im
+    automatischen Ablauf der Gruppe).
+\end{enumerate}
+
+Warum etwas so gebaut ist, steht in der ausführlichen Dokumentation (Dokument~A). Diese
+Anleitung beschreibt nur, \emph{wie} man es bedient.
+
+\section{Ordnerstruktur}
+
+Alle Pfade in dieser Anleitung sind relativ zu \pfad{code/m4_behavior_cloning/}, wenn nichts
+anderes dasteht.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{tabularx}{\textwidth}{@{}l X@{}}
+    \toprule
+    Ordner & Inhalt \\
+    \midrule
+    \pfad{apps/} & Programme: \pfad{record}, \pfad{export}, \pfad{train}, \pfad{infer},
+      \pfad{replay_check}, \pfad{teach}, \pfad{eval} \\
+    \pfad{bc/} & Bibliothek, darin \pfad{bc/config.py} mit allen Konstanten und
+      \pfad{bc/gui/} mit der Oberfläche \\
+    \pfad{tools/} & Prüf- und Auswertewerkzeuge (\pfad{check_*.py}, \pfad{report_*.py}, \dots) \\
+    \pfad{sequences/} & Ablaufdateien (\pfad{pick_bis_griff.json}, \pfad{pick_to_station.json})
+      und gesicherte Punktlisten \\
+    \pfad{einstellungen/} & Hindernisse, Auswahl der Metadaten, lokale Einstellungen der
+      Oberfläche \\
+    \pfad{data/} & Aufnahmen, je Tag ein Ordner, darin je Lage ein Block \\
+    \pfad{datasets/} & exportierte LeRobot-Datensätze \\
+    \pfad{checkpoints/} & trainierte Modelle, darin \pfad{rollouts/} mit den Fahrten \\
+    \pfad{Berichte/} & Messberichte und Testprotokolle \\
+    \pfad{Dokumentation/} & Einzeldokumente und diese Anleitung \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Rechner und Umgebungen}
+
+\begin{itemize}
+  \item \textbf{Betriebsrechner (Laptop):} an der Anlage; Aufnahme, Systemcheck, Fahren. Auf
+    ihm läuft bei Bedarf auch die virtuelle Steuerung (\acs{vm}).
+  \item \textbf{Trainingsrechner (PC mit RTX~5070~Ti):} Export und Training. Ein Datensatz kann
+    einfach kopiert werden.
+  \item Modul~4 hat eine \textbf{eigene Python-Umgebung} (Python~3.12, torch, LeRobot~0.6.1).
+    Die Oberfläche der Gruppe nutzt sie automatisch für alles, was torch braucht.
+\end{itemize}
+
+\achtung{Software-Stopp und Rückfragen der Oberfläche ersetzen keinen Not-Halt. Bei jeder
+Bewegung des realen Roboters hat eine Person die Hand am Not-Halt. Nie allein an der Anlage
+arbeiten.}

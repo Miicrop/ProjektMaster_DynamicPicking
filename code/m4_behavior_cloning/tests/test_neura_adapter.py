@@ -708,3 +708,50 @@ def test_jog_only_in_teach_mode_and_with_motion_permission():
             raise AssertionError("ValueError erwartet")
         except ValueError:
             pass
+
+
+class ToolOffsetClient(UrdfMatchingClient):
+    """Fake wie die Anlage (2026-11-11): Tool 197,5 mm vor dem Flansch, ``wrist``
+    = Ursprung von Gelenk 5, ``elbow`` = fester Punkt in Glied 2 der Kette."""
+
+    TOOL = 0.1975
+
+    def _frame_pose(self, joint_angles, target_frame):
+        q = np.asarray(joint_angles, dtype=float)
+        frames = self._chain.fk_frames(q)
+        if target_frame == "wrist":
+            T = frames[6][1]
+        elif target_frame == "elbow":
+            T = frames[3][1].copy()
+            T[:3, 3] = (frames[3][1] @ np.array([0.078, 0.38, 0.0, 1.0]))[:3]
+        else:
+            T = self._chain.fk(q).copy()
+            T[:3, 3] = T[:3, 3] + T[:3, 2] * self.TOOL
+        return np.concatenate([T[:3, 3], geometry.matrix_to_quat(T[:3, :3])])
+
+    def compute_forward_kinematics(self, joint_angles, target_frame, representation):
+        self._log("compute_forward_kinematics")
+        return list(geometry.pose_quat_to_rpy(self._frame_pose(joint_angles, target_frame)))
+
+    def get_tcp_pose_quaternion(self):
+        return list(self._frame_pose(self.joints, "tool"))
+
+
+def test_local_fk_with_tool_offset_and_link_points():
+    """Mit Tool (Anlage) rechnet die Kette jetzt lokal -- Versatz und
+    Stuetzpunkte werden beim Verbinden bestimmt und gegengeprueft; danach
+    braucht weder read_state() noch link_positions() einen FK-Aufruf."""
+    bot = NeuraRobot(robot=ToolOffsetClient()).connect()
+    assert bot.local_fk_active, bot.local_fk_check
+    assert abs(bot.local_fk_check["tool_offset_m"][2] - ToolOffsetClient.TOOL) < 1e-9
+    assert set(bot.local_fk_check["stuetzpunkte"]) == set(config.COLLISION_CHECK_FRAMES)
+
+    q = [0.2, 0.1, 1.2, 0.3, 0.9, -0.2]
+    bot.robot.calls.clear()
+    lokal = bot.link_positions(q)
+    state = bot.read_state()
+    assert not any(name == "compute_forward_kinematics" for name, _, _ in bot.robot.calls)
+    for name in config.COLLISION_CHECK_FRAMES:
+        erwartet = bot.robot._frame_pose(q, name)[:3]
+        assert np.allclose(lokal[name], erwartet, atol=1e-9), name
+    assert np.allclose(state.tcp_quat, bot.fk(state.joints, frame="tool"), atol=1e-9)

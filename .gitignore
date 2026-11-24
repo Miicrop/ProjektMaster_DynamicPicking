@@ -24,3 +24,13 @@ presentation/build/
 *.toc
 *.lof
 *.lot
+
+# M4-Setup: rechnerspezifisch
+code/setup/_cache/
+code/setup/logs/
+code/setup/einstellungen.json
+code/setup/Checkliste_Laborbetreuer.md
+code/m4_behavior_cloning/data
+
+# Claude-Code-Worktrees (eigene Git-Arbeitsordner, nie committen)
+**/.claude/worktrees/

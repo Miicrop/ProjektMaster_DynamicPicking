@@ -1,0 +1,10 @@
+lauf;fahrt;lage;probegriff;stopp;stopp_dz_mm;stopp_dx_mm;stopp_dy_mm;stopp_xy_mm;stopp_yaw_grad;vorh_dx_mm;vorh_dy_mm;vorh_xy_mm;vorh_yaw_grad;vorh_schliesst;korr_dx_mm;korr_dy_mm;korr_xy_mm;korr_yaw_grad;erfolg_gezaehlt
+12-42-28;0;x 241 / y -230;tisch;max_steps;5.7;2.8;-21.0;21.2;-3.0;nan;nan;nan;;;;;;;False
+12-44-44;0;x 241 / y -230;objekt;kollision vorab: tool an Tischebene (Rest -0 mm);22.1;17.9;-23.2;29.4;1.5;4.1;-17.5;18.0;1.0;False;;;;;False
+12-45-48;0;x 241 / y -230;objekt;kollision vorab: tool an Tischebene (Rest -1 mm);21.3;7.7;-12.3;14.5;10.3;1.8;-6.1;6.3;11.8;False;;;;;True
+12-50-59;0;x 502 / y -142;objekt;stopp: [Violation(Schritt None, Frame 'tool', Quader 'Tische;5.2;6.4;3.5;7.3;8.3;nan;nan;nan;;;;;;;False
+12-52-08;0;x 502 / y -142;objekt;stopp: [Violation(Schritt None, Frame 'tool', Quader 'Tische;3.2;5.7;0.6;5.8;8.7;nan;nan;nan;;;;;;;False
+12-53-36;0;x 502 / y -142;objekt;kollision vorab: tool an Tischebene (Rest -2 mm);11.0;13.2;-2.4;13.4;3.0;4.6;-1.9;5.0;0.8;False;-12.2;2.1;12.4;-3.0;True
+12-53-36;1;x 258 / y -36;objekt;kollision vorab: tool an Tischebene (Rest -3 mm);19.0;8.4;1.5;8.6;-2.6;-16.1;6.6;17.4;-5.3;False;-8.4;-1.4;8.5;2.7;False
+12-55-03;0;x 496 / y -223;objekt;kollision vorab: tool an Tischebene (Rest -5 mm);7.8;7.9;0.2;7.9;3.8;11.0;-1.8;11.1;2.5;False;-8.3;0.1;8.3;-3.8;False
+12-55-03;1;x 241 / y -29;objekt;kollision vorab: tool an Tischebene (Rest -1 mm);14.4;-14.6;0.5;14.6;2.7;0.3;-0.9;1.0;0.1;False;13.9;-0.3;13.9;-2.6;True

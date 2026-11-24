@@ -15,6 +15,8 @@ Ein physischer Not-Halt muss waehrend aller Laeufe in Reichweite sein.
 import threading
 import traceback
 
+import numpy as np
+
 from . import config
 
 
@@ -74,6 +76,59 @@ class Watchdog(object):
             self._thread = None
 
 
+class CameraStale(RuntimeError):
+    """Ein Kamerabild ist zu lange nicht mehr neu -- die Policy saehe ein Standbild."""
+
+
+class FrameAgeGuard(object):
+    """Erkennt eingefrorene Kamerabilder in der Inferenz (Anwender 2026-11-11).
+
+    ``capture.ThreadedCapture.latest()`` liefert bei einem Kamerafehler
+    stillschweigend weiter das letzte Bild. Der Recorder faengt das ueber das
+    Latenzbudget ab (Episode verworfen); die Inferenz wuerde dagegen auf einem
+    Standbild weiterfahren -- etwa dorthin, wo das Objekt im alten Bild lag.
+
+    Je Takt :meth:`check` mit den Frames (Name -> Frame oder None) und der
+    aktuellen Zeit derselben Uhr, mit der die Kameras stempeln. Ist ein Bild
+    ``max_age_s`` aelter, zaehlt der Takt als schlecht; nach ``max_steps``
+    schlechten Takten in Folge wirft er :class:`CameraStale`. Ein einzelnes
+    verspaetetes Bild bricht nichts ab.
+    """
+
+    def __init__(self, max_age_s=config.INFER_MAX_FRAME_AGE_S,
+                 max_steps=config.INFER_FRAME_AGE_STEPS):
+        if max_age_s <= 0 or int(max_steps) < 1:
+            raise ValueError("max_age_s > 0 und max_steps >= 1 noetig")
+        self.max_age_s = float(max_age_s)
+        self.max_steps = int(max_steps)
+        self.bad_steps = 0
+        self.worst_age_s = 0.0
+
+    def reset(self):
+        self.bad_steps = 0
+        self.worst_age_s = 0.0
+
+    def check(self, frames, now):
+        """Rueckgabe: groesstes Bildalter (s). Wirft CameraStale nach zu vielen Takten."""
+        ages = {}
+        for name, frame in frames.items():
+            ages[name] = float("inf") if frame is None else float(now) - float(frame.timestamp)
+        oldest = max(ages, key=ages.get) if ages else None
+        age = ages[oldest] if oldest is not None else 0.0
+        if age != float("inf"):
+            self.worst_age_s = max(self.worst_age_s, age)
+        if age > self.max_age_s:
+            self.bad_steps += 1
+            if self.bad_steps >= self.max_steps:
+                raise CameraStale(
+                    "kamera %s: neuestes Bild %s alt, %d Takte in Folge ueber %.0f ms"
+                    % (oldest, "nie geliefert" if age == float("inf") else "%.0f ms" % (1e3 * age),
+                       self.bad_steps, 1e3 * self.max_age_s))
+        else:
+            self.bad_steps = 0
+        return age
+
+
 def geofence_check(robot, collision_model):
     """Baut einen Watchdog-Check aus dem Kollisionsmodell (AP 4.2).
 
@@ -85,8 +140,96 @@ def geofence_check(robot, collision_model):
     def check():
         state = robot.read_state()
         violations = collision_model.check_positions(
-            robot.link_positions(state.joints)
+            collision_model.positions_for(robot, state.joints)
         )
         return violations or None
 
     return check
+
+
+class TargetRejected(RuntimeError):
+    """Ein Ziel der Policy wuerde ins Kollisionsmodell fuehren -- nicht gesendet."""
+
+
+class ArmStalled(RuntimeError):
+    """Der Arm steht, das Ziel nicht -- Not-Aus am Handbediengeraet oder
+    toter Steuerkanal. Die Fahrt endet, statt weiter Ziele zu senden."""
+
+
+class StallGuard(object):
+    """Erkennt "Arm steht, Ziel nicht" (Anwender 2026-11-16).
+
+    Der Not-Aus am Handbediengeraet haelt den Arm an, ohne dass servo_j einen
+    Fehler meldet. Ohne diese Pruefung sendet die Fahrt weiter Ziele, die
+    Luecke zur Messung waechst, und nach dem Entriegeln laege ein altes Ziel
+    an. ``check`` je Takt mit der gemessenen Stellung und dem gesendeten Ziel;
+    wirft :class:`ArmStalled` nach ``steps`` Takten in Folge, in denen sich
+    die Messung um weniger als ``move_rad`` bewegt hat und das Ziel mehr als
+    ``gap_rad`` entfernt ist. Steht der Arm AM Ziel (Dwell, Zoegern der
+    Policy), loest nichts aus.
+    """
+
+    def __init__(self, move_rad=config.STALL_MOVE_RAD, gap_rad=config.STALL_GAP_RAD,
+                 steps=config.STALL_STEPS):
+        self.move_rad = float(move_rad)
+        self.gap_rad = float(gap_rad)
+        self.steps = int(steps)
+        self.reset()
+
+    def reset(self):
+        self._prev = None
+        self.count = 0
+        self.since = None      # erster Takt der laufenden Folge (Zaehler der Aufrufe)
+        self._calls = 0
+        return self
+
+    def check(self, measured, target):
+        """Rueckgabe: Takte in Folge "steht". Wirft ArmStalled an der Grenze."""
+        measured = np.asarray(measured, dtype=float)
+        target = np.asarray(target, dtype=float)[:len(measured)]
+        moved = (float("inf") if self._prev is None
+                 else float(np.max(np.abs(measured - self._prev))))
+        gap = float(np.max(np.abs(target - measured)))
+        self._prev = measured
+        if moved < self.move_rad and gap > self.gap_rad:
+            if self.count == 0:
+                self.since = self._calls
+            self.count += 1
+        else:
+            self.count, self.since = 0, None
+        self._calls += 1
+        if self.count >= self.steps:
+            raise ArmStalled(
+                "arm steht: %d Takte ohne Bewegung (< %.0e rad), Ziel %.3f rad entfernt "
+                "-- Not-Aus am Handbediengeraet oder Steuerkanal weg? Anlage pruefen, "
+                "Not-Aus erst nach dem Ende der Fahrt entriegeln"
+                % (self.count, self.move_rad, gap))
+        return self.count
+
+
+def check_target(collision_model, robot, joints, previous=None, lookahead=0.0):
+    """Vorabpruefung eines Ziels VOR dem Senden (Inferenz, Analyse 2026-11-11).
+
+    Der Watchdog prueft die GEMESSENE Stellung, reagiert also erst, wenn der
+    Arm schon dort ist (bei 20 Hz plus ~0,1 s Stopp einige mm zu spaet). Hier
+    wird das Ziel selbst geprueft: ein verbotenes Ziel geht gar nicht erst
+    raus. Wirft :class:`TargetRejected` mit der ersten Verletzung.
+
+    ``previous`` + ``lookahead`` (Anlage 2026-11-17): zusaetzlich das um
+    ``lookahead`` Takte linear verlaengerte Ziel ``joints + lookahead *
+    (joints - previous)`` pruefen. Nach einem abgelehnten Ziel laeuft der Arm
+    noch nach (gemessen bis 7,5 mm bei 150 mm/s, ~50 ms) -- so wird schon
+    abgelehnt, solange der Nachlauf bei der aktuellen Geschwindigkeit noch
+    vor der Grenze endet.
+    """
+    joints = np.asarray(joints, dtype=float)
+    candidates = [("", joints)]
+    if previous is not None and lookahead > 0:
+        ahead = joints + float(lookahead) * (joints - np.asarray(previous, dtype=float)[:len(joints)])
+        candidates.append((" (Nachlauf)", ahead))
+    for tag, q in candidates:
+        violations = collision_model.check_positions(collision_model.positions_for(robot, q))
+        if violations:
+            v = violations[0]
+            raise TargetRejected("kollision vorab%s: %s an %s (Rest %.0f mm)"
+                                 % (tag, v.frame, v.box, 1e3 * v.clearance))

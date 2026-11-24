@@ -45,20 +45,23 @@ def _pose(x, y, z, quat=DOWN):
 def test_plane_from_points_one_mm_above():
     points = [_pose(0.3, -0.1, 0.011), _pose(0.5, -0.1, 0.011),
               _pose(0.3, 0.1, 0.011), _pose(0.5, 0.1, 0.011)]
-    plane = fit_table(points)
+    plane = fit_table(points, offset=0.001)
     assert np.isclose(plane.height_at(0.4, 0.0), 0.010)   # 1 mm unter den Punkten
     assert plane.tilt_deg < 1e-6 and plane.residual_m < 1e-9 and plane.count == 4
     # schraeger Tisch: 2 mm auf 20 cm
-    tilted = fit_table([_pose(0.3, 0, 0.011), _pose(0.5, 0, 0.013), _pose(0.3, 0.2, 0.011)])
+    tilted = fit_table([_pose(0.3, 0, 0.011), _pose(0.5, 0, 0.013), _pose(0.3, 0.2, 0.011)],
+                       offset=0.001)
     assert np.isclose(tilted.height_at(0.5, 0.2), 0.012)
     assert 0.5 < tilted.tilt_deg < 0.6
     # ein Punkt: waagerecht; keiner: unbekannt
-    assert fit_table([_pose(0.3, 0, 0.02)]).height_at(1, 1) == 0.019
+    assert fit_table([_pose(0.3, 0, 0.02)], offset=0.001).height_at(1, 1) == 0.019
+    # Standard seit 2026-11-02: Greifer beruehrt den Tisch beim Teachen
+    assert fit_table([_pose(0.3, 0, 0.02)]).height_at(1, 1) == 0.02
     assert fit_table([]) is None
 
 
 def test_points_too_close_to_the_table_are_named():
-    plane = fit_table([_pose(0.3, 0, 0.011), _pose(0.5, 0, 0.011), _pose(0.4, 0.2, 0.011)])
+    plane = fit_table([_pose(0.3, 0, 0.010), _pose(0.5, 0, 0.010), _pose(0.4, 0.2, 0.010)])
     wps = [Waypoint(_pose(0.4, 0.0, 0.018), name="PICK"),        # 8 mm drueber
            Waypoint(_pose(0.4, 0.0, 0.011), name="TIEF"),        # 1 mm
            Waypoint(_pose(0.4, 0.0, 0.005), name="DRUNTER")]
@@ -93,7 +96,7 @@ def test_align_keeps_yaw_and_sets_height():
 
 
 def test_table_surface_checks_only_the_tool_tip():
-    plane = fit_table([_pose(0.3, 0, 0.011)])
+    plane = fit_table([_pose(0.3, 0, 0.010)])
     surface = TableSurface(plane)
     assert surface.clearance_for("wrist", [0.4, 0, 0.0], 0.08) is None
     assert np.isclose(surface.clearance_for("tool", [0.4, 0, 0.018], 0.06), 0.008)
@@ -116,7 +119,7 @@ def _sim_table():
         pose = pick.copy()
         pose[0] += dx
         pose[1] += dy
-        pose[2] -= 0.007          # Tisch 8 mm unter PICK, Punkt 1 mm darueber
+        pose[2] -= 0.008          # Tisch 8 mm unter PICK, Punkt beruehrt ihn
         points["ID%d" % k] = kin.ik(pose, points["PICK"])
     return points
 
@@ -168,7 +171,7 @@ def test_gui_keeps_the_table_when_saving(tmp_path):
     assert [r["kind"] for r in rows[-4:]] == [points_module.TABLE] * 4
     # die mitgelieferte Ablaufdatei hat den Abschnitt
     shipped = json.loads((ROOT / "sequences" / "pick_to_station.json").read_text(encoding="utf-8"))
-    assert shipped["table"]["points"] == ["ID0", "ID1", "ID2", "ID3"]
+    assert shipped["table"]["points"] == ["ID%d" % k for k in range(9)]
 
 
 def _record(tmp_path, points):
@@ -236,6 +239,31 @@ def test_keepout_zone_around_ignore():
     assert surface.clearance_for("tool", [0.25, -0.1, 0.06], 0.0) > 0
 
 
+def test_new_poses_keep_the_whole_object_out_of_the_keepout():
+    # Anwender 2026-11-03: Bauteil 60 mm, mittig gegriffen, je 5 mm Puffer
+    from bc.table import Keepout, keepout_notes
+
+    plane = fit_table([_pose(0.2, -0.3, 0.001), _pose(0.6, -0.3, 0.001), _pose(0.2, 0.0, 0.001)])
+    zone = Keepout("IGNORE", (0.232, -0.091))
+    assert zone.object_margin == config.KEEPOUT_OBJECT_MARGIN_M == 0.035
+    edge = 0.232 + 0.05
+    assert abs(zone.distance_xy((edge + 0.020, -0.091)) - 0.020) < 1e-9
+    assert zone.distance_xy((0.25, -0.10)) == 0.0
+    assert zone.blocks_object((edge + 0.034, -0.091))
+    assert not zone.blocks_object((edge + 0.036, -0.091))
+    # Ecke: Abstand diagonal, nicht je Achse
+    corner = (edge + 0.025, -0.091 - 0.05 - 0.018)          # geteachter PICK 2026-11-02
+    assert abs(zone.distance_xy(corner) - np.hypot(0.025, 0.018)) < 1e-9
+    assert zone.blocks_object(corner) and not zone.contains_xy(corner)
+    assert not zone.blocks_object((edge + 0.025, -0.091 - 0.05 - 0.025))
+    # geteacht: nur Hinweis, und nur fuer tiefe Punkte
+    pick = Waypoint(_pose(corner[0], corner[1], 0.007), name="PICK")
+    high = Waypoint(_pose(corner[0], corner[1], 0.10), name="ANFLUG")
+    notes = keepout_notes([pick, high], plane, [zone])
+    assert len(notes) == 1 and notes[0].startswith("PICK liegt 31 mm neben")
+    assert zone.as_dict()["object_margin"] == 0.035                     # in meta.json
+
+
 def test_sequence_with_keepout_resolves_zone():
     points = _sim_table()
     probe = SimRobot(clock=SimClock()).connect()
@@ -271,3 +299,28 @@ def test_block_counts_up_and_yaw_is_an_axis():
     assert abs(yaw_deg(pose) - 115.0) < 1e-6
     turned = geometry.quat_from_axis_angle([0.0, 0.0, 1.0], np.radians(295))
     assert abs(yaw_deg(_pose(0.3, 0, 0.01, geometry.quat_multiply(turned, DOWN))) - 115.0) < 1e-6
+
+
+def test_correction_hits_the_points_and_fades_out():
+    # Anlage 2026-11-02: Ebene verfehlt die Punkte um bis zu 0,4 mm -- die
+    # Korrektur trifft sie exakt, dazwischen glatt, weit weg ~ Ebene
+    rng = np.random.default_rng(1)
+    pts = []
+    for x in (0.2, 0.4, 0.6):
+        for y in (-0.3, -0.15, 0.0):
+            pts.append([x, y, 0.01 * x + rng.uniform(-0.0004, 0.0004), 1, 0, 0, 0])
+    plain = fit_table(pts, curved=False, correct=False)
+    table = fit_table(pts, curved=False)
+    assert table.corrected and not plain.corrected
+    for p in pts:
+        assert abs(table.height_at(p[0], p[1]) - p[2]) < 1e-9
+    mid = table.height_at(0.3, -0.075)
+    lo = min(p[2] for p in pts[:5]) - 0.001
+    assert lo < mid < max(p[2] for p in pts) + 0.001
+    far = table.correction_at(5.0, 5.0)
+    assert abs(far - np.mean(table.corr_dz)) < 1e-4
+    # Senkrechte unveraendert, Meta enthaelt die Korrektur
+    assert np.allclose(table.normal_at(0.3, -0.1), plain.normal_at(0.3, -0.1))
+    data = table.as_dict()
+    assert len(data["corr_dz"]) == 9 and "Korrektur an den Punkten" in table.describe()
+    json.dumps(data)

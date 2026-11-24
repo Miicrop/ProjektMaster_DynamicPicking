@@ -166,3 +166,40 @@ def test_relabel_changes_only_the_meta_file(tmp_path):
     assert meta["relabeled_from"]["success"] is True
     index = json.loads((root / "index.json").read_text(encoding="utf-8"))
     assert index["episodes"][0]["discarded"] is False
+
+
+def test_rename_retries_while_windows_denies_access(tmp_path):
+    # Anlage 2026-11-02: OneDrive/Virenscanner hielten ep_*.partial kurz offen
+    from pathlib import Path
+    from bc.dataset import rename_retrying
+
+    source = tmp_path / "ep_00000.partial"
+    source.mkdir()
+    target = tmp_path / "ep_00000"
+    calls = []
+    original = Path.rename
+
+    def flaky(self, dest):
+        calls.append(self)
+        if len(calls) < 3:
+            raise PermissionError(5, "Zugriff verweigert")
+        return original(self, dest)
+
+    Path.rename = flaky
+    try:
+        rename_retrying(source, target, tries=5, wait_s=0.0)
+    finally:
+        Path.rename = original
+    assert len(calls) == 3 and target.is_dir() and not source.exists()
+
+    blocked = tmp_path / "blocked.partial"
+    blocked.mkdir()
+    Path.rename = lambda self, dest: (_ for _ in ()).throw(PermissionError(5, "x"))
+    try:
+        rename_retrying(blocked, tmp_path / "blocked", tries=2, wait_s=0.0)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("PermissionError nach dem letzten Versuch erwartet")
+    finally:
+        Path.rename = original

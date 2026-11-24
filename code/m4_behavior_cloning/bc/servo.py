@@ -145,6 +145,58 @@ class TargetLimiter(object):
         return self._q.copy()
 
 
+class CommandLowpass(object):
+    """Tiefpass auf die Policy-Ziele (Inferenz, Anlage 2026-11-23).
+
+    Je Takt: ``z = alpha * Ziel + (1 - alpha) * z_vorher`` -- exponentielle
+    Glaettung erster Ordnung je Gelenk. ``alpha = 1`` laesst das Ziel
+    unveraendert (aus). Befund 23.11.: die Chunks der Diffusion Policy
+    zittern schon in sich (Soll-Ruck unter 60 mm median 3 mm/Takt^2, Planer
+    0,04), der Arm schwingt darauf seitlich 2-4x weiter als befohlen.
+    Offline: alpha 0,5 glaettet ~3x, 0,3 ~5x -- Preis ist Verzug von
+    ``(1 - alpha) / alpha`` Takten (0,5: 1 Takt, 0,3: ~2,3 Takte).
+
+    Sitzt in apps/infer.py hinter dem TargetLimiter, vor Kollisionspruefung
+    und Interpolation. Nur Inferenz, nie Aufnahme: die Daten bleiben gleich.
+    """
+
+    def __init__(self, alpha=1.0):
+        alpha = float(alpha)
+        if not 0.0 < alpha <= 1.0:
+            raise ValueError("Glaettung alpha muss in (0, 1] liegen, nicht %s" % alpha)
+        self.alpha = alpha
+        self._q = None
+
+    @property
+    def active(self):
+        return self.alpha < 1.0
+
+    @property
+    def lag_steps(self):
+        """Mittlerer Verzug in Takten (Gruppenlaufzeit bei tiefen Frequenzen)."""
+        return (1.0 - self.alpha) / self.alpha
+
+    def reset(self, joints):
+        self._q = np.asarray(joints, dtype=float).copy()
+        return self
+
+    def apply(self, target):
+        target = np.asarray(target, dtype=float)
+        if self._q is None:
+            raise RuntimeError("CommandLowpass.reset() zuerst aufrufen")
+        self._q = self.alpha * target + (1.0 - self.alpha) * self._q
+        return self._q.copy()
+
+
+def lowpass_series(targets, alpha, start=None):
+    """:class:`CommandLowpass` ueber eine ganze Folge (N, D) -- fuer Auswertungen."""
+    targets = np.asarray(targets, dtype=float)
+    if not len(targets):
+        return targets.copy()
+    lp = CommandLowpass(alpha).reset(targets[0] if start is None else start)
+    return np.array([lp.apply(t) for t in targets])
+
+
 class ServoGuard(object):
     """Sprung- und Geschwindigkeitsfilter fuer servo_j (AP 4.2, Rauschstudie).
 

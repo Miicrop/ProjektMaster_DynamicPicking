@@ -45,3 +45,31 @@ def test_broken_check_counts_as_violation():
     violation = dog.run_once()
     assert violation and "Sensor weg" in str(violation)
     assert robot.stop_requested
+
+
+def test_frame_age_guard_needs_consecutive_stale_steps():
+    """Eingefrorenes Bild (Anwender 2026-11-11): erst nach INFER_FRAME_AGE_STEPS
+    Takten in Folge ueber INFER_MAX_FRAME_AGE_S anhalten, ein einzelnes
+    verspaetetes Bild bricht nichts ab."""
+    from bc.ports import Frame
+    from bc.safety import CameraStale, FrameAgeGuard
+
+    guard = FrameAgeGuard(max_age_s=0.1, max_steps=2)
+    frisch = Frame(None, 10.0, 0, "wrist")
+    alt = Frame(None, 9.8, 0, "scene")
+    assert guard.check({"wrist": frisch, "scene": frisch}, 10.01) < 0.1
+    guard.check({"wrist": frisch, "scene": alt}, 10.0)          # 1. schlechter Takt
+    guard.check({"wrist": frisch, "scene": frisch}, 10.02)      # wieder gut -> Zaehler 0
+    guard.check({"wrist": frisch, "scene": alt}, 10.0)
+    try:
+        guard.check({"wrist": frisch, "scene": alt}, 10.07)
+        assert False, "CameraStale erwartet"
+    except CameraStale as exc:
+        assert "scene" in str(exc)
+    # nie geliefert zaehlt als eingefroren
+    guard = FrameAgeGuard(max_age_s=0.1, max_steps=1)
+    try:
+        guard.check({"wrist": None}, 10.0)
+        assert False, "CameraStale erwartet"
+    except CameraStale as exc:
+        assert "nie geliefert" in str(exc)

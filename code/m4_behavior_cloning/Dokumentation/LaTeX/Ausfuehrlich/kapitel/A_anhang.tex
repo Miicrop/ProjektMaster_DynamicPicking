@@ -1,0 +1,89 @@
+\chapter{Wichtige Parameter}
+\label{app:parameter}
+
+Alle Konstanten stehen mit Begründung in \code{bc/config.py}. \Cref{tab:parameter} fasst die
+zusammen, die in diesem Dokument vorkommen.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Wichtige Parameter (Stand 19.11.2026)}
+  \label{tab:parameter}
+  \small
+  \begin{tabularx}{\textwidth}{@{}l l X@{}}
+    \toprule
+    Name in \code{config.py} & Wert & Bedeutung \\
+    \midrule
+    \code{CONTROL_RATE_HZ} & \SI{15}{\hertz} & Takt von Aufnahme und Policy \\
+    \code{SERVO_RATE_HZ} & \SI{60}{\hertz} & Sollwertstrom \code{servo_j} \\
+    \code{TRANSIT_SPEED_MS} & \SI{0.15}{\metre\per\second} & Transfer, linear \\
+    \code{APPROACH_SPEED_MS} & \SI{0.02}{\metre\per\second} & Endanflug \\
+    \code{PTP_JOINT_SPEED_RADS} & \SI{0.5}{rad/s} & Gelenkfahrt \\
+    \code{SEGMENT_RAMP_S} & \SI{0.5}{\second} & Anfahr- und Bremsrampe \\
+    \code{GRIPPER_DWELL_S} & \SI{0.5}{\second} & Wartezeit nach Greiferbefehl \\
+    \code{NOISE_TRANS_AMPLITUDE_M} & \SI{15}{\milli\metre} & Rauschen Position \\
+    \code{NOISE_ROT_AMPLITUDE_RAD} & \SI{0.05}{rad} & Rauschen Drehung \\
+    \code{NOISE_OU_TAU_S} & \SI{0.8}{\second} & Zeitkonstante \\
+    \code{FUNNEL_START_DIST_M} / \code{_ZERO_} & \SI{15}{} / \SI{2}{\centi\metre} & Trichter \\
+    \code{APPROACH_OFFSET_SHARE} & \num{0.5} & Anteil Episoden mit Versatz \\
+    \code{COLLISION_MARGIN_M} & \SI{3}{\centi\metre} & Sicherheitsabstand \\
+    \code{SYNC_MAX_SKEW_S} & \SI{30}{\milli\second} & Zeitbudget Bild--Zustand \\
+    \code{AUTO_YAW_RANGE_DEG} & \ang{\pm 45} & Drehung neuer Lagen \\
+    \code{POLICY_HORIZON} / \code{_N_ACTION_STEPS} & 16 / 8 & Vorhersagehorizont \\
+    \code{POLICY_INFERENCE_STEPS} & 10 & \acs{ddim}-Schritte \\
+    \code{POLICY_MAX_JOINT_SPEED_RADS} & \SI{0.8}{rad/s} & weiche Begrenzung \\
+    \code{SERVO_MAX_JOINT_SPEED_RADS} & \SI{1.0}{rad/s} & harte Grenze \\
+    \code{INFER_MAX_FRAME_AGE_S} & \SI{100}{\milli\second} & Höchstalter eines Bildes \\
+    \code{PROBE_GAP_M} & \SI{25}{\milli\metre} & Abstand beim Probegriff \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\chapter{Verzeichnis der Berichte und Einzeldokumente}
+\label{app:berichte}
+
+Die folgenden Unterlagen liegen unter \code{code/m4_behavior_cloning/} und bleiben als
+eigenständige Dokumente bestehen.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Berichte (\code{Berichte/})}
+  \label{tab:berichte}
+  \small
+  \begin{tabularx}{\textwidth}{@{}l X l@{}}
+    \toprule
+    Datum & Inhalt & Abschnitt \\
+    \midrule
+    16.09. & Rauschstudie ohne Bilder; Rauschen je Episode in der \acs{vm} & \ref{sec:rauschstudie} \\
+    17.09. & Durchstich der Kette in Simulation und \acs{vm} & \ref{sec:durchstich} \\
+    01.--21.10. & Labortage: Systemcheck, Aufruflatenz, Sollwerttakt, Trajektorienpuffer,
+      Servo-Strom, Kinematik, Smartphone-Messungen & \ref{sec:labortage} \\
+    10.11. & Modellprüfung Checkpoint 09.11. & \ref{sec:modellpruefung} \\
+    13.11. & \acs{vm}-Test mit den Aufnahmen vom 11.11. & \ref{sec:replay-1111} \\
+    13.--15.11. & Versuchsreihe Policy-Varianten & \ref{sec:varianten} \\
+    16.11. & Anlagentest C2 & \ref{sec:anlagentest-c2} \\
+    16.11. & Kameraempfindlichkeit C2 & \ref{sec:kamera-empfindlichkeit} \\
+    17.11. & Drehbias C2/C3/C3a & \ref{sec:drehbias} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Einzeldokumente (\code{Dokumentation/} und \code{Requierments/})}
+  \label{tab:einzeldokumente}
+  \small
+  \begin{tabularx}{\textwidth}{@{}l X@{}}
+    \toprule
+    Dokument & Inhalt \\
+    \midrule
+    \code{requierments.md} & Anforderungen und Entscheidungen je Arbeitspaket \\
+    \code{Kamera-Inbetriebnahme.md} & Kameras: Hardware, SDK, Einstellungen, Mechanik \\
+    \code{Taktzeit-und-RPC-Latenz.md} & Eingrenzung abbrechender Bahnen, Messmethode \\
+    \code{Zittern-an-der-Anlage.md} & Ursache und Lösung des Zitterns, alle Messreihen \\
+    \code{Training-und-Inferenz.md} & Export, Training, Ausführung, Prüfung ohne Anlage \\
+    \code{DAgger-Ablauf.md} & geplanter Ablauf für \acs{dagger} \\
+    \code{Environment-*.md} & Einrichtung der Python-Umgebungen \\
+    \code{Anlagentag-Checkliste.md} & Ablauf eines Tages an der Anlage \\
+    \bottomrule
+  \end{tabularx}
+\end{table}

@@ -38,7 +38,7 @@ from . import session as session_module
 from . import training as training_module
 from .runner import ProcessRunner
 from .tab_base import ModeTab
-from .widgets import BAD, GOOD, LogView, NEUTRAL, WARN, block_wheel
+from .widgets import BAD, GOOD, LogView, NEUTRAL, TEXT, WARN, block_wheel
 
 log = logging.getLogger(__name__)
 
@@ -535,7 +535,7 @@ class SystemcheckTab(ModeTab):
             return
         item.setText(1, detail if detail is not None else state)
         colour = _STATE_COLOURS.get(state)
-        item.setForeground(1, QBrush(QColor(colour or "#333")))
+        item.setForeground(1, QBrush(QColor(colour or TEXT)))
 
     def _set_buttons_running(self, running):
         self.btn_selected.setEnabled(not running)

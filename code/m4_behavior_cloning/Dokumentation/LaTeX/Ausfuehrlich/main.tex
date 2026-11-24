@@ -1,0 +1,71 @@
+% !TeX program = pdflatex
+% !BIB program = biber
+% Dokument A: ausführliche Dokumentation von Modul 4 (Behavior Cloning).
+% Bauen:  latexmk   (im Ordner Ausfuehrlich, Ausgabe nach build/)
+\documentclass[
+  a4paper,
+  12pt,
+  oneside,
+  parskip=half,
+  bibliography=totoc,
+  listof=totoc,
+  numbers=noenddot
+]{scrreprt}
+
+\input{../praeambel}
+
+\newcommand{\doctitle}{Modul 4: KI-basiertes Greifen mit Behavior Cloning}
+\newcommand{\docsubtitle}{Ausführliche Dokumentation}
+\newcommand{\docauthor}{Jeremy Zid}
+\newcommand{\thesiscourse}{Automatisierungstechnik und Robotik}
+\newcommand{\thesissupervisor}{Prof.~Dr.~Tobias~Weiser}
+
+\hypersetup{pdftitle={\doctitle},pdfauthor={\docauthor}}
+
+\begin{document}
+
+\pagenumbering{Roman}
+\begin{titlepage}
+  \centering
+  {\large Hochschule für angewandte Wissenschaften Kempten\par}
+  \vspace{0.5cm}
+  {\large \thesiscourse\par}
+  \vspace{3cm}
+  {\LARGE\bfseries \doctitle\par}
+  \vspace{0.8cm}
+  {\Large \docsubtitle\par}
+  \vfill
+  \begin{tabular}{ll}
+    Verfasser: & \docauthor \\
+    Betreuer:  & \thesissupervisor \\
+    Stand:     & \today \\
+  \end{tabular}
+\end{titlepage}
+
+\tableofcontents
+\listoffigures
+\listoftables
+\printacronyms[name=Abkürzungsverzeichnis]
+\listoftodos[Offene Punkte]
+
+\cleardoublepage
+\pagenumbering{arabic}
+\input{kapitel/01_einleitung}
+\input{kapitel/02_grundlagen}
+\input{kapitel/03_anforderungen}
+\input{kapitel/04_architektur}
+\input{kapitel/05_datenaufnahme}
+\input{kapitel/06_training}
+\input{kapitel/07_ausfuehrung}
+\input{kapitel/08_sicherheit}
+\input{kapitel/09_integration}
+\input{kapitel/10_versuche}
+\input{kapitel/11_diskussion}
+\input{kapitel/12_fazit}
+
+\printbibliography[heading=bibintoc,title=Literaturverzeichnis]
+
+\appendix
+\input{kapitel/A_anhang}
+
+\end{document}

@@ -1,0 +1,50 @@
+\chapter{Fehlerbehebung}
+\label{ch:fehler}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{50mm} X@{}}
+    \toprule
+    Meldung / Beobachtung & Ursache und Abhilfe \\
+    \midrule
+    Touchpad bleibt schwarz & Kabel des Touchpads abziehen und wieder einstecken. \\
+    Greifer reagiert nicht & IO Settings: Output 1.3 = 1, alle anderen = 0? Werkzeug
+      \code{ZimmerLWR50} gewählt? \\
+    Anzeige orange, Bewegung gesperrt & Steuerung antwortet nicht als Simulation und
+      \enquote{Reale Anlage freigeben} ist aus. An der Anlage Haken setzen; sonst prüfen, womit
+      man verbunden ist. \\
+    \acs{vm} startet nicht, \pfad{VERR_INTNET_FLT_IF_NOT_FOUND} & zweiten Netzwerkadapter der
+      \acs{vm} auf \enquote{Host-Only Ethernet Adapter \#3} stellen. \\
+    \acs{vm} antwortet nach Stunden nicht mehr (\enquote{robot is reachable?}) & Robotersoftware
+      in der \acs{vm} hängt; \acs{vm} neu starten. \\
+    Bahn bricht ab, Episoden \enquote{über Budget} & Laptop gedrosselt: Netzteil, Energiemodus
+      \enquote{Beste Leistung}, \acs{vm} nicht neben der Aufnahme. \\
+    \enquote{arm folgt nicht} (Schleppfehler) & Tempo zu hoch für den Override, oder Versatz bzw.
+      Drehung baut sich zu schnell auf. Tempo senken, nicht den Override. \\
+    Kamera nur \SIrange{23}{30}{fps} & an einem USB-Verteiler; direkt an den Rechner stecken. \\
+    Kamerabild zeigt eine Ecke & in der Kamera gespeicherter Ausschnitt; der Adapter setzt ihn
+      sonst selbst, Kamera einmal neu öffnen. \\
+    \pfad{KeyError: 'GALAXY_GENICAM_ROOT'} & Shell nach der SDK-Installation neu öffnen. \\
+    Handgelenk- und Draufsichtbild vertauscht & Zuordnung per Seriennummer prüfen. \\
+    Export bricht ab: Werte gemischt & Override, Tempo, Rate oder Kameras unterscheiden sich
+      zwischen Aufnahmen. Aufnahmen trennen; \pfad{--allow-mixed} nur für bewusste Vergleiche. \\
+    Fahrt stoppt sofort: Kameras/Override passen nicht & Ausführung erzwingt die Werte der
+      Aufnahme. \enquote{Wie aufgezeichnet} wählen. \\
+    \enquote{kollision vorab} & Ziel der Policy hätte Tisch, Sperrzone oder Hindernis
+      verletzt. Beim Policy-Test der gewollte Stopp über dem Bauteil. \\
+    \enquote{vorhersage zu langsam} & Grafikkarte ausgelastet oder fehlt; anderes Programm
+      beenden, \pfad{check_gpu.py}. \\
+    \enquote{arm steht} & Not-Halt am Bedienhandgerät gedrückt oder Steuerkanal weg. Erst nach
+      dem Ende der Fahrt entriegeln. \\
+    Training: Fehler 1455 / CUDA out of memory & Speicherlimit; ein Training zur Zeit,
+      weniger Datenlader. \\
+    Policy dreht zu wenig & Drehbias der Daten; Verteilung mit \pfad{analyse_drehung.py}
+      prüfen. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Ausführliche Analysen bekannter Fehlerbilder stehen in
+\pfad{Dokumentation/Taktzeit-und-RPC-Latenz.md}, \pfad{Zittern-an-der-Anlage.md} und
+\pfad{Laptop-Inbetriebnahme-Befunde.md}.

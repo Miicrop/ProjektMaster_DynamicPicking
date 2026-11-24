@@ -25,8 +25,10 @@ from . import config
 from .noise import TrajectoryPlan
 
 
-def slowed_plan(plan, factor=config.PROBE_SPEED_FACTOR):
-    """Ideale Bahn von ``plan``, zeitlich gestreckt, Greifer durchgehend offen.
+def slowed_plan(plan, factor=config.PROBE_SPEED_FACTOR, keep_gripper=False):
+    """Ideale Bahn von ``plan``, zeitlich gestreckt, Greifer durchgehend offen
+    (``keep_gripper``: Greifer wie geplant -- erster Griff bei
+    ``--start-lage m1``).
 
     ``factor`` < 1 = langsamer (0.4 -> 2,5-fache Dauer). Soll = Ist: Die
     Probefahrt hat kein Rauschen.
@@ -48,7 +50,8 @@ def slowed_plan(plan, factor=config.PROBE_SPEED_FACTOR):
         joints_noisy=joints.copy(),
         poses_ideal=poses,
         poses_noisy=poses.copy(),
-        gripper=np.full(m, config.GRIPPER_OPEN),
+        gripper=(np.asarray(plan.gripper)[nearest] if keep_gripper
+                 else np.full(m, config.GRIPPER_OPEN)),
         dwell_mask=np.asarray(plan.dwell_mask)[nearest],
         rate_hz=plan.rate_hz,
     )
@@ -65,6 +68,30 @@ def reversed_plan(plan):
         dwell_mask=np.asarray(plan.dwell_mask)[::-1].copy(),
         rate_hz=plan.rate_hz,
     )
+
+
+def placement_plans(forward, factor=config.PROBE_SPEED_FACTOR):
+    """Langsam vom Start an den Greifpunkt und zurueck, Greifer offen.
+
+    Fuer den selbst gesuchten ersten PICK (Anwender 2026-11-09): Der Arm faehrt
+    die ideale Bahn nur bis zum Schliessen des Greifers, dort wird das Teil von
+    Hand eingelegt. Rueckgabe ``(hin, zurueck)``, Geometrie wie die Aufnahme.
+    """
+    closed = np.flatnonzero(np.asarray(forward.gripper) >= 0.5 * config.GRIPPER_CLOSED)
+    if closed.size == 0:
+        raise ValueError("Die Bahn schliesst den Greifer nie -- kein Greifpunkt zum Einlegen")
+    end = int(closed[0]) + 1
+    part = TrajectoryPlan(
+        joints_ideal=forward.joints_ideal[:end],
+        joints_noisy=forward.joints_ideal[:end],
+        poses_ideal=forward.poses_ideal[:end],
+        poses_noisy=forward.poses_ideal[:end],
+        gripper=np.full(end, config.GRIPPER_OPEN),
+        dwell_mask=np.asarray(forward.dwell_mask)[:end],
+        rate_hz=forward.rate_hz,
+    )
+    hin = slowed_plan(part, factor)
+    return hin, reversed_plan(hin)
 
 
 def probe_plans(forward, back=None, factor=config.PROBE_SPEED_FACTOR):

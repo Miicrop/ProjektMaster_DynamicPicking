@@ -37,6 +37,22 @@ Quelle: Repo `joshi99999/Dynamic_Robot_Project`, Branch `main`, Ordner
 > * Änderungen nachziehen (Abschnitt 7) mit
 >   `git subtree pull --prefix=code/m4_behavior_cloning ../Dynamic_Robot_Project bc-export`.
 > * `BC-Oberflaeche.bat` (BC allein) gilt unverändert.
+>
+> **Änderungen 2026-11-11, die den Gruppenablauf betreffen:**
+>
+> * „ERFOLG“ in der Ergebniszeile von `apps/infer.py` heißt jetzt:
+>   Übergabepunkt erreicht und Greifer wie aufgezeichnet (bei `pick_to_station`:
+>   zu). Bisher musste zusätzlich der Greifpunkt höchstens 10 mm neben einem
+>   Greifpunkt aus dem Training liegen — an neuen Objektlagen wurde ein
+>   richtiger Griff so als Fehler gemeldet und der Zyklus abgebrochen.
+>   `m4_grasper.py` wertet die Zeile unverändert aus.
+> * Der Abbruchgrund in der Ergebniszeile enthält keine Kommas mehr (die
+>   Zeile wird an Kommas zerlegt).
+> * Neue Abbruchgründe: `kamera …` (Bild eingefroren), `kollision vorab: …`
+>   (Ziel der Policy im Kollisionsmodell, nicht gesendet).
+> * Stopp-Test an der Anlage (2026-11-11, `terminate()` wie in
+>   `m4_grasper.py`): Arm steht nach ~0,5 s, ~20 mrad Nachlauf; die Steuerung
+>   bleibt bis zu einem `stop()` gesperrt — den sendet der Fehlerweg von M2.
 
 ---
 

@@ -835,7 +835,11 @@ class TrainingTab(ModeTab):
             return
         self.output.clear()
         self._activity = activity
-        if activity != TRAINING:
+        if activity == EXPORTING:
+            self._progress = training_module.ExportProgress()
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(0)
+        elif activity != TRAINING:
             self._progress = None
             self.progress_bar.setRange(0, 0)       # unbestimmt
         else:
@@ -1025,7 +1029,7 @@ def _command_label():
     label = QLabel("")
     label.setWordWrap(True)
     label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-    label.setStyleSheet("font-family:Consolas; color:#333")
+    label.setStyleSheet("font-family:Consolas; color:palette(text)")
     return label
 
 

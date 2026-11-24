@@ -1,4 +1,4 @@
-numpy>=1.24
+numpy>=2.0,<2.3   # same range as M4 (setup_m4.bat); gxipy from the Daheng SDK needs numpy.compat (gone in 2.4)
 opencv-python-headless>=4.8   # same package EasyOCR uses; includes cv2.aruco (>= 4.7)
 pyyaml>=6.0
 pillow>=10.0   # A4 marker sheet as PDF (make_markers)

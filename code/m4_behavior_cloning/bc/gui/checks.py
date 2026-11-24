@@ -259,8 +259,15 @@ def catalogue():
               ["tools/check_sim_robot.py"],
               "Host, Port, NeuraPy-Version, is_robot_in_simulation(), "
               "Servo-Interface und Greifermodus. Ohne Bewegung wird nur "
-              "gelesen und gerechnet.",
-              needs=("neurapy",)),
+              "gelesen und gerechnet. Mit Haken auch die Ubuntu-Version der "
+              "Steuerung (per SSH, Schluessel noetig).",
+              needs=("neurapy",),
+              params=(
+                  Param("os_version", "Ubuntu-Version lesen", True, kind="bool",
+                        flag="--os-version",
+                        help="liest /etc/os-release per SSH; einmalig: ssh-copy-id hrg@<Steuerung>"),
+                  Param("ssh_user", "SSH-Benutzer", "hrg", flag="--ssh-user"),
+              )),
         Check("kinematics", "Kinematik und Achsgrenzen", CONNECT,
               ["tools/check_kinematics.py"],
               "Controller-FK gegen die VM-Referenz (50 Stellungen), "

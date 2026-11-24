@@ -111,3 +111,21 @@ def test_a_real_mode_can_be_turned_into_placeholders():
     # Der Fall des Anwenders: "real" gewaehlt, aber zum Testen ohne Kamera.
     cfgs = camera_configs("real", specs=["wrist=sim", "scene=sim"])
     assert all(c.backend == "sim" for c in cfgs)
+
+
+def test_camera_settings_compare_against_recording():
+    """Belichtung/Gain/Weissabgleich jetzt gegen die Aufnahme (Analyse
+    2026-11-11): nur Hinweise, aeltere Aufnahmen ohne Werte bleiben still."""
+    from bc import camera_settings
+
+    seen = camera_settings.collect([
+        {"wrist": {"exposure_us": 8000.0, "gain_db": 0.0, "white_balance_auto": "Once"}},
+        {"wrist": {"exposure_us": 6000.0, "gain_db": 0.0, "white_balance_auto": "Once"}},
+        None,
+    ])
+    assert seen["wrist"]["exposure_us"] == [8000.0, 6000.0]
+    assert camera_settings.compare(seen, {"wrist": {"exposure_us": 6020.0, "gain_db": 0.2}}) == []
+    zeilen = camera_settings.compare(seen, {"wrist": {"exposure_us": 12000.0, "gain_db": 3.0,
+                                                      "white_balance_auto": "Off"}})
+    assert len(zeilen) == 3 and all(z.startswith("Kamera wrist") for z in zeilen)
+    assert camera_settings.compare({}, {"wrist": {"exposure_us": 1.0}}) == []

@@ -45,6 +45,7 @@ class FakeNeura:
         self.program_ready = False
         self.init_failures = 0   # > 0: refuse that many init_program calls (transient state seen on the VM)
         self.gripper_closed = False
+        self.outputs: dict[str, Any] = {}   # digital outputs of the control box (gripper_io)
         self.override = 1.0
         self.tool = "NoTool"
         self.tools = {k: list(v) for k, v in TOOLS.items()}
@@ -167,6 +168,12 @@ class FakeNeura:
     def release(self) -> bool:
         self.gripper_closed = False
         return True
+
+    def io(self, operation_type: str, io_name: str, target_value: Any = None) -> Any:
+        if operation_type == "set":
+            self.outputs[io_name] = target_value
+            return True
+        return self.outputs.get(io_name, False)
 
     # -- protocol ------------------------------------------------------------
     def dispatch(self, request: dict) -> dict:

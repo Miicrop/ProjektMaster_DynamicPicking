@@ -69,6 +69,12 @@ def as_target(cfg: dict[str, Any], pose: ObjectPose | RobotTarget) -> RobotTarge
                        home.rx_deg, home.ry_deg, rz)
 
 
+def place_target(cfg: dict[str, Any], target: RobotTarget) -> RobotTarget:
+    """Where place() opens the gripper: robot.place_height_mm above the place pose. The poses are the
+    surfaces (fingertips on them), the held part hangs grasp_height_mm below the TCP."""
+    return offset_z(target, cfg["robot"].get("place_height_mm", 0.0), target.name)
+
+
 def check_limits(cfg: dict[str, Any], t: RobotTarget) -> None:
     lim = cfg["robot"]["limits_mm"]
     for axis, value in (("x", t.x_mm), ("y", t.y_mm), ("z", t.z_mm)):
@@ -136,6 +142,7 @@ class MockRobot(RobotController):
 
     def place(self, target: RobotTarget) -> None:
         self._check_ready()
+        target = place_target(self._cfg, target)
         check_limits(self._cfg, target)
         if not self.holding:
             raise RobotError("Nothing to place")
@@ -191,7 +198,21 @@ class NeuraRobot(RobotController):
         r.set_override(self._rc["override"])
         r.set_joint_speed(self._rc["joint_speed_percent"])
         self._init_program(r)   # required before any motion command
+        self._enable_gripper()
         self.stopped = False
+
+    def _enable_gripper(self) -> None:
+        """Digital-output gripper: enable on (motors, error state without it), then a reset pulse."""
+        io = self._rc.get("gripper_io")
+        if not (self.gripper_enabled and io):
+            return
+        if io.get("enable"):
+            self._set_output(io["enable"], True)
+        if io.get("reset"):
+            log.info("Gripper reset pulse on %s", io["reset"])
+            self._set_output(io["reset"], True)
+            time.sleep(self._rc.get("gripper_reset_pulse_s", 0.5))
+            self._set_output(io["reset"], False)
 
     def _init_program(self, r) -> None:
         """init_program, retried while the controller transiently refuses to switch to play mode."""
@@ -242,7 +263,18 @@ class NeuraRobot(RobotController):
         if not self.gripper_enabled:
             log.info("Gripper disabled - skipping %s", "close" if close else "open")
             return
-        self.open_client().grasp() if close else self.open_client().release()
+        io = self._rc.get("gripper_io")
+        if not io:
+            self.open_client().grasp() if close else self.open_client().release()
+            return
+        on, off = (io["close"], io["open"]) if close else (io["open"], io["close"])
+        self._set_output(off, False)   # never both outputs on at the same time
+        self._set_output(on, True)
+
+    def _set_output(self, name: str, value: bool) -> None:
+        """Set a digital output of the control box by name (e.g. DO_1)."""
+        if self.open_client().io("set", io_name=name, target_value=value) is False:
+            raise RobotError(f"Controller refused io set {name}={value} - check robot.gripper_io")
 
     def _check_tool(self) -> None:
         """Refuse motion if the controller tool's TCP differs from robot.tool_tcp_mm - every
@@ -366,9 +398,10 @@ class NeuraRobot(RobotController):
         self._retreat(t, above)
 
     def place(self, target: RobotTarget) -> None:
+        target = place_target(self._cfg, target)
         above = offset_z(target, self._rc["approach_height_mm"])
         check_limits(self._cfg, target)
-        log.info("place at %s", target.name)
+        log.info("place at %s (z %.1f)", target.name, target.z_mm)
         self._joint_move_to(above)
         self._approach(above, target)
         self.gripper(close=False)

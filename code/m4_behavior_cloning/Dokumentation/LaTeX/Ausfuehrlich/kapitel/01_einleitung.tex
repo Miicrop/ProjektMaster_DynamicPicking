@@ -1,0 +1,82 @@
+\chapter{Einleitung}
+\label{ch:einleitung}
+
+\section{Einordnung in das Gesamtprojekt}
+\label{sec:einordnung}
+
+Das Projekt \enquote{Dynamisches Greifen und automatisierte Sichtprüfung mit einem
+kollaborativen Roboter} ist in vier Module gegliedert. Modul~1 erkennt das Bauteil mit
+einer Draufsichtkamera und bestimmt seine Lage, Modul~2 steuert den Roboter und greift das
+Bauteil auf klassischem Weg, und Modul~3 prüft das abgelegte Bauteil optisch. Modul~4, das
+Thema dieses Dokuments, untersucht einen anderen Weg zum Greifen: Statt einer programmierten
+Bahn zu einer gemessenen Greifpose führt eine gelernte Steuerungsstrategie (Policy) den Arm.
+Sie erhält in jedem Takt Kamerabilder und den Zustand des Roboters und gibt daraus direkt die
+nächsten Sollwerte für Gelenke und Greifer aus.
+
+Modul~4 ist eine Alternative zum Greifen von Modul~2 und für den automatischen Ablauf nicht
+erforderlich. Im Ablauf übernimmt es nur den Abschnitt vom Start bis zur Übergabe: Die Policy
+startet in einer festen Ausgangsstellung, sucht das Bauteil in den Bildern, greift es und
+fährt es an einen Übergabepunkt über der Prüfvorrichtung. Dort endet ihre Aufgabe mit dem
+Bauteil im Greifer. Das Ablegen auf der Prüfvorrichtung und alle weiteren Bewegungen führt
+wieder Modul~2 aus (\cref{ch:integration}).
+
+\section{Zielsetzung}
+\label{sec:ziel}
+
+Ziel von Modul~4 ist eine vollständige, lokal betriebene Kette für Imitation Learning am
+Roboter Neura LARA~5:
+\begin{enumerate}
+  \item automatisierte Aufnahme von Demonstrationen mit gezielt eingespeistem Rauschen,
+  \item Training einer Diffusion Policy~\cite{chi2024} auf diesen Daten,
+  \item Ausführung der Policy in Echtzeit mit einer eigenen Sicherheitsschicht und
+  \item Einbindung in den Ablauf und die Bedienoberfläche des Gesamtprojekts.
+\end{enumerate}
+Bewertet wird die Kette danach, wie zuverlässig die Policy das Bauteil an unterschiedlichen
+Lagen greift und übergibt (\cref{ch:versuche}).
+
+\section{Aufbau der Anlage}
+\label{sec:aufbau}
+
+\Cref{tab:aufbau} fasst die Komponenten zusammen, mit denen Modul~4 arbeitet. Roboter und
+Greifer teilt es mit Modul~2, die Draufsichtkamera mit Modul~1.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Komponenten von Modul~4}
+  \label{tab:aufbau}
+  \begin{tabularx}{\textwidth}{@{}l X@{}}
+    \toprule
+    Komponente & Ausführung \\
+    \midrule
+    Roboter & Neura LARA~5, sechs Achsen, Steuerung LARA-5.0.8, Python-Schnittstelle
+              NeuraPy über TCP/IP~\cite{neura2025neurapy} \\
+    Greifer & Zimmer LWR50L-03, Parallelbackengreifer, über NeuraPy nur öffnen und
+              schließen~\cite{zimmer_lwr50l} \\
+    Handgelenkkamera & Daheng VEN-161-61U3C, $1440 \times 1080$~Pixel, Global Shutter,
+                       Objektiv \SI{3.6}{\milli\metre}, F8.0, kaum Verzeichnung \\
+    Szenenkamera & Draufsichtkamera von Modul~1 \\
+    Bauteil & $\num{39.7} \times \SI{14.9}{\milli\metre}$ (Grundfläche) \\
+    Rechner & Training: NVIDIA RTX 5070~Ti, \SI{16}{\giga\byte}; Betrieb: Laptop mit
+              NVIDIA-\acs{gpu} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\todo[inline]{Foto des Aufbaus mit Beschriftung (Roboter, Kameras, Bauteil, Prüfvorrichtung,
+Kamerastange).}
+
+\section{Aufbau dieses Dokuments}
+\label{sec:aufbau-dokument}
+
+\Cref{ch:grundlagen} stellt den klassischen Ansatz und Behavior Cloning gegenüber und
+erklärt die mathematischen Grundlagen der verwendeten Verfahren, einschließlich der bekannten
+Schwierigkeiten des Lernens aus Demonstrationen. \Cref{ch:anforderungen} leitet daraus die
+Anforderungen an Modul~4 ab. Die \cref{ch:architektur,ch:datenaufnahme,ch:training,%
+ch:ausfuehrung,ch:sicherheit,ch:integration} beschreiben die Umsetzung. Jeder Abschnitt folgt
+dabei demselben Muster: Idee, Umsetzung, aufgetretene Probleme und ihre Lösung, und die
+Begründung der jeweiligen Designentscheidung. \Cref{ch:versuche} fasst die Versuche
+zusammen, \cref{ch:diskussion} bewertet sie, und \cref{ch:fazit} zieht ein Fazit.
+
+Die Messberichte und Einzeldokumente im Ordner \code{code/m4_behavior_cloning/} bleiben als
+eigenständige Unterlagen bestehen. Dieses Dokument fasst ihren Inhalt zusammen und verweist
+für Rohdaten und Einzelheiten auf sie (\cref{app:berichte}).

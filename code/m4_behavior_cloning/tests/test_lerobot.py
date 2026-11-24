@@ -86,6 +86,20 @@ def test_scan_selects_episodes_and_detects_tempo_conflicts(tmp_path):
     assert both["skipped"]["verworfen (schutzstopp)"] == 1
 
 
+def test_scan_skips_episode_folders_deleted_by_hand(tmp_path):
+    # Anlage 2026-11-03: ep_00082 (Standby) von Hand geloescht, Index blieb
+    import shutil
+
+    from bc import metrics
+
+    root = _record(tmp_path / "a", [_episode(), _episode(), _episode()])
+    shutil.rmtree(root / "ep_00001")
+    scan = lerobot_io.scan_sources([root])
+    assert len(scan["episodes"]) == 2 and scan["skipped"] == {"Ordner fehlt": 1}
+    summary = metrics.summarize(root)
+    assert summary["episodes_usable"] == 2 and summary["discard_reasons"] == {"Ordner fehlt": 1}
+
+
 def test_dry_run_episodes_never_reach_the_export(tmp_path):
     """Trockenlauf ohne Greifer: die Greiferbefehle stehen im Action-Vektor,
     haben aber nie stattgefunden. apps/record.py verwirft solche Episoden
@@ -130,6 +144,8 @@ def test_export_train_save_load_predict(tmp_path):
     assert info["lerobot_version"] == config.LEROBOT_VERSION
     assert info["codebase_version"].startswith("v3")
     assert len(info["episodes"]) == 2 and info["episodes"][0]["grasp_tcp"] is not None
+    # Kamerapruefung: Referenz je Kamera aus dem ersten Bild jeder Episode
+    assert info["camera_reference"]["wrist"]["episodes"] == 2
     assert lerobot_io.read_export_info(out)["schema_version"] == config.SCHEMA_VERSION
 
     # Mini-Policy auf der CPU: Features, Zeitversaetze, ein Lernschritt
@@ -182,3 +198,17 @@ def test_scan_refuses_to_mix_execution_modes(tmp_path):
     b = _record(tmp_path / "b", [online])
     assert "execution/mode" in lerobot_io.scan_sources([a, b])["conflicts"]
     assert not lerobot_io.scan_sources([b])["conflicts"]
+
+
+def test_table_reference_takes_newest_recording():
+    from bc.lerobot_io import table_reference
+
+    alt = {"table": {"a": 0, "b": 0, "c": 0.0}, "table_points": {"ID0": {}, "ID1": {}},
+           "keepout": [{"name": "IGNORE", "center": [0.2, -0.1], "half_size": 0.015}],
+           "sequence_file": "a.json"}
+    neu = dict(alt, table={"a": 0, "b": 0, "c": 0.001})
+    ref = table_reference([("2026-11-09T10:00", neu), ("2026-11-02T10:00", alt)])
+    assert ref["table"]["c"] == 0.001 and ref["table_variants"] == 2
+    assert ref["table_spec"]["points"] == ["ID0", "ID1"]
+    assert ref["table_spec"]["keepout_sizes"] == {"IGNORE": 0.015}
+    assert table_reference([])["table"] is None

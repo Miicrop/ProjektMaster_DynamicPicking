@@ -54,9 +54,10 @@ def test_edit_keeps_comments_and_flow_lists(store):
 
 def test_reload_keeps_dict_identity(store):
     data = store.data
+    saved = data["robot"]["override"]
     store.set(["robot", "override"], 0.9)
     store.reload()
-    assert store.data is data and data["robot"]["override"] == 0.2 and not store.dirty
+    assert store.data is data and data["robot"]["override"] == saved and not store.dirty
 
 
 def test_parse_value():

@@ -1,0 +1,67 @@
+\chapter{Diskussion}
+\label{ch:diskussion}
+
+\todo[inline]{Vorläufige Fassung auf dem Stand vom 19.11. Nach den Versuchen mit dem neuen
+Datensatz überarbeiten.}
+
+% ==============================================================================
+\section{Bewertung der Designentscheidungen}
+\label{sec:bewertung}
+
+\Cref{tab:bewertung} stellt die wichtigsten Entscheidungen ihrer Wirkung in den Versuchen
+gegenüber.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Designentscheidungen und ihre Bewertung nach den Versuchen}
+  \label{tab:bewertung}
+  \small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{38mm} X@{}}
+    \toprule
+    Entscheidung & Bewertung \\
+    \midrule
+    Ports und Adapter, hardwarefrei entwickelt & bewährt: Die Kette lief vor dem ersten
+      Anlagentag vollständig; an der Anlage blieben nur Adapter- und Physikthemen. \\
+    Planer statt Teleoperation & bewährt: gleichmäßiges Tempo und über 700 Demonstrationen
+      mit wenig Handarbeit. Nachteil: Alle Bahnen haben dieselbe Struktur; was der Planer nie
+      zeigt (z.\,B.\ Drehen unter \code{ANFLUG}), kann die Policy nicht. \\
+    Rauschen mit Trichter & in der Vorstudie deutlich wirksam. An der Anlage zeigte sich die
+      Lücke im Endanflug, die der gezielte Versatz schließen soll. \\
+    Absolute Gelenkwinkel als Aktion & bewährt: direkte Abbildung auf \code{servo_j}, keine
+      Drift durch aufsummierte Änderungen. \\
+    Direkte Vorhersage der Aktionsfolge & notwendig: Mit Rauschvorhersage waren zehn
+      Entrauschungsschritte zu ungenau. \\
+    \code{servo_j} mit Override \num{0.5} & bewährt: ruhig wie ein Herstellerprogramm und
+      bahntreu. \\
+    Keine Rektifizierung & bestätigt: Die Policy reagiert kaum auf die Kameralage. \\
+    Eigene Sicherheitsschicht & notwendig: In der \acs{vm} wäre die Werkzeugspitze in gut der
+      Hälfte der Fahrten unter den Tisch gegangen. Die Stufen sind jeweils aus einem
+      beobachteten Fehlerfall entstanden. \\
+    Policy nur für den Griff & vielversprechend: weniger Abbrüche und Tischfahrten, gleiche
+      Genauigkeit. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+% ==============================================================================
+\section{Grenzen}
+\label{sec:grenzen}
+
+\paragraph{Aussagekraft der Tests ohne Anlage.} Weder der Offline-Test noch der \ac{vm}-Test
+koppeln die Bilder an die Bewegung zurück. Sie eignen sich zum Vergleich von Modellen und zum
+Finden grober Fehler, sagen aber die Genauigkeit an der Anlage nur ungefähr und den Drehfehler
+gar nicht vorher. Der einzige vollständige Test ist die Anlage, an der aus Zeit- und
+Sicherheitsgründen nur wenige Fahrten möglich waren.
+
+\paragraph{Fehlerfortpflanzung bleibt.} Offline ist die Policy auf wenige Millimeter genau, an
+der Anlage auf knapp einen Zentimeter. Der Unterschied entsteht in Zuständen, die sie selbst
+herbeiführt. Das ist genau die Hürde aus \cref{sec:covariate-shift}; das eingespeiste
+Rauschen verringert sie, beseitigt sie aber nicht dort, wo es gedämpft ist.
+
+\paragraph{Ungeklärte Verschlechterung.} Warum die Daten vom 11.11.\ die Genauigkeit
+verschlechterten, ist offen. Der Befund zeigt, wie empfindlich das Ergebnis auf schwer
+greifbare Unterschiede der Aufnahmebedingungen reagiert.
+
+\paragraph{Umfang.} Alle Versuche verwenden ein Bauteil auf einem ebenen Tisch, ohne Kiste und
+ohne Störungen während der Fahrt. Aussagen über andere Bauteile oder Szenen sind daraus nicht
+ableitbar.

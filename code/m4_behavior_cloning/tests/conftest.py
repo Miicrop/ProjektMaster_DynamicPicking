@@ -22,6 +22,14 @@ def pytest_addoption(parser):
     parser.addoption("--uvc-device", default=None, type=int)
 
 
+@pytest.fixture(autouse=True)
+def _point_backups_in_tmp(tmp_path, monkeypatch):
+    """record.py sichert PICK beim Ablegen -- nicht ins Arbeitsverzeichnis."""
+    from bc import config
+
+    monkeypatch.setattr(config, "TOUCHUP_BACKUP_ROOT", str(tmp_path / "punkt_sicherungen"))
+
+
 @pytest.fixture
 def robot(request):
     kind = request.config.getoption("--robot")

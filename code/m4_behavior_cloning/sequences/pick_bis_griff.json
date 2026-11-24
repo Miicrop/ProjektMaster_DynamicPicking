@@ -1,0 +1,14 @@
+{
+  "name": "pick_bis_griff",
+  "_hinweis": "Anwender 2026-11-19: Aufnahme nur bis zum Griff -- greifen, anheben, an einen gemeinsamen Endpunkt 15 cm ueber der Tischmitte (ID4, berechnet, nicht geteacht). Kein Transport zur Station: spart Zeit je Episode und beim Zuruecklegen. Der Endpunkt muss fuer alle Lagen gleich sein, sonst passt die Rueckfahrt zur naechsten Lage nicht.",
+  "gripper_start": "open",
+  "table": {"points": ["ID0", "ID1", "ID2", "ID3", "ID4", "ID5", "ID6", "ID7", "ID8"], "pick_height": 0.008, "keepout": [{"point": "IGNORE", "size": 0.015}]},
+  "sequence": [
+    {"point": "CLEAR_FOV", "motion": "ptp"},
+    {"point": "ANFLUG", "motion": "ptp", "above": "PRE_PICK", "dz": 0.1, "blend": 0.05},
+    {"point": "PRE_PICK", "motion": "lin", "above": "PICK", "dz": 0.05, "blend": 0.01},
+    {"point": "PICK", "motion": "lin", "approach": true, "gripper": "close"},
+    {"point": "PRE_PICK", "motion": "lin", "blend": 0.04},
+    {"point": "UEBER_TISCH", "motion": "ptp", "above": "ID4", "dz": 0.15}
+  ]
+}

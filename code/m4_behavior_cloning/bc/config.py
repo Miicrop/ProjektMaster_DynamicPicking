@@ -120,7 +120,23 @@ GRIPPER_DWELL_STEPS = int(math.ceil(GRIPPER_DWELL_S * CONTROL_RATE_HZ))
 #: Objekt in den Tisch druecken, nicht zu hoch loslassen. Abgelegt wird
 #: deshalb exakt auf der Greifpose (PICK), der letzte Abstieg langsamer als
 #: der Endanflug der Aufnahme (wird nicht aufgezeichnet, Tempo frei) ...
+#: Anwender 2026-11-03: alle Ablagen bisher sauber (Varianten schon mit
+#: Endanflug-Tempo 0,05 m/s), das langsame Ablegen beim Lagenwechsel
+#: kostete nur Zeit -- von 0,02 auf das Endanflug-Tempo
+#: (``record.py --ablage-tempo``; kleiner = wieder langsamer).
+#: 2026-11-17: mit dem neuen Endanflug (0,02) ebenfalls 0,02 -- Ablegen nie
+#: schneller als der Endanflug der Aufnahme.
 PUT_BACK_APPROACH_SPEED_MS = 0.02
+#: Vor dem Zuruecklegen: steht der Arm nach der Episode bis zu so weit (rad,
+#: je Gelenk) neben dem Start der Rueckfahrt (Nachlauf am Episodenende),
+#: faehrt er erst langsam per PTP hin, statt abzubrechen (Anlage 2026-11-19:
+#: 0,0154 rad > 0,01 rad brach den Lauf ab). Mehr = echter Fehler, Abbruch.
+PUT_BACK_ALIGN_MAX_RAD = 0.10
+#: Ablage-Zugabe (Anlage 2026-11-02, B013-B037): beim Zuruecklegen so viel
+#: UEBER der Greifhoehe oeffnen. Die Tischhoehe stimmt nur auf einige
+#: Zehntel mm; lieber faellt das Objekt kurz, als dass es eingedrueckt wird
+#: (``record.py --ablage-zugabe``).
+PUT_BACK_PLACE_OFFSET_M = 0.0005
 #: ... und nach dem Oeffnen einmal "zu, auf" (Nachgreifen): der
 #: Parallelgreifer schiebt das Objekt dabei mittig zwischen die Backen --
 #: die Lage ist danach durch den Greifer bestimmt, nicht durch ein Rutschen
@@ -140,8 +156,13 @@ PUT_BACK_REGRIP_DEFAULT = "lagenwechsel"
 #: (Verbinden, Kameras, Referenzbilder) ~20 s, Umlegen an eine neue Lage
 #: einige s mehr (Nachgreifen, laengerer Weg). Wartezeit fuer Bewertungen
 #: ist NICHT enthalten.
-ESTIMATE_CYCLE_S = 25.0
-ESTIMATE_PLAN_LAGE_S = 12.0
+#: Nachgemessen Anlage 2026-11-03 (297 Fahrten, 99 Lagen, angezeigt ~3 h,
+#: gedauert ~3 h 50): Fahrt an eine Variante 31 s (Anfahren + Episode 11 s +
+#: Speichern 19 s, Ablegen 12 s), Lagenwechsel 53 s statt 12 s Ablegen --
+#: Planen der naechsten Lage samt Varianten und Umlegen mit Nachgreifen.
+#: Seit 2026-11-03 legt der Lagenwechsel schneller ab (--ablage-tempo).
+ESTIMATE_CYCLE_S = 31.0
+ESTIMATE_PLAN_LAGE_S = 36.0
 ESTIMATE_PROBE_S = 50.0
 ESTIMATE_START_S = 20.0
 ESTIMATE_TRANSFER_S = 5.0
@@ -375,7 +396,12 @@ URDF_PATH = Path(__file__).resolve().parent / "data" / "lara5_candidate.urdf"
 TRANSIT_SPEED_MS = 0.15
 
 #: Reduzierte Geschwindigkeit im Endanflug (Greifen/Absetzen).
-APPROACH_SPEED_MS = 0.05
+#: 2026-11-17 (Anwender): 0,020 statt 0,050 fuer neue Datensaetze -- so schnell
+#: wie die Probefahrt beim Greifen (40 % von 0,05), mehr Bilder und
+#: Korrekturchancen ueber dem Objekt, weniger Nachlauf. Gilt nur fuer NEUE
+#: Aufnahmen: Modelle tragen ihr Tempo in bc_policy.json (recording.planner),
+#: var_C2 faehrt weiter mit 0,05.
+APPROACH_SPEED_MS = 0.02
 
 #: Hoechste Gelenkgeschwindigkeit in PTP-Segmenten (Interpolation im
 #: Gelenkraum). Die Schrittzahl eines PTP-Segments richtet sich nach dem
@@ -429,14 +455,51 @@ APPROACH_MIN_DROP_M = 0.010
 APPROACH_MAX_LATERAL_M = 0.015
 
 #: Tischreferenz (bc/table.py, Anwender 2026-10-26): Punkte werden so weit
-#: UEBER dem Tisch geteacht (mittig ueber den ArUco-Markern) ...
-TABLE_POINT_OFFSET_M = 0.001
+#: UEBER dem Tisch geteacht (mittig ueber den ArUco-Markern) -- seit dem
+#: Neu-Teachen am 2026-11-02 (ID0-ID8) beruehrt der Greifer den Tisch: 0.
+#: Mit 1 mm laege der Tisch im Modell 1 mm zu tief, gegriffen und abgelegt
+#: wuerde 1 mm tiefer als ``pick_height`` ...
+TABLE_POINT_OFFSET_M = 0.0
 #: ... kein Wegpunkt und keine Werkzeugspitze darf naeher an die Ebene
 #: (PICK liegt ueblich 6-10 mm darueber) ...
 TABLE_MIN_CLEARANCE_M = 0.003
+#: Probegriff "objekt" (bc/known_pose.py, Anwender 2026-11-16): Die Backenspitzen
+#: erreichen die Objektoberkante (14,9 mm ueber dem Tisch), wenn der TCP so weit
+#: ueber PICK steht (Werte wie APPROACH_OFFSET_FREE_M) ...
+PROBE_OBJECT_TOP_ABOVE_PICK_M = 0.007
+#: ... und sollen so weit darueber anhalten. Anlage 2026-11-17: 3 mm reichten
+#: nicht -- nach dem abgelehnten Ziel lief der Arm bis 7,5 mm unter die Ebene
+#: nach (Nachlauf ~ Abstiegstempo x 50 ms, 66-150 mm/s), die Backen trafen das
+#: Objekt. Jetzt 25 mm (Anwender 2026-11-17: sicherer Standard, in der GUI
+#: bzw. mit --probe-abstand schrittweise kleiner), dazu
+#: PROBE_TARGET_LOOKAHEAD_STEPS.
+PROBE_GAP_M = 0.025
+#: Unter diesem Abstand warnt die GUI vor dem Start (Nachlauf bis 7,5 mm).
+PROBE_GAP_WARN_M = 0.010
+#: Probegriff: jedes Ziel zusaetzlich um so viele Takte linear verlaengert
+#: pruefen (bc/safety.check_target) -- bei schnellem Abstieg wird frueher
+#: abgelehnt, der Nachlauf endet vor der Ebene.
+PROBE_TARGET_LOOKAHEAD_STEPS = 1.0
+#: Policy-Test "Erfolg": Greifpunkt (bzw. vorhergesagter) hoechstens so weit
+#: waagrecht von PICK -- wie das Kriterium von metrics.evaluate_rollout.
+KNOWN_POSE_SUCCESS_XY_M = 0.010
+#: Violation-Stopp des Geofence-Waechters an der Probegriff-Ebene zaehlt als
+#: Probegriff-Stopp, wenn das Werkzeug hoechstens so tief darunter war
+#: (Anlage 2026-11-16: 3,1 und 3,9 mm; 2026-11-17 Nachlauf bis 7,5 mm)
+PROBE_VIOLATION_MAX_M = 0.010
+#: Kamerapruefung vor der Inferenz (bc/camera_check.py): so lange nach dem
+#: Anfahren der Startstellung warten, bis die Bilder sicher frisch sind.
+CAMERA_CHECK_SETTLE_S = 0.5
 #: ... die Punkte duerfen hoechstens so weit von einer Ebene abweichen
 #: (sonst ist einer falsch geteacht) ...
 TABLE_MAX_RESIDUAL_M = 0.003
+#: Gewoelbter Tisch (Anwender 2026-11-01, Bauch 1-2 mm vermutet): ab so vielen
+#: Tischpunkten wird zusaetzlich eine quadratische Flaeche angepasst (6
+#: Unbekannte; sinnvoll ist ein 3x3-Raster) ...
+TABLE_CURVED_MIN_POINTS = 6
+#: ... und nur genommen, wenn sie die Punkte um mindestens so viel besser
+#: trifft als die Ebene (groesste Abweichung) -- darunter ist es Teach-Streuung.
+TABLE_CURVED_MIN_GAIN_M = 0.0005
 #: Sperrzone um einen geteachten Punkt (``"table": {"keepout": [...]}``,
 #: Anwender 2026-10-26: Schraube im Tisch an Punkt IGNORE): Quadrat mit
 #: dieser halben Kantenlaenge um den Punkt (+-5 cm) ...
@@ -444,11 +507,30 @@ KEEPOUT_HALF_SIZE_M = 0.05
 #: ... darin muss die Werkzeugspitze mindestens so hoch ueber dem Tisch
 #: bleiben -- kein Greifen dort, und keine verrauschte Bahn taucht hinein.
 KEEPOUT_MIN_HEIGHT_M = 0.05
+#: ... und berechnete Lagen/Varianten halten das ganze Bauteil heraus
+#: (Anwender 2026-11-03): 60 mm lang, meist mittig gegriffen, je 5 mm Puffer
+#: -> bis 35 mm vom TCP in jede Richtung. Der Schraubenkopf misst nur ~7 mm,
+#: IGNORE liegt aber nicht genau mittig darueber -- deshalb zaehlt das ganze
+#: Quadrat, nicht der Kopf. Geteachte Punkte prueft nur der TCP (Hinweis).
+KEEPOUT_OBJECT_MARGIN_M = 0.035
 #: ... "Anfahren" eines Tischpunkts kommt von so weit senkrecht darueber.
 TABLE_APPROACH_ABOVE_M = 0.05
 #: Greifhoehe ueber dem Tisch fuer "PICK ausrichten", solange die
 #: Ablaufdatei keine eigene nennt (``"table": {"pick_height": ...}``).
 PICK_HEIGHT_DEFAULT_M = 0.008
+#: Korrektur an den Tischpunkten (bc/table.py): Abweichung der Punkte von
+#: der Flaeche dazwischen interpolieren -- ab so vielen Punkten.
+TABLE_LOCAL_CORRECTION = True
+TABLE_CORRECTION_MIN_POINTS = 4
+
+#: Episodenordner umbenennen (bc/dataset.rename_retrying): bei "Zugriff
+#: verweigert" (OneDrive, Virenscanner) so oft, so lange gewartet -- 10 s.
+DATASET_RENAME_TRIES = 40
+DATASET_RENAME_WAIT_S = 0.25
+#: Varianten und neue Lagen greifen/legen auf Hoehe des geteachten PICK ab
+#: (apps/record.grasp_height); weicht die um mehr als das von ``pick_height``
+#: ab, sagt die Aufnahme es an.
+GRASP_HEIGHT_NOTE_M = 0.0005
 
 #: Automatische Lagen (bc/auto_layout.py, Anwender 2026-10-26): gezogen wird
 #: so weit innerhalb der Tischpunkte (Objekt + Backen) ...
@@ -461,6 +543,45 @@ AUTO_YAW_RANGE_DEG = 45.0
 #: Tempo, Kollision), bevor der Lauf aufhoert.
 AUTO_SAMPLE_TRIES = 500
 AUTO_PLAN_TRIES = 8
+
+#: Kontrollierter Zufall (bc/auto_layout.py, Anwender 2026-11-01): Der Bereich
+#: der Tischpunkte wird in Felder dieser Kantenlaenge geteilt, die naechste
+#: Gruppe kommt ins bisher seltenste Feld ...
+AUTO_CELL_SIZE_M = 0.06
+#: ... und in den bisher seltensten von so vielen Abschnitten des Drehbereichs.
+AUTO_YAW_BINS = 6
+#: Mitte der Drehverteilung (Anwender 2026-11-17): Steuerungspunkt, gegen
+#: dessen Werkzeugdrehung plus und minus gleich oft vorkommen sollen -- die
+#: Startstellung der Policy. Vorher war die Mitte der geteachte PICK; mit
+#: "Schluss-Lage neu" wanderte er von Aufnahme zu Aufnahme, in den Demos
+#: vom 02./03./09.11. drehten 62 % nach plus und 25 % nach minus gegen den
+#: Start -- die Policy drehte bei Minus-Lagen zu wenig. None = alte Mitte.
+AUTO_YAW_CENTER_POINT = "CLEAR_FOV"
+
+#: Varianten innerhalb einer Gruppe (``record.py``, Anwender 2026-11-01):
+#: nach jedem Griff wird das Objekt nicht an derselben Stelle, sondern so weit
+#: verschoben (halb bis ganz) ...
+AUTO_VARIANT_SHIFT_M = 0.015
+#: ... und so weit gedreht (halb bis ganz, Grad) abgelegt -- jede Fahrt ist eine
+#: eigene Lage, die Gruppe bleibt an ihrer Stelle.
+AUTO_VARIANT_YAW_DEG = 15.0
+#: Kameraschutz (Anlage 2026-11-09, ep_00208-210): Steht der Greifer am Rand so
+#: gedreht, dass die Wrist-Kamera nach aussen zeigt, ragt sie ueber den Tisch
+#: hinaus -- in Feld 1/5 Richtung Roboter, in Feld 3/1 Richtung Kamerastange.
+#: Diese Felder (Spalte/Zeile wie im Tooltip der Tischabdeckung) nehmen deshalb
+#: nur Drehungen, bei denen die Kamera nicht weiter hinausragt als erlaubt.
+CAMERA_GUARD_FIELDS = ((1, 5), (3, 1))
+#: Lage der Kamera im Werkzeug-KS (x, y) in m. Richtung +y aus den Posen von
+#: ep_00208-210 abgeleitet (dort zeigte sie nach aussen). Abstand laut Anwender
+#: 2-4 cm (2026-11-10), hier die obere Grenze.
+CAMERA_OFFSET_TOOL_M = (0.0, 0.04)
+#: So weit (m) darf der Kamerapunkt ueber die Huelle der Tischpunkte hinausragen.
+#: Mit 4 cm / 2 cm waere am 2026-11-09 keine Pose gesperrt worden (alle Laeufe
+#: ohne Kollision, schlimmste ep_00209 mit 6 mm) -- gesperrt wird nur, was
+#: deutlich weiter hinausgeht als bisher gefahren.
+CAMERA_EDGE_ALLOWANCE_M = 0.02
+#: Versuche je Feld, eine Drehung ohne Ueberstand zu finden
+CAMERA_GUARD_TURN_TRIES = 24
 
 #: Berechnete Punkte (``"above"``/``"dz"`` in der Ablaufdatei, Festlegung
 #: Anwender 2026-10-26: je Lage nur PICK teachen): die IK fuer den Punkt
@@ -612,6 +733,58 @@ FUNNEL_START_DIST_M = 0.15
 #: Bahnlaenge, unterhalb der das Rauschen vollstaendig auf 0 gedaempft ist.
 FUNNEL_ZERO_DIST_M = 0.02
 
+#: Gezielter Versatz im Anflug (bc/noise.py, Anwender 2026-11-11). Das Rauschen
+#: ist im senkrechten Abstieg auf PICK praktisch 0 (Trichter: ab ~5 cm unter
+#: 2 mm, ab ~3 cm unter 0,3 mm) -- die Policy saehe nie, was zu tun ist, wenn
+#: sie versetzt ueber dem Objekt ankommt. Deshalb faehrt ein Teil der Episoden
+#: mit einem festen seitlichen Versatz an PRE_PICK, der im Abstieg auf 0
+#: abklingt; das Label bleibt die ideale Bahn und zeigt damit zurueck zur Mitte.
+#: Anteil der Episoden mit Versatz (0 = aus) ...
+#: 2026-11-19 (Anwender, neuer Datensatz): 0,5 statt 0,4; seitlich 5-10 mm statt
+#: 3-6 mm, dazu Drehung und Ausreisser -- an der Anlage stand die Policy 2-16 mm
+#: und bis ~50 Grad daneben und korrigierte im Anflug kaum noch.
+APPROACH_OFFSET_SHARE = 0.5
+#: ... Betrag (m), gleichverteilt, Richtung waagrecht gleichverteilt (auch schraeg) ...
+APPROACH_OFFSET_RANGE_M = (0.005, 0.010)
+#: ... Drehung um die Senkrechte (Grad), Betrag gleichverteilt, Vorzeichen zufaellig,
+#: klingt wie der seitliche Versatz bis APPROACH_OFFSET_FREE_M auf 0 ab ...
+APPROACH_YAW_RANGE_DEG = (10.0, 20.0)
+#: ... je Groesse unabhaengig mit diesem Anteil ein Ausreisser: seitlich bis
+#: APPROACH_OFFSET_OUTLIER_MAX_M, Drehung bis APPROACH_YAW_OUTLIER_MAX_DEG
+#: (jeweils ab dem Normalbereich aufwaerts).
+APPROACH_OFFSET_OUTLIER_SHARE = 0.15
+APPROACH_OFFSET_OUTLIER_MAX_M = 0.025
+APPROACH_YAW_OUTLIER_MAX_DEG = 35.0
+#: ... auf- und abgebaut hoechstens so schnell (je Sekunde). Der Anstieg
+#: liegt 15-10 cm vor dem Greifen noch im Transfer (0,15 m/s): ohne Grenze kamen
+#: 20-35 Grad in ~0,3 s, Gelenk 6 bis 2 rad/s -- jede Bahn verworfen (Test
+#: 2026-11-19). Wird die volle Groesse in der verfuegbaren Zeit nicht erreicht,
+#: bleibt der Versatz kleiner; null ab APPROACH_OFFSET_FREE_M gilt immer.
+APPROACH_YAW_RATE_DEG_S = 12.0
+APPROACH_OFFSET_RATE_M_S = 0.03
+#: ... und zusaetzlich geglaettet (Fenster in s): Anlage 2026-11-19, zwei
+#: Episoden mit "arm folgt nicht" -- die Drehung wurde mit 20 Grad/s auf- und
+#: sofort wieder abgebaut (spitzes V ohne Haltephase), Gelenk 6 kam der
+#: Richtungsumkehr nicht nach (0,5 s hinterher, 6 Grad Ueberschwinger, dann
+#: 0,31-0,34 rad Schleppfehler). Die anderen Gelenke folgten auf 1-4 mrad.
+APPROACH_OFFSET_SMOOTH_S = 0.8
+#: ... die Drehung beginnt frueher als der seitliche Versatz (Bahnlaenge vor dem
+#: Greifen, m): mehr Zeit zum Aufbauen, damit sie trotz langsamerem Tempo ihre
+#: Groesse erreicht und eine Haltephase hat.
+APPROACH_YAW_START_M = 0.30
+#: ... Bahnlaenge bis zum Greifen: darunter 0 (Backenspitzen erreichen die
+#: Objektoberkante 14,9 mm ueber dem Tisch bei TCP ~7 mm ueber PICK, + Reserve),
+#: ab FULL voll (PRE_PICK 5 cm ueber PICK), ab HOLD wieder abklingend bis HOLD+RAMP.
+APPROACH_OFFSET_FREE_M = 0.020
+APPROACH_OFFSET_FULL_M = 0.050
+APPROACH_OFFSET_HOLD_M = 0.100
+APPROACH_OFFSET_RAMP_M = 0.050
+#: Pruefung jeder geplanten Bahn (Versatz UND Rauschen): auf den letzten
+#: APPROACH_OFFSET_FREE_M vor dem Greifen hoechstens so viel seitlich neben der
+#: Idealbahn, sonst neu ziehen. Spiel je Backe 2,5 mm (Objekt 39,7 +-0,1 mm,
+#: Backen 44,8 mm); 1 mm bleibt fuer Teach- und Ablagefehler.
+APPROACH_REST_MAX_M = 0.0015
+
 #: Maximale Zahl an Rejection-Sampling-Versuchen, bevor die Generierung
 #: einer verrauschten Trajektorie als fehlgeschlagen gilt.
 NOISE_MAX_REJECTS = 20
@@ -630,6 +803,85 @@ COLLISION_CHECK_FRAMES = ("tool", "wrist", "elbow")
 
 #: Pruefintervall des Geofence-Waechters (AP 4.2).
 SAFETY_CHECK_PERIOD_S = 0.05
+
+#: "Arm steht, Ziel nicht" in der INFERENZ und den Planerfahrten danach
+#: (safety.StallGuard, Anwender 2026-11-16): Not-Aus am Handbediengeraet oder
+#: ein toter Steuerkanal. servo_j meldet dann weiter "in Ordnung", infer.py
+#: fuhr am 16.11. zweimal ~130 Takte gegen einen stehenden Arm bis max_steps
+#: (Luecke Ziel - Messung bis 0,26 rad). Ausloesen, wenn sich die Messung je
+#: Takt um weniger als STALL_MOVE_RAD bewegt UND das gesendete Ziel mehr als
+#: STALL_GAP_RAD entfernt ist, STALL_STEPS Takte in Folge (~0,35 s bei 15 Hz).
+#: Kalibriert an 1013 Rollouts (VM + Anlage bis 16.11.): beide Not-Aus-Fahrten
+#: >= 133 Takte, alle anderen < 3 Takte -- ausser drei VM-Fahrten, in denen
+#: der Arm ebenfalls 220-250 Takte stand (Haenger der VM-Software).
+STALL_MOVE_RAD = 1e-4
+STALL_GAP_RAD = 0.02
+STALL_STEPS = 5
+
+#: PICK aus der Lokalisierung der Gruppe (bc/lokalisierung.py, 2026-11-16):
+#: Steuerungspunkt, an dem der Arm aus dem Bild der Draufsichtkamera ist
+#: (Anlage 2026-11-17: "Home" ist an der Anlage nicht geteacht -- CLEAR_FOV
+#: aus dem Ablauf, der Arm faehrt selbst hin, apps/infer.localize_pick) ...
+LOCALIZE_POINT = "CLEAR_FOV"
+#: ... und so lange nach dem Anhalten warten, bis das Bild sicher frisch ist
+LOCALIZE_SETTLE_S = 0.5
+#: Hoechstens so weit darf die M1-Lage vom zuletzt bekannten PICK abweichen,
+#: bevor nachgefragt wird (nur als Pruefung, wenn das Teil nicht bewegt wurde)
+LOCALIZE_WARN_M = 0.010
+#: Fase (Anwender 2026-11-17): Das Objekt hat eine angeschraegte Seite, die
+#: Handgelenkkamera schaut zu ihr -- die Greifrichtung ist eindeutig (360 Grad).
+#: M1 liefert mit erkannter Fase den Winkel 0..360; Werkzeug-x-Richtung an PICK
+#: = M2-Greiferdrehung + dieser Versatz (Grad). None = noch nicht an der Anlage
+#: abgeglichen: dann wie bisher modulo 180, naeher an der geteachten Lage, und
+#: der Unterschied steht im Protokoll ("Fase: ...") -- daraus den Versatz
+#: setzen (erwartet 0 oder 180).
+#: Abgleich 2026-11-17 (11 Lokalisierungen an der Anlage): die volle M2-Richtung
+#: passte zu den geteachten/nachgefuehrten PICKs (0 Grad), in den Faellen mit
+#: +-180 Grad hatte das Umklappen PICK verdreht -- die Policy stand dort
+#: 0-4 Grad an der M2-Richtung, der Experte fand keine Bahn.
+LOCALIZE_CHAMFER_OFFSET_DEG = 0.0
+#: Live-Ansicht (bc/live.py): Pfeil in Blickrichtung der Handgelenkkamera =
+#: Werkzeug-x-Richtung + dieser Winkel (Grad). Aus den A6-Ablesungen des
+#: Anwenders 2026-11-17 (Kamera nach vorne bei A6 60, zur Szenenkamera bei 150,
+#: zur Teststation bei -30; grob, +-10 Grad). Bestaetigt 2026-11-19: Kamera
+#: in Werkzeug +y, 15-20 Grad gedreht (Werkzeug-z zeigt nach unten, deshalb
+#: liegt Werkzeug +y von oben gesehen bei -90 Grad), hindernisse.json
+#: kamera_versatz_werkzeug_m = 60 mm unter 107 Grad.
+LIVE_CAMERA_YAW_OFFSET_DEG = -107.0
+#: Experte nach dem Probegriff: darf er um 180 Grad gedreht greifen, wenn das
+#: naeher an der Stoppstellung liegt? Nein (2026-11-17): die Richtung ist
+#: eindeutig, sonst lernte DAgger beide Richtungen.
+EXPERT_FLIP_180 = False
+
+#: DAgger (bc/dagger.py, 2026-11-16): Jeder Takt der Policy bekommt das Label
+#: des Planers ("zurueck auf die Idealbahn, dann weiter auf ihr").
+#: Groesster Schritt eines Korrektur-Labels je Takt (rad, je Gelenk) zusaetzlich
+#: zum Schritt der Idealbahn: die Rueckkehr auf die Bahn verteilt sich auf
+#: mehrere Takte statt eines Sprungs (Rauschaufnahmen: bis ~0,02 rad).
+DAGGER_EXTRA_STEP_RAD = 0.006
+#: Takte nach dem Schliessbefehl des Experten, die die DAgger-Episode noch
+#: enthaelt (Dwell; export_variante --abschneiden-nach kuerzt weiter)
+DAGGER_TAIL_STEPS = 10
+
+#: Eingefrorenes Kamerabild in der INFERENZ (safety.FrameAgeGuard, Anwender
+#: 2026-11-11): ist das neueste Bild einer Kamera aelter als dies ...
+INFER_MAX_FRAME_AGE_S = 0.100
+#: ... und zwar so viele 15-Hz-Takte in Folge, haelt die Fahrt an. Bei 60 fps
+#: ist ein Bild normal hoechstens ~17 ms alt (USB-Hub ~45 ms); 100 ms heisst
+#: rund 6 ausgebliebene Bilder. Worst Case bis Stillstand: Erkennung <= 0,23 s
+#: + Software-Stopp ~0,1 s -> ~5 cm im Transit (0,15 m/s), ~1,7 cm im Endanflug.
+#: Der Recorder braucht das nicht: dort verwirft das Latenzbudget die Episode.
+INFER_FRAME_AGE_STEPS = 2
+
+#: Huelle der Demonstrationen in der Inferenz (bc/obstacles.Envelope, Anwender
+#: 2026-11-11): die Werkzeugspitze bleibt im Quader um alle aufgezeichneten
+#: TCP-Positionen (ideal, gesendet, gemessen -- das Rauschen ist also schon
+#: drin) plus diesem Rand je Seite.
+INFER_ENVELOPE_MARGIN_M = 0.03
+#: Tisch in der Inferenz: live aus den Tischpunkten der Steuerung (Anwender
+#: 2026-11-11), die Aufnahme als Rueckfall. Weichen beide an den Tischpunkten
+#: um mehr als dies ab, gibt es einen Hinweis (Tisch verschoben/nachgeteacht).
+INFER_TABLE_WARN_M = 0.002
 
 # --------------------------------------------------------------------------
 # Kameras (AP 1.1)
@@ -698,7 +950,9 @@ WRIST_CAMERA = CameraConfig(
     fps=60.0,
 )
 
-#: Szenen-/Top-View-Kamera -- MODELL NOCH NICHT ENTSCHIEDEN.
+#: Szenen-/Top-View-Kamera. Im Betrieb die Draufsichtkamera der Gruppe (Daheng),
+#: je Lauf zugeordnet per ``--camera scene=daheng:<Seriennummer>`` (Oberflaeche,
+#: code/orchestrator/m4_grasper.py) -- diese Konfiguration gilt nur ohne Zuordnung.
 #:
 #: ACHTUNG: Diese Konfiguration ist ein PLATZHALTER und zeigt auf
 #: OpenCV-Index 0. Auf einem Laptop ist das die eingebaute Webcam --
@@ -738,6 +992,17 @@ SCENE_CAMERA_DAHENG = CameraConfig(
 )
 
 CAMERAS = (WRIST_CAMERA, SCENE_CAMERA)
+
+#: Fester Weissabgleich je Daheng-Kamera (R, G, B) -- Standard fuer neue
+#: Datensaetze (Anwender 2026-11-17). Ohne feste Werte misst die Kamera bei
+#: jedem Start einmal ("Once"): am 17.11. sprang Blau so zwischen 1,85 und
+#: 2,68. Gemessen im Lauf 2026-11-17 ep_00006 mit dem neuen Standardlicht
+#: (Decke + Kameralicht, Fenster offen). Ueberschreibbar je Kamera in
+#: einstellungen/kameras.local.json ("white_balance_ratios").
+CAMERA_WHITE_BALANCE = {
+    "daheng:EBK24100633": (1.156, 1.0, 2.641),   # wrist
+    "daheng:EBK24100634": (1.074, 1.0, 2.383),   # scene
+}
 
 #: NUR ZUM TESTEN: beliebige USB-Webcam als Ersatz fuer die Wrist-Kamera
 #: (Kameramodus "wrist-uvc", AP 1.1/1.3). Prueft die Kamera-KETTE mit
@@ -844,6 +1109,15 @@ POLICY_REPLAN_STEPS = 2
 #: Takten). 0 = gleichgewichtet. k > 0 bevorzugt NEUERE Vorhersagen
 #: (reaktiver), k < 0 aeltere (ruhiger, ACT-Stil).
 POLICY_ENSEMBLE_DECAY = 0.0
+
+#: Tiefpass auf die Policy-Ziele (bc/servo.CommandLowpass, apps/infer.py
+#: ``--glaettung``): z = alpha*Ziel + (1-alpha)*z_vorher, 1 = aus.
+#: Anlage 2026-11-23 (Anwender: Standard): mit 0,5 folgte der Arm der Policy
+#: unter 60 mm auf 0,2 statt 4 mm, kein Pendeln mehr (10/10 Fahrten ruhig,
+#: ohne Glaettung 2/5 stark ausgeschwungen); Verzug ~1 Takt. 0,25 noch ruhiger,
+#: aber ~3 Takte Verzug und im Transit ~1/3 langsamer -- nur 2 Fahrten, ohne
+#: echten Griff geprueft (Berichte/Testprotokoll.md, Abschnitt 5).
+POLICY_COMMAND_LOWPASS_ALPHA = 0.5
 
 #: U-Net-Kanaele. (256, 512, 1024) ist die Groesse der Diffusion-Policy-
 #: Referenz fuer Realroboter (~65 M Parameter) statt lerobots Default

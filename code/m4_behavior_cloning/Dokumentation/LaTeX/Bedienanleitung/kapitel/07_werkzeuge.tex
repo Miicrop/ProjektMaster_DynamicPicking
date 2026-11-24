@@ -1,0 +1,79 @@
+\chapter{Prüf- und Auswertewerkzeuge}
+\label{ch:werkzeuge}
+
+\section{Prüfungen im Reiter Systemcheck}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Prüfungen im Systemcheck}
+  \label{tab:checks}
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{44mm} X@{}}
+    \toprule
+    Prüfung & bestanden, wenn \\
+    \midrule
+    \multicolumn{2}{@{}l}{\textit{hardwarefrei}} \\
+    Unittests (komplett) & alles grün \\
+    Schichtentrennung & kein Pipeline-Modul importiert \pfad{neurapy} oder \pfad{gxipy} \\
+    Kamerakette (Platzhalterbilder) & Kette läuft ohne Kamera \\
+    Aufnahmen bewerten & Takt gehalten, kein Ruckeln, Schleppfehler klein \\
+    Episodenbericht (PDF) & -- (Übersicht einer Aufnahme) \\
+    Taktbudget rechnen & \SI{15}{\hertz} mit \code{servo_j} \SI{60}{\hertz} passt mit Reserve \\
+    GPU / CUDA & Karte erkannt, Architektur unterstützt \\
+    Daheng-API (ohne Kamera) & keine \texttt{FAIL} \\
+    \midrule
+    \multicolumn{2}{@{}l}{\textit{verbunden, ohne Bewegung}} \\
+    Steuerung pruefen (nur lesen) & Simulation ja/nein wie erwartet, Werkzeug, Greifermodus \\
+    Kinematik und Achsgrenzen & Abweichung zur \acs{vm} unter \SI{1}{\milli\metre} \\
+    IK-Absicherungen & Werkzeug hinterlegt, \acs{tcp} an der Backenspitze \\
+    RPC-Latenz messen & kein Hänger im Dauerlauf \\
+    Pufferbefehle pruefen & -- (Bestandsaufnahme) \\
+    Punkte sichern & Datei in \pfad{sequences/} \\
+    Roboter-Contract & alle Fälle grün (schaltet den Greifer!) \\
+    Kameras suchen & beide Daheng mit Seriennummer \\
+    Daheng am Geraet pruefen & alle Merkmale vorhanden und schreibbar (Binning bekannt nicht) \\
+    Kameras: Rate und Versatz & je $\ge$ \SI{15}{fps}, Bildalter und Versatz p95
+      $<$ \SI{30}{\milli\second} \\
+    Kamera-Contract & alle grün \\
+    \midrule
+    \multicolumn{2}{@{}l}{\textit{mit Bewegung}} \\
+    servo\_j-Timing messen & Takt gehalten \\
+    Nachlauf und Override & Nachlauf je Override protokolliert \\
+    Bahnpuffer testen & -- (Untersuchung Zittern) \\
+    Greifer-Totzeit messen & Wartezeit nach Greiferbefehl reicht \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Werkzeuge in \pfad{tools/}}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{tabularx}{\textwidth}{@{}l X@{}}
+    \toprule
+    Werkzeug & Zweck \\
+    \midrule
+    \pfad{check_gpu.py} & Grafikkarte und CUDA \\
+    \pfad{check_cameras.py --list} & Kameras mit Seriennummer auflisten, Vorschau \\
+    \pfad{check_episodes.py} & Aufnahmen prüfen \\
+    \pfad{plot_episode.py} & eine Episode grafisch darstellen \\
+    \pfad{analyse_drehung.py demos <Ordner>} & Drehverteilung der Demonstrationen \\
+    \pfad{export_points.py}, \pfad{import_points.py} & Punkte der Steuerung sichern und
+      zurückspielen \\
+    \pfad{m1_abgleich.py} & Lage aus Modul~1 mit \code{PICK} vergleichen \\
+    \pfad{kamera_referenz.py} & Referenzbild der Draufsicht, Verschiebung erkennen \\
+    \pfad{replay_vm.py} & Modell in der \acs{vm} mit aufgezeichneten Bildern \\
+    \pfad{report_rollouts.py} & PDF-Bericht aus Fahrten \\
+    \pfad{checkpoints_umbenennen.py} & Checkpoints sprechend benennen, Pfade nachziehen \\
+    \pfad{selftest.py} & schneller Gesamttest \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Tests}
+
+\begin{lstlisting}[style=ps]
+python tests/run_all.py        # ohne pytest
+pytest                         # mit pytest
+\end{lstlisting}

@@ -449,6 +449,11 @@ class EpisodeRecorder(object):
                 "servo_j_ms": _ms_stats(servo_s),
                 "read_state_ms": _ms_stats(read_s),
                 "noise_rejects": plan.rejects,
+                "anflug_versatz_m": (None if getattr(plan, "approach_offset", None) is None
+                                     else list(plan.approach_offset[:3])),
+                "anflug_drehung_grad": (None if getattr(plan, "approach_offset", None) is None
+                                        or len(plan.approach_offset) < 4
+                                        else float(np.degrees(plan.approach_offset[3]))),
                 "rate_hz": self.rate_hz,
                 "servo_rate_hz": self.servo_rate_hz,
                 "execution": self.execution,

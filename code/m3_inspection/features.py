@@ -37,7 +37,11 @@ def locate_part(img: np.ndarray, ic: dict[str, Any], trace: Trace | None = None)
 
     # close vertically over the part height -> label and holes become part of the body
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(3, height // 4), max(3, height)))
-    closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    # zero padding: OpenCV's erode treats pixels outside the image as set, so a part closer to the image
+    # edge than half its height grew to the edge (lab 2026-11-12: box 1166 instead of 837 px high)
+    pad = max(3, height)
+    closed = cv2.morphologyEx(cv2.copyMakeBorder(mask, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0),
+                              cv2.MORPH_CLOSE, kernel)[pad:-pad, pad:-pad]
     contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     box = cv2.boundingRect(max(contours, key=cv2.contourArea))
     if trace is not None:
@@ -117,7 +121,8 @@ def _region_features(roi: np.ndarray, offset: tuple[int, int], part_h: int,
     ring = np.zeros(v.shape, bool)
     ring[:3, :] = ring[-3:, :] = ring[:, :3] = ring[:, -3:] = True
     face_s, face_v = np.median(s[ring]), np.median(v[ring])
-    differs = (v < ic["face_brightness_frac"] * face_v) | (np.abs(s - face_s) > ic["face_saturation_delta"])
+    frac = ic.get("notch_brightness_frac", ic["face_brightness_frac"])
+    differs = (v < frac * face_v) | (np.abs(s - face_s) > ic["face_saturation_delta"])
     mask = cv2.morphologyEx(differs.astype(np.uint8) * 255, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
     if trace is not None:
         trace.add("notch_region_mask", mask)

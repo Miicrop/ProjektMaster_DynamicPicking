@@ -17,7 +17,7 @@ import _paths  # noqa: F401
 from bc import config
 from bc import preview as bc_preview
 from bc.gui import (MODES, cameras, checks, operation, recording, requirements,
-                    session, training)
+                    session, training, widgets)
 
 
 # -- Voraussetzungen ------------------------------------------------------
@@ -372,6 +372,45 @@ def test_progress_survives_lines_it_does_not_know():
     assert progress.feed("") is False
     assert progress.step == 0
     assert progress.headline()          # kein Absturz ohne Zahlen
+
+
+def test_export_progress_reads_the_real_export_output():
+    now = [0.0]
+    progress = training.ExportProgress(clock=lambda: now[0])
+    assert progress.percent is None
+    assert progress.feed("Episoden fuer den Export: 4 (davon unbewertet: 1)")
+    assert progress.percent == 0
+    now[0] = 60.0
+    assert progress.feed("    Episode 1/4: 50 %")
+    assert progress.percent == 12          # 0.5 von 4, abgerundet
+    assert progress.feed("  Episode 1/4 exportiert (block_a, 312 Schritte)")
+    assert progress.percent == 25
+    assert "Episode 2 von 4" in progress.headline()
+    assert progress.eta_min is not None and progress.eta_min > 0
+    assert progress.feed("  Episode 4/4 exportiert (block_b, 300 Schritte)")
+    assert progress.percent == 99          # 100 erst mit dem Prozessende
+    assert progress.feed("Datensatz wird abgeschlossen (Metadaten, Videos) ...")
+    assert progress.percent == 99
+    assert "abgeschlossen" in progress.headline()
+    assert progress.feed("Map: 100%") is False
+
+
+def test_known_harmless_encoder_warning_is_not_orange():
+    upper = "Svt[warn]: Preset M12 is mapped to M10.".upper()
+    assert any(h in upper for h in widgets.HARMLESS_WARNINGS)
+    assert not any(h in "SVT[WARN]: SOMETHING ELSE" for h in widgets.HARMLESS_WARNINGS)
+
+
+def test_export_prints_the_lines_the_progress_parser_expects():
+    import inspect
+    from bc import lerobot_io
+    source = inspect.getsource(lerobot_io.export)
+    assert "Episode %d/%d exportiert" in source
+    assert "Episode %d/%d: %d %%" in source
+    assert "Datensatz wird abgeschlossen" in source
+    assert lerobot_io.format_scan({"episodes": [1, 2], "unlabeled": 0, "cameras": [],
+                                   "skipped": {}, "consistency": {}, "conflicts": set(),
+                                   "missing_meta": {}}).startswith("Episoden fuer den Export: 2")
 
 
 def test_validation_series_skips_rows_without_a_value(tmp_path):

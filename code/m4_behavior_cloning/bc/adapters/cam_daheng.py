@@ -267,6 +267,33 @@ class DahengCamera(CameraPort):
         else:
             _try(lambda: cam.AcquisitionFrameRateMode.set(gx.GxSwitchEntry.OFF))
 
+    def apply_settings(self, **values):
+        """Belichtung/Gain an der OFFENEN Kamera aendern (Fenster
+        "Kameraeinstellungen", Anwender 2026-11-03). ``exposure_us``/``gain_db``;
+        None = Automatik. Rueckgabe: :meth:`settings` danach."""
+        from dataclasses import replace
+
+        unknown = set(values) - {"exposure_us", "gain_db"}
+        if unknown:
+            raise ValueError("Unbekannte Einstellung(en): %s" % ", ".join(sorted(unknown)))
+        if self._cam is None:
+            raise CameraError("Kamera '%s' ist nicht offen" % self.name)
+        gx, cam = self._gx, self._cam
+        self.cfg = replace(self.cfg, **values)
+        if "exposure_us" in values:
+            if values["exposure_us"] is None:
+                _try(lambda: cam.ExposureAuto.set(gx.GxAutoEntry.CONTINUOUS))
+            else:
+                _try(lambda: cam.ExposureAuto.set(gx.GxAutoEntry.OFF))
+                _try(lambda: cam.ExposureTime.set(float(values["exposure_us"])))
+        if "gain_db" in values:
+            if values["gain_db"] is None:
+                _try(lambda: cam.GainAuto.set(gx.GxAutoEntry.CONTINUOUS))
+            else:
+                _try(lambda: cam.GainAuto.set(gx.GxAutoEntry.OFF))
+                _try(lambda: cam.Gain.set(float(values["gain_db"])))
+        return self.settings()
+
     def settings(self):
         """Tatsaechlich wirksame Einstellungen, aus der Kamera zurueckgelesen.
 
@@ -303,6 +330,20 @@ class DahengCamera(CameraPort):
             "link_limit_bps": value(cam.DeviceLinkThroughputLimit),
             "link_throughput_bps": value(cam.DeviceLinkCurrentThroughput),
         }
+        # Weissabgleich (Analyse 2026-11-11): bisher nicht zurueckgelesen. Bei
+        # "Once" haengt er davon ab, was beim Oeffnen im Bild war -- die
+        # Ratios stehen deshalb je Episode in den Metadaten.
+        out["white_balance_auto"] = value(cam.BalanceWhiteAuto)
+        ratios = []
+        for channel in ("Red", "Green", "Blue"):
+            try:
+                entries = getattr(self._gx, "GxBalanceRatioSelectorEntry", None)
+                cam.BalanceRatioSelector.set(getattr(entries, channel.upper(), channel))
+                ratios.append(round(float(cam.BalanceRatio.get()), 3))
+            except Exception:
+                ratios = None
+                break
+        out["white_balance_ratios"] = ratios
         for key in ("exposure_us", "gain_db", "rate_set_fps", "rate_possible_fps"):
             if out[key] is not None:
                 out[key] = round(float(out[key]), 2)

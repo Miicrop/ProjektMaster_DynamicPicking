@@ -235,10 +235,11 @@ def test_small_blend_before_lin_approach_keeps_descent_straight():
     # Anfahrt ans Objekt muss dabei praktisch unveraendert bleiben.
     pre, pick = np.array([0.45, 0.0, 0.40]), np.array([0.45, 0.0, 0.30])
     stop = build_ideal_trajectory(
-        [_wp(0.25, -0.15, 0.40), _wp(*pre), _wp(*pick, approach=True)]
+        [_wp(0.25, -0.15, 0.40), _wp(*pre), _wp(*pick, approach=True)], approach_speed=0.05
     )
     blend = build_ideal_trajectory(
-        [_wp(0.25, -0.15, 0.40), _blend_wp(*pre, blend=0.01), _wp(*pick, approach=True)]
+        [_wp(0.25, -0.15, 0.40), _blend_wp(*pre, blend=0.01), _wp(*pick, approach=True)],
+        approach_speed=0.05
     )
     assert blend.blend_applied[1] == 0.01
     p = blend.poses_quat[:, :3]
@@ -253,7 +254,7 @@ def test_small_blend_before_lin_approach_keeps_descent_straight():
     corner_stop = int(np.argmin(np.linalg.norm(stop.poses_quat[:, :3] - pre, axis=1)))
     assert _speeds(stop)[corner_stop] < 0.005
     window = _speeds(blend)[corner - ramp_steps:corner + ramp_steps]
-    assert window.min() > 0.3 * config.APPROACH_SPEED_MS
+    assert window.min() > 0.3 * 0.05
     assert np.allclose(p[-1], pick)
 
 
