@@ -694,8 +694,47 @@ def retreat_after_test(robot, workspace, log, start_joints, clock, args, planner
     return "am Start" if result["stop_reason"] == "endstellung" else result["stop_reason"]
 
 
+def grasp_height(info, known=None):
+    """Greifhoehe (z des Werkzeugpunkts): PICK der bekannten Lage, sonst der
+    tiefste Punkt der Demonstrationen; None, wenn beides fehlt."""
+    if known is not None:
+        return float(np.asarray(known.pick, dtype=float)[2])
+    if info.get("ideal_z_min") is not None:
+        return float(info["ideal_z_min"])
+    return None
+
+
+def ptp_height_problem(robot, grasp_z):
+    """Text, wenn eine PTP-Fahrt aus der jetzigen Stellung zu tief beginnt, sonst None.
+
+    Befund 2026-11-24: Der Rueckzug hing ~10 mm ueber dem Objekt; der naechste
+    Lauf fuhr per PTP direkt zur Startstellung. Eine Gelenkfahrt hebt nicht erst
+    an -- die Backen koennen dabei durchs Objekt gezogen werden.
+    """
+    if grasp_z is None:
+        return None
+    height = float(robot.read_state().tcp_quat[2]) - grasp_z
+    if height >= config.PTP_MIN_ABOVE_GRASP_M:
+        return None
+    return ("Werkzeug steht nur %.0f mm ueber der Greifhoehe (Grenze %.0f mm) -- keine "
+            "PTP-Fahrt von hier, sie koennte durchs Objekt ziehen. Arm erst von Hand "
+            "(Handbediengeraet) senkrecht anheben, dann neu starten."
+            % (1e3 * height, 1e3 * config.PTP_MIN_ABOVE_GRASP_M))
+
+
+def move_to_joints_checked(robot, joints, grasp_z, what):
+    """``move_to_joints`` nur, wenn :func:`ptp_height_problem` nichts meldet.
+    Rueckgabe False = nicht gefahren (Meldung ist ausgegeben)."""
+    problem = ptp_height_problem(robot, grasp_z)
+    if problem is not None:
+        print("NICHT GEFAHREN (%s): %s" % (what, problem))
+        return False
+    robot.move_to_joints(joints)
+    return True
+
+
 def camera_check_before_run(robot, captures, info, start, start_gripper, args,
-                            use_sim_cameras, out):
+                            use_sim_cameras, out, grasp_z=None):
     """Kameras in der Startstellung gegen die Aufnahme pruefen (bc/camera_check.py).
 
     Rueckgabe False = nicht fahren (Abweichung, ``--kamerapruefung an`` und
@@ -719,7 +758,8 @@ def camera_check_before_run(robot, captures, info, start, start_gripper, args,
         away = float(np.max(np.abs(robot.read_state().joints - start)))
         if away > config.START_POSE_TOL_RAD:
             print("Kamerapruefung: an die Startstellung (%.3f rad entfernt)" % away)
-            robot.move_to_joints(start)
+            if not move_to_joints_checked(robot, start, grasp_z, "Kamerapruefung"):
+                return False
     time.sleep(config.CAMERA_CHECK_SETTLE_S)    # frische Bilder nach dem Anhalten
     frames = {}
     for cap in captures:
@@ -728,6 +768,7 @@ def camera_check_before_run(robot, captures, info, start, start_gripper, args,
     results = camera_check.compare(reference, frames)
     for line in camera_check.format_lines(results):
         print(line)
+    print(camera_check.to_json_line(results))   # fuer die Tabelle in der Oberflaeche
     try:
         import cv2
         for name, image in frames.items():
@@ -815,6 +856,73 @@ def run_planned(robot, workspace, targets, gripper, clock, servo_rate_hz=config.
     return out
 
 
+def approach_above_pick(robot, workspace, known):
+    """Gelenkwinkel ueber dem PICK (``RELOCATE_APPROACH_ABOVE_PICK_M``), in der
+    Greiferdrehung, die der jetzigen naeher liegt; vorab gegen das
+    Kollisionsmodell geprueft. Wirft bei IK-Fehler oder verbotenem Ziel."""
+    from bc.kinematics import Kinematics
+
+    q0 = np.asarray(robot.read_state().joints, dtype=float)
+    p0 = np.asarray(robot.fk(q0), dtype=float)
+    _above, grasp, _info = known_pose.correction(known, p0)
+    target = np.asarray(grasp, dtype=float).copy()
+    target[2] += config.RELOCATE_APPROACH_ABOVE_PICK_M
+    q = np.asarray(Kinematics(robot).ik(target, q0), dtype=float)
+    check_target(workspace, robot, q)
+    return q
+
+
+def relocate_only(robot, workspace, known, reference_pick, start_joints, grasp_z, clock, args,
+                  planner, rng, pick_state):
+    """Teil ohne Policy-Fahrt umlegen (``--nur-umlegen``, Modellvergleich).
+
+    Arm an die Startstellung (PTP nur aus sicherer Hoehe), Greifer auf, dann
+    derselbe Experte wie nach einem Probegriff: ueber PICK, greifen, an eine
+    neue Lage legen, PICK in der Steuerung nachfuehren, zurueck zum Start.
+    Rueckgabe dict ``result`` (Text), ``new_pick``, ``placed_xy``, ``ok``.
+    """
+    if workspace is None or known is None:
+        return {"ok": False, "result": "keine bekannte Lage", "new_pick": None,
+                "placed_xy": None}
+    if start_joints is not None:
+        away = float(np.max(np.abs(robot.read_state().joints - start_joints)))
+        if away > config.START_POSE_TOL_RAD and not move_to_joints_checked(
+                robot, start_joints, grasp_z, "Umlegen"):
+            return {"ok": False, "result": "nicht gefahren: Arm steht zu tief",
+                    "new_pick": None, "placed_xy": None}
+    if robot.read_state().gripper_closed:
+        robot.gripper_command(False)
+    back_to = start_joints if start_joints is not None else np.asarray(robot.read_state().joints)
+    # Erst per PTP ueber den PICK (Gelenkfahrt, keine Singularitaet auf einer
+    # langen Geraden), dann der Experte wie nach einem Probestopp: senkrecht ab
+    try:
+        q_above = approach_above_pick(robot, workspace, known)
+    except Exception as exc:
+        return {"ok": False, "result": "nicht ueber den PICK planbar (%s)" % exc,
+                "new_pick": None, "placed_xy": None}
+    print("Umlegen: per PTP %.0f mm ueber den PICK"
+          % (1e3 * config.RELOCATE_APPROACH_ABOVE_PICK_M))
+    robot.move_to_joints(q_above)
+    expert = expert_after_probe(robot, workspace, known, reference_pick, back_to, clock, args,
+                                planner, rng, pick_state)
+    new_pick = expert.get("new_pick")
+    return {"ok": new_pick is not None, "result": expert.get("result"),
+            "new_pick": None if new_pick is None else [float(v) for v in new_pick],
+            "placed_xy": expert.get("placed_xy")}
+
+
+def placement_history():
+    """Gemerkte Ablagen des Experten ueber alle Laeufe (bc/known_pose.py)."""
+    return known_pose.placement_history(known_pose.placements_file(config.TOUCHUP_BACKUP_ROOT))
+
+
+def remember_placement(xy):
+    try:
+        known_pose.remember_placement(known_pose.placements_file(config.TOUCHUP_BACKUP_ROOT), xy)
+    except OSError as exc:
+        print("Hinweis: Ablage nicht gemerkt (%s)" % exc)
+
+
 def _write_pick(robot, joints, pick_state):
     """PICK in der Steuerung auf ``joints`` setzen. Erste Aenderung je Lauf mit
     Sicherung wie beim Touch-up, danach nur schreiben (Stand vor dem Lauf
@@ -876,9 +984,20 @@ def expert_after_probe(robot, workspace, known, reference_pick, start_joints, cl
     from bc.live import yaw360 as _yaw360
     center = (((_yaw360(start_pose, known.table) - _yaw360(reference_pick, known.table)
                 + 180.0) % 360.0 - 180.0) if config.AUTO_YAW_CENTER_POINT else None)
-    for pose, xy, turn in known_pose.new_place_pose(known, reference_pick, rng,
-                                                    used_xy=pick_state.get("used_xy", ()),
-                                                    center_shift_deg=center):
+    candidates = list(known_pose.new_place_pose(known, reference_pick, rng,
+                                                used_xy=placement_history()
+                                                + list(pick_state.get("used_xy", ())),
+                                                center_shift_deg=center))
+    planned = getattr(args, "ablage_pose", None)
+    if planned:
+        # vorab geplante Lage (Reiter Vergleich) zuerst, sonst automatisch
+        from bc.table import yaw_deg as _yaw_deg
+        planned = np.asarray(planned, dtype=float)
+        turn_planned = ((_yaw_deg(planned, known.table) - _yaw_deg(reference_pick, known.table)
+                         + 90.0) % 180.0) - 90.0
+        candidates.insert(0, (planned, (float(planned[0]), float(planned[1])),
+                              float(turn_planned)))
+    for pose, xy, turn in candidates:
         # in derselben Orientierung ablegen, wie gegriffen wurde
         place = (rotated_about(pose, known.table.normal_at(pose[0], pose[1]), np.pi)
                  if info["flipped"] else pose)
@@ -888,7 +1007,8 @@ def expert_after_probe(robot, workspace, known, reference_pick, start_joints, cl
             place_above_joints = kin.ik(up_place, lift_joints)
             waypoints = known_pose.expert_waypoints(
                 p0, q0, above, grasp, place, start_joints, lift, lift_joints,
-                place_above_joints, start_pose)
+                place_above_joints, start_pose,
+                regrasp=bool(getattr(args, "nachgreifen", False)))
             ideal = build_ideal_trajectory(waypoints, fk=robot.fk, **speeds)
             targets = kin.solve_path(ideal.poses_quat, q0, fixed_joints=ideal.joints)
             for q in targets:
@@ -902,6 +1022,10 @@ def expert_after_probe(robot, workspace, known, reference_pick, start_joints, cl
         out["result"] = "keine Ablage planbar (%s) -- Arm steht am Stopp" % last_error
         return out
     pose, xy, turn, place, ideal, targets = plan
+    out["planned_pose_used"] = bool(planned is not None and len(planned)
+                                    and np.allclose(pose, planned))
+    if planned is not None and len(planned) and not out["planned_pose_used"]:
+        print("   Hinweis: geplante Ablage nicht erreichbar (%s) -- ausgewichen" % last_error)
     log = run_planned(robot, workspace, targets, ideal.gripper, clock,
                       servo_rate_hz=args.servo_rate,
                       threaded_watchdog=not isinstance(clock, SimClock),
@@ -924,6 +1048,7 @@ def expert_after_probe(robot, workspace, known, reference_pick, start_joints, cl
                          "vor der naechsten Fahrt teachen" % (1e3 * xy[0], 1e3 * xy[1], exc))
         return out
     pick_state.setdefault("used_xy", []).append(xy)
+    remember_placement(xy)
     out["new_pick"] = [float(v) for v in pose]
     out["result"] = ("gegriffen, abgelegt bei x %.0f y %.0f mm (Drehung %+.0f Grad), PICK "
                      "nachgefuehrt (Sicherung %s)" % (1e3 * xy[0], 1e3 * xy[1], turn,
@@ -954,6 +1079,9 @@ def localize_pick(robot, captures, localizer, known, args, info, planner, pick_s
     joints = np.asarray(joints, dtype=float)
     if float(np.max(np.abs(robot.read_state().joints - joints))) > config.START_POSE_TOL_RAD:
         print("Lokalisierung: an die Fotostellung '%s'" % args.foto_punkt)
+        problem = ptp_height_problem(robot, grasp_height(info, known))
+        if problem is not None:
+            raise lokalisierung.LocalizationError("Fotostellung nicht angefahren: " + problem)
         robot.move_to_joints(joints)
     loc = localizer.locate(lokalisierung.full_frame(scene, clock=clock))
     print("Lokalisierung: %s" % loc.describe())
@@ -1185,6 +1313,9 @@ def parse_args():
                         help="Vorhersage im Takt statt im eigenen Thread (Default nur bei SimClock)")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--ablage-seed", dest="ablage_seed", type=int, default=None,
+                        help="Zufall fuer die Ablage des Experten (Default: jedes Mal neu, "
+                             "steht in summary.json unter args)")
     parser.add_argument("--table-z", type=float, default=None)
     parser.add_argument("--hindernisse", choices=("auto", "an", "aus"), default="auto",
                         help="feste Hindernisse der Zelle (einstellungen/hindernisse.json); "
@@ -1209,6 +1340,17 @@ def parse_args():
                         help="mit --probegriff objekt: Abstand der Werkzeugspitze ueber der "
                              "Objektoberkante in mm (Default %.0f; Nachlauf nach dem Stopp an der "
                              "Anlage bis 7,5 mm -- schrittweise annaehern)" % (1e3 * config.PROBE_GAP_M))
+    parser.add_argument("--nur-umlegen", dest="nur_umlegen", action="store_true",
+                        help="mit --lage-bekannt --probegriff objekt: keine Policy-Fahrt -- "
+                             "der Experte greift das Teil am PICK, legt es an eine neue Lage "
+                             "und fuehrt PICK nach (Modellvergleich, apps/vergleich.py)")
+    parser.add_argument("--ablage-pose", dest="ablage_pose", default=None, metavar="X,Y,Z,QW,QX,QY,QZ",
+                        help="Experte: zuerst an diese Pose ablegen (m, Basis-KS; vorab geplant, "
+                             "Reiter Vergleich) -- nicht erreichbar: automatische Wahl wie sonst")
+    parser.add_argument("--nachgreifen", action="store_true",
+                        help="mit Experte: nach dem Ablegen auf Greifhoehe noch einmal "
+                             "schliessen und oeffnen -- der Greifer schiebt das Teil mittig, "
+                             "es liegt dann am nachgefuehrten PICK (Anwender 2026-11-24)")
     parser.add_argument("--ohne-experte", dest="experte", action="store_false",
                         help="mit --probegriff objekt: nach dem Stopp ueber dem Objekt NICHT "
                              "korrigieren/greifen/umlegen -- senkrecht anheben, zurueck zum "
@@ -1253,6 +1395,17 @@ def parse_args():
         parser.error("--lage-bekannt endet selbst mit dem Griff -- ohne --transport-geplant")
     if args.dagger and not args.experte:
         parser.error("--dagger braucht den Experten (ohne --ohne-experte)")
+    if args.ablage_pose is not None:
+        try:
+            args.ablage_pose = [float(v) for v in str(args.ablage_pose).split(",")]
+        except ValueError:
+            args.ablage_pose = []
+        if len(args.ablage_pose) != 7:
+            parser.error("--ablage-pose: sieben Zahlen x,y,z,qw,qx,qy,qz (m)")
+    if args.nur_umlegen and not (args.lage_bekannt and args.probegriff == "objekt"
+                                 and args.experte and not args.dagger and not args.hold):
+        parser.error("--nur-umlegen braucht --lage-bekannt --probegriff objekt und den "
+                     "Experten, ohne --dagger/--hold")
     if not args.experte and not (args.lage_bekannt and args.probegriff == "objekt"):
         parser.error("--ohne-experte gilt nur mit --lage-bekannt --probegriff objekt")
     if args.glaettung is not None and not 0.0 < args.glaettung <= 1.0:
@@ -1344,7 +1497,10 @@ def main():
         problems = check_against_recording(info, args, robot_kind, cam_cfgs)
         if args.replay:
             problems += ["Replay: %s" % p for p in replay.check_compatible(args.replay, info)]
-        if problems:
+        if problems and args.nur_umlegen:
+            # die Policy faehrt nicht -- Kameras/Tempo der Aufnahme spielen keine Rolle
+            print("Hinweis (nur umlegen): " + "; ".join(problems))
+        elif problems:
             raise SystemExit("Policy passt nicht zu dieser Ausfuehrung:\n  - " + "\n  - ".join(problems))
     if args.override is None:
         args.override = config.DEFAULT_OVERRIDE
@@ -1362,6 +1518,9 @@ def main():
             if ask("Trotzdem fahren? [j/N] ", "n").strip().lower() != "j":
                 raise SystemExit("Abgebrochen.")
 
+    if policy is None and args.nur_umlegen:
+        # nur Startstellung und Tischhoehe aus bc_policy.json -- die Policy faehrt nicht
+        policy = HoldPolicy(horizon=config.POLICY_N_ACTION_STEPS)
     if policy is None:
         print("Lade Policy %s ..." % checkpoint)
         policy = DiffusionPolicyRunner(checkpoint, device=args.device,
@@ -1446,11 +1605,15 @@ def main():
             else ""))
 
     # Fester Weissabgleich der Aufnahme (neue Datensaetze, Anwender 2026-11-17):
-    # hatte jede Episode denselben, gilt er hier auch; sonst wie bisher "Once"
+    # derselbe wie im Training, bei mehreren der haeufigste; "Once" nur noch
+    # fuer alte Aufnahmen, die selbst "Once" hatten (Befund 2026-11-24, G2c)
     from dataclasses import replace as _replace
     rec_cams = ((info or {}).get("recording") or {}).get("camera_settings")
     for k, cfg in enumerate(cam_cfgs):
         wb = camera_settings_module.recorded_white_balance(rec_cams, cfg.name)
+        note = camera_settings_module.recorded_white_balance_note(rec_cams, cfg.name)
+        if note and cfg.backend == "daheng":
+            print("Hinweis: %s" % note)
         if wb is not None and cfg.backend == "daheng" and not cfg.white_balance_ratios:
             cam_cfgs[k] = _replace(cfg, white_balance_ratios=wb)
             print("Kamera %s: Weissabgleich fest wie in der Aufnahme %s"
@@ -1500,7 +1663,7 @@ def main():
     # auch ohne Experte: der Rueckzug nach dem Probegriff braucht den normalen
     # Tischabstand (nach einem Violation-Stopp liegt der Arm unter der Probe-Ebene)
     if known is not None and args.probegriff == "objekt" and (
-            args.episodes > 1 or args.dagger or not args.experte):
+            args.episodes > 1 or args.dagger or not args.experte or args.nur_umlegen):
         expert_workspace = build_workspace(table_z, info, robot, robot_info, args, known,
                                            None, progress=lambda *_: None)
     start = np.asarray(info["start_joints"]) if info.get("start_joints") else None
@@ -1538,7 +1701,8 @@ def main():
     if args.kamerapruefung != "aus":
         try:
             go = camera_check_before_run(robot, captures, info, start, start_gripper, args,
-                                         use_sim_cameras, out)
+                                         use_sim_cameras, out,
+                                         grasp_z=grasp_height(info, known))
         except Exception:
             if hasattr(executor, "close"):
                 executor.close()
@@ -1549,10 +1713,27 @@ def main():
         if not go or args.kamerapruefung == "nur":
             args.episodes = 0      # Kameras pruefen, nicht fahren (Abschluss wie immer)
 
-    # Umlegen durch den Experten (Probegriff "objekt", mehrere Fahrten)
-    rng = np.random.default_rng(args.seed)
+    # Umlegen durch den Experten (Probegriff "objekt", mehrere Fahrten).
+    # Eigener Zufall, nicht --seed (Anwender 2026-11-24): mit festem Startwert
+    # und je Lauf nur einer Fahrt kennt die Abdeckung nur die aktuelle Lage --
+    # der Experte pendelte so zwischen zwei Stellen. Startwert steht im Protokoll.
+    if args.ablage_seed is None:
+        args.ablage_seed = int(np.random.SeedSequence().entropy % (2 ** 32))
+    rng = np.random.default_rng(args.ablage_seed)
+    if args.experte and known is not None:
+        print("Ablage-Zufall des Experten: %d (--ablage-seed zum Wiederholen)" % args.ablage_seed)
     reference_pick = None if known is None else known.pick.copy()
     pick_state = {}
+
+    # Nur umlegen (Modellvergleich, apps/vergleich.py): keine Policy -- der
+    # Experte greift am PICK und legt an eine neue Lage, wie nach einer Fahrt
+    umlegen = None
+    if args.nur_umlegen:
+        args.episodes = 0
+        umlegen = relocate_only(robot, expert_workspace, known, reference_pick, start,
+                                grasp_height(info, known), clock, args, rec_planner, rng,
+                                pick_state)
+        print("UMLEGEN: %s" % umlegen["result"])
 
     # PICK aus der Lokalisierung der Gruppe (bc/lokalisierung.py)
     localizer = None
@@ -1620,6 +1801,15 @@ def main():
                     print("Beendet nach Stopp.")
                     break
             robot.clear_stop()
+            if ep > 0 and hasattr(robot, "reset_program"):
+                # Befund 2026-11-24: ohne stop/init_program dazwischen nahm die
+                # Steuerung in Fahrt 1 die Servo-Sollwerte meist nicht an
+                try:
+                    robot.reset_program()
+                except Exception as exc:
+                    print("Fahrt %d: Programm nicht neu initialisiert (%s) -- Steuerung pruefen"
+                          % (ep, exc))
+                    break
             # Reset wie in der Aufzeichnung (AP 5.2): Greifer auf den Startzustand,
             # dann an die Startstellung -- sonst beginnt die Policy z. B. mit
             # geschlossenem Greifer und "glaubt", das Objekt schon zu halten.
@@ -1673,7 +1863,10 @@ def main():
                 away = float(np.max(np.abs(robot.read_state().joints - ep_start)))
                 if away > config.START_POSE_TOL_RAD:
                     print("Fahrt %d: an die Startstellung (%.3f rad entfernt)" % (ep, away))
-                    robot.move_to_joints(ep_start)
+                    if not move_to_joints_checked(robot, ep_start, grasp_height(info, known),
+                                                  "Fahrt %d" % ep):
+                        print("Beendet: Arm steht zu tief fuer die Fahrt zur Startstellung.")
+                        break
             if live is not None:
                 live.start_episode(ep)
             t0 = time.perf_counter()
@@ -1852,8 +2045,12 @@ def main():
         "created": datetime.now().isoformat(timespec="seconds"),
         "args": vars(args),
         "robot": robot_info,
+        # was die Kameras wirklich eingestellt hatten (Befund 2026-11-24:
+        # Weissabgleich der Fahrten war nicht nachvollziehbar)
+        "camera_settings": now_settings or None,
         "replan_steps": replan,
         "ensemble_decay": None if args.no_ensemble else decay,
+        "umlegen": umlegen,
         "episodes": results,
         "success_rate": float(np.mean([r["success"] for r in results])) if results else None,
     }

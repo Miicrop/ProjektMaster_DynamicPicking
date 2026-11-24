@@ -245,3 +245,93 @@ def test_infer_known_pose_needs_a_sequence(tmp_path):
         pass
     finally:
         sys.argv = saved
+
+
+def test_expert_placement_differs_between_runs_without_fixed_seed():
+    # Anwender 2026-11-24: je Lauf eine Fahrt, fester Seed -> der Experte pendelte
+    # zwischen zwei Stellen. Mit demselben Startwert gleich, mit anderen verteilt.
+    known = _known()
+    known.region = [_down(x, y, 0.0) for x, y in ((0.2, -0.3), (0.6, -0.3), (0.6, 0.1),
+                                                  (0.2, 0.1))]
+    reference = known.pick.copy()
+
+    def first_xy(seed):
+        cands = known_pose.new_place_pose(known, reference, np.random.default_rng(seed),
+                                          camera_guard=False)
+        return tuple(np.round(cands[0][1], 3))
+
+    assert first_xy(0) == first_xy(0)
+    assert len({first_xy(seed) for seed in range(12)}) >= 4
+
+
+def test_regrasp_after_placing_closes_and_opens_once_more():
+    # Anwender 2026-11-24: nach dem Ablegen nachgreifen, damit das Teil mittig liegt
+    pick = _down(0.4, -0.1, 0.009)
+    place = _down(0.3, -0.2, 0.009)
+    plain = known_pose.expert_waypoints(pick, None, pick, pick, place, np.zeros(6), 0.05,
+                                        np.zeros(6), np.zeros(6), pick)
+    names = [w.name for w in known_pose.expert_waypoints(
+        pick, None, pick, pick, place, np.zeros(6), 0.05, np.zeros(6), np.zeros(6), pick,
+        regrasp=True)]
+    assert "NACHGRIFF" not in [w.name for w in plain]
+    i = names.index("ABLAGE")
+    assert names[i + 1:i + 4] == ["NACHGRIFF", "LOESEN", "UEBER_ABLAGE"]
+    wps = known_pose.expert_waypoints(pick, None, pick, pick, place, np.zeros(6), 0.05,
+                                      np.zeros(6), np.zeros(6), pick, regrasp=True)
+    ablage, nach, los = wps[i], wps[i + 1], wps[i + 2]
+    assert (ablage.gripper_closed, nach.gripper_closed, los.gripper_closed) == (False, True, False)
+    # zu und auf an derselben Stelle -- kein Hub mit geschlossenem Greifer
+    assert np.allclose(nach.pose_quat, ablage.pose_quat) and np.allclose(los.pose_quat, ablage.pose_quat)
+    assert np.allclose(nach.pose_quat[:2], place[:2])
+
+
+def test_expert_regrasps_in_the_simulation(tmp_path):
+    from test_auto_layout import _points
+
+    points, _probe = _points(size=0.12)
+    # Experte erst ab zwei Fahrten (eine Fahrt: Arm bleibt ueber dem Objekt)
+    error, log, _ = _run_infer(tmp_path, ["--episodes", "2", "--probegriff", "objekt",
+                                          "--nachgreifen"], points)
+    assert error is None, log[-4000:]
+    z = np.load(tmp_path / "out" / "experte_000.npz")
+    g = z["gripper_cmd"]
+    closings = int(np.sum((g[1:] > 0.5) & (g[:-1] < 0.5)))
+    assert closings == 2, closings                # greifen + nachgreifen
+    assert g[-1] == 0.0
+    # nach dem Nachgreifen: solange zu, keine Hoehenaenderung
+    z = np.asarray(z["tcp"])[:, 2]
+    second = np.flatnonzero((g[1:] > 0.5) & (g[:-1] < 0.5))[1] + 1
+    shut = second + np.flatnonzero(g[second:] < 0.5)[0]
+    assert np.ptp(z[second:shut]) < 2e-4, np.ptp(z[second:shut])
+
+
+def _single_run_placements(remember, runs=6):
+    """Je Lauf eine Ablage, jeder Lauf mit neuem Zufall (wie getrennte Prozesse)."""
+    known = _known()
+    known.region = [_down(x, y, 0.0) for x, y in ((0.2, -0.3), (0.6, -0.3), (0.6, 0.1),
+                                                  (0.2, 0.1))]
+    reference = known.pick.copy()
+    history, placed = [], []
+    for run in range(runs):
+        cands = known_pose.new_place_pose(known, reference, np.random.default_rng(1000 + run),
+                                          used_xy=list(history) if remember else (),
+                                          camera_guard=False)
+        pose, xy, _turn = cands[0]
+        placed.append(np.asarray(xy))
+        history.append(xy)
+        known.pick = np.asarray(pose, dtype=float)
+    return placed
+
+
+def test_single_runs_no_longer_swing_between_two_places():
+    # Anwender 2026-11-24: ohne Gedaechtnis waehlt die Abdeckung von A aus B
+    # (am weitesten weg) und von B aus wieder A -- gleich welcher Zufall
+    def swings(placed):
+        return all(np.linalg.norm(placed[k] - placed[k - 2]) < 0.06 for k in range(2, len(placed)))
+
+    assert swings(_single_run_placements(remember=False))
+    remembered = _single_run_placements(remember=True)
+    assert not swings(remembered)
+    gaps = [min(np.linalg.norm(p - q) for q in remembered[:k]) for k, p in
+            enumerate(remembered) if k]
+    assert min(gaps) > 0.03, gaps                # keine Ablage auf einer frueheren

@@ -49,6 +49,10 @@ MODULES = [
     "test_put_back",
     "test_probe",
     "test_camera_rate",
+    "test_camera_white_balance",
+    "test_operation_gui",
+    "test_ptp_height",
+    "test_comparison",
     "test_computed_points",
     "test_reload",
     "test_points_panel",
@@ -175,6 +179,14 @@ def main(argv=None):
         print("!! --real-robot: Tests laufen gegen die REALE Steuerung (Greifer schaltet).")
         if input("   Not-Aus in Reichweite, Greifer frei? 'ANLAGE' eintippen: ").strip() != "ANLAGE":
             raise SystemExit("Abgebrochen.")
+
+    # Wie conftest._point_backups_in_tmp: PICK-Sicherungen (record.py beim
+    # Ablegen) nicht relativ zum Aufrufordner schreiben -- aus tests/ heraus
+    # gestartet landeten sie sonst ungeignort in tests/sequences/ (2026-11-24)
+    import tempfile
+
+    config.TOUCHUP_BACKUP_ROOT = str(Path(tempfile.mkdtemp(prefix="bc_tests_"))
+                                     / "punkt_sicherungen")
 
     total_passed, total_failed = 0, []
     for module_name in modules:

@@ -29,11 +29,12 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QColor, QFont
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout,
-                               QGroupBox, QHBoxLayout, QLabel, QLineEdit,
-                               QMessageBox, QProgressBar, QPushButton,
-                               QScrollArea, QSpinBox, QSplitter, QTreeWidget,
-                               QTreeWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDoubleSpinBox,
+                               QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel,
+                               QLineEdit, QMessageBox, QProgressBar, QPushButton,
+                               QScrollArea, QSpinBox, QSplitter, QTableWidget,
+                               QTableWidgetItem, QTreeWidget, QTreeWidgetItem,
+                               QVBoxLayout, QWidget)
 
 from . import _bootstrap
 from .. import config
@@ -45,9 +46,19 @@ from . import training as training_module
 from .runner import ProcessRunner
 from .tab_base import ModeTab
 from .widgets import (BAD, GOOD, LogView, NEUTRAL, WARN,
-                      CameraAssignmentView, block_wheel, find_data)
+                      CameraAssignmentView, CollapsibleSection, block_wheel, find_data,
+                      load_layout_state, save_layout_state)
 
 log = logging.getLogger(__name__)
+
+#: Unter diesem Namen belegt eine Fahrt die Kameras (widgets.CameraShare)
+CAMERA_OWNER = "Fahrt im Reiter Betrieb"
+#: Schluessel der gemerkten Anordnung in widgets.LAYOUT_FILE
+LAYOUT_KEY = "betrieb"
+#: Abschnitte rechts (QSplitter senkrecht), in dieser Reihenfolge
+RIGHT_SECTIONS = ("kommando", "fahrt", "kameras", "ausgabe")
+#: Hoehe ohne Begrenzung (Qt: QWIDGETSIZE_MAX)
+_NO_LIMIT = 16777215
 
 
 class OperationTab(ModeTab):
@@ -66,6 +77,10 @@ class OperationTab(ModeTab):
         self._problems = []
         self._out_dir = None
         self._pick_state = None
+        # Auf/Zu und Aufteilung wie zuletzt (Anwender 2026-11-24: einklappen
+        # und verschieben wie im Reiter Aufnahme)
+        self._layout = load_layout_state(self.workdir).get(LAYOUT_KEY) or {}
+        self._sections = {}
 
         left = self._build_controls()
         right = self._build_output()
@@ -90,11 +105,12 @@ class OperationTab(ModeTab):
         page = QWidget()
         column = QVBoxLayout(page)
         column.setContentsMargins(0, 0, 0, 0)
-        column.addWidget(self._build_model_box())
-        column.addWidget(self._build_camera_box())
-        column.addWidget(self._build_run_box())
-        column.addWidget(self._build_test_box())
-        column.addWidget(self._build_offline_box())
+        for key, build in (("modell", self._build_model_box),
+                           ("kameras_zuordnung", self._build_camera_box),
+                           ("fahrt_einstellungen", self._build_run_box),
+                           ("test", self._build_test_box),
+                           ("offline", self._build_offline_box)):
+            column.addWidget(self._section(key, build()), 0)
         column.addStretch(1)
 
         area = QScrollArea()
@@ -300,6 +316,15 @@ class OperationTab(ModeTab):
             "Das Teil wird nicht berührt (z. B. wenn die M1-Lage nicht sicher stimmt).")
         self.expert.toggled.connect(self._on_probe_changed)
         form.addRow("", self.expert)
+        self.regrasp = QCheckBox("Nach dem Ablegen nachgreifen (Teil mittig)")
+        self.regrasp.setChecked(True)
+        self.regrasp.setToolTip(
+            "Der Experte schließt nach dem Ablegen auf Greifhöhe noch einmal und öffnet "
+            "wieder (--nachgreifen). Der Parallelgreifer schiebt das Teil dabei mittig "
+            "zwischen die Backen — es liegt dann am nachgeführten PICK statt um das Spiel "
+            "beim Ablegen daneben. Kostet etwa 2 s je Fahrt.")
+        self.regrasp.toggled.connect(self._update_command)
+        form.addRow("", self.regrasp)
         self.sequence = QLineEdit()
         self.sequence.setPlaceholderText("aus dem Modell")
         self.sequence.textChanged.connect(self._update_command)
@@ -375,13 +400,14 @@ class OperationTab(ModeTab):
 
     def _known_widgets(self):
         return (self.probe, self.probe_gap, self.expert, self.sequence, self.pick_source,
-                self.photo_point, self.dagger_dir)
+                self.photo_point, self.dagger_dir, self.regrasp)
 
     def _on_probe_changed(self, *_):
         objekt = self.known.isChecked() and self.probe.currentData() == "objekt"
         self.probe_gap.setEnabled(objekt)
         self.expert.setEnabled(objekt)
         self.dagger_dir.setEnabled(objekt and self.expert.isChecked())
+        self.regrasp.setEnabled(objekt and self.expert.isChecked())
         self._update_command()
 
     def _on_pick_source_changed(self, *_):
@@ -438,9 +464,62 @@ class OperationTab(ModeTab):
     # -- Aufbau: Ausgabeseite ----------------------------------------------
 
     def _build_output(self):
-        page = QWidget()
-        layout = QVBoxLayout(page)
+        """Rechte Seite: vier Abschnitte untereinander, einklappbar und in der
+        Hoehe verschiebbar (QSplitter); Stand in widgets.LAYOUT_FILE."""
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setChildrenCollapsible(False)
+        self.right_splitter = splitter
+        boxes = self._build_output_boxes()
+        for key in RIGHT_SECTIONS:
+            splitter.addWidget(self._section(key, boxes[key]))
+        for index, key in enumerate(RIGHT_SECTIONS):
+            splitter.setStretchFactor(index, 1 if key == "ausgabe" else 0)
+        sizes = self._layout.get("rechts")
+        if isinstance(sizes, list) and len(sizes) == len(RIGHT_SECTIONS):
+            splitter.setSizes([int(v) for v in sizes])
+        for key in RIGHT_SECTIONS:
+            self._fit_closed(key)
+        splitter.splitterMoved.connect(lambda *_: self._save_layout())
+        return splitter
 
+    def _section(self, key, box, default=True):
+        """Kasten ``box`` (QGroupBox mit Titel) als einklappbaren Abschnitt."""
+        title = box.title()
+        box.setTitle("")
+        box.setFlat(True)
+        box.setObjectName("abschnitt")
+        box.setStyleSheet("QGroupBox#abschnitt{border:0; margin:0; padding:0}")
+        opened = (self._layout.get("offen") or {}).get(key, default)
+        section = CollapsibleSection(title, box, opened)
+        section.toggled.connect(lambda _on, k=key: self._section_toggled(k))
+        self._sections[key] = section
+        return section
+
+    def _section_toggled(self, key):
+        self._fit_closed(key)
+        self._save_layout()
+
+    def _fit_closed(self, key):
+        """Rechts zugeklappt: nur die Kopfzeile hoch, der Platz geht an die anderen."""
+        section = self._sections.get(key)
+        if section is None or key not in RIGHT_SECTIONS:
+            return
+        if section.is_open():
+            section.setMaximumHeight(_NO_LIMIT)
+        else:
+            section.setMaximumHeight(section.header.sizeHint().height() + 4)
+
+    def _save_layout(self):
+        state = load_layout_state(self.workdir)
+        entry = {"offen": {k: s.is_open() for k, s in self._sections.items()}}
+        if getattr(self, "right_splitter", None) is not None:
+            entry["rechts"] = self.right_splitter.sizes()
+        state[LAYOUT_KEY] = entry
+        self._layout = entry
+        save_layout_state(self.workdir, state)
+
+    def _build_output_boxes(self):
+        boxes = {}
         command_box = QGroupBox("Kommandozeile")
         command_layout = QVBoxLayout(command_box)
         self.command = QLabel("")
@@ -449,7 +528,7 @@ class OperationTab(ModeTab):
             Qt.TextInteractionFlag.TextSelectableByMouse)
         self.command.setStyleSheet("font-family:Consolas; color:palette(text)")
         command_layout.addWidget(self.command)
-        layout.addWidget(command_box)
+        boxes["kommando"] = command_box
 
         progress_box = QGroupBox("Fahrt")
         progress_layout = QVBoxLayout(progress_box)
@@ -468,6 +547,8 @@ class OperationTab(ModeTab):
         self.camera_line = QLabel("")
         self.camera_line.setWordWrap(True)
         progress_layout.addWidget(self.camera_line)
+        self.camera_table = _camera_check_table()
+        progress_layout.addWidget(self.camera_table)
 
         self.rollouts = QTreeWidget()
         self.rollouts.setHeaderLabels(
@@ -481,16 +562,16 @@ class OperationTab(ModeTab):
                                         75, 75, 65, 75, 90, 140)):
             self.rollouts.setColumnWidth(column, width)
         progress_layout.addWidget(self.rollouts)
-        layout.addWidget(progress_box)
+        boxes["fahrt"] = progress_box
 
-        layout.addWidget(self._build_camera_live_box())
+        boxes["kameras"] = self._build_camera_live_box()
 
         output_box = QGroupBox("Ausgabe")
         output_layout = QVBoxLayout(output_box)
         self.output = LogView()
         output_layout.addWidget(self.output)
-        layout.addWidget(output_box, 1)
-        return page
+        boxes["ausgabe"] = output_box
+        return boxes
 
     def _build_camera_live_box(self):
         """Kamerabilder der laufenden Fahrt (Anwender 2026-11-19).
@@ -504,8 +585,6 @@ class OperationTab(ModeTab):
         from .widgets import ImageView
 
         box = QGroupBox("Kameras (live während der Fahrt)")
-        box.setCheckable(True)
-        box.setChecked(True)
         row = QHBoxLayout(box)
         self.live_scene = ImageView("Szenenkamera — erscheint mit der Fahrt")
         self.live_wrist = ImageView("Handgelenkkamera — erscheint mit der Fahrt")
@@ -514,9 +593,7 @@ class OperationTab(ModeTab):
             view.setMaximumHeight(260)
             row.addWidget(view, 1)
         box.setToolTip("Bilder aus der laufenden Fahrt (etwa 5 je Sekunde). Ohne Fahrt: "
-                       "\"Vorschau starten\" im Reiter Aufnahme. Abhaken blendet sie aus.")
-        box.toggled.connect(lambda on: [v.setVisible(on) for v in (self.live_scene,
-                                                                   self.live_wrist)])
+                       "\"Vorschau starten\" im Reiter Aufnahme. Zuklappen blendet sie aus.")
         self._live_mtimes = {}
         self.live_timer = QTimer(self)
         self.live_timer.setInterval(200)
@@ -740,6 +817,7 @@ class OperationTab(ModeTab):
             probe=self.probe.currentData(),
             probe_gap_mm=self.probe_gap.value(),
             expert=self.expert.isChecked(),
+            regrasp=self.regrasp.isChecked(),
             sequence=self.sequence.text().strip() or None,
             camera_check=camera_check or self.camera_check.currentData(),
             pick_source=self.pick_source.currentData(),
@@ -852,9 +930,13 @@ class OperationTab(ModeTab):
         if not self._confirm_motion(only_check=camera_check == "nur"):
             return
 
+        if not self._take_cameras(assignment):
+            return
+
         self._progress = operation_module.RolloutProgress(
             total_episodes=None if camera_check == "nur" else self.episodes.value())
         self.camera_line.setText("")
+        _fill_camera_table(self.camera_table, [])
         self.rollouts.clear()
         self.output.clear()
         self.totals_line.setText("")
@@ -875,7 +957,31 @@ class OperationTab(ModeTab):
         except Exception as exc:
             QMessageBox.warning(self, "Start gescheitert", str(exc))
             return
+        if not cameras_module.all_simulated(assignment):
+            self.cameras.share.claim(CAMERA_OWNER)     # gehoeren jetzt apps/infer.py
         self._set_running(True)
+
+    def _take_cameras(self, assignment):
+        """Kameras fuer die Fahrt frei machen (widgets.CameraShare).
+
+        Eine offene Vorschau im Reiter Aufnahme wird geschlossen -- eine Kamera
+        laesst sich nicht zweimal oeffnen, apps/infer.py braeche sonst ab.
+        Laeuft dort eine Aufnahme, wird nicht gestartet.
+        """
+        if cameras_module.all_simulated(assignment):
+            return True
+        closed, blocked = self.cameras.share.take_over(CAMERA_OWNER)
+        if blocked:
+            QMessageBox.information(
+                self, "Kameras belegt",
+                "Die Fahrt braucht die Kameras, sie sind aber gerade belegt: %s.\n\n"
+                "Eine Kamera lässt sich nicht zweimal öffnen — erst dort beenden."
+                % ", ".join(blocked))
+            return False
+        for other in closed:
+            self.output.append_record("Kameras: %s geschlossen — die Fahrt braucht sie."
+                                      % other, logging.INFO)
+        return True
 
     def _confirm_motion(self, only_check=False):
         """Rueckfrage vor jeder Bewegung -- die Antwort der Steuerung zaehlt."""
@@ -956,6 +1062,7 @@ class OperationTab(ModeTab):
         before = self.rollouts.topLevelItemCount()
         for rollout in self._progress.rollouts[before:]:
             item = QTreeWidgetItem(self.rollouts, rollout.row())
+            item.setToolTip(8, rollout.stop_reason)        # Abbruchgrund im Wortlaut
             item.setForeground(1, QBrush(QColor(GOOD if rollout.success else WARN)))
             self.rollouts.addTopLevelItem(item)
             self.rollouts.scrollToItem(item)
@@ -964,11 +1071,7 @@ class OperationTab(ModeTab):
             last = self.rollouts.topLevelItem(self.rollouts.topLevelItemCount() - 1)
             for column, text in enumerate(self._progress.rollouts[-1].row()):
                 last.setText(column, text)
-        text, level = operation_module.camera_check_summary(self._progress)
-        if text:
-            self.camera_line.setText(text)
-            self.camera_line.setStyleSheet("color:%s" % (
-                GOOD if level == "ok" else WARN if level == "warnung" else NEUTRAL))
+        self._show_camera_check()
         self.headline.setText(self._progress.headline())
         self.detail_line.setText(self._progress.detail_line())
         self.totals_line.setText(self._progress.totals_line())
@@ -976,7 +1079,20 @@ class OperationTab(ModeTab):
         if percent is not None:
             self.progress_bar.setValue(percent)
 
+    def _show_camera_check(self):
+        """Kamerapruefung: Kopfzeile und Tabelle Kamera x (Licht/Farbe, Kameralage)."""
+        text, level = operation_module.camera_check_summary(self._progress)
+        if not text:
+            return
+        rows = operation_module.camera_check_table(self._progress)
+        color = GOOD if level == "ok" else WARN if level == "warnung" else NEUTRAL
+        # Mit Tabelle oben nur das Ergebnis -- die Einzelheiten stehen darin
+        self.camera_line.setText(text.split("\n")[0] if rows else text)
+        self.camera_line.setStyleSheet("color:%s; font-weight:bold" % color)
+        _fill_camera_table(self.camera_table, rows)
+
     def _on_finished(self, code, text):
+        self.cameras.share.free(CAMERA_OWNER)
         self._set_running(False)
         ok = code == 0
         if ok and self._progress is not None and self._progress.total is not None:
@@ -1056,6 +1172,52 @@ class OperationTab(ModeTab):
             self.process.stop()
         if getattr(self, "_live_window", None) is not None:
             self._live_window.close()
+
+
+def _camera_check_table():
+    """Kamerapruefung: Zeile je Kamera, Spalten Licht/Farbe und Kameralage."""
+    table = QTableWidget(0, 3)
+    table.setHorizontalHeaderLabels(["Kamera", "Licht/Farbe", "Kameralage"])
+    table.verticalHeader().setVisible(False)
+    table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+    table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+    table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    table.setWordWrap(True)
+    header = table.horizontalHeader()
+    header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+    header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+    header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+    table.setToolTip("Mauszeiger auf eine Zelle: alle Werte mit der Spanne aus dem Training.\n"
+                     "Licht/Farbe = Helligkeit, Farbe R/G und B/G, Sättigung, übersteuert.\n"
+                     "Kameralage = Versatz, Drehung, Maßstab gegen das Bezugsbild.")
+    table.setVisible(False)
+    return table
+
+
+def _fill_camera_table(table, rows):
+    """Zeilen aus ``operation.camera_check_table`` eintragen; leer = ausblenden."""
+    from .. import camera_check
+
+    table.setRowCount(len(rows))
+    for index, row in enumerate(rows):
+        name = QTableWidgetItem(row["label"])
+        font = name.font()
+        font.setBold(True)
+        name.setFont(font)
+        table.setItem(index, 0, name)
+        for column, key in ((1, camera_check.LIGHT), (2, camera_check.POSE)):
+            group = row["groups"][key]
+            warn = group["level"] == camera_check.WARN
+            item = QTableWidgetItem(("⚠ " if warn else "✓ ") + group["short"])
+            item.setForeground(QBrush(QColor(WARN if warn else GOOD)))
+            item.setToolTip("%s – %s\n%s" % (row["label"], camera_check.GROUP_LABELS[key],
+                                             group["detail"]))
+            table.setItem(index, column, item)
+    table.resizeRowsToContents()
+    height = table.horizontalHeader().sizeHint().height() + 2 * table.frameWidth()
+    height += sum(table.rowHeight(i) for i in range(table.rowCount()))
+    table.setFixedHeight(height)
+    table.setVisible(bool(rows))
 
 
 def _hint(text):

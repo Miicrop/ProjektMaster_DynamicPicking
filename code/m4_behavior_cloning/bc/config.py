@@ -814,6 +814,27 @@ SAFETY_CHECK_PERIOD_S = 0.05
 #: Kalibriert an 1013 Rollouts (VM + Anlage bis 16.11.): beide Not-Aus-Fahrten
 #: >= 133 Takte, alle anderen < 3 Takte -- ausser drei VM-Fahrten, in denen
 #: der Arm ebenfalls 220-250 Takte stand (Haenger der VM-Software).
+#: PTP-Fahrt (move_to_joints) zur Start- oder Fotostellung nur, wenn das
+#: Werkzeug mindestens so hoch ueber der Greifhoehe steht (Befund 2026-11-24:
+#: Rueckzug hing ~10 mm ueber dem Objekt, der naechste Lauf fuhr per PTP direkt
+#: zum Start -- eine Gelenkfahrt aus dieser Hoehe kann die Backen durchs Objekt
+#: ziehen). Darunter: nicht fahren, erst von Hand anheben.
+PTP_MIN_ABOVE_GRASP_M = 0.05
+#: Nur umlegen (Modellvergleich): erst per PTP so hoch ueber den PICK, dann
+#: der Experte wie nach einem Probestopp (Anlage 2026-11-24: die Linearfahrt
+#: von der Startstellung quer ueber den Tisch lief in einen
+#: Konfigurationssprung, |Delta q| 0,21 rad bei Schritt 24)
+RELOCATE_APPROACH_ABOVE_PICK_M = 0.10
+#: So viele fruehere Ablagen des Experten zaehlen fuer die Tischabdeckung --
+#: ueber Laeufe hinweg (Anwender 2026-11-24: sonst Pendeln zwischen zwei Stellen)
+EXPERT_PLACEMENT_MEMORY = 30
+#: Mindestpause zwischen deactivate_servo_interface und dem naechsten
+#: activate_servo_interface am Neura (Befund 2026-11-24): Fahrt 1 von
+#: 2026-11-23_16-40-02 (ohne Experte) startete ~0,1 s nach dem Rueckzug neu --
+#: der Arm fuhr erst nach ~0,4-0,5 s los, der Stillstandswaechter brach vorher
+#: ab ("arm steht"). Mit Experte oder als eigener Prozess lagen Sekunden
+#: dazwischen, dort trat es nicht auf. 0 = aus.
+NEURA_SERVO_REACTIVATE_PAUSE_S = 1.0
 STALL_MOVE_RAD = 1e-4
 STALL_GAP_RAD = 0.02
 STALL_STEPS = 5
@@ -999,9 +1020,17 @@ CAMERAS = (WRIST_CAMERA, SCENE_CAMERA)
 #: 2,68. Gemessen im Lauf 2026-11-17 ep_00006 mit dem neuen Standardlicht
 #: (Decke + Kameralicht, Fenster offen). Ueberschreibbar je Kamera in
 #: einstellungen/kameras.local.json ("white_balance_ratios").
+#:
+#: Befund 2026-11-24: gemessen waren (1,156/1,0/2,641) und (1,074/1,0/2,383),
+#: gesetzt wurde wegen eines Fehlers in cam_daheng aber nur der LETZTE Wert
+#: in den Rot-Kanal; Blau blieb, was in der Kamera stand. Die Aufnahmen ab
+#: 17.11. (G2, G2c) haben deshalb einen Rotstich. Damit neue Aufnahmen dazu
+#: passen, gelten hier die Werte, die die Kamera damals zurueckgemeldet hat
+#: (Anwender 2026-11-24: Rotstich vorerst behalten; neutral erst mit einem
+#: neuen Datensatz).
 CAMERA_WHITE_BALANCE = {
-    "daheng:EBK24100633": (1.156, 1.0, 2.641),   # wrist
-    "daheng:EBK24100634": (1.074, 1.0, 2.383),   # scene
+    "daheng:EBK24100633": (2.641, 1.0, 2.609),   # wrist
+    "daheng:EBK24100634": (2.383, 1.0, 2.352),   # scene
 }
 
 #: NUR ZUM TESTEN: beliebige USB-Webcam als Ersatz fuer die Wrist-Kamera

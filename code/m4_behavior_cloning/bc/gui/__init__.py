@@ -30,12 +30,13 @@ uebrigen Bestand.
 """
 
 #: Reihenfolge der Reiter. Neue Modi hier und in requirements.BY_MODE eintragen.
-MODES = ("systemcheck", "recording", "training", "operation", "console")
+MODES = ("systemcheck", "recording", "training", "comparison", "operation", "console")
 
 MODE_LABELS = {
     "systemcheck": "Systemcheck",
     "recording": "Aufnahme",
     "training": "Training",
+    "comparison": "Vergleich",
     "operation": "Betrieb",
     "console": "Konsole",
 }

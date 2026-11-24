@@ -21,6 +21,7 @@ import json
 import re
 from pathlib import Path
 
+from .. import camera_check as camera_check_module
 from .. import config
 
 CHECKPOINT_ROOT = "checkpoints"
@@ -53,7 +54,10 @@ def find_policies(workdir, root=CHECKPOINT_ROOT):
 
     Zwischenstaende (``checkpoints/step_*``) werden mitgenommen: Nach dem
     Durchstich ist genau der Vergleich "Schritt 4000 gegen 8000" die Frage,
-    die man am Rechner stellt.
+    die man am Rechner stellt. Nicht aber der letzte, wenn er dieselbe Policy
+    ist wie ``<lauf>/policy`` (Anwender 2026-11-24: jedes Modell stand doppelt
+    in der Liste -- ``--save-every`` gleich ``--steps`` speichert den Endstand
+    zweimal, einmal mit Trainingsstand zum Fortsetzen).
     """
     from .training import relative
 
@@ -64,12 +68,29 @@ def find_policies(workdir, root=CHECKPOINT_ROOT):
     for run in sorted(base.glob("*")):
         if not run.is_dir():
             continue
-        if has_policy(run):
+        final = policy_dir(run) / POLICY_MARKER if has_policy(run) else None
+        if final is not None:
             found.append(relative(run, workdir))
         for step in sorted((run / "checkpoints").glob("step_*")):
-            if has_policy(step):
+            if has_policy(step) and not _same_file(policy_dir(step) / POLICY_MARKER, final):
                 found.append(relative(step, workdir))
     return found
+
+
+def _same_file(a, b):
+    """Dieselbe Policy? ``bc_policy.json`` gleich bis auf den Zeitstempel
+    ``created`` und das Modell gleich gross (die 360 MB nicht lesen)."""
+    if b is None:
+        return False
+    try:
+        left, right = _read_json(a), _read_json(b)
+        left.pop("created", None)
+        right.pop("created", None)
+        model = "model.safetensors"
+        return (left == right and bool(left)
+                and (a.parent / model).stat().st_size == (b.parent / model).stat().st_size)
+    except (OSError, AttributeError):
+        return False
 
 
 def describe_policy(path):
@@ -261,7 +282,7 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
                real_robot=False, seed=None, known_pose=False, probe="tisch",
                sequence=None, camera_check="an", pick_source="steuerung",
                photo_point=None, dagger_dir=None, probe_gap_mm=None, expert=True,
-               inference_steps=None, glaettung=None):
+               inference_steps=None, glaettung=None, regrasp=False):
     """Kommandozeile fuer apps/infer.py (ohne das Python-Programm).
 
     ``known_pose``: Policy-Test mit bekannter Lage (``--lage-bekannt``,
@@ -313,6 +334,8 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
             argv += ["--probe-abstand", "%g" % float(probe_gap_mm)]
         if probe == "objekt" and not expert:
             argv.append("--ohne-experte")
+        if probe == "objekt" and expert and regrasp:
+            argv.append("--nachgreifen")
         if sequence:
             argv += ["--ablauf", str(sequence)]
         if pick_source and pick_source != "steuerung":
@@ -440,7 +463,7 @@ class Rollout(object):
             _mm(self.grasp_mm), _mm(self.end_mm), _mm(self.path_mm),
             "-" if self.predict_ms is None else "%.1f ms" % self.predict_ms,
             str(self.overruns),
-            self.stop_reason,
+            stop_text(self.stop_reason),
         ] + self.known_columns()
 
     def known_columns(self):
@@ -484,6 +507,8 @@ class RolloutProgress(object):
         self.predict_ms = None
         #: Kamerapruefung: Kamera -> Text, "gesamt" -> "OK ..."/"WARNUNG ..."
         self.camera_check = {}
+        #: ... und getrennt nach Licht/Kameralage (Zeile KAMERAPRUEFUNG_JSON)
+        self.camera_groups = None
 
     def feed(self, line):
         """Eine Ausgabezeile einlesen. Liefert True, wenn sich etwas geaendert hat."""
@@ -520,6 +545,14 @@ class RolloutProgress(object):
         if known is not None:
             if self.rollouts:
                 self.rollouts[-1].known = known
+            return True
+
+        if line.startswith(camera_check_module.JSON_PREFIX):
+            try:
+                self.camera_groups = json.loads(line[len(camera_check_module.JSON_PREFIX):])
+            except ValueError:
+                return False
+            self.last_event = "Kamerapruefung"
             return True
 
         match = _CAMERA_CHECK.match(line)
@@ -647,6 +680,20 @@ class RolloutProgress(object):
         return "  ·  ".join(bits)
 
 
+def stop_text(reason):
+    """Abbruchgrund fuer die Tabellen (Anwender 2026-11-24).
+
+    "kollision vorab: tool an Tischebene" ist beim Probegriff das VORGESEHENE
+    Ende: das naechste Ziel der Policy laege unter der Probe-Ebene (gewaehlter
+    Abstand ueber dem Objekt; "Nachlauf" = samt Nachlauf des Arms) und wird
+    gar nicht erst gesendet -- kein Geofence-Treffer der gemessenen Stellung.
+    """
+    text = str(reason or "")
+    if text.startswith("kollision vorab") and "Tischebene" in text:
+        return "Probeabstand erreicht%s" % (" (mit Nachlauf)" if "Nachlauf" in text else "")
+    return text
+
+
 def camera_check_summary(progress):
     """(Text, Stufe) fuer die Anzeige im Reiter: "ok", "warnung" oder None."""
     total = progress.camera_check.get("gesamt")
@@ -658,6 +705,62 @@ def camera_check_summary(progress):
     lines += ["  %s: %s" % (name, text) for name, text in sorted(progress.camera_check.items())
               if name != "gesamt"]
     return "\n".join(lines), level
+
+
+#: Anzeigenamen der Kameraplaetze in der Tabelle
+CAMERA_NAMES = {"wrist": "Wrist", "scene": "Szene"}
+
+
+def camera_check_table(progress):
+    """Kamerapruefung als Tabelle (Anwender 2026-11-24).
+
+    Liste ``{camera, label, groups: {licht|lage: {level, short, detail}}}``,
+    eine Zeile je Kamera; ``level`` "ok"/"warnung". Leer, solange nichts
+    geprueft ist. Aeltere Protokolle ohne KAMERAPRUEFUNG_JSON: aus den
+    Textzeilen -- dort stehen bei einer Warnung nur die auffaelligen Werte.
+    """
+    groups_by_camera = progress.camera_groups
+    if groups_by_camera is None:
+        groups_by_camera = _groups_from_text(progress.camera_check)
+    rows = []
+    for camera in sorted(groups_by_camera, key=lambda c: (c not in CAMERA_NAMES, c)):
+        groups = {}
+        for key in (camera_check_module.LIGHT, camera_check_module.POSE):
+            group = (groups_by_camera[camera] or {}).get(key) or {}
+            checks = group.get("checks") or []
+            level = group.get("level") or camera_check_module.OK
+            bad = [c["text"] for c in checks if c.get("level") == camera_check_module.WARN]
+            short = "; ".join(_short(t) for t in bad) if bad else "OK"
+            detail = "\n".join(("! " if c.get("level") == camera_check_module.WARN else "   ")
+                               + c["text"] for c in checks) or "keine Einzelwerte im Protokoll"
+            groups[key] = {"level": level, "short": short, "detail": detail}
+        rows.append({"camera": camera, "label": CAMERA_NAMES.get(camera, camera),
+                     "groups": groups})
+    return rows
+
+
+def _short(text):
+    """"Farbe R/G 0.98 (Training 1.40..1.55)" -> "Farbe R/G 0.98"."""
+    return text.split(" (Training")[0]
+
+
+def _groups_from_text(lines):
+    out = {}
+    for camera, text in (lines or {}).items():
+        if camera == "gesamt" or not (text.startswith("OK") or text.startswith("WARNUNG")):
+            continue
+        level = camera_check_module.WARN if text.startswith("WARNUNG") else camera_check_module.OK
+        items = ([t.strip() for t in text.split(" -- ", 1)[1].split(";") if t.strip()]
+                 if " -- " in text else [])
+        groups = {key: {"level": camera_check_module.OK, "checks": []}
+                  for key in (camera_check_module.LIGHT, camera_check_module.POSE)}
+        for item in items:
+            group = groups[camera_check_module.group_of(item)]
+            group["checks"].append({"level": level, "text": item})
+            if level == camera_check_module.WARN:
+                group["level"] = camera_check_module.WARN
+        out[camera] = groups
+    return out
 
 
 def read_summary(path):

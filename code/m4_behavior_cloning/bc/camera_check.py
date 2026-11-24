@@ -148,11 +148,24 @@ def estimate_shift(reference, image):
             "scale": scale, "inliers": int(inliers.sum())}
 
 
+#: Gruppen der Pruefung (Anwender 2026-11-24: getrennt anzeigen, ob Licht
+#: oder eine verschobene Kamera die Warnung ausloest)
+LIGHT, POSE = "licht", "lage"
+GROUP_LABELS = {LIGHT: "Licht/Farbe", POSE: "Kameralage"}
+#: Zeilenkopf der maschinenlesbaren Ergebniszeile fuer die Oberflaeche
+JSON_PREFIX = "KAMERAPRUEFUNG_JSON "
+
+
 def _range_check(label, value, span, margin, fmt):
     lo, med, hi = span
     ok = lo - margin <= value <= hi + margin
     text = "%s %s (Training %s..%s)" % (label, fmt % value, fmt % lo, fmt % hi)
     return (OK if ok else WARN), text
+
+
+def group_of(text):
+    """Gruppe eines Pruefungstexts -- auch fuer Zeilen aelterer Protokolle."""
+    return POSE if text.startswith("Kameralage") else LIGHT
 
 
 def compare(reference, frames):
@@ -166,7 +179,8 @@ def compare(reference, frames):
         image = frames.get(name)
         if image is None:
             results.append({"camera": name, "level": WARN,
-                            "checks": [(WARN, "kein Bild")]})
+                            "checks": [(WARN, "kein Bild")],
+                            "groups": {LIGHT: WARN, POSE: WARN}})
             continue
         stats, span = frame_stats(image), ref["stats"]
         checks = [
@@ -192,8 +206,33 @@ def compare(reference, frames):
                            % (shift["shift_px"], shift["rotation_deg"], shift["scale"])))
         level = WARN if any(lvl == WARN for lvl, _ in checks) else OK
         results.append({"camera": name, "level": level, "checks": checks, "stats": stats,
-                        "shift": shift})
+                        "shift": shift, "groups": group_levels(checks)})
     return results
+
+
+def group_levels(checks):
+    """``{gruppe: "ok"|"warnung"}`` aus den Einzelpruefungen ``[(level, text)]``."""
+    out = {LIGHT: OK, POSE: OK}
+    for lvl, text in checks:
+        if lvl == WARN:
+            out[group_of(text)] = WARN
+    return out
+
+
+def to_json_line(results):
+    """Eine Zeile fuer die Oberflaeche: je Kamera und Gruppe Stufe und Pruefungen."""
+    import json
+
+    data = {}
+    for r in results:
+        groups = {}
+        for key in (LIGHT, POSE):
+            checks = [{"level": lvl, "text": text} for lvl, text in r["checks"]
+                      if group_of(text) == key]
+            levels = r.get("groups") or group_levels(r["checks"])
+            groups[key] = {"level": levels[key], "checks": checks}
+        data[r["camera"]] = groups
+    return JSON_PREFIX + json.dumps(data, ensure_ascii=True)
 
 
 def format_lines(results):

@@ -325,13 +325,20 @@ def new_place_pose(known, reference_pick, rng, used_xy=(), yaw_range_deg=None,
 
 
 def expert_waypoints(stop_pose, stop_joints, above, grasp, place, start_joints, lift_m,
-                     lift_joints, place_above_joints, start_pose, gripper_closed=False):
+                     lift_joints, place_above_joints, start_pose, gripper_closed=False,
+                     regrasp=False):
     """Wegpunkte des Experten (bc/trajectory.Waypoint).
 
     STOPP -> KORREKTUR (gleiche Hoehe, xy + Drehung) -> GRIFF (senkrecht ab,
     schliessen) -> ANHEBEN -> UEBER_ABLAGE -> ABLAGE (oeffnen) ->
     UEBER_ABLAGE -> START. ``place``: Ablagepose in derselben Orientierung
     wie gegriffen.
+
+    ``regrasp`` (Anwender 2026-11-24): nach dem Oeffnen auf Greifhoehe noch
+    einmal schliessen (NACHGRIFF) und wieder oeffnen (LOESEN). Der
+    Parallelgreifer schiebt das Teil dabei mittig zwischen die Backen -- es
+    liegt dann am nachgefuehrten PICK statt um das Spiel beim Ablegen
+    daneben. Beide Wechsel an der Ablagepose, ohne Hub dazwischen.
     """
     from .trajectory import MOTION_LIN, MOTION_PTP, Waypoint
 
@@ -352,6 +359,18 @@ def expert_waypoints(stop_pose, stop_joints, above, grasp, place, start_joints, 
         free[2] = above[2]
         start.append(Waypoint(free, gripper_closed=False, name="FREI", motion=MOTION_LIN,
                               approach=True))
+    regrip = []
+    if regrasp:
+        # an DERSELBEN Stelle wie die Ablage schliessen und oeffnen, erst dann
+        # hoch (Anlage 2026-11-24: mit 0,5 mm Hub zwischen Zu und Auf hob der
+        # Greifer das Teil kurz an -- das Zentrieren war damit hinfaellig).
+        # Segmente der Laenge null plant bc/trajectory als reinen Halt.
+        regrip = [
+            Waypoint(place_down, gripper_closed=True, name="NACHGRIFF", motion=MOTION_LIN,
+                     approach=True),
+            Waypoint(place_down, gripper_closed=False, name="LOESEN", motion=MOTION_LIN,
+                     approach=True),
+        ]
     return start + [
         Waypoint(above, gripper_closed=False, name="KORREKTUR", motion=MOTION_LIN, approach=True),
         Waypoint(grasp, gripper_closed=True, name="GRIFF", motion=MOTION_LIN, approach=True),
@@ -360,6 +379,7 @@ def expert_waypoints(stop_pose, stop_joints, above, grasp, place, start_joints, 
         Waypoint(up(place), gripper_closed=True, name="UEBER_ABLAGE", motion=MOTION_PTP,
                  joints=place_above_joints),
         Waypoint(place_down, gripper_closed=False, name="ABLAGE", motion=MOTION_LIN, approach=True),
+    ] + regrip + [
         Waypoint(up(place), gripper_closed=False, name="UEBER_ABLAGE", motion=MOTION_LIN,
                  joints=place_above_joints),
         Waypoint(start_pose, gripper_closed=False, name="START", motion=MOTION_PTP,
@@ -431,3 +451,57 @@ def result_line(summary):
              "Tisch min %s mm" % (_mm(summary.get("table_min_m")) or "-"),
              "Vorhersage xy %s mm" % ((_mm(p.get("xy_m")) or "-") if p else "-")]
     return "   Lage: " + ", ".join(parts)
+
+
+# -- Gemerkte Ablagen des Experten ---------------------------------------------
+
+def placements_file(backup_root):
+    """Neben den PICK-Sicherungen am Arbeitsplatz (``config.TOUCHUP_BACKUP_ROOT``,
+    gitignored; Tests leiten das ins Wegwerf-Verzeichnis)."""
+    from pathlib import Path
+
+    return Path(backup_root).parent / "experte_ablagen.json"
+
+
+def placement_history(path, memory=None):
+    """Die letzten ``memory`` (Default ``config.EXPERT_PLACEMENT_MEMORY``) Ablagen
+    (x, y) ueber alle Laeufe.
+
+    Anwender 2026-11-24: Bei einer Fahrt je Lauf kannte die Tischabdeckung nur
+    die aktuelle Lage und waehlte das Feld am weitesten davon -- der Experte
+    pendelte zwischen zwei Stellen, egal mit welchem Zufall. Mit den
+    gemerkten Ablagen zaehlen auch die frueheren Laeufe. Nur Inferenz/Vergleich;
+    die Aufnahme waehlt weiter wie bisher (bc/auto_layout.py).
+    """
+    import json
+
+    memory = config.EXPERT_PLACEMENT_MEMORY if memory is None else int(memory)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    items = data.get("ablagen") if isinstance(data, dict) else None
+    out = []
+    for item in (items or [])[-memory:] if memory > 0 else []:
+        try:
+            out.append((float(item["xy"][0]), float(item["xy"][1])))
+        except (KeyError, TypeError, ValueError, IndexError):
+            continue
+    return out
+
+
+def remember_placement(path, xy):
+    """Ablage anhaengen (wirft OSError, wenn nicht schreibbar)."""
+    import json
+    from datetime import datetime
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    items = list((data or {}).get("ablagen") or []) if isinstance(data, dict) else []
+    items.append({"xy": [round(float(xy[0]), 4), round(float(xy[1]), 4)],
+                  "zeit": datetime.now().isoformat(timespec="seconds")})
+    items = items[-max(config.EXPERT_PLACEMENT_MEMORY, 1) * 4:]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"ablagen": items}, indent=1), encoding="utf-8")

@@ -45,6 +45,14 @@ class PickState:
     read_at: str = ""                     # wann gelesen (lokal)
     last_episode: dict = None             # {"xy", "when", "where"} oder None
     warnings: list = field(default_factory=list)
+    #: Lagen einer Versuchsreihe (Reiter Vergleich): je {"xy", "yaw_deg",
+    #: "label", "current", "status" (geplant/erledigt/aktuell), "known"
+    #: (alle/keins/teils/None)} -- nummeriert gezeichnet
+    lagen: list = field(default_factory=list)
+    #: Greiflagen (x, y) aus dem Training -- nur fuer den Bildausschnitt
+    training_xy: list = field(default_factory=list)
+    #: Heatmap der Trainingslagen EINES Modells (bc/gui/vergleich.heat_grid)
+    heat: dict = None
 
 
 def _parse_time(text):
@@ -189,7 +197,8 @@ class PickView(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect().adjusted(8, 8, -8, -8)
         state = self.state
-        if state is None or not state.table_points:
+        if state is None or not (state.table_points or state.pick or state.lagen
+                                 or len(state.training_xy)):
             painter.setPen(QColor("#888"))
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "PICK nicht gelesen")
             return
@@ -197,6 +206,8 @@ class PickView(QWidget):
         extra = [state.pick] if state.pick else []
         if state.last_episode:
             extra.append(state.last_episode["xy"])
+        extra += [tuple(lage["xy"]) for lage in state.lagen]
+        extra += [tuple(p) for p in state.training_xy]
         view = [self._view(*p) for p in list(pts.values()) + extra]
         u = np.array([v[0] for v in view])
         w = np.array([v[1] for v in view])
@@ -210,10 +221,11 @@ class PickView(QWidget):
                            rect.center().y() + (b - cw) * scale)
 
         # Tischbereich
-        hull = convex_hull(list(pts.values()))
-        painter.setPen(QPen(QColor("#9aa7b4"), 1))
-        painter.setBrush(QColor(154, 167, 180, 40))
-        painter.drawPolygon(QPolygonF([px(*p) for p in hull]))
+        if len(pts) >= 3:
+            hull = convex_hull(list(pts.values()))
+            painter.setPen(QPen(QColor("#9aa7b4"), 1))
+            painter.setBrush(QColor(154, 167, 180, 40))
+            painter.drawPolygon(QPolygonF([px(*p) for p in hull]))
         # Tischpunkte
         font = QFont()
         font.setPointSize(7)
@@ -224,6 +236,43 @@ class PickView(QWidget):
             painter.setBrush(QColor("#5b6b7b"))
             painter.drawEllipse(p, 2.5, 2.5)
             painter.drawText(QRectF(p.x() + 3, p.y() - 12, 40, 12), name)
+        # Heatmap: Trainingslagen eines Modells je Feld (dunkler = mehr)
+        heat = state.heat
+        if heat and heat.get("counts"):
+            counts = np.asarray(heat["counts"], dtype=float)
+            top = max(float(counts.max()), 1.0)
+            cell = float(heat["cell"])
+            painter.setPen(Qt.PenStyle.NoPen)
+            for i, j in zip(*np.nonzero(counts)):
+                x = heat["x0"] + i * cell
+                y = heat["y0"] + j * cell
+                a, b = px(x, y), px(x + cell, y + cell)
+                alpha = int(35 + 185 * counts[i, j] / top)
+                painter.setBrush(QColor(142, 68, 173, alpha))
+                painter.drawRect(QRectF(a, b).normalized())
+        # Lagen der Versuchsreihe: Nummer (Farbe = im Training bekannt?),
+        # Backenrichtung; geplant gestrichelt, erledigt grau, aktuell blau
+        known_colors = {"alle": "#1e8449", "keins": "#d35400", "teils": "#b7950b"}
+        bold = QFont(font)
+        bold.setBold(True)
+        for lage in state.lagen:
+            x, y = lage["xy"]
+            p = px(x, y)
+            status = lage.get("status") or ("aktuell" if lage.get("current") else "erledigt")
+            current = status == "aktuell"
+            color = QColor("#2e86c1" if current else "#8e9aa6")
+            style = Qt.PenStyle.DashLine if status == "geplant" else Qt.PenStyle.SolidLine
+            painter.setPen(QPen(color, 2 if current else 1, style))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(p, 7 if current else 5, 7 if current else 5)
+            if lage.get("yaw_deg") is not None:
+                t = np.radians(lage["yaw_deg"])
+                painter.drawLine(px(x - 0.02 * np.cos(t), y - 0.02 * np.sin(t)),
+                                 px(x + 0.02 * np.cos(t), y + 0.02 * np.sin(t)))
+            painter.setPen(QColor(known_colors.get(lage.get("known"), "#5b6b7b")))
+            painter.setFont(bold)
+            painter.drawText(QRectF(p.x() + 7, p.y() - 15, 30, 13), str(lage.get("label", "")))
+            painter.setFont(font)
         # juengste Episode (grau, gestrichelt)
         if state.last_episode:
             p = px(*state.last_episode["xy"])

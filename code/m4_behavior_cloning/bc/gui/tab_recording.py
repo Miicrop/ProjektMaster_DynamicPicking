@@ -58,7 +58,8 @@ from ..sync import camera_rate_findings
 from .runner import ProcessRunner
 from .tab_base import ModeTab
 from .widgets import (BAD, GOOD, ImageView, LogView, NEUTRAL, WARN,
-                      CameraAssignmentView, CollapsibleSection, block_wheel, find_data)
+                      CameraAssignmentView, CollapsibleSection, LAYOUT_FILE, block_wheel,
+                      find_data, load_layout_state, save_layout_state)
 
 log = logging.getLogger(__name__)
 
@@ -67,10 +68,12 @@ PREVIEW_INTERVAL_MS = 100
 #: Wie oft das Livebild einer laufenden Aufnahme von der Platte gelesen wird.
 LIVE_INTERVAL_MS = 250
 #: Aufgeklappte Kaesten der rechten Seite, Breite links waehrend der Aufnahme
-LAYOUT_FILE = "einstellungen/oberflaeche.local.json"
 #: Links waehrend einer Aufnahme (Anwender 2026-11-03: dann steht die rechte
 #: Seite im Vordergrund; beim Teachen bleibt die linke ganz sichtbar)
 LEFT_WIDTH_RECORDING = 380
+#: Namen, unter denen der Reiter die Kameras belegt (widgets.CameraShare)
+PREVIEW_OWNER = "Vorschau im Reiter Aufnahme"
+RECORD_OWNER = "Aufnahme läuft"
 LEFT_MIN_WIDTH_TEACHING = 740
 #: Kennung der Anordnung in LAYOUT_FILE (zwei Spalten seit 2026-11-09)
 LAYOUT_VERSION = 2
@@ -2969,6 +2972,8 @@ class RecordingTab(ModeTab):
                 "der Aufnahme\" ankreuzen und neu starten.")
             return
         assignment = self.cameras.assignment()
+        if not self._cameras_free("Die Vorschau", PREVIEW_OWNER):
+            return
         if not self.ensure_requirements(
                 "Die Vorschau", cameras_module.required_backend_keys(assignment),
                 "Mit Platzhalterbildern geht sie ohne alles."):
@@ -3031,6 +3036,7 @@ class RecordingTab(ModeTab):
                     capture.name, self._camera_settings[capture.name]))
         self.btn_preview.setEnabled(True)
         self.btn_preview.setText("Vorschau beenden")
+        self.cameras.share.claim(PREVIEW_OWNER, self.stop_preview)
         self.preview_timer.start()
         log.info("Vorschau offen: %s",
                  ", ".join(c.name for c in captures))
@@ -3047,12 +3053,33 @@ class RecordingTab(ModeTab):
         self.sources_line.setStyleSheet("color:%s" % BAD)
         log.error("Vorschau gescheitert: %s", error)
 
+    def _cameras_free(self, what, owner):
+        """Kameras fuer ``owner`` frei? Sonst Hinweis, wer sie hat (CameraShare).
+
+        Eine Vorschau in einem anderen Reiter wird geschlossen; eine laufende
+        Fahrt im Reiter Betrieb nicht -- dann geht es hier nicht weiter.
+        """
+        if cameras_module.all_simulated(self.cameras.assignment()):
+            return True
+        closed, blocked = self.cameras.share.take_over(owner)
+        if blocked:
+            QMessageBox.information(
+                self, "Kameras belegt",
+                "%s braucht die Kameras, sie sind aber gerade belegt: %s.\n\n"
+                "Eine Kamera lässt sich nicht zweimal öffnen — erst dort beenden."
+                % (what, ", ".join(blocked)))
+            return False
+        for other in closed:
+            log.info("Kameras: %s geschlossen, %s braucht sie", other, what)
+        return True
+
     def stop_preview(self):
         if self._preview_cancel is not None:
             self.cancel_preview_open()
         if self._camera_dialog is not None:
             self._camera_dialog.close()
         self.preview_timer.stop()
+        self.cameras.share.free(PREVIEW_OWNER)
         captures, self._captures = self._captures, None
         if captures:
             for capture in captures:
@@ -3287,6 +3314,9 @@ class RecordingTab(ModeTab):
             self.image.setText("Livebild aus — während der Aufnahme gehören "
                                "die Kameras apps/record.py")
 
+        if not self._cameras_free("Die Aufnahme", RECORD_OWNER):
+            self.live_timer.stop()
+            return
         argv = self._argv()
         # Fuer das nachtraegliche Bewerten (_episode_menu): wohin dieser Lauf
         # schreibt. Relativ zum Arbeitsordner, wie record.py es aufloest.
@@ -3304,6 +3334,8 @@ class RecordingTab(ModeTab):
             self.live_timer.stop()
             QMessageBox.warning(self, "Start gescheitert", str(exc))
             return
+        if not cameras_module.all_simulated(self.cameras.assignment()):
+            self.cameras.share.claim(RECORD_OWNER)     # gehoeren jetzt apps/record.py
         self._set_running(True)
         self._focus_output(True)
 
@@ -3628,6 +3660,7 @@ class RecordingTab(ModeTab):
         self.output.append_record("%s -> %s" % (folder, text))
 
     def _on_finished(self, code, text):
+        self.cameras.share.free(RECORD_OWNER)
         self._set_running(False)
         self._focus_output(False)
         if self._pick_adopted:
@@ -3899,23 +3932,6 @@ def _brush(colour):
     return QBrush(QColor(colour))
 
 
-def _load_layout_state(workdir):
-    """Gemerkte Anordnung (:data:`LAYOUT_FILE`); leer, wenn nicht lesbar."""
-    import json
-
-    try:
-        data = json.loads((Path(workdir) / LAYOUT_FILE).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def _save_layout_state(workdir, state):
-    import json
-
-    path = Path(workdir) / LAYOUT_FILE
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
-    except OSError as exc:
-        log.warning("Anordnung nicht gespeichert: %s", exc)
+# Gemerkte Anordnung: gemeinsam mit dem Reiter Betrieb (bc/gui/widgets.py)
+_load_layout_state = load_layout_state
+_save_layout_state = save_layout_state

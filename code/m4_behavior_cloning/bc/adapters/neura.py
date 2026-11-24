@@ -171,6 +171,11 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         self._gripper_mode = None
         self._gripper_closed = False
         self._servo_active = False
+        #: host_time() des letzten Abschaltens (config.NEURA_SERVO_REACTIVATE_PAUSE_S)
+        self._servo_off_at = None
+        #: Pause vor dem Einschalten, Sekunden (Tests setzen 0); zuletzt gewartet
+        self.servo_reactivate_pause_s = config.NEURA_SERVO_REACTIVATE_PAUSE_S
+        self.last_reactivate_wait_s = 0.0
         #: init_program() gelaufen und seitdem kein stop()? Siehe connect().
         self._program_ready = False
         self._stop_requested = threading.Event()
@@ -974,6 +979,15 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
     def activate_servo(self, mode="position"):
         self._require_motion("activate_servo")
         self._ensure_program()
+        # Direkt nach dem Abschalten eingeschaltet, faehrt der Arm erst nach
+        # ~0,5 s los (Befund 2026-11-24, zweite Fahrt ohne Experte) -- bis
+        # dahin hat der Stillstandswaechter abgebrochen. Rest der Pause warten.
+        self.last_reactivate_wait_s = 0.0
+        if self._servo_off_at is not None and self.servo_reactivate_pause_s > 0:
+            rest = self.servo_reactivate_pause_s - (host_time() - self._servo_off_at)
+            if rest > 0:
+                time.sleep(rest)
+                self.last_reactivate_wait_s = rest
         # Startstellung des Filters VOR der Aktivierung messen: der erste
         # Sollwert muss nahe an der Ist-Stellung liegen.
         self.servo_guard.reset(self.get_joint_angles(), host_time())
@@ -985,6 +999,7 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         if self._servo_active:
             self._call("deactivate_servo_interface")
             self._servo_active = False
+            self._servo_off_at = host_time()
 
     def servo_j(self, joint_angles, velocity=None, acceleration=None):
         """Ein Servo-Sollwert: Position (rad), Geschwindigkeit (rad/s),
@@ -1186,10 +1201,27 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         self._call_safe("stop_movelinear_online")
         self._call_safe("deactivate_servo_interface")
         self._servo_active = False
+        self._servo_off_at = host_time()
 
     @property
     def stop_requested(self):
         return self._stop_requested.is_set()
+
+    def reset_program(self):
+        """``stop`` + ``init_program`` zwischen zwei Fahrten -- bewegt nichts.
+
+        Befund 2026-11-24: Servofahrten direkt nach ``stop``/``init_program``
+        (erste Fahrt nach dem Verbinden, Rueckzug nach dem Probegriff-Stopp)
+        fuhren an; die Policy-Fahrt direkt nach dem Rueckzug, ohne beides
+        dazwischen, nahm 15 von 18 Mal keine Sollwerte an ("arm steht"). Hier
+        derselbe Ablauf wie nach einem Stopp, nur ohne Stoppanforderung.
+        """
+        self._require_motion("reset_program")
+        if self._servo_active:
+            raise RobotError("reset_program bei aktivem Servo-Interface")
+        self._program_ready = False
+        self._call_safe("stop")
+        self._init_program()
 
     def clear_stop(self):
         """Stopp quittieren. Nach ``stop`` nimmt der Controller keine Bewegung

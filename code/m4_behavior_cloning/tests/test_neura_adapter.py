@@ -755,3 +755,36 @@ def test_local_fk_with_tool_offset_and_link_points():
         erwartet = bot.robot._frame_pose(q, name)[:3]
         assert np.allclose(lokal[name], erwartet, atol=1e-9), name
     assert np.allclose(state.tcp_quat, bot.fk(state.joints, frame="tool"), atol=1e-9)
+
+
+def test_servo_waits_after_deactivation_before_reactivating():
+    # Befund 2026-11-24: direkt nach dem Abschalten wieder eingeschaltet, fuhr
+    # der Arm erst nach ~0,5 s los -- zweite Fahrt ohne Experte "arm steht"
+    robot = NeuraRobot(robot=FakeNeuraClient()).connect()
+    robot.servo_reactivate_pause_s = 0.2
+    robot.activate_servo()
+    assert robot.last_reactivate_wait_s == 0.0          # erstes Einschalten: sofort
+    robot.deactivate_servo()
+    robot.activate_servo()
+    assert 0.1 < robot.last_reactivate_wait_s <= 0.2
+    robot.deactivate_servo()
+    import time
+    time.sleep(0.25)
+    robot.activate_servo()
+    assert robot.last_reactivate_wait_s == 0.0          # Pause schon vorbei
+
+
+def test_reset_program_stops_and_initialises_between_rides():
+    client = FakeNeuraClient()
+    robot = NeuraRobot(robot=client).connect()
+    robot.activate_servo()
+    try:
+        robot.reset_program()
+        assert False, "RobotError erwartet (Servo-Interface aktiv)"
+    except RobotError:
+        pass
+    robot.deactivate_servo()
+    before = len(client.calls)
+    robot.reset_program()
+    names = [c[0] for c in client.calls[before:]]
+    assert names.index("stop") < names.index("init_program")
