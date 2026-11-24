@@ -820,6 +820,11 @@ SAFETY_CHECK_PERIOD_S = 0.05
 #: zum Start -- eine Gelenkfahrt aus dieser Hoehe kann die Backen durchs Objekt
 #: ziehen). Darunter: nicht fahren, erst von Hand anheben.
 PTP_MIN_ABOVE_GRASP_M = 0.05
+#: Nur umlegen (Modellvergleich): erst per PTP so hoch ueber den PICK, dann
+#: der Experte wie nach einem Probestopp (Anlage 2026-11-24: die Linearfahrt
+#: von der Startstellung quer ueber den Tisch lief in einen
+#: Konfigurationssprung, |Delta q| 0,21 rad bei Schritt 24)
+RELOCATE_APPROACH_ABOVE_PICK_M = 0.10
 #: Mindestpause zwischen deactivate_servo_interface und dem naechsten
 #: activate_servo_interface am Neura (Befund 2026-11-24): Fahrt 1 von
 #: 2026-11-23_16-40-02 (ohne Experte) startete ~0,1 s nach dem Rueckzug neu --

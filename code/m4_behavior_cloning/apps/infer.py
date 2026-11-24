@@ -856,6 +856,22 @@ def run_planned(robot, workspace, targets, gripper, clock, servo_rate_hz=config.
     return out
 
 
+def approach_above_pick(robot, workspace, known):
+    """Gelenkwinkel ueber dem PICK (``RELOCATE_APPROACH_ABOVE_PICK_M``), in der
+    Greiferdrehung, die der jetzigen naeher liegt; vorab gegen das
+    Kollisionsmodell geprueft. Wirft bei IK-Fehler oder verbotenem Ziel."""
+    from bc.kinematics import Kinematics
+
+    q0 = np.asarray(robot.read_state().joints, dtype=float)
+    p0 = np.asarray(robot.fk(q0), dtype=float)
+    _above, grasp, _info = known_pose.correction(known, p0)
+    target = np.asarray(grasp, dtype=float).copy()
+    target[2] += config.RELOCATE_APPROACH_ABOVE_PICK_M
+    q = np.asarray(Kinematics(robot).ik(target, q0), dtype=float)
+    check_target(workspace, robot, q)
+    return q
+
+
 def relocate_only(robot, workspace, known, reference_pick, start_joints, grasp_z, clock, args,
                   planner, rng, pick_state):
     """Teil ohne Policy-Fahrt umlegen (``--nur-umlegen``, Modellvergleich).
@@ -877,6 +893,16 @@ def relocate_only(robot, workspace, known, reference_pick, start_joints, grasp_z
     if robot.read_state().gripper_closed:
         robot.gripper_command(False)
     back_to = start_joints if start_joints is not None else np.asarray(robot.read_state().joints)
+    # Erst per PTP ueber den PICK (Gelenkfahrt, keine Singularitaet auf einer
+    # langen Geraden), dann der Experte wie nach einem Probestopp: senkrecht ab
+    try:
+        q_above = approach_above_pick(robot, workspace, known)
+    except Exception as exc:
+        return {"ok": False, "result": "nicht ueber den PICK planbar (%s)" % exc,
+                "new_pick": None, "placed_xy": None}
+    print("Umlegen: per PTP %.0f mm ueber den PICK"
+          % (1e3 * config.RELOCATE_APPROACH_ABOVE_PICK_M))
+    robot.move_to_joints(q_above)
     expert = expert_after_probe(robot, workspace, known, reference_pick, back_to, clock, args,
                                 planner, rng, pick_state)
     new_pick = expert.get("new_pick")

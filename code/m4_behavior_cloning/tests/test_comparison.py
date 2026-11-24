@@ -201,3 +201,42 @@ def test_comparison_stops_when_a_retreat_hangs(tmp_path):
     finally:
         tab.shutdown()
         runner.shutdown()
+
+
+def test_relocate_only_in_the_simulation_approaches_by_ptp(tmp_path):
+    # Anlage 2026-11-24: Linearfahrt von der Startstellung -> Konfigurationssprung;
+    # jetzt erst PTP ueber den PICK, dann der Experte wie nach einem Probestopp
+    import infer
+    from test_auto_layout import SEQ, _points
+
+    from bc import config
+    from bc.adapters.sim_robot import SimRobot
+
+    source = (Path(__file__).resolve().parents[1] / "checkpoints" / "G2_licht_langsam_nur_griff"
+              / "policy" / "bc_policy.json")
+    if not source.is_file():
+        return
+    points, _probe = _points(size=0.12)
+    info = json.loads(source.read_text(encoding="utf-8"))
+    info["start_joints"] = [float(q) for q in SimRobot(points=points).connect().read_state().joints]
+    ck = tmp_path / "M" / "policy"
+    ck.mkdir(parents=True)
+    (ck / "bc_policy.json").write_text(json.dumps(info), encoding="utf-8")
+    seq = tmp_path / "ablauf.json"
+    seq.write_text(json.dumps(SEQ), encoding="utf-8")
+    saved = sys.argv, infer.open_robot, config.TOUCHUP_BACKUP_ROOT
+    config.TOUCHUP_BACKUP_ROOT = str(tmp_path / "sicherungen")
+    sys.argv = ["infer.py", "--sim", "--checkpoint", str(tmp_path / "M"), "--lage-bekannt",
+                "--probegriff", "objekt", "--nur-umlegen", "--nachgreifen",
+                "--kamerapruefung", "aus", "--ablauf", str(seq), "--out", str(tmp_path / "out")]
+    infer.open_robot = lambda kind, clock=None, **kw: SimRobot(clock=clock, points=points)
+    log = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(log):
+            infer.main()
+    finally:
+        sys.argv, infer.open_robot, config.TOUCHUP_BACKUP_ROOT = saved
+    text = log.getvalue()
+    assert "per PTP 100 mm ueber den PICK" in text, text[-3000:]
+    result = json.loads((tmp_path / "out" / "summary.json").read_text(encoding="utf-8"))["umlegen"]
+    assert result["ok"], result
