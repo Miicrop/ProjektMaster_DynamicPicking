@@ -33,7 +33,10 @@
 - [ ] **N** – **Fazit (Zusammenfassung, Diskussion) und Ergebnissatz der Kurzfassung.**
 - [ ] **N** – Gesamte Arbeit durchsehen, dann `/ars-reviewer`, Befunde mit `/ars-revision` einarbeiten.
 - [ ] **T** – Korrekturlesen, Abgabe.
-- [ ] **N** – **Präsentation auf den Laborstand vom 12.11. bringen** (in der Thesis erledigt):
+- [x] **N** – **Präsentation auf den Laborstand vom 12.11. gebracht** (24.11.): Bauteil mit Fase auf der
+  Etikettseite, Seitenkamera auf der vom Roboter abgewandten Seite, Klebeband-Ablagen, neue Blätter
+  3.6 Positionskorrektur, 7.2 Labortag 12.11., 7.3 Messwerte, 7.4 Was noch fehlt. Alle Szenen ohne
+  Konsolenfehler. **Offen: Niklas schaut drüber.** Ursprüngliche Liste:
   - `python build_data.py` neu laufen lassen. `data.json` enthält noch den Offset 113° und die
     alten Posen (inspection 520,8 / 199,6 / 42,0, Ablagen z 4/3).
   - Szene 4.4 „23° verdreht“: Offset jetzt −67° (90° + 23° − 180°). Das Teil wird um 180°
