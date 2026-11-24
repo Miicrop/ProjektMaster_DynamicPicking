@@ -22,6 +22,7 @@ from . import MODES, _bootstrap  # noqa: F401  (_bootstrap setzt sys.path)
 from . import reload as reload_module
 from . import session as session_module
 from .runner import TaskRunner
+from .tab_comparison import ComparisonTab
 from .tab_console import ConsoleTab
 from .tab_operation import OperationTab
 from .tab_recording import RecordingTab
@@ -36,6 +37,7 @@ TAB_CLASSES = {
     "systemcheck": SystemcheckTab,
     "recording": RecordingTab,
     "training": TrainingTab,
+    "comparison": ComparisonTab,
     "operation": OperationTab,
     "console": ConsoleTab,
 }

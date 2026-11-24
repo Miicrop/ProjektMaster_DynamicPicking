@@ -856,6 +856,35 @@ def run_planned(robot, workspace, targets, gripper, clock, servo_rate_hz=config.
     return out
 
 
+def relocate_only(robot, workspace, known, reference_pick, start_joints, grasp_z, clock, args,
+                  planner, rng, pick_state):
+    """Teil ohne Policy-Fahrt umlegen (``--nur-umlegen``, Modellvergleich).
+
+    Arm an die Startstellung (PTP nur aus sicherer Hoehe), Greifer auf, dann
+    derselbe Experte wie nach einem Probegriff: ueber PICK, greifen, an eine
+    neue Lage legen, PICK in der Steuerung nachfuehren, zurueck zum Start.
+    Rueckgabe dict ``result`` (Text), ``new_pick``, ``placed_xy``, ``ok``.
+    """
+    if workspace is None or known is None:
+        return {"ok": False, "result": "keine bekannte Lage", "new_pick": None,
+                "placed_xy": None}
+    if start_joints is not None:
+        away = float(np.max(np.abs(robot.read_state().joints - start_joints)))
+        if away > config.START_POSE_TOL_RAD and not move_to_joints_checked(
+                robot, start_joints, grasp_z, "Umlegen"):
+            return {"ok": False, "result": "nicht gefahren: Arm steht zu tief",
+                    "new_pick": None, "placed_xy": None}
+    if robot.read_state().gripper_closed:
+        robot.gripper_command(False)
+    back_to = start_joints if start_joints is not None else np.asarray(robot.read_state().joints)
+    expert = expert_after_probe(robot, workspace, known, reference_pick, back_to, clock, args,
+                                planner, rng, pick_state)
+    new_pick = expert.get("new_pick")
+    return {"ok": new_pick is not None, "result": expert.get("result"),
+            "new_pick": None if new_pick is None else [float(v) for v in new_pick],
+            "placed_xy": expert.get("placed_xy")}
+
+
 def _write_pick(robot, joints, pick_state):
     """PICK in der Steuerung auf ``joints`` setzen. Erste Aenderung je Lauf mit
     Sicherung wie beim Touch-up, danach nur schreiben (Stand vor dem Lauf
@@ -929,7 +958,8 @@ def expert_after_probe(robot, workspace, known, reference_pick, start_joints, cl
             place_above_joints = kin.ik(up_place, lift_joints)
             waypoints = known_pose.expert_waypoints(
                 p0, q0, above, grasp, place, start_joints, lift, lift_joints,
-                place_above_joints, start_pose)
+                place_above_joints, start_pose,
+                regrasp=bool(getattr(args, "nachgreifen", False)))
             ideal = build_ideal_trajectory(waypoints, fk=robot.fk, **speeds)
             targets = kin.solve_path(ideal.poses_quat, q0, fixed_joints=ideal.joints)
             for q in targets:
@@ -1256,6 +1286,14 @@ def parse_args():
                         help="mit --probegriff objekt: Abstand der Werkzeugspitze ueber der "
                              "Objektoberkante in mm (Default %.0f; Nachlauf nach dem Stopp an der "
                              "Anlage bis 7,5 mm -- schrittweise annaehern)" % (1e3 * config.PROBE_GAP_M))
+    parser.add_argument("--nur-umlegen", dest="nur_umlegen", action="store_true",
+                        help="mit --lage-bekannt --probegriff objekt: keine Policy-Fahrt -- "
+                             "der Experte greift das Teil am PICK, legt es an eine neue Lage "
+                             "und fuehrt PICK nach (Modellvergleich, apps/vergleich.py)")
+    parser.add_argument("--nachgreifen", action="store_true",
+                        help="mit Experte: nach dem Ablegen auf Greifhoehe noch einmal "
+                             "schliessen und oeffnen -- der Greifer schiebt das Teil mittig, "
+                             "es liegt dann am nachgefuehrten PICK (Anwender 2026-11-24)")
     parser.add_argument("--ohne-experte", dest="experte", action="store_false",
                         help="mit --probegriff objekt: nach dem Stopp ueber dem Objekt NICHT "
                              "korrigieren/greifen/umlegen -- senkrecht anheben, zurueck zum "
@@ -1300,6 +1338,10 @@ def parse_args():
         parser.error("--lage-bekannt endet selbst mit dem Griff -- ohne --transport-geplant")
     if args.dagger and not args.experte:
         parser.error("--dagger braucht den Experten (ohne --ohne-experte)")
+    if args.nur_umlegen and not (args.lage_bekannt and args.probegriff == "objekt"
+                                 and args.experte and not args.dagger and not args.hold):
+        parser.error("--nur-umlegen braucht --lage-bekannt --probegriff objekt und den "
+                     "Experten, ohne --dagger/--hold")
     if not args.experte and not (args.lage_bekannt and args.probegriff == "objekt"):
         parser.error("--ohne-experte gilt nur mit --lage-bekannt --probegriff objekt")
     if args.glaettung is not None and not 0.0 < args.glaettung <= 1.0:
@@ -1391,7 +1433,10 @@ def main():
         problems = check_against_recording(info, args, robot_kind, cam_cfgs)
         if args.replay:
             problems += ["Replay: %s" % p for p in replay.check_compatible(args.replay, info)]
-        if problems:
+        if problems and args.nur_umlegen:
+            # die Policy faehrt nicht -- Kameras/Tempo der Aufnahme spielen keine Rolle
+            print("Hinweis (nur umlegen): " + "; ".join(problems))
+        elif problems:
             raise SystemExit("Policy passt nicht zu dieser Ausfuehrung:\n  - " + "\n  - ".join(problems))
     if args.override is None:
         args.override = config.DEFAULT_OVERRIDE
@@ -1409,6 +1454,9 @@ def main():
             if ask("Trotzdem fahren? [j/N] ", "n").strip().lower() != "j":
                 raise SystemExit("Abgebrochen.")
 
+    if policy is None and args.nur_umlegen:
+        # nur Startstellung und Tischhoehe aus bc_policy.json -- die Policy faehrt nicht
+        policy = HoldPolicy(horizon=config.POLICY_N_ACTION_STEPS)
     if policy is None:
         print("Lade Policy %s ..." % checkpoint)
         policy = DiffusionPolicyRunner(checkpoint, device=args.device,
@@ -1551,7 +1599,7 @@ def main():
     # auch ohne Experte: der Rueckzug nach dem Probegriff braucht den normalen
     # Tischabstand (nach einem Violation-Stopp liegt der Arm unter der Probe-Ebene)
     if known is not None and args.probegriff == "objekt" and (
-            args.episodes > 1 or args.dagger or not args.experte):
+            args.episodes > 1 or args.dagger or not args.experte or args.nur_umlegen):
         expert_workspace = build_workspace(table_z, info, robot, robot_info, args, known,
                                            None, progress=lambda *_: None)
     start = np.asarray(info["start_joints"]) if info.get("start_joints") else None
@@ -1612,6 +1660,16 @@ def main():
         print("Ablage-Zufall des Experten: %d (--ablage-seed zum Wiederholen)" % args.ablage_seed)
     reference_pick = None if known is None else known.pick.copy()
     pick_state = {}
+
+    # Nur umlegen (Modellvergleich, apps/vergleich.py): keine Policy -- der
+    # Experte greift am PICK und legt an eine neue Lage, wie nach einer Fahrt
+    umlegen = None
+    if args.nur_umlegen:
+        args.episodes = 0
+        umlegen = relocate_only(robot, expert_workspace, known, reference_pick, start,
+                                grasp_height(info, known), clock, args, rec_planner, rng,
+                                pick_state)
+        print("UMLEGEN: %s" % umlegen["result"])
 
     # PICK aus der Lokalisierung der Gruppe (bc/lokalisierung.py)
     localizer = None
@@ -1928,6 +1986,7 @@ def main():
         "camera_settings": now_settings or None,
         "replan_steps": replan,
         "ensemble_decay": None if args.no_ensemble else decay,
+        "umlegen": umlegen,
         "episodes": results,
         "success_rate": float(np.mean([r["success"] for r in results])) if results else None,
     }

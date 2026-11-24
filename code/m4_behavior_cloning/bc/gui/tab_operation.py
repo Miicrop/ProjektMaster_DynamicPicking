@@ -316,6 +316,15 @@ class OperationTab(ModeTab):
             "Das Teil wird nicht berührt (z. B. wenn die M1-Lage nicht sicher stimmt).")
         self.expert.toggled.connect(self._on_probe_changed)
         form.addRow("", self.expert)
+        self.regrasp = QCheckBox("Nach dem Ablegen nachgreifen (Teil mittig)")
+        self.regrasp.setChecked(True)
+        self.regrasp.setToolTip(
+            "Der Experte schließt nach dem Ablegen auf Greifhöhe noch einmal und öffnet "
+            "wieder (--nachgreifen). Der Parallelgreifer schiebt das Teil dabei mittig "
+            "zwischen die Backen — es liegt dann am nachgeführten PICK statt um das Spiel "
+            "beim Ablegen daneben. Kostet etwa 2 s je Fahrt.")
+        self.regrasp.toggled.connect(self._update_command)
+        form.addRow("", self.regrasp)
         self.sequence = QLineEdit()
         self.sequence.setPlaceholderText("aus dem Modell")
         self.sequence.textChanged.connect(self._update_command)
@@ -391,13 +400,14 @@ class OperationTab(ModeTab):
 
     def _known_widgets(self):
         return (self.probe, self.probe_gap, self.expert, self.sequence, self.pick_source,
-                self.photo_point, self.dagger_dir)
+                self.photo_point, self.dagger_dir, self.regrasp)
 
     def _on_probe_changed(self, *_):
         objekt = self.known.isChecked() and self.probe.currentData() == "objekt"
         self.probe_gap.setEnabled(objekt)
         self.expert.setEnabled(objekt)
         self.dagger_dir.setEnabled(objekt and self.expert.isChecked())
+        self.regrasp.setEnabled(objekt and self.expert.isChecked())
         self._update_command()
 
     def _on_pick_source_changed(self, *_):
@@ -807,6 +817,7 @@ class OperationTab(ModeTab):
             probe=self.probe.currentData(),
             probe_gap_mm=self.probe_gap.value(),
             expert=self.expert.isChecked(),
+            regrasp=self.regrasp.isChecked(),
             sequence=self.sequence.text().strip() or None,
             camera_check=camera_check or self.camera_check.currentData(),
             pick_source=self.pick_source.currentData(),

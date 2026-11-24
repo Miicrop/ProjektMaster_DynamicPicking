@@ -1,0 +1,260 @@
+"""Modellvergleich an der Anlage (Anwender 2026-11-24).
+
+Mehrere Policies an DENSELBEN Lagen: je Lage faehrt jedes Modell nacheinander
+``fahrten`` Mal an (Probegriff "objekt", ohne Experte -- die Policy haelt den
+gewaehlten Abstand ueber dem Objekt, dann senkrecht hoch und zurueck zum
+Start). Danach legt der Experte das Teil an eine neue Lage (``infer.py
+--nur-umlegen``), und alles wiederholt sich:
+
+    Lage 0: A, A, B, B, C, C, umlegen
+    Lage 1: A, A, B, B, C, C, umlegen
+    ...
+
+Jede Fahrt ist ein eigener Aufruf von apps/infer.py (``--episodes 1``):
+frisch verbunden fuhr die Policy an der Anlage zuverlaessig an, die zweite
+Fahrt im selben Prozess nicht immer (Befund 2026-11-24, "arm steht"). Der
+Reiter (bc/gui/tab_comparison.py) startet die Aufrufe nacheinander -- STOPP
+beendet so die laufende Fahrt selbst, nicht nur ein Steuerprogramm darueber.
+
+Qt-frei: Plan, Kommandozeilen, Auswertung je Fahrt und je Modell.
+"""
+
+import csv
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+from . import operation
+
+FAHRT, UMLEGEN = "fahrt", "umlegen"
+
+#: Ordner der Vergleiche, relativ zum Arbeitsordner
+ROOT = "vergleiche"
+
+CSV_COLUMNS = ("lage", "modell", "fahrt", "erfolg", "xy_mm", "dz_mm", "drehung_grad",
+               "tisch_min_mm", "takte", "vorhersage_ms", "ueberlaeufe", "stopp", "rueckzug",
+               "griff_x_mm", "griff_y_mm", "pick_x_mm", "pick_y_mm", "pick_drehung_grad",
+               "ordner")
+
+
+@dataclass
+class Step:
+    kind: str           # FAHRT oder UMLEGEN
+    lage: int
+    model: str          # Checkpoint (Pfad wie in der Auswahl)
+    index: int = 0      # Fahrt dieses Modells an dieser Lage
+    out: str = ""       # Protokollordner, relativ zum Vergleichsordner
+
+    @property
+    def label(self):
+        if self.kind == UMLEGEN:
+            return "Lage %d: Experte legt um" % (self.lage + 1)
+        return "Lage %d: %s, Fahrt %d" % (self.lage + 1, model_name(self.model), self.index + 1)
+
+
+def model_name(model):
+    """Anzeigename: Ordner des Laufs (``checkpoints/G2/policy`` -> G2)."""
+    path = Path(str(model).replace("\\", "/"))
+    if path.name == "policy":
+        path = path.parent
+    if path.parent.name == "checkpoints" and path.name.startswith("step_"):
+        return "%s/%s" % (path.parent.parent.name, path.name)
+    return path.name
+
+
+def plan(models, fahrten, lagen):
+    """Alle Schritte in Reihenfolge. Nach der letzten Lage wird nicht umgelegt."""
+    models = [m for m in models if m]
+    if not models:
+        raise ValueError("kein Modell gewaehlt")
+    if fahrten < 1 or lagen < 1:
+        raise ValueError("Fahrten und Lagen muessen mindestens 1 sein")
+    names = [model_name(m) for m in models]
+    if len(set(names)) != len(names):
+        raise ValueError("zwei Modelle mit demselben Namen: %s" % ", ".join(names))
+    steps = []
+    for lage in range(lagen):
+        for model, name in zip(models, names):
+            for k in range(fahrten):
+                steps.append(Step(FAHRT, lage, model, k,
+                                  "lage_%02d/%s_fahrt%d" % (lage + 1, name, k + 1)))
+        if lage + 1 < lagen:
+            steps.append(Step(UMLEGEN, lage, models[0], 0, "lage_%02d/umlegen" % (lage + 1)))
+    return steps
+
+
+def step_argv(step, root, probe_gap_mm, regrasp=True, **common):
+    """Kommandozeile fuer apps/infer.py. ``common``: wie operation.infer_argv
+    (robot_kind, camera_specs, override, glaettung, real_robot, ...)."""
+    out = Path(root) / step.out
+    if step.kind == FAHRT:
+        return operation.infer_argv(
+            step.model, episodes=1, known_pose=True, probe="objekt",
+            probe_gap_mm=probe_gap_mm, expert=False, camera_check="warnen",
+            out=out, **common)
+    argv = operation.infer_argv(
+        step.model, episodes=1, known_pose=True, probe="objekt",
+        probe_gap_mm=probe_gap_mm, expert=True, regrasp=regrasp, camera_check="aus",
+        out=out, **common)
+    return argv + ["--nur-umlegen"]
+
+
+def evaluate(step, summary, code):
+    """Ergebnis eines Schritts: ``(zeile | None, abbruchgrund | None)``.
+
+    Abgebrochen wird, sobald der Arm nicht sicher wieder am Start steht oder
+    die Steuerung nicht mitgemacht hat -- der naechste Schritt finge sonst
+    an einer unbekannten Stelle an (Befund 2026-11-24: Rueckzug hing ueber
+    dem Objekt, der naechste Lauf fuhr per PTP durchs Teil).
+    """
+    if code != 0 or not summary:
+        return None, "%s: abgebrochen (Rueckgabewert %s)" % (step.label, code)
+    if step.kind == UMLEGEN:
+        result = summary.get("umlegen") or {}
+        if not result.get("ok"):
+            return None, "%s: %s" % (step.label, result.get("result") or "nicht umgelegt")
+        return None, None
+    episodes = summary.get("episodes") or []
+    if not episodes:
+        return None, "%s: keine Fahrt (Kamerapruefung oder Start gescheitert)" % step.label
+    ep = episodes[0]
+    lage = ep.get("lage") or {}
+    at = lage.get("predicted") or lage.get("at_stop") or {}
+    pick = lage.get("pick") or [None, None]
+    pose = (lage.get("predicted") or {}).get("pose") or [None, None]
+    row = {
+        "lage": step.lage + 1,
+        "modell": model_name(step.model),
+        "fahrt": step.index + 1,
+        "erfolg": bool(ep.get("success")),
+        "xy_mm": _mm(ep.get("grasp_error_m")),
+        "dz_mm": _mm(at.get("dz_m")),
+        "drehung_grad": _num(at.get("yaw_deg")),
+        "tisch_min_mm": _mm(lage.get("table_min_m")),
+        "takte": ep.get("steps"),
+        "vorhersage_ms": _num(ep.get("predict_ms_median")),
+        "ueberlaeufe": ep.get("pacer_overruns"),
+        "stopp": ep.get("stop_reason"),
+        "rueckzug": ep.get("rueckzug"),
+        "griff_x_mm": _mm(pose[0]),
+        "griff_y_mm": _mm(pose[1]),
+        "pick_x_mm": _mm(pick[0]),
+        "pick_y_mm": _mm(pick[1]),
+        "pick_drehung_grad": _num(lage.get("pick_yaw_deg")),
+        "ordner": step.out,
+    }
+    stop = str(ep.get("stop_reason") or "")
+    retreat = str(ep.get("rueckzug") or "")
+    if stop.startswith("arm steht"):
+        return row, "%s: %s" % (step.label, stop)
+    if not retreat.startswith("ohne Experte"):
+        return row, "%s: Arm nicht sicher am Start (%s)" % (step.label, retreat or stop)
+    return row, None
+
+
+def aggregate(rows, models=None):
+    """Kennzahlen je Modell (Reihenfolge wie ``models``, sonst wie die Zeilen)."""
+    order = [model_name(m) for m in models] if models else []
+    for row in rows:
+        if row["modell"] not in order:
+            order.append(row["modell"])
+    out = []
+    for name in order:
+        mine = [r for r in rows if r["modell"] == name]
+        xy = _values(mine, "xy_mm")
+        yaw = [abs(v) for v in _values(mine, "drehung_grad")]
+        out.append({
+            "modell": name,
+            "fahrten": len(mine),
+            "erfolg": sum(1 for r in mine if r["erfolg"]),
+            "lagen": len({r["lage"] for r in mine}),
+            "xy_median_mm": _stat(xy, np.median),
+            "xy_mittel_mm": _stat(xy, np.mean),
+            "xy_max_mm": _stat(xy, np.max),
+            "xy_streuung_mm": _spread_within_lage(mine),
+            "drehung_median_grad": _stat(yaw, np.median),
+            "dz_median_mm": _stat(_values(mine, "dz_mm"), np.median),
+            "takte_median": _stat(_values(mine, "takte"), np.median),
+        })
+    return out
+
+
+def write_results(root, rows, stats, meta=None):
+    """``vergleich.csv`` (je Fahrt) und ``vergleich.json`` (je Modell + Rahmen)."""
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    with open(root / "vergleich.csv", "w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle, delimiter=";")
+        writer.writerow(CSV_COLUMNS)
+        for row in rows:
+            writer.writerow(["" if row.get(c) is None else row.get(c) for c in CSV_COLUMNS])
+    data = {"modelle": stats, "fahrten": rows}
+    data.update(meta or {})
+    (root / "vergleich.json").write_text(json.dumps(data, indent=2, ensure_ascii=False),
+                                         encoding="utf-8")
+
+
+def stats_row(stat):
+    """Zeile fuer die Tabelle im Reiter."""
+    def fmt(value, unit=""):
+        return "-" if value is None else "%.1f%s" % (value, unit)
+    return [stat["modell"], "%d" % stat["fahrten"],
+            "%d / %d" % (stat["erfolg"], stat["fahrten"]),
+            fmt(stat["xy_median_mm"], " mm"), fmt(stat["xy_max_mm"], " mm"),
+            fmt(stat["xy_streuung_mm"], " mm"), fmt(stat["drehung_median_grad"], "°"),
+            fmt(stat["dz_median_mm"], " mm"), fmt(stat["takte_median"])]
+
+
+STATS_HEADER = ["Modell", "Fahrten", "Erfolg", "xy Median", "xy max",
+                "Streuung je Lage", "Drehung Median", "dz Median", "Takte"]
+
+
+def run_row(row):
+    def fmt(value, unit=""):
+        return "-" if value is None else "%.1f%s" % (value, unit)
+    return ["%d" % row["lage"], row["modell"], "%d" % row["fahrt"],
+            "Erfolg" if row["erfolg"] else "kein Erfolg", fmt(row["xy_mm"], " mm"),
+            fmt(row["drehung_grad"], "°"), fmt(row["dz_mm"], " mm"),
+            "-" if row["takte"] is None else "%d" % row["takte"], str(row["stopp"] or "")]
+
+
+RUNS_HEADER = ["Lage", "Modell", "Fahrt", "Ergebnis", "xy", "Drehung", "dz", "Takte", "Stopp"]
+
+
+# -- intern -------------------------------------------------------------------
+
+def _mm(value):
+    return None if value is None else round(1e3 * float(value), 2)
+
+
+def _num(value):
+    return None if value is None else round(float(value), 2)
+
+
+def _values(rows, key):
+    return [float(r[key]) for r in rows if r.get(key) is not None]
+
+
+def _stat(values, fn):
+    return round(float(fn(values)), 2) if values else None
+
+
+def _spread_within_lage(rows):
+    """Wie weit liegen die Fahrten EINES Modells an derselben Lage auseinander?
+
+    Groesster Abstand zwischen den vorhergesagten Griffpunkten (x, y) einer
+    Lage, gemittelt ueber die Lagen -- die Varianz von Lauf zu Lauf, ohne
+    den gemeinsamen Versatz gegen PICK.
+    """
+    spans = []
+    for lage in {r["lage"] for r in rows}:
+        points = [(r["griff_x_mm"], r["griff_y_mm"]) for r in rows
+                  if r["lage"] == lage and r.get("griff_x_mm") is not None
+                  and r.get("griff_y_mm") is not None]
+        if len(points) >= 2:
+            pts = np.asarray(points, dtype=float)
+            spans.append(max(float(np.hypot(*(a - b))) for i, a in enumerate(pts)
+                             for b in pts[i + 1:]))
+    return round(float(np.mean(spans)), 2) if spans else None

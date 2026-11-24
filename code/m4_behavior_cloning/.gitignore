@@ -12,5 +12,7 @@ snapshot_*.png
 waypoints*.json
 datasets/
 rollouts/
+# Modellvergleiche (bc/gui/tab_comparison.py): Fahrtprotokolle wie rollouts/
+vergleiche/
 sequences/arbeitskopien/
 einstellungen/*.local.json

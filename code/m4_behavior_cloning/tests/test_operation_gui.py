@@ -185,3 +185,12 @@ def test_final_step_is_not_listed_twice(tmp_path):
           extra={"step": 4000})
     found = [str(p).replace("\\", "/") for p in operation.find_policies(tmp_path)]
     assert found == ["checkpoints/G2", "checkpoints/G2/checkpoints/step_004000"]
+
+
+def test_regrasp_option_reaches_the_command_line():
+    argv = operation.infer_argv("checkpoints/G2", known_pose=True, probe="objekt", regrasp=True)
+    assert "--nachgreifen" in argv
+    # ohne Experte gibt es nichts nachzugreifen
+    argv = operation.infer_argv("checkpoints/G2", known_pose=True, probe="objekt",
+                                expert=False, regrasp=True)
+    assert "--nachgreifen" not in argv and "--ohne-experte" in argv

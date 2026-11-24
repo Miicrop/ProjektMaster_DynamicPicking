@@ -52,6 +52,7 @@ MODULES = [
     "test_camera_white_balance",
     "test_operation_gui",
     "test_ptp_height",
+    "test_comparison",
     "test_computed_points",
     "test_reload",
     "test_points_panel",

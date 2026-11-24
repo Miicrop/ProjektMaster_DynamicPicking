@@ -383,6 +383,8 @@ BY_MODE = {
     "systemcheck": systemcheck_requirements,
     "recording": recording_requirements,
     "training": training_requirements,
+    # Modellvergleich (bc/gui/tab_comparison.py): faehrt Policies wie der Betrieb
+    "comparison": operation_requirements,
     "operation": operation_requirements,
     "console": console_requirements,
 }

@@ -325,13 +325,21 @@ def new_place_pose(known, reference_pick, rng, used_xy=(), yaw_range_deg=None,
 
 
 def expert_waypoints(stop_pose, stop_joints, above, grasp, place, start_joints, lift_m,
-                     lift_joints, place_above_joints, start_pose, gripper_closed=False):
+                     lift_joints, place_above_joints, start_pose, gripper_closed=False,
+                     regrasp=False):
     """Wegpunkte des Experten (bc/trajectory.Waypoint).
 
     STOPP -> KORREKTUR (gleiche Hoehe, xy + Drehung) -> GRIFF (senkrecht ab,
     schliessen) -> ANHEBEN -> UEBER_ABLAGE -> ABLAGE (oeffnen) ->
     UEBER_ABLAGE -> START. ``place``: Ablagepose in derselben Orientierung
     wie gegriffen.
+
+    ``regrasp`` (Anwender 2026-11-24): nach dem Oeffnen auf Greifhoehe noch
+    einmal schliessen (NACHGRIFF) und wieder oeffnen (LOESEN). Der
+    Parallelgreifer schiebt das Teil dabei mittig zwischen die Backen -- es
+    liegt dann am nachgefuehrten PICK statt um das Spiel beim Ablegen
+    daneben. Die Wechsel liegen 0,5 mm auseinander (Ablage-Zugabe), damit
+    kein Segment die Laenge null hat.
     """
     from .trajectory import MOTION_LIN, MOTION_PTP, Waypoint
 
@@ -352,6 +360,18 @@ def expert_waypoints(stop_pose, stop_joints, above, grasp, place, start_joints, 
         free[2] = above[2]
         start.append(Waypoint(free, gripper_closed=False, name="FREI", motion=MOTION_LIN,
                               approach=True))
+    regrip = []
+    if regrasp:
+        # Greifhoehe = Ablage ohne Zugabe; mindestens 0,5 mm Weg je Segment
+        at_grasp = np.asarray(place, dtype=float).copy()
+        if place_down[2] - at_grasp[2] < 0.0005:
+            at_grasp[2] = place_down[2] - 0.0005
+        regrip = [
+            Waypoint(at_grasp, gripper_closed=True, name="NACHGRIFF", motion=MOTION_LIN,
+                     approach=True),
+            Waypoint(place_down, gripper_closed=False, name="LOESEN", motion=MOTION_LIN,
+                     approach=True),
+        ]
     return start + [
         Waypoint(above, gripper_closed=False, name="KORREKTUR", motion=MOTION_LIN, approach=True),
         Waypoint(grasp, gripper_closed=True, name="GRIFF", motion=MOTION_LIN, approach=True),
@@ -360,6 +380,7 @@ def expert_waypoints(stop_pose, stop_joints, above, grasp, place, start_joints, 
         Waypoint(up(place), gripper_closed=True, name="UEBER_ABLAGE", motion=MOTION_PTP,
                  joints=place_above_joints),
         Waypoint(place_down, gripper_closed=False, name="ABLAGE", motion=MOTION_LIN, approach=True),
+    ] + regrip + [
         Waypoint(up(place), gripper_closed=False, name="UEBER_ABLAGE", motion=MOTION_LIN,
                  joints=place_above_joints),
         Waypoint(start_pose, gripper_closed=False, name="START", motion=MOTION_PTP,
