@@ -814,6 +814,12 @@ SAFETY_CHECK_PERIOD_S = 0.05
 #: Kalibriert an 1013 Rollouts (VM + Anlage bis 16.11.): beide Not-Aus-Fahrten
 #: >= 133 Takte, alle anderen < 3 Takte -- ausser drei VM-Fahrten, in denen
 #: der Arm ebenfalls 220-250 Takte stand (Haenger der VM-Software).
+#: PTP-Fahrt (move_to_joints) zur Start- oder Fotostellung nur, wenn das
+#: Werkzeug mindestens so hoch ueber der Greifhoehe steht (Befund 2026-11-24:
+#: Rueckzug hing ~10 mm ueber dem Objekt, der naechste Lauf fuhr per PTP direkt
+#: zum Start -- eine Gelenkfahrt aus dieser Hoehe kann die Backen durchs Objekt
+#: ziehen). Darunter: nicht fahren, erst von Hand anheben.
+PTP_MIN_ABOVE_GRASP_M = 0.05
 #: Mindestpause zwischen deactivate_servo_interface und dem naechsten
 #: activate_servo_interface am Neura (Befund 2026-11-24): Fahrt 1 von
 #: 2026-11-23_16-40-02 (ohne Experte) startete ~0,1 s nach dem Rueckzug neu --

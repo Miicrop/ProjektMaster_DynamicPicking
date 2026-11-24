@@ -136,3 +136,31 @@ def test_planned_run_ends_when_the_arm_stands():
                       threaded_watchdog=False)
     assert out["stop_reason"].startswith("arm steht"), out["stop_reason"]
     assert len(out["t"]) < 20
+
+
+def test_never_moving_at_all_is_reported_as_servo_not_taken():
+    # Befund 2026-11-24: Fahrt 1 ohne Experte -- Arm seit dem Einschalten unbewegt
+    guard = StallGuard()
+    q = np.zeros(6)
+    with pytest.raises(ArmStalled, match="faehrt nicht los"):
+        for _ in range(config.STALL_STEPS + 1):
+            guard.check(q, q + 0.05)
+    # Stand der Arm erst nach einer Bewegung: Meldung wie bisher (Not-Aus?)
+    guard = StallGuard()
+    guard.check(q, q + 0.05)
+    moved = q + 0.01
+    with pytest.raises(ArmStalled, match="Not-Aus am Handbediengeraet"):
+        for _ in range(config.STALL_STEPS + 1):
+            guard.check(moved, moved + 0.05)
+
+
+def test_hanging_second_ride_of_2026_11_24_is_servo_not_taken():
+    path = (Path(__file__).resolve().parents[1] / "checkpoints" / "G2_licht_langsam_nur_griff"
+            / "policy" / "rollouts" / "2026-11-24_12-54-07" / "rollout_001.npz")
+    if not path.is_file():
+        pytest.skip("Anlagen-Rollout nicht vorhanden")
+    z = np.load(path)
+    guard = StallGuard()
+    with pytest.raises(ArmStalled, match="faehrt nicht los"):
+        for q, ziel in zip(z["joints"], z["ziel"].reshape(-1, 6)):
+            guard.check(q, ziel)

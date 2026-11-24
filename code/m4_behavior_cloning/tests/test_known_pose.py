@@ -245,3 +245,20 @@ def test_infer_known_pose_needs_a_sequence(tmp_path):
         pass
     finally:
         sys.argv = saved
+
+
+def test_expert_placement_differs_between_runs_without_fixed_seed():
+    # Anwender 2026-11-24: je Lauf eine Fahrt, fester Seed -> der Experte pendelte
+    # zwischen zwei Stellen. Mit demselben Startwert gleich, mit anderen verteilt.
+    known = _known()
+    known.region = [_down(x, y, 0.0) for x, y in ((0.2, -0.3), (0.6, -0.3), (0.6, 0.1),
+                                                  (0.2, 0.1))]
+    reference = known.pick.copy()
+
+    def first_xy(seed):
+        cands = known_pose.new_place_pose(known, reference, np.random.default_rng(seed),
+                                          camera_guard=False)
+        return tuple(np.round(cands[0][1], 3))
+
+    assert first_xy(0) == first_xy(0)
+    assert len({first_xy(seed) for seed in range(12)}) >= 4

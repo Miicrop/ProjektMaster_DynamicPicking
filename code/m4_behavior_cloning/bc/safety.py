@@ -176,8 +176,18 @@ class StallGuard(object):
         self.steps = int(steps)
         self.reset()
 
+    #: "Seit dem Start unbewegt": Messrauschen der Anlage ~2e-4 rad (Fahrten vom
+    #: 24.11.); eine echte Anfahrt ist nach 5 Takten weit darueber
+    NEVER_MOVED_RAD = 2e-3
+
+    def never_moved(self, measured):
+        """Seit dem ersten Takt dieser Fahrt unbewegt?"""
+        return self._first is not None and float(
+            np.max(np.abs(np.asarray(measured, dtype=float) - self._first))) < self.NEVER_MOVED_RAD
+
     def reset(self):
         self._prev = None
+        self._first = None
         self.count = 0
         self.since = None      # erster Takt der laufenden Folge (Zaehler der Aufrufe)
         self._calls = 0
@@ -191,6 +201,8 @@ class StallGuard(object):
                  else float(np.max(np.abs(measured - self._prev))))
         gap = float(np.max(np.abs(target - measured)))
         self._prev = measured
+        if self._first is None:
+            self._first = measured
         if moved < self.move_rad and gap > self.gap_rad:
             if self.count == 0:
                 self.since = self._calls
@@ -198,6 +210,16 @@ class StallGuard(object):
         else:
             self.count, self.since = 0, None
         self._calls += 1
+        if self.count >= self.steps and self.never_moved(measured):
+            # Befund 2026-11-24: am Anfang einer Fahrt, Arm seit dem Einschalten
+            # unbewegt -- die Steuerung nahm die Servo-Sollwerte nicht an (15x
+            # in Fahrt 1 ohne Experte). Text beginnt mit "arm steht" (Auswertungen)
+            raise ArmStalled(
+                "arm steht (faehrt nicht los): seit dem Einschalten des Servo-Interface "
+                "keine Bewegung, Ziel %.3f rad entfernt -- die Steuerung nimmt die "
+                "Sollwerte nicht an (oder Not-Aus schon vor dem Start). Bleibt das im "
+                "naechsten Lauf so: Steuerungsreset (half am 24.11.), dann neu "
+                "verbinden" % gap)
         if self.count >= self.steps:
             raise ArmStalled(
                 "arm steht: %d Takte ohne Bewegung (< %.0e rad), Ziel %.3f rad entfernt "

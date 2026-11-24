@@ -772,3 +772,19 @@ def test_servo_waits_after_deactivation_before_reactivating():
     time.sleep(0.25)
     robot.activate_servo()
     assert robot.last_reactivate_wait_s == 0.0          # Pause schon vorbei
+
+
+def test_reset_program_stops_and_initialises_between_rides():
+    client = FakeNeuraClient()
+    robot = NeuraRobot(robot=client).connect()
+    robot.activate_servo()
+    try:
+        robot.reset_program()
+        assert False, "RobotError erwartet (Servo-Interface aktiv)"
+    except RobotError:
+        pass
+    robot.deactivate_servo()
+    before = len(client.calls)
+    robot.reset_program()
+    names = [c[0] for c in client.calls[before:]]
+    assert names.index("stop") < names.index("init_program")

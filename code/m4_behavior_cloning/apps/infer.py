@@ -694,8 +694,47 @@ def retreat_after_test(robot, workspace, log, start_joints, clock, args, planner
     return "am Start" if result["stop_reason"] == "endstellung" else result["stop_reason"]
 
 
+def grasp_height(info, known=None):
+    """Greifhoehe (z des Werkzeugpunkts): PICK der bekannten Lage, sonst der
+    tiefste Punkt der Demonstrationen; None, wenn beides fehlt."""
+    if known is not None:
+        return float(np.asarray(known.pick, dtype=float)[2])
+    if info.get("ideal_z_min") is not None:
+        return float(info["ideal_z_min"])
+    return None
+
+
+def ptp_height_problem(robot, grasp_z):
+    """Text, wenn eine PTP-Fahrt aus der jetzigen Stellung zu tief beginnt, sonst None.
+
+    Befund 2026-11-24: Der Rueckzug hing ~10 mm ueber dem Objekt; der naechste
+    Lauf fuhr per PTP direkt zur Startstellung. Eine Gelenkfahrt hebt nicht erst
+    an -- die Backen koennen dabei durchs Objekt gezogen werden.
+    """
+    if grasp_z is None:
+        return None
+    height = float(robot.read_state().tcp_quat[2]) - grasp_z
+    if height >= config.PTP_MIN_ABOVE_GRASP_M:
+        return None
+    return ("Werkzeug steht nur %.0f mm ueber der Greifhoehe (Grenze %.0f mm) -- keine "
+            "PTP-Fahrt von hier, sie koennte durchs Objekt ziehen. Arm erst von Hand "
+            "(Handbediengeraet) senkrecht anheben, dann neu starten."
+            % (1e3 * height, 1e3 * config.PTP_MIN_ABOVE_GRASP_M))
+
+
+def move_to_joints_checked(robot, joints, grasp_z, what):
+    """``move_to_joints`` nur, wenn :func:`ptp_height_problem` nichts meldet.
+    Rueckgabe False = nicht gefahren (Meldung ist ausgegeben)."""
+    problem = ptp_height_problem(robot, grasp_z)
+    if problem is not None:
+        print("NICHT GEFAHREN (%s): %s" % (what, problem))
+        return False
+    robot.move_to_joints(joints)
+    return True
+
+
 def camera_check_before_run(robot, captures, info, start, start_gripper, args,
-                            use_sim_cameras, out):
+                            use_sim_cameras, out, grasp_z=None):
     """Kameras in der Startstellung gegen die Aufnahme pruefen (bc/camera_check.py).
 
     Rueckgabe False = nicht fahren (Abweichung, ``--kamerapruefung an`` und
@@ -719,7 +758,8 @@ def camera_check_before_run(robot, captures, info, start, start_gripper, args,
         away = float(np.max(np.abs(robot.read_state().joints - start)))
         if away > config.START_POSE_TOL_RAD:
             print("Kamerapruefung: an die Startstellung (%.3f rad entfernt)" % away)
-            robot.move_to_joints(start)
+            if not move_to_joints_checked(robot, start, grasp_z, "Kamerapruefung"):
+                return False
     time.sleep(config.CAMERA_CHECK_SETTLE_S)    # frische Bilder nach dem Anhalten
     frames = {}
     for cap in captures:
@@ -955,6 +995,9 @@ def localize_pick(robot, captures, localizer, known, args, info, planner, pick_s
     joints = np.asarray(joints, dtype=float)
     if float(np.max(np.abs(robot.read_state().joints - joints))) > config.START_POSE_TOL_RAD:
         print("Lokalisierung: an die Fotostellung '%s'" % args.foto_punkt)
+        problem = ptp_height_problem(robot, grasp_height(info, known))
+        if problem is not None:
+            raise lokalisierung.LocalizationError("Fotostellung nicht angefahren: " + problem)
         robot.move_to_joints(joints)
     loc = localizer.locate(lokalisierung.full_frame(scene, clock=clock))
     print("Lokalisierung: %s" % loc.describe())
@@ -1186,6 +1229,9 @@ def parse_args():
                         help="Vorhersage im Takt statt im eigenen Thread (Default nur bei SimClock)")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--ablage-seed", dest="ablage_seed", type=int, default=None,
+                        help="Zufall fuer die Ablage des Experten (Default: jedes Mal neu, "
+                             "steht in summary.json unter args)")
     parser.add_argument("--table-z", type=float, default=None)
     parser.add_argument("--hindernisse", choices=("auto", "an", "aus"), default="auto",
                         help="feste Hindernisse der Zelle (einstellungen/hindernisse.json); "
@@ -1543,7 +1589,8 @@ def main():
     if args.kamerapruefung != "aus":
         try:
             go = camera_check_before_run(robot, captures, info, start, start_gripper, args,
-                                         use_sim_cameras, out)
+                                         use_sim_cameras, out,
+                                         grasp_z=grasp_height(info, known))
         except Exception:
             if hasattr(executor, "close"):
                 executor.close()
@@ -1554,8 +1601,15 @@ def main():
         if not go or args.kamerapruefung == "nur":
             args.episodes = 0      # Kameras pruefen, nicht fahren (Abschluss wie immer)
 
-    # Umlegen durch den Experten (Probegriff "objekt", mehrere Fahrten)
-    rng = np.random.default_rng(args.seed)
+    # Umlegen durch den Experten (Probegriff "objekt", mehrere Fahrten).
+    # Eigener Zufall, nicht --seed (Anwender 2026-11-24): mit festem Startwert
+    # und je Lauf nur einer Fahrt kennt die Abdeckung nur die aktuelle Lage --
+    # der Experte pendelte so zwischen zwei Stellen. Startwert steht im Protokoll.
+    if args.ablage_seed is None:
+        args.ablage_seed = int(np.random.SeedSequence().entropy % (2 ** 32))
+    rng = np.random.default_rng(args.ablage_seed)
+    if args.experte and known is not None:
+        print("Ablage-Zufall des Experten: %d (--ablage-seed zum Wiederholen)" % args.ablage_seed)
     reference_pick = None if known is None else known.pick.copy()
     pick_state = {}
 
@@ -1625,6 +1679,15 @@ def main():
                     print("Beendet nach Stopp.")
                     break
             robot.clear_stop()
+            if ep > 0 and hasattr(robot, "reset_program"):
+                # Befund 2026-11-24: ohne stop/init_program dazwischen nahm die
+                # Steuerung in Fahrt 1 die Servo-Sollwerte meist nicht an
+                try:
+                    robot.reset_program()
+                except Exception as exc:
+                    print("Fahrt %d: Programm nicht neu initialisiert (%s) -- Steuerung pruefen"
+                          % (ep, exc))
+                    break
             # Reset wie in der Aufzeichnung (AP 5.2): Greifer auf den Startzustand,
             # dann an die Startstellung -- sonst beginnt die Policy z. B. mit
             # geschlossenem Greifer und "glaubt", das Objekt schon zu halten.
@@ -1678,7 +1741,10 @@ def main():
                 away = float(np.max(np.abs(robot.read_state().joints - ep_start)))
                 if away > config.START_POSE_TOL_RAD:
                     print("Fahrt %d: an die Startstellung (%.3f rad entfernt)" % (ep, away))
-                    robot.move_to_joints(ep_start)
+                    if not move_to_joints_checked(robot, ep_start, grasp_height(info, known),
+                                                  "Fahrt %d" % ep):
+                        print("Beendet: Arm steht zu tief fuer die Fahrt zur Startstellung.")
+                        break
             if live is not None:
                 live.start_episode(ep)
             t0 = time.perf_counter()

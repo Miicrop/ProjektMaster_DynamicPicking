@@ -1207,6 +1207,22 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
     def stop_requested(self):
         return self._stop_requested.is_set()
 
+    def reset_program(self):
+        """``stop`` + ``init_program`` zwischen zwei Fahrten -- bewegt nichts.
+
+        Befund 2026-11-24: Servofahrten direkt nach ``stop``/``init_program``
+        (erste Fahrt nach dem Verbinden, Rueckzug nach dem Probegriff-Stopp)
+        fuhren an; die Policy-Fahrt direkt nach dem Rueckzug, ohne beides
+        dazwischen, nahm 15 von 18 Mal keine Sollwerte an ("arm steht"). Hier
+        derselbe Ablauf wie nach einem Stopp, nur ohne Stoppanforderung.
+        """
+        self._require_motion("reset_program")
+        if self._servo_active:
+            raise RobotError("reset_program bei aktivem Servo-Interface")
+        self._program_ready = False
+        self._call_safe("stop")
+        self._init_program()
+
     def clear_stop(self):
         """Stopp quittieren. Nach ``stop`` nimmt der Controller keine Bewegung
         mehr an ("Motion cannot be executed! Try executing after running
