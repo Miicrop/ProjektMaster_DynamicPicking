@@ -270,12 +270,20 @@ dabei stabil; drei Fotos derselben Lage weichen um höchstens \SI{0.4}{\milli\me
 voneinander ab. Sie kann aber systematisch zur Bildmitte hin oder von ihr weg verschoben sein,
 und zwar umso mehr, je weiter das Bauteil vom Punkt unter der Kamera entfernt liegt.
 
-Am Aufbau wurde der Versatz mit 21 Zeigetests (\cref{sec:koordinatensysteme}) an Rand- und
+Am Aufbau (\cref{fig:m1-aufbau}) wurde der Versatz mit 21 Zeigetests (\cref{sec:koordinatensysteme}) an Rand- und
 Mittelpositionen des Arbeitsbereichs gemessen, zunächst ohne Korrektur. Der Versatz ist nicht
 konstant, sondern wächst mit dem Abstand von einem Punkt nahe der Bildmitte: Die erkannte
 Mitte liegt stets weiter außen als die tatsächliche, in $x$ am linken Rand um bis zu
-\SI{8}{\milli\metre}, in $y$ um bis zu \SI{\pm 3}{\milli\metre}. Das passt zur Parallaxe der
+\SI{8}{\milli\metre}, in $y$ um bis zu \SI{4}{\milli\metre}. Das passt zur Parallaxe der
 erhöhten Oberseite; dazu kommt die nicht korrigierte Verzeichnung des Objektivs.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.8\textwidth]{m1/aufbau_erkennung.jpg}
+  \caption[Objekterkennung am Aufbau]{Objekterkennung am Aufbau mit der Daheng-Kamera: erkannte
+  Marker (gelb), Arbeitsbereich (grün), Kontur des Bauteils (rot) und erkannte Mitte (Kreuz)}
+  \label{fig:m1-aufbau}
+\end{figure}
 
 Ein lineares Modell je Achse beschreibt den gemessenen Versatz gut. Die erkannte Position
 $(x, y)$ im Arbeitsbereich-\ac{ks} wird zu einem Bezugspunkt $(x_0, y_0)$ hin gezogen:
@@ -309,4 +317,5 @@ Position je nach Lage um bis zu \SI{8}{\milli\metre} nach außen. Eine feste Bel
 lineare Positionskorrektur aus Zeigetests reichen aus, um diesen Versatz auf höchstens
 \SI{2}{\milli\metre} zu verringern; auf eine intrinsische Kalibrierung konnte verzichtet werden.
 
-\todo[inline]{Nach den Versuchen ergänzen: Ergebnisse der Versuchsreihen mit der Daheng-Kamera.}
+In allen sieben Arbeitszyklen am Aufbau wurde das Bauteil erkannt und an der erkannten Pose
+gegriffen (\cref{sec:eval-zyklus}).

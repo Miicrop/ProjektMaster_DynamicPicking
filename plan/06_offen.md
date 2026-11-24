@@ -23,13 +23,13 @@
 ## A – Ohne das keine Abgabe
 
 - [ ] **T** – **Deadline, Umfang der Ausarbeitung und Vortragsdauer** festhalten.
-- [ ] **T** – **Kleine Versuchsreihe** (ein Labortag, siehe unten). Vorher festlegen:
-  Anzahl Durchläufe, welche Fehlerteile es gibt.
+- [x] **N** – **Evaluation (Kap. 10) als Funktionsnachweis** mit den Daten vom 12.11. geschrieben
+  (Zeigetests, 7 Zyklen: 7/7 gegriffen, 5 vollständig, OCR und Kerbe 5/5, Urteil 2/5 gut wegen
+  Lochmaßstab). Kein weiterer Labortag nötig; der Labortag unten ist nur noch optional.
 - [ ] **N** – **Kap. 08 (M4) aus Jeremys Doku übernehmen.** Seine Fassung ersetzt den Entwurf
   vom 30.10., gekürzt auf Kapitellänge; die ausführliche Doku als Anhang oder eigenes Dokument.
   Danach mit Jeremy abstimmen, was aus „Verwendung offen“-Berichten rein darf.
-- [ ] **T** – **Evaluation (Kap. 10)** mit den Zahlen der Versuchsreihe, M2/M4-Vergleich mit
-  Jeremys Anlagenergebnissen.
+- [ ] **J/N** – Kap. 10.5 M2/M4-Vergleich nach Klärung mit Jeremy ergänzen.
 - [ ] **N** – **Fazit (Zusammenfassung, Diskussion) und Ergebnissatz der Kurzfassung.**
 - [ ] **N** – Gesamte Arbeit durchsehen, dann `/ars-reviewer`, Befunde mit `/ars-revision` einarbeiten.
 - [ ] **T** – Korrekturlesen, Abgabe.
@@ -53,7 +53,9 @@
   ggf. (k)-Szenen streichen, endgültigen Titel festlegen.
 - [ ] **J** – Akt 6 der Präsentation prüfen (6.1–6.8) gegen seinen aktuellen Stand.
 
-### Labortag (alles an einem Tag)
+### Labortag (optional, nur falls doch Zeit ist)
+
+Logs vom 12.11. liegen in `code/logs/` (Kopie von `I:\logs`).
 
 - [ ] **P3** – Lochmaßstab: 2–3 bekannte Gutteile je 3 Aufnahmen, Korrekturfaktor eintragen.
   Toleranz nicht aufweiten. Zuerst, sonst fallen Gutteile in der Versuchsreihe durch.

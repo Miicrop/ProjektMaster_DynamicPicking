@@ -244,19 +244,28 @@ um \SI{\pm 1,2}{\percent} (0,647; 0,663; 0,649), was etwa \SIrange{9.7}{9.9}{\mi
 entspricht. Künstlich erzeugte Fehler, bei denen Kerbe oder Loch im Bild übermalt sind, werden
 als Schlechtteil erkannt.
 
-An der Seitenkamera am Aufbau misst die Sichtprüfung das Loch eines Gutteils mit
-\SIrange{9,57}{9,68}{\milli\metre} statt \SI{10}{\milli\metre}. Das Verhältnis von
-Lochdurchmesser zu Bauteilhöhe liegt bei etwa 0,64 statt 0,667. Der Messwert liegt damit
-systematisch zu niedrig und genau an der unteren Toleranzgrenze von \SI{9,6}{\milli\metre}, so
-dass ein Gutteil je nach Aufnahme als Schlechtteil eingestuft werden kann. Die Toleranz wird
-deshalb nicht aufgeweitet, sondern der Maßstab mit mehreren bekannten Gutteilen nachgemessen und
-um einen Korrekturfaktor ergänzt.
+An der Seitenkamera am Aufbau (\cref{fig:m3-aufbau}) wurden Seriennummer und Kerbe in allen
+vollständigen Zyklen richtig erkannt (\cref{sec:eval-zyklus}). Das Loch des Gutteils misst die
+Sichtprüfung dort aber mit \SIrange{9,54}{9,68}{\milli\metre} statt \SI{10}{\milli\metre}; das
+Verhältnis von Lochdurchmesser zu Bauteilhöhe liegt bei etwa 0,64 statt 0,667. Die Werte
+streuen untereinander wenig, liegen aber systematisch etwa \SI{4}{\percent} zu niedrig und
+damit um die untere Toleranzgrenze von \SI{9,6}{\milli\metre}. Das Gutteil wurde deshalb in drei
+von fünf Zyklen als Schlechtteil eingestuft.
 
-In wiederholten Durchläufen mit Bauteilen aus verschiedenen Lagen im Arbeitsbereich wurde das
-Gutteil überwiegend richtig beurteilt. Vereinzelt wirkte das Loch durch Spiegelungen auf der
-Oberfläche oder einfallendes Fensterlicht kleiner, und das Bauteil wurde als Schlechtteil
-eingestuft. Die Prüfstation ist damit empfindlich gegenüber dem Umgebungslicht; eine eigene,
-abgeschirmte Beleuchtung würde die Messung stabiler machen.
+Eine wahrscheinliche Ursache zeigt \cref{fig:m3-aufbau}: Die Seitenkamera blickt in Richtung
+Fenster, und auf der Innenwand des Lochs spiegelt sich das einfallende Licht. Der helle Bereich
+am unteren Rand des Lochs verschiebt die Kante, an die die Ellipse angepasst wird, nach innen.
+Abhilfe schaffen zwei Maßnahmen: ein Korrekturfaktor für den Maßstab, der mit bekannten
+Gutteilen bestimmt wird, und eine eigene, gegen Fensterlicht abgeschirmte Beleuchtung der
+Prüfstation. Die Toleranz aufzuweiten wäre dagegen keine Lösung, da sie dann auch fehlerhafte
+Löcher durchließe.
 
-\todo[inline]{Korrekturfaktor des Maßstabs nach der Messung mit bekannten Gutteilen eintragen.
-Nach den Versuchen ergänzen: echte Fehlerteile, aufgetretene Probleme.}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{m3/aufbau_pruefung.jpg}
+  \caption[Sichtprüfung am Aufbau]{Sichtprüfung am Aufbau mit der Seitenkamera: Seriennummer
+  gelesen, Kerbe erkannt (blau), angepasste Ellipse am Loch (rot). Im Loch spiegelt sich das
+  Fensterlicht; der gemessene Durchmesser liegt mit \SI{9,58}{\milli\metre} knapp unter der
+  Toleranz.}
+  \label{fig:m3-aufbau}
+\end{figure}

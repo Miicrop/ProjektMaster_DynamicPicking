@@ -3,83 +3,115 @@
 
 Die Evaluation soll zeigen, ob das Gesamtsystem die Zielsetzung aus \cref{ch:einleitung}
 erfüllt: Ein Bauteil wird ohne Eingriff eines Bedieners erkannt, gegriffen, geprüft und
-richtig sortiert. Sie ist als Funktionsnachweis angelegt und nicht als Messkampagne zur
-Genauigkeit einzelner Verfahren. Grundlage sind die Zyklusprotokolle aus
-\cref{sec:int-protokoll}.
+sortiert. Sie ist als Funktionsnachweis angelegt und nicht als Messkampagne zur Genauigkeit
+einzelner Verfahren.
 
-\section{Versuchsaufbau und Vorgehen}
+\section{Vorgehen}
 \label{sec:eval-vorgehen}
 
-Alle Versuche finden an der realen Anlage statt, mit allen Modulen in der Betriebsstufe
-\enquote{Real} (\cref{sec:teststrategie}). Es werden zwei Versuchsreihen durchgeführt.
+Alle Messungen fanden am realen Aufbau statt, mit allen Modulen in der Betriebsstufe
+\enquote{Real} (\cref{sec:teststrategie}): Top-down-Kamera und Seitenkamera lieferten Live-Bilder,
+der Roboter fuhr mit Greifer, und als Bauteil diente das Gutteil aus \cref{sec:hardware}. Die
+Evaluation stützt sich auf zwei Datenquellen aus derselben Inbetriebnahme:
+\begin{itemize}
+  \item die Zeigetests zur Greifposition, bei denen der Roboter über dem erkannten Bauteil
+        stehen bleibt und der Versatz abgelesen wird (\cref{sec:koordinatensysteme}), und
+  \item vollständige Arbeitszyklen im automatischen Ablauf, bei denen das Bauteil vor jedem
+        Zyklus von Hand an eine neue Stelle des Arbeitsbereichs gelegt wurde. Jeder Zyklus ist
+        mit Pose, Prüfergebnis, Urteil und Dauer im Zyklusprotokoll festgehalten
+        (\cref{sec:int-protokoll}).
+\end{itemize}
+Gezielt gefertigte Fehlerteile standen nicht zur Verfügung. Ob die Sichtprüfung fehlende
+Merkmale erkennt, wurde deshalb nur an Testbildern mit übermalten Merkmalen geprüft
+(\cref{ch:sichtpruefung}).
 
-Als Vorstufe lief bereits ein vollständiger Zyklus am realen Roboter, wobei Erkennung und
-Prüfung noch auf Testbildern arbeiteten (\cref{ch:robotersteuerung}). Dieser Lauf zeigte,
-dass Zustandsautomat, Robotersteuerung und Posen zusammenpassen, ist aber noch kein Ergebnis
-im Sinne der Versuchsreihen.
+\section{Erkennung und Greifposition}
+\label{sec:eval-greifposition}
 
-\paragraph{Versuchsreihe 1: Wiederholbarkeit.}
-Ein Gutteil wird wiederholt von Hand an zufälliger Position und mit zufälliger Orientierung in
-den Arbeitsbereich gelegt, und jeweils ein vollständiger Zyklus wird gestartet. Die Reihe zeigt,
-ob Erkennung, Greifen, Ablegen an der Prüfposition und Prüfung für unterschiedliche Lagen
-zuverlässig zusammenspielen und das Teil jedes Mal als Gutteil sortiert wird.
+Ohne Korrektur zeigten 21 Zeigetests einen Versatz der erkannten Bauteilmitte, der zum Rand des
+Arbeitsbereichs hin auf bis zu \SI{8}{\milli\metre} in $x$ und \SI{4}{\milli\metre} in $y$
+anwuchs. An einigen Stellen hätten die Greiferbacken das Bauteil dabei seitlich getroffen. Mit
+der linearen Positionskorrektur aus \cref{sec:m1-korrektur} war in neun von elf
+Kontrollmessungen kein Versatz sichtbar, in den übrigen beiden \SI{1}{} bzw.\
+\SI{2}{\milli\metre}. In allen Kontrollmessungen, auch in den vier Ecken, hätte der Greifer das
+Bauteil gefasst, teils knapp. Für das Greifen reicht die Genauigkeit damit aus; der Spielraum
+der Backen zum \SI{40}{\milli\metre} breiten Bauteil ist allerdings gering.
 
-\paragraph{Versuchsreihe 2: Aussortierung.}
-Es werden gezielt fehlerhafte Bauteile gefertigt, bei denen jeweils eines der Prüfmerkmale
-nicht erfüllt ist (\cref{tab:eval-fehlerteile}). Jedes dieser Teile durchläuft den Zyklus wie
-in Versuchsreihe~1. Die Reihe zeigt, ob das System die Fehler erkennt und die Teile als
-Schlechtteil ablegt.
+\section{Vollständige Arbeitszyklen}
+\label{sec:eval-zyklus}
+
+\Cref{tab:eval-zyklen} zeigt die sieben Zyklen der Messreihe. Die ersten beiden brachen bei der
+Sichtprüfung mit der Meldung ab, dass kein Bauteil im Bild sei. Ursache war ein veraltetes Bild:
+Die Seitenkamera lieferte nach einer Pause beim ersten Abruf noch ein Bild aus ihrem Puffer, das
+die leere Prüfvorrichtung zeigte. Nach der Korrektur, die den Puffer vor jeder Aufnahme verwirft,
+liefen alle weiteren Zyklen vollständig durch. Greifen und Ablegen an der Prüfposition gelangen
+in allen sieben Zyklen, auch in den beiden abgebrochenen, da der Abbruch erst nach dem Ablegen
+erfolgte.
 
 \begin{table}[htbp]
   \centering
-  \caption{Fehlerhafte Bauteile für Versuchsreihe 2}
-  \label{tab:eval-fehlerteile}
-  \begin{tabularx}{\textwidth}{@{}l X X@{}}
+  \caption[Arbeitszyklen am realen Aufbau]{Arbeitszyklen am realen Aufbau mit dem Gutteil.
+  Position und Winkel der erkannten Pose im Basis-\ac{ks}, Lochdurchmesser in mm (Sollwert
+  \SI{10}{\milli\metre}, Toleranz \SI{\pm 0,4}{\milli\metre}).}
+  \label{tab:eval-zyklen}
+  \begin{tabular}{@{}r r r r l r l l r@{}}
     \toprule
-    Teil & Fehler & Erwartetes Ergebnis \\
+    Nr. & $x$ / mm & $y$ / mm & $\theta$ / ° & Seriennr. & Loch & Kerbe & Urteil & Dauer / s \\
     \midrule
-    A & Kerbe fehlt & Schlechtteil, Grund \enquote{Kerbe fehlt} \\
-    B & Lochdurchmesser außerhalb der Toleranz & Schlechtteil, Grund \enquote{Durchmesser außerhalb der Toleranz} \\
-    C & Etikett mit Seriennummer entfernt & Schlechtteil, Grund \enquote{Seriennummer ungültig} \\
+    1 & 419,3 & $-155{,}1$ & 79,8 & \multicolumn{4}{l}{Abbruch: kein Bauteil im Prüfbild} & 36,5 \\
+    2 & 376,8 & $-133{,}7$ & 92,3 & \multicolumn{4}{l}{Abbruch: kein Bauteil im Prüfbild} & 38,7 \\
+    3 & 403,8 & $-99{,}7$ & 88,3 & 69420 & 9,58 & ja & schlecht & 86,1 \\
+    4 & 409,8 & $-136{,}2$ & 71,7 & 69420 & 9,62 & ja & gut & 78,0 \\
+    5 & 314,3 & $-187{,}1$ & 86,8 & 69420 & 9,63 & ja & gut & 84,0 \\
+    6 & 456,9 & $-177{,}3$ & 83,1 & 69420 & 9,58 & ja & schlecht & 81,7 \\
+    7 & 354,1 & $-115{,}9$ & 200,9 & 69420 & 9,54 & ja & schlecht & 112,9 \\
     \bottomrule
-  \end{tabularx}
+  \end{tabular}
 \end{table}
 
-\todo[inline]{Anzahl der Durchläufe je Versuchsreihe festlegen. Festlegen, ob und welche
-Kennzahlen ausgewertet werden (z.\,B.\ Anteil erfolgreicher Zyklen, Fehler je Zustand,
-Zyklusdauer).}
+In den fünf vollständigen Zyklen wurde das Bauteil jedes Mal erkannt, gegriffen, an der
+Prüfposition abgelegt, geprüft und an einem Ablageort abgelegt. Die Seriennummer wurde in allen
+fünf Zyklen richtig gelesen und die Kerbe immer erkannt. Sortiert wurde das Gutteil aber nur
+zweimal als Gutteil und dreimal als Schlechtteil. Grund war in allen drei Fällen der
+Lochdurchmesser: Er lag mit \SIrange{9,54}{9,58}{\milli\metre} knapp unter der Toleranzgrenze
+von \SI{9,6}{\milli\metre}.
 
-\section{Ergebnisse Versuchsreihe 1: Wiederholbarkeit}
-\label{sec:eval-vr1}
-\todo[inline]{Ergebnisse nach den Versuchen ergänzen.}
+Ein vollständiger Zyklus dauerte zwischen \num{78} und \SI{113}{\second}, im Median
+\SI{84}{\second}. Die Bewegungen sind für die Inbetriebnahme bewusst langsam ausgelegt
+(\cref{sec:m2-sequenz}); eine kürzere Zykluszeit war kein Ziel des Projekts.
 
-\section{Ergebnisse Versuchsreihe 2: Aussortierung}
-\label{sec:eval-vr2}
-\todo[inline]{Ergebnisse nach den Versuchen ergänzen.}
+\section{Bewertung der Sichtprüfung}
+\label{sec:eval-pruefung}
+
+Die Fehlurteile gehen nicht auf zufällige Ausreißer zurück, sondern auf eine systematische
+Abweichung. Alle gemessenen Lochdurchmesser liegen in einem schmalen Band von
+\SIrange{9,54}{9,63}{\milli\metre}, also etwa \SI{4}{\percent} unter dem Sollwert. Die Messung ist
+damit gut wiederholbar, aber nicht richtig kalibriert. Als Ursache kommt vor allem das
+Fensterlicht infrage, das sich im Loch spiegelt (\cref{fig:m3-aufbau}). Ein Korrekturfaktor in
+der Größenordnung von \num{1,04} hätte alle fünf Messungen in die Toleranz gebracht. Er müsste
+aber an unabhängigen Messungen mit bekannten Gutteilen bestimmt werden und gilt nur, solange
+das Licht an der Prüfstation gleich bleibt. Die robustere Lösung ist eine eigene, abgeschirmte
+Beleuchtung (\cref{sec:ausblick}).
+
+Seriennummer und Kerbe wurden dagegen zuverlässig erkannt. Ob fehlende Merkmale an echten
+Fehlerteilen ebenso sicher erkannt werden, wie es die Testbilder zeigen, bleibt offen.
 
 \section{Vergleich klassischer und KI-basierter Ansatz}
 \label{sec:eval-vergleich}
 
-Verglichen wird das Greifen: einmal mit der Objekterkennung und der programmierten
-Greifsequenz von Modul~2 (\cref{ch:objekterkennung,ch:robotersteuerung}), einmal mit der
-gelernten Policy von Modul~4 (\cref{ch:kigreifen}). Prüfung und Sortieren sind in beiden
-Fällen gleich. Beide Varianten lassen sich im Reiter \enquote{Ablauf} umschalten, sodass
-dieselbe Versuchsreihe~1 mit beiden Varianten gefahren werden kann.
+Beide Varianten des Greifens lassen sich im Reiter \enquote{Ablauf} umschalten. Die Übergabe von
+Modul~4 an Modul~2 wurde in der \ac{vm} der Steuerung geprüft (\cref{sec:m4-integration}).
 
-Die Übergabe zwischen beiden Modulen wurde in der \ac{vm} der Steuerung geprüft. Modul~4 fuhr dabei über eine zweite Verbindung zur Steuerung, anschließend setzte
-Modul~2 seine Einstellungen zurück, legte an der Prüfposition ab und fuhr in die
-Ruheposition, ohne dass ein Fehler auftrat. Zwei gleichzeitige Verbindungen zur Steuerung
-sind demnach kein Problem. Da für diesen Test kein trainiertes Modell vorlag, hielt die
-Policy ihre Stellung, statt zu greifen; der Übergabepunkt wurde also nicht erreicht. In der
-\ac{vm} meldete die Ausführung außerdem viele Taktüberschreitungen (562 bei 45 Takten), die
-auf die Rechenleistung der \ac{vm} zurückgehen dürften und an der Anlage zu prüfen sind.
+\todo[inline]{Nach Klärung mit Jeremy ergänzen: Ergebnisse von Modul~4 an der Anlage und, falls
+vorhanden, Vergleich mit dem klassischen Greifen.}
 
-Als Vergleichsgrößen bieten sich der Anteil erfolgreicher Griffe und die Robustheit gegenüber
-Störungen an, etwa bei veränderter Beleuchtung oder verschobener Szenenkamera. Die
-Zykluszeit eignet sich nur eingeschränkt: Die Policy fährt im Tempo ihrer Aufzeichnung
-(\cref{sec:m4-zustand}), und im Ablauf wird ihre Ausführung für jeden Zyklus neu gestartet,
-einschließlich des Ladens des Modells.
+\section{Grenzen der Evaluation}
+\label{sec:eval-grenzen}
 
-\todo[inline]{Jeremy: Vergleich nach den Läufen mit trainiertem Modell ergänzen (Anzahl
-Versuche, Erfolgsrate beider Varianten, Verhalten bei Störungen). Dauer des Starts der
-Inferenz je Zyklus messen.}
+Die Evaluation umfasst eine kleine Zahl von Durchläufen an einem Tag mit einem einzigen Gutteil.
+Die Lagen im Arbeitsbereich wurden von Hand gewählt und decken nicht alle Bereiche und
+Orientierungen gleichmäßig ab; die Zeigetests ergänzen hier die Ränder und Ecken. Echte
+Fehlerteile, wechselnde Lichtverhältnisse und ein Dauerbetrieb über viele Zyklen wurden nicht
+untersucht. Die Ergebnisse belegen daher, dass die Kette aus Erkennung, Greifen, Prüfen und
+Sortieren am realen Aufbau durchgängig funktioniert. Eine statistisch belastbare Aussage über
+Erfolgsquoten erlauben sie nicht.

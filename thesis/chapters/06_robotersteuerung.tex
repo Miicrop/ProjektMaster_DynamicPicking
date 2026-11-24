@@ -204,8 +204,10 @@ Geteacht wird über eine eigene Seite der Bedienoberfläche oder das Prüfprogra
 (\cref{sec:m2-inbetriebnahme}): Der Bediener fährt den Greifer im Tippbetrieb an die
 gewünschte Stelle, und die aktuelle \ac{tcp}-Pose wird unter dem Namen der Pose übernommen.
 
-\todo[inline]{Wiederholgenauigkeit an der Prüfposition beurteilen, da die Sichtprüfung eine
-reproduzierbare Lage voraussetzt.}
+Die Sichtprüfung setzt voraus, dass das Bauteil an der Prüfposition immer gleich liegt. Eine
+eigene Messung der Wiederholgenauigkeit gab es nicht; in allen vollständigen Zyklen der
+Evaluation lag das Bauteil aber so, dass alle Prüfmerkmale gefunden wurden
+(\cref{sec:eval-zyklus}).
 
 % ------------------------------------------------------------------------------
 \section{Kalibrierung zwischen Kamera und Roboter}
@@ -296,5 +298,7 @@ Inbetriebnahme zeigten sich mehrere Punkte, die in die beschriebene Lösung eing
         nicht fällt.
 \end{itemize}
 
-\todo[inline]{Nach den Versuchen mit den echten Kameras ergänzen: Greiferfolg an der
-korrigierten Pose, Wiederholgenauigkeit an der Prüfposition, aufgetretene Probleme.}
+Mit den echten Kameras gelangen Greifen und Ablegen an der Prüfposition in allen sieben
+Arbeitszyklen der Evaluation (\cref{sec:eval-zyklus}). Die Lage des Bauteils an der Prüfposition
+war dabei so reproduzierbar, dass die Sichtprüfung in jedem vollständigen Zyklus Seriennummer,
+Loch und Kerbe fand; eine eigene Messung der Wiederholgenauigkeit wurde nicht durchgeführt.
