@@ -241,7 +241,7 @@ function sheetDiffusion(api) {
   api.text(0, `EINGANG · LETZTE ${pc.n_obs} TAKTE`, { font: 'mono', size: 0.14, hex: T.inkSoft, letterSpacing: 0.06 }, [IX, 2.5]);
   const inputs = [
     ['Kamera oben', `Bild ${pc.image[0]} × ${pc.image[1]}`, MODULE_COLOR.M1],
-    ['Handgelenkkamera', `Fisheye, ${pc.image[0]} × ${pc.image[1]}`, MODULE_COLOR.M4],
+    ['Handgelenkkamera', `3,6 mm, F8, ${pc.image[0]} × ${pc.image[1]}`, MODULE_COLOR.M4],
     ['Zustand', '14 Werte: 6 Gelenke, TCP, Greifer', T.inkSoft],
   ];
   inputs.forEach(([t, s, hex], i) => box(0, IX, 2.2 - i * 1.15, IW, 0.95, t, s, hex, { delay: 0.1 + i * 0.12 }));

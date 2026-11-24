@@ -538,7 +538,7 @@ export function createCell(ctx) {
     [2, `Greifer ${rc.tool_name}`, worldOf(gHousing), v3(2.2, -0.4, 1.4)],
     [3, 'Kamera oben M1 (Daheng) · Szene für M4', worldOf(camM1), v3(1.4, -0.4, 0.9)],
     [4, 'Seitenkamera M3 (USB)', null, v3(2.6, 0.2, 2.2)],
-    [5, 'Handgelenkkamera M4 (Daheng, Fisheye)', worldOf(wristCam), v3(-2.6, -0.8, 0.9)],
+    [5, 'Handgelenkkamera M4 (Daheng, 3,6 mm, mit Licht)', worldOf(wristCam), v3(-2.6, -0.8, 0.9)],
     [6, 'Arbeitsraum mit ArUco-Markern', W(...ws2r(WSW, 0), TZ), v3(1.6, -1.4, 0.4)],
     [7, 'Prüfposition', W(insp[0], insp[1], insp[2] - 10), v3(2.8, -1.2, 0.3)],
     [8, 'Ablageorte GUT / SCHLECHT (Klebeband)', W(bin('bin_good')[0] - 55, bin('bin_good')[1], TZ + 2), v3(-3.0, 0.6, 1.0)],
