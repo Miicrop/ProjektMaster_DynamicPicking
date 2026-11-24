@@ -12,13 +12,16 @@ die Reihe ebenfalls: der naechste Schritt finge sonst an einer unbekannten
 Stelle an. Ein SOFTWARE-Stopp, kein zertifizierter Not-Aus (AP 4.2).
 """
 
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QColor, QFont
-from PySide6.QtWidgets import (QCheckBox, QDoubleSpinBox, QFormLayout, QGroupBox,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QGroupBox,
                                QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                                QMessageBox, QProgressBar, QPushButton, QScrollArea,
                                QSpinBox, QSplitter, QTreeWidget, QTreeWidgetItem,
@@ -28,6 +31,7 @@ from . import _bootstrap
 from .. import config
 from . import cameras as cameras_module
 from . import operation as operation_module
+from . import pick_view as pick_view_module
 from . import session as session_module
 from . import training as training_module
 from . import vergleich as vergleich_module
@@ -53,6 +57,12 @@ class ComparisonTab(ModeTab):
         self.process.finished.connect(self._on_finished)
         self._steps, self._index, self._rows = [], 0, []
         self._root, self._stopped, self._models, self._meta = None, False, [], {}
+        self._pick_state = pick_view_module.PickState({})
+        #: Greiflagen aus dem Training je Modellname (None = nicht vollstaendig)
+        self._training = {}
+        #: vorab geplante Lagen ab Lage 2 (vergleich.plan_poses) und fuer die
+        #: Ansicht je Lage (xy, Drehung) ab Lage 1; Schluessel = (Modelle, Lagen)
+        self._plan, self._plan_xy, self._plan_key = [], [], None
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._build_controls())
@@ -77,6 +87,7 @@ class ComparisonTab(ModeTab):
         self.models = QListWidget()
         self.models.setMinimumHeight(140)
         self.models.itemChanged.connect(self._update_plan_text)
+        self.models.itemChanged.connect(self._on_models_changed)
         inner.addWidget(self.models)
         row = QHBoxLayout()
         self.btn_rescan = QPushButton("Neu suchen")
@@ -136,6 +147,7 @@ class ComparisonTab(ModeTab):
         form.addRow("", self.regrasp)
         for widget in (self.fahrten, self.lagen):
             widget.valueChanged.connect(self._update_plan_text)
+        self.lagen.valueChanged.connect(self._drop_stale_plan)
         column.addWidget(box)
         column.addStretch(1)
 
@@ -186,6 +198,43 @@ class ComparisonTab(ModeTab):
             inner.addWidget(widget)
         splitter.addWidget(box)
 
+        box = QGroupBox("Lagen und aktueller PICK")
+        row = QHBoxLayout(box)
+        self.pick_view = pick_view_module.PickView()
+        self.pick_view.setMinimumSize(360, 300)
+        self.pick_view.setToolTip(
+            "Draufsicht wie im Reiter Betrieb (Roboter unten): Tischpunkte, PICK in der "
+            "Steuerung, dazu die Lagen dieses Vergleichs mit Nummer und Greiferrichtung "
+            "-- die aktuelle blau.")
+        row.addWidget(self.pick_view, 1)
+        side = QVBoxLayout()
+        self.btn_read_pick = QPushButton("PICK lesen")
+        self.btn_read_pick.setToolTip("PICK und Tischpunkte aus der verbundenen Steuerung "
+                                      "(Ablauf des ersten gewählten Modells).")
+        self.btn_read_pick.clicked.connect(self.read_pick)
+        side.addWidget(self.btn_read_pick)
+        self.btn_plan = QPushButton("Lagen planen")
+        self.btn_plan.setToolTip(
+            "Alle Lagen vorab planen und anzeigen (wie der Experte: seltenstes Feld, "
+            "frühere Ablagen zählen mit, nur erreichbare). Lage 1 = aktueller PICK. "
+            "Ohne Planung wählt der Experte bei jedem Umlegen selbst.")
+        self.btn_plan.clicked.connect(self.plan_lagen)
+        side.addWidget(self.btn_plan)
+        side.addWidget(QLabel("Abdeckung aus dem Training von"))
+        self.heat_model = QComboBox()
+        self.heat_model.setToolTip(
+            "Heatmap: wo dieses Modell im Training gegriffen hat (2-cm-Felder, dunkler = "
+            "mehr Episoden). Ohne vollständige Greifposen im Modell: keine Heatmap.")
+        self.heat_model.currentIndexChanged.connect(lambda *_: self._show_pick())
+        side.addWidget(self.heat_model)
+        self.pick_info = QLabel(pick_view_module.state_text(None))
+        self.pick_info.setWordWrap(True)
+        self.pick_info.setStyleSheet("color:%s" % NEUTRAL)
+        side.addWidget(self.pick_info)
+        side.addStretch(1)
+        row.addLayout(side, 1)
+        splitter.addWidget(box)
+
         box = QGroupBox("Ergebnis je Modell")
         inner = QVBoxLayout(box)
         self.stats = QTreeWidget()
@@ -211,7 +260,7 @@ class ComparisonTab(ModeTab):
         self.output = LogView()
         inner.addWidget(self.output)
         splitter.addWidget(box)
-        splitter.setSizes([110, 150, 220, 260])
+        splitter.setSizes([110, 340, 140, 180, 180])
         return splitter
 
     # -- Modelle --------------------------------------------------------------
@@ -219,6 +268,7 @@ class ComparisonTab(ModeTab):
     def refresh(self):
         super().refresh()
         self._reload_models()
+        self._on_models_changed()
         self.cameras.refresh(
             backend_is_sim_robot=self.session.backend == session_module.BACKEND_SIM)
         self._update_plan_text()
@@ -269,6 +319,164 @@ class ComparisonTab(ModeTab):
                self.lagen.value() - 1,
                ", ".join("%s ×%d" % (vergleich_module.model_name(m), self.fahrten.value())
                          for m in models)))
+
+    # -- PICK und Lagen -------------------------------------------------------
+
+    def read_pick(self, quiet=False):
+        """PICK und Tischpunkte aus der Steuerung (wie im Reiter Betrieb)."""
+        robot = self.session.robot
+        models = self.selected_models()
+        if robot is None or not models:
+            if not quiet:
+                QMessageBox.information(self, "PICK lesen",
+                                        "Erst oben verbinden und ein Modell ankreuzen.")
+            return
+        described = operation_module.describe_policy(self.workdir / models[0]) or {}
+        text = described.get("sequence_file")
+        if not text:
+            if not quiet:
+                QMessageBox.information(self, "PICK lesen", "Das Modell nennt keinen Ablauf.")
+            return
+        path = Path(text) if Path(text).is_absolute() else self.workdir / text
+        try:
+            state = pick_view_module.read_pick_state(robot, path)
+        except Exception as exc:
+            if not quiet:
+                QMessageBox.warning(self, "PICK nicht lesbar", "%s: %s" % (type(exc).__name__, exc))
+            log.warning("Vergleich: PICK nicht lesbar: %s", exc)
+            return
+        state.lagen = self._pick_state.lagen
+        self._pick_state = state
+        self._show_pick()
+
+    def _on_models_changed(self, *_):
+        """Abdeckung aus dem Training der gewaehlten Modelle neu laden."""
+        self._training = {}
+        for model in self.selected_models():
+            info = operation_module._read_json(
+                operation_module.policy_dir(self.workdir / model) / operation_module.POLICY_MARKER)
+            self._training[vergleich_module.model_name(model)] = vergleich_module.training_xy(info)
+        if hasattr(self, "heat_model"):
+            current = self.heat_model.currentText()
+            self.heat_model.blockSignals(True)
+            self.heat_model.clear()
+            for name, train in self._training.items():
+                self.heat_model.addItem(name if train is not None
+                                        else "%s (keine vollständigen Greifposen)" % name, name)
+            index = self.heat_model.findText(current)
+            self.heat_model.setCurrentIndex(index if index >= 0 else 0)
+            self.heat_model.blockSignals(False)
+        self._drop_stale_plan()
+
+    def _drop_stale_plan(self, *_):
+        """Plan passt nicht mehr zu Modellen/Lagen -> nicht mehr zeigen."""
+        if self._plan_key is not None and self._plan_key != (tuple(self.selected_models()),
+                                                             self.lagen.value()):
+            self._plan, self._plan_xy, self._plan_key = [], [], None
+        if hasattr(self, "pick_view") and not self._steps:
+            self._show_pick()
+
+    def _current_lage(self):
+        if self._steps:
+            step = self._steps[self._index]
+            return step.lage + 1 if step.kind == vergleich_module.UMLEGEN else step.lage
+        return None
+
+    def plan_lagen(self, quiet=False):
+        """Alle Lagen vorab planen (vergleich.plan_poses) -- braucht die Steuerung."""
+        from .. import known_pose
+        from ..kinematics import IKFailure, Kinematics
+        from ..table import yaw_deg
+
+        robot, models = self.session.robot, self.selected_models()
+        if robot is None or not models:
+            if not quiet:
+                QMessageBox.information(self, "Lagen planen",
+                                        "Erst oben verbinden und ein Modell ankreuzen.")
+            return False
+        info = operation_module._read_json(
+            operation_module.policy_dir(self.workdir / models[0]) / operation_module.POLICY_MARKER)
+        text = (info.get("table_spec") or {}).get("sequence_file")
+        try:
+            if not text:
+                raise ValueError("das Modell nennt keinen Ablauf")
+            path = Path(text) if Path(text).is_absolute() else self.workdir / text
+            known, _resolved = known_pose.load(path, robot)
+            kin = Kinematics(robot)
+            start = info.get("start_joints")
+            seed = np.asarray(start if start is not None else robot.read_state().joints, dtype=float)
+            center = None
+            if config.AUTO_YAW_CENTER_POINT and start is not None:
+                from ..live import yaw360
+                start_pose = np.asarray(robot.fk(seed), dtype=float)
+                center = ((yaw360(start_pose, known.table) - yaw360(known.pick, known.table)
+                           + 180.0) % 360.0 - 180.0)
+
+            def reachable(pose):
+                up = np.asarray(pose, dtype=float).copy()
+                up[2] += 0.05
+                try:
+                    kin.ik(np.asarray(pose, dtype=float), seed)
+                    kin.ik(up, seed)
+                    return True
+                except IKFailure:
+                    return False
+
+            history = known_pose.placement_history(known_pose.placements_file(
+                self.workdir / config.TOUCHUP_BACKUP_ROOT))
+            planned = vergleich_module.plan_poses(known, self.lagen.value() - 1,
+                                                  np.random.default_rng(), history=history,
+                                                  center_shift_deg=center, reachable=reachable)
+        except Exception as exc:
+            log.warning("Vergleich: Lagen nicht planbar: %s", exc)
+            if not quiet:
+                QMessageBox.warning(self, "Lagen nicht planbar", "%s: %s" % (type(exc).__name__, exc))
+            return False
+        self._plan = planned
+        self._plan_xy = [((float(known.pick[0]), float(known.pick[1])),
+                          float(yaw_deg(known.pick, known.table)))]
+        self._plan_xy += [(p["xy"], float(yaw_deg(np.asarray(p["pose"]), known.table)))
+                          for p in planned]
+        self._plan_key = (tuple(models), self.lagen.value())
+        if len(planned) < self.lagen.value() - 1:
+            self.output.append_record("Nur %d von %d Lagen planbar -- den Rest wählt der "
+                                      "Experte beim Umlegen selbst."
+                                      % (len(planned), self.lagen.value() - 1), logging.WARNING)
+        self._show_pick()
+        return True
+
+    def _show_pick(self, placed_xy=None, current=None):
+        state = self._pick_state
+        state.training_xy = [tuple(p) for train in self._training.values() if train is not None
+                             for p in train]
+        chosen = self.heat_model.currentData() if hasattr(self, "heat_model") else None
+        state.heat = vergleich_module.heat_grid(self._training.get(chosen))
+        state.lagen = vergleich_module.lagen_view(
+            self._rows, self._plan_xy, self._current_lage() if current is None else current,
+            self._training, None if self._plan_xy else placed_xy)
+        current = next((lage for lage in state.lagen if lage["current"]), None)
+        if current is not None:
+            state.pick = tuple(current["xy"])
+            if current.get("yaw_deg") is not None:
+                state.pick_yaw_deg = current["yaw_deg"]
+            state.warnings = []
+        self.pick_view.set_state(state)
+        lines = [pick_view_module.state_text(state) if state.table_points else (
+            "Lage %s: x %.1f  y %.1f mm" % (current["label"], 1e3 * current["xy"][0],
+                                             1e3 * current["xy"][1]) if current
+            else pick_view_module.state_text(None))]
+        if current is not None and self._training:
+            bits = []
+            for name, train in self._training.items():
+                d = vergleich_module.training_distance(current["xy"], train)
+                bits.append("%s %s" % (name, "keine vollständige Abdeckung" if d is None
+                                       else "%.0f mm" % (1e3 * d)))
+            lines.append("Nächste Trainingslage: " + ", ".join(bits))
+        lines.append("Heatmap = Greiflagen im Training des gewählten Modells · Nummer grün = für alle Modelle "
+                     "bekannt (≤ %.0f mm), gelb = für einige, orange = für keines · "
+                     "gestrichelt = geplant, blau = aktuell"
+                     % (1e3 * vergleich_module.KNOWN_RADIUS_M))
+        self.pick_info.setText("\n".join(lines))
 
     # -- Ablauf ---------------------------------------------------------------
 
@@ -340,6 +548,14 @@ class ComparisonTab(ModeTab):
         self.output.clear()
         self.folder_line.setText("Protokoll: %s" % self._root)
         self.headline.setStyleSheet("font-weight:bold")
+        self.read_pick(quiet=True)          # Tischpunkte fuer die Ansicht, falls verbunden
+        if self._plan_key != (tuple(models), self.lagen.value()):
+            self._plan, self._plan_xy, self._plan_key = [], [], None
+            if self.session.robot is not None:
+                self.plan_lagen(quiet=True)
+        vergleich_module.attach_targets(steps, self._plan)
+        self._meta["geplante_lagen"] = [p["pose"] for p in self._plan]
+        self._show_pick()
         self._set_running(True)
         self._start_step()
 
@@ -370,11 +586,24 @@ class ComparisonTab(ModeTab):
         summary = operation_module.read_summary(self.workdir / self._root / step.out)
         row, reason = vergleich_module.evaluate(step, summary, code)
         if row is not None:
+            if row.get("pick_x_mm") is not None:
+                d = vergleich_module.training_distance(
+                    (row["pick_x_mm"] / 1e3, row["pick_y_mm"] / 1e3),
+                    self._training.get(row["modell"]))
+                row["trainingsabstand_mm"] = None if d is None else round(1e3 * d, 1)
+                row["trainingslagen_umkreis"] = vergleich_module.training_density(
+                    (row["pick_x_mm"] / 1e3, row["pick_y_mm"] / 1e3),
+                    self._training.get(row["modell"]))
             self._rows.append(row)
             item = QTreeWidgetItem(self.runs, vergleich_module.run_row(row))
+            item.setToolTip(8, str(row["stopp"] or ""))   # Abbruchgrund im Wortlaut
             item.setForeground(3, QBrush(QColor(GOOD if row["erfolg"] else WARN)))
             self.runs.scrollToItem(item)
             self._show_stats()
+        if step.kind == vergleich_module.UMLEGEN and not reason:
+            self._show_pick((summary.get("umlegen") or {}).get("placed_xy"), current=step.lage + 1)
+        elif row is not None:
+            self._show_pick()
         if reason:
             self._finish(reason)
             return
@@ -426,7 +655,7 @@ class ComparisonTab(ModeTab):
     def _set_running(self, running):
         for widget in (self.btn_start, self.btn_rescan, self.models, self.cameras,
                        self.fahrten, self.lagen, self.probe_gap, self.glaettung, self.regrasp,
-                       self.btn_up, self.btn_down):
+                       self.btn_up, self.btn_down, self.btn_read_pick, self.btn_plan):
             widget.setEnabled(not running)
         self.btn_stop.setEnabled(running)
 

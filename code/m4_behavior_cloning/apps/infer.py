@@ -911,6 +911,18 @@ def relocate_only(robot, workspace, known, reference_pick, start_joints, grasp_z
             "placed_xy": expert.get("placed_xy")}
 
 
+def placement_history():
+    """Gemerkte Ablagen des Experten ueber alle Laeufe (bc/known_pose.py)."""
+    return known_pose.placement_history(known_pose.placements_file(config.TOUCHUP_BACKUP_ROOT))
+
+
+def remember_placement(xy):
+    try:
+        known_pose.remember_placement(known_pose.placements_file(config.TOUCHUP_BACKUP_ROOT), xy)
+    except OSError as exc:
+        print("Hinweis: Ablage nicht gemerkt (%s)" % exc)
+
+
 def _write_pick(robot, joints, pick_state):
     """PICK in der Steuerung auf ``joints`` setzen. Erste Aenderung je Lauf mit
     Sicherung wie beim Touch-up, danach nur schreiben (Stand vor dem Lauf
@@ -972,9 +984,20 @@ def expert_after_probe(robot, workspace, known, reference_pick, start_joints, cl
     from bc.live import yaw360 as _yaw360
     center = (((_yaw360(start_pose, known.table) - _yaw360(reference_pick, known.table)
                 + 180.0) % 360.0 - 180.0) if config.AUTO_YAW_CENTER_POINT else None)
-    for pose, xy, turn in known_pose.new_place_pose(known, reference_pick, rng,
-                                                    used_xy=pick_state.get("used_xy", ()),
-                                                    center_shift_deg=center):
+    candidates = list(known_pose.new_place_pose(known, reference_pick, rng,
+                                                used_xy=placement_history()
+                                                + list(pick_state.get("used_xy", ())),
+                                                center_shift_deg=center))
+    planned = getattr(args, "ablage_pose", None)
+    if planned:
+        # vorab geplante Lage (Reiter Vergleich) zuerst, sonst automatisch
+        from bc.table import yaw_deg as _yaw_deg
+        planned = np.asarray(planned, dtype=float)
+        turn_planned = ((_yaw_deg(planned, known.table) - _yaw_deg(reference_pick, known.table)
+                         + 90.0) % 180.0) - 90.0
+        candidates.insert(0, (planned, (float(planned[0]), float(planned[1])),
+                              float(turn_planned)))
+    for pose, xy, turn in candidates:
         # in derselben Orientierung ablegen, wie gegriffen wurde
         place = (rotated_about(pose, known.table.normal_at(pose[0], pose[1]), np.pi)
                  if info["flipped"] else pose)
@@ -999,6 +1022,10 @@ def expert_after_probe(robot, workspace, known, reference_pick, start_joints, cl
         out["result"] = "keine Ablage planbar (%s) -- Arm steht am Stopp" % last_error
         return out
     pose, xy, turn, place, ideal, targets = plan
+    out["planned_pose_used"] = bool(planned is not None and len(planned)
+                                    and np.allclose(pose, planned))
+    if planned is not None and len(planned) and not out["planned_pose_used"]:
+        print("   Hinweis: geplante Ablage nicht erreichbar (%s) -- ausgewichen" % last_error)
     log = run_planned(robot, workspace, targets, ideal.gripper, clock,
                       servo_rate_hz=args.servo_rate,
                       threaded_watchdog=not isinstance(clock, SimClock),
@@ -1021,6 +1048,7 @@ def expert_after_probe(robot, workspace, known, reference_pick, start_joints, cl
                          "vor der naechsten Fahrt teachen" % (1e3 * xy[0], 1e3 * xy[1], exc))
         return out
     pick_state.setdefault("used_xy", []).append(xy)
+    remember_placement(xy)
     out["new_pick"] = [float(v) for v in pose]
     out["result"] = ("gegriffen, abgelegt bei x %.0f y %.0f mm (Drehung %+.0f Grad), PICK "
                      "nachgefuehrt (Sicherung %s)" % (1e3 * xy[0], 1e3 * xy[1], turn,
@@ -1316,6 +1344,9 @@ def parse_args():
                         help="mit --lage-bekannt --probegriff objekt: keine Policy-Fahrt -- "
                              "der Experte greift das Teil am PICK, legt es an eine neue Lage "
                              "und fuehrt PICK nach (Modellvergleich, apps/vergleich.py)")
+    parser.add_argument("--ablage-pose", dest="ablage_pose", default=None, metavar="X,Y,Z,QW,QX,QY,QZ",
+                        help="Experte: zuerst an diese Pose ablegen (m, Basis-KS; vorab geplant, "
+                             "Reiter Vergleich) -- nicht erreichbar: automatische Wahl wie sonst")
     parser.add_argument("--nachgreifen", action="store_true",
                         help="mit Experte: nach dem Ablegen auf Greifhoehe noch einmal "
                              "schliessen und oeffnen -- der Greifer schiebt das Teil mittig, "
@@ -1364,6 +1395,13 @@ def parse_args():
         parser.error("--lage-bekannt endet selbst mit dem Griff -- ohne --transport-geplant")
     if args.dagger and not args.experte:
         parser.error("--dagger braucht den Experten (ohne --ohne-experte)")
+    if args.ablage_pose is not None:
+        try:
+            args.ablage_pose = [float(v) for v in str(args.ablage_pose).split(",")]
+        except ValueError:
+            args.ablage_pose = []
+        if len(args.ablage_pose) != 7:
+            parser.error("--ablage-pose: sieben Zahlen x,y,z,qw,qx,qy,qz (m)")
     if args.nur_umlegen and not (args.lage_bekannt and args.probegriff == "objekt"
                                  and args.experte and not args.dagger and not args.hold):
         parser.error("--nur-umlegen braucht --lage-bekannt --probegriff objekt und den "

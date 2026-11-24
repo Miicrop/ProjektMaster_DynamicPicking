@@ -463,7 +463,7 @@ class Rollout(object):
             _mm(self.grasp_mm), _mm(self.end_mm), _mm(self.path_mm),
             "-" if self.predict_ms is None else "%.1f ms" % self.predict_ms,
             str(self.overruns),
-            self.stop_reason,
+            stop_text(self.stop_reason),
         ] + self.known_columns()
 
     def known_columns(self):
@@ -678,6 +678,20 @@ class RolloutProgress(object):
         bits.append("Ende: " + ", ".join("%s (%dx)" % (k, v)
                                          for k, v in sorted(reasons.items())))
         return "  ·  ".join(bits)
+
+
+def stop_text(reason):
+    """Abbruchgrund fuer die Tabellen (Anwender 2026-11-24).
+
+    "kollision vorab: tool an Tischebene" ist beim Probegriff das VORGESEHENE
+    Ende: das naechste Ziel der Policy laege unter der Probe-Ebene (gewaehlter
+    Abstand ueber dem Objekt; "Nachlauf" = samt Nachlauf des Arms) und wird
+    gar nicht erst gesendet -- kein Geofence-Treffer der gemessenen Stellung.
+    """
+    text = str(reason or "")
+    if text.startswith("kollision vorab") and "Tischebene" in text:
+        return "Probeabstand erreicht%s" % (" (mit Nachlauf)" if "Nachlauf" in text else "")
+    return text
 
 
 def camera_check_summary(progress):

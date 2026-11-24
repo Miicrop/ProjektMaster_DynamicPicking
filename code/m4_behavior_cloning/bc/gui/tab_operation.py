@@ -1062,6 +1062,7 @@ class OperationTab(ModeTab):
         before = self.rollouts.topLevelItemCount()
         for rollout in self._progress.rollouts[before:]:
             item = QTreeWidgetItem(self.rollouts, rollout.row())
+            item.setToolTip(8, rollout.stop_reason)        # Abbruchgrund im Wortlaut
             item.setForeground(1, QBrush(QColor(GOOD if rollout.success else WARN)))
             self.rollouts.addTopLevelItem(item)
             self.rollouts.scrollToItem(item)

@@ -7,6 +7,8 @@ import os
 import sys
 from pathlib import Path
 
+import numpy as np
+
 import _paths  # noqa: F401
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "apps"))
@@ -84,6 +86,68 @@ def test_aggregate_per_model_with_spread_between_runs_at_one_pose():
     assert stats[0]["xy_streuung_mm"] == 3.0 and stats[1]["xy_streuung_mm"] == 0.0
     assert stats[0]["erfolg"] == 2 and stats[1]["erfolg"] == 0      # 12 mm > 10 mm
     assert v.stats_row(stats[0])[2] == "2 / 2"
+
+
+def test_pose_view_numbers_the_poses_and_marks_the_current_one():
+    rows = [v.evaluate(step, _summary(v.FAHRT), 0)[0] for step in v.plan(MODELS, 1, 2)
+            if step.kind == v.FAHRT]
+    for row, x in zip(rows, (440.0, 440.0, 300.0, 300.0)):
+        row["pick_x_mm"] = x
+    lagen = v.lagen_view(rows)
+    assert [l["label"] for l in lagen] == ["1", "2"] and lagen[-1]["current"]
+    assert lagen[1]["xy"][0] == 0.3 and lagen[0]["yaw_deg"] == 81.0
+    assert lagen[0]["status"] == "erledigt" and lagen[0]["known"] is None
+    lagen = v.lagen_view(rows, placed_xy=(0.5, -0.1))           # gerade umgelegt
+    assert lagen[-1]["xy"] == (0.5, -0.1) and lagen[-1]["label"] == "3"
+    assert lagen[-1]["current"] and not lagen[1]["current"]
+    # vorab geplant: alle Lagen sofort sichtbar, angefahrene mit dem echten PICK
+    plan = [((0.44, -0.18), 81.0), ((0.30, -0.18), 10.0), ((0.25, -0.05), -20.0),
+            ((0.50, -0.25), 30.0)]
+    lagen = v.lagen_view(rows[:2], plan, current=1,
+                         training={"A": np.array([[0.44, -0.18]]), "B": None})
+    assert [l["status"] for l in lagen] == ["erledigt", "aktuell", "geplant", "geplant"]
+    assert lagen[0]["known"] == "alle" and lagen[2]["known"] == "keins"
+    assert v.run_row(rows[0])[-1] == "Probeabstand erreicht (mit Nachlauf)"
+
+
+def test_training_coverage_is_all_or_nothing_with_density_and_heatmap():
+    info = {"dataset": {"episodes": 3},
+            "reference": {"grasp_tcp": [[0.40, -0.10, 0.007], [0.41, -0.10, 0.007],
+                                        [0.30, -0.25, 0.007]]}}
+    train = v.training_xy(info)
+    assert train.shape == (3, 2)
+    assert v.training_density((0.405, -0.10), train) == 2
+    assert round(v.training_distance((0.30, -0.22), train), 3) == 0.03
+    grid = v.heat_grid(train)
+    assert sum(map(sum, grid["counts"])) == 3 and grid["cell"] == v.HEAT_CELL_M
+    # unvollstaendig (weniger Greifposen als Episoden) -> gar keine Abdeckung
+    info["dataset"]["episodes"] = 5
+    assert v.training_xy(info) is None and v.heat_grid(None) is None
+    info["dataset"]["episodes"] = 3
+    info["reference"]["grasp_tcp"][1] = None
+    assert v.training_xy(info) is None
+
+
+def test_planned_poses_are_spread_and_go_to_the_relocation_steps():
+    from test_known_pose import _down, _known
+
+    known = _known()
+    known.region = [_down(x, y, 0.0) for x, y in ((0.2, -0.3), (0.6, -0.3), (0.6, 0.1),
+                                                  (0.2, 0.1))]
+    planned = v.plan_poses(known, 5, np.random.default_rng(3), history=[(0.4, -0.1)])
+    assert len(planned) == 5
+    xy = np.array([p["xy"] for p in planned])
+    gaps = [np.min(np.linalg.norm(xy[:k] - xy[k], axis=1)) for k in range(1, 5)]
+    assert min(gaps) > 0.03, gaps
+    # nicht erreichbare Kandidaten werden uebersprungen
+    left = v.plan_poses(known, 3, np.random.default_rng(3), reachable=lambda pose: pose[1] < -0.1)
+    assert all(p["xy"][1] < -0.1 for p in left)
+    steps = v.attach_targets(v.plan(MODELS, 1, 3), planned)
+    relocations = [s for s in steps if s.kind == v.UMLEGEN]
+    assert [s.target for s in relocations] == [planned[0]["pose"], planned[1]["pose"]]
+    argv = v.step_argv(relocations[0], "vergleiche/x", 1.0, robot_kind="sim")
+    values = [float(t) for t in argv[argv.index("--ablage-pose") + 1].split(",")]
+    assert np.allclose(values, planned[0]["pose"], atol=1e-6)
 
 
 def test_infer_relocate_only_needs_the_expert_on_the_object():
@@ -180,6 +244,7 @@ def test_comparison_tab_runs_the_whole_series(tmp_path):
         assert result["abgeschlossen"] is True and len(result["fahrten"]) == 8
         assert (tmp_path / tab._root / "vergleich.csv").is_file()
         assert tab.btn_start.isEnabled() and not tab.btn_stop.isEnabled()
+        assert [l["label"] for l in tab.pick_view.state.lagen] == ["1", "2"]
     finally:
         tab.shutdown()
         runner.shutdown()
@@ -240,3 +305,24 @@ def test_relocate_only_in_the_simulation_approaches_by_ptp(tmp_path):
     assert "per PTP 100 mm ueber den PICK" in text, text[-3000:]
     result = json.loads((tmp_path / "out" / "summary.json").read_text(encoding="utf-8"))["umlegen"]
     assert result["ok"], result
+
+    # vorab geplante Lage (Reiter Vergleich): dorthin, nicht automatisch
+    from bc import known_pose
+    robot = SimRobot(points=points).connect()
+    known, _ = known_pose.load(seq, robot)
+    known.pick = np.asarray(result["new_pick"], dtype=float)
+    target = v.plan_poses(known, 1, np.random.default_rng(7))[0]
+    sys.argv = ["infer.py", "--sim", "--checkpoint", str(tmp_path / "M"), "--lage-bekannt",
+                "--probegriff", "objekt", "--nur-umlegen", "--kamerapruefung", "aus",
+                "--ablauf", str(seq), "--out", str(tmp_path / "out2"),
+                "--ablage-pose", ",".join("%.6f" % x for x in target["pose"])]
+    infer.open_robot = lambda kind, clock=None, **kw: SimRobot(clock=clock, points=points)
+    config.TOUCHUP_BACKUP_ROOT = str(tmp_path / "sicherungen")
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            infer.main()
+    finally:
+        sys.argv, infer.open_robot, config.TOUCHUP_BACKUP_ROOT = saved
+    second = json.loads((tmp_path / "out2" / "summary.json").read_text(encoding="utf-8"))["umlegen"]
+    assert second["ok"], second
+    assert np.allclose(second["placed_xy"], target["xy"], atol=1e-4)

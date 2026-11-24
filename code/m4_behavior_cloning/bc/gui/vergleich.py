@@ -36,7 +36,16 @@ ROOT = "vergleiche"
 CSV_COLUMNS = ("lage", "modell", "fahrt", "erfolg", "xy_mm", "dz_mm", "drehung_grad",
                "tisch_min_mm", "takte", "vorhersage_ms", "ueberlaeufe", "stopp", "rueckzug",
                "griff_x_mm", "griff_y_mm", "pick_x_mm", "pick_y_mm", "pick_drehung_grad",
-               "ordner")
+               "trainingsabstand_mm", "trainingslagen_umkreis", "ordner")
+
+#: Lage gilt als "bekannt", wenn eine Trainingsepisode des Modells naeher als
+#: so viel daneben gegriffen hat (nur xy: bc_policy.json fuehrt die Drehung
+#: der Trainingslagen nicht mit)
+KNOWN_RADIUS_M = 0.02
+#: Trainingsdichte je Fahrt: Trainingslagen des Modells in diesem Umkreis
+DENSITY_RADIUS_M = 0.03
+#: Feldgroesse der Heatmap in der Draufsicht
+HEAT_CELL_M = 0.02
 
 
 @dataclass
@@ -46,6 +55,7 @@ class Step:
     model: str          # Checkpoint (Pfad wie in der Auswahl)
     index: int = 0      # Fahrt dieses Modells an dieser Lage
     out: str = ""       # Protokollordner, relativ zum Vergleichsordner
+    target: list = None  # UMLEGEN: vorab geplante Ablagepose (7,), sonst None
 
     @property
     def label(self):
@@ -98,7 +108,93 @@ def step_argv(step, root, probe_gap_mm, regrasp=True, **common):
         step.model, episodes=1, known_pose=True, probe="objekt",
         probe_gap_mm=probe_gap_mm, expert=True, regrasp=regrasp, camera_check="aus",
         out=out, **common)
-    return argv + ["--nur-umlegen"]
+    argv = argv + ["--nur-umlegen"]
+    if step.target is not None:
+        argv += ["--ablage-pose", ",".join("%.6f" % float(v) for v in step.target)]
+    return argv
+
+
+def attach_targets(steps, planned):
+    """Vorab geplante Lagen an die Umlege-Schritte haengen: nach Lage k wird an
+    ``planned[k]`` (Lage k+2) gelegt. Fehlt eine, waehlt der Experte selbst."""
+    for step in steps:
+        if step.kind == UMLEGEN and step.lage < len(planned):
+            step.target = [float(v) for v in planned[step.lage]["pose"]]
+    return steps
+
+
+def plan_poses(known, count, rng, history=(), center_shift_deg=None, reachable=None):
+    """``count`` Lagen nacheinander wie der Experte (bc/known_pose.new_place_pose):
+    jede zaehlt fuer die naechste als belegt, dazu die frueheren Ablagen
+    (``history``). ``reachable(pose) -> bool``: Kandidaten, die nicht passen,
+    werden uebersprungen. Rueckgabe Liste ``{"pose", "xy", "turn_deg"}``.
+    """
+    from dataclasses import replace
+
+    from .. import known_pose
+
+    reference = np.asarray(known.pick, dtype=float).copy()
+    current, used, out = known, list(history), []
+    for _ in range(int(count)):
+        chosen = None
+        for pose, xy, turn in known_pose.new_place_pose(current, reference, rng, used_xy=used,
+                                                        center_shift_deg=center_shift_deg):
+            if reachable is None or reachable(pose):
+                chosen = (pose, xy, turn)
+                break
+        if chosen is None:
+            break
+        pose, xy, turn = chosen
+        out.append({"pose": [float(v) for v in pose], "xy": (float(xy[0]), float(xy[1])),
+                    "turn_deg": float(turn)})
+        used.append(xy)
+        current = replace(current, pick=np.asarray(pose, dtype=float))
+    return out
+
+
+def training_xy(info):
+    """Greiflagen (x, y) aller Trainingsepisoden eines Modells, oder None.
+
+    Ganz oder gar nicht (Anwender 2026-11-24): nur wenn fuer JEDE Episode des
+    Datensatzes eine Greifpose vorliegt -- eine Teilmenge liesse eine Lage
+    faelschlich "unbekannt" aussehen.
+    """
+    grasps = ((info or {}).get("reference") or {}).get("grasp_tcp") or []
+    episodes = ((info or {}).get("dataset") or {}).get("episodes")
+    if not grasps or episodes is None or len(grasps) != int(episodes):
+        return None
+    if any(g is None or len(g) < 2 for g in grasps):
+        return None
+    return np.asarray([[float(g[0]), float(g[1])] for g in grasps], dtype=float)
+
+
+def training_density(xy, train, radius=None):
+    """Trainingslagen des Modells im Umkreis ``radius`` um ``xy``; None ohne Abdeckung."""
+    if train is None or xy is None:
+        return None
+    radius = DENSITY_RADIUS_M if radius is None else float(radius)
+    return int(np.sum(np.linalg.norm(train - np.asarray(xy, dtype=float)[:2], axis=1) <= radius))
+
+
+def heat_grid(train, cell=None):
+    """Heatmap der Trainingslagen: ``{"x0", "y0", "cell", "counts"}`` (counts[i][j]:
+    Feld i in x, j in y) -- oder None ohne Abdeckung."""
+    if train is None or len(train) == 0:
+        return None
+    cell = HEAT_CELL_M if cell is None else float(cell)
+    x0, y0 = (np.floor(train.min(axis=0) / cell) * cell).tolist()
+    idx = np.floor((train - [x0, y0]) / cell).astype(int)
+    nx, ny = idx.max(axis=0) + 1
+    counts = np.zeros((nx, ny), dtype=int)
+    np.add.at(counts, (idx[:, 0], idx[:, 1]), 1)
+    return {"x0": float(x0), "y0": float(y0), "cell": cell, "counts": counts.tolist()}
+
+
+def training_distance(xy, train):
+    """Abstand (m) von ``xy`` zur naechsten Trainingslage; None ohne Abdeckung."""
+    if train is None or xy is None or len(train) == 0:
+        return None
+    return float(np.min(np.linalg.norm(train - np.asarray(xy, dtype=float)[:2], axis=1)))
 
 
 def evaluate(step, summary, code):
@@ -217,10 +313,64 @@ def run_row(row):
     return ["%d" % row["lage"], row["modell"], "%d" % row["fahrt"],
             "Erfolg" if row["erfolg"] else "kein Erfolg", fmt(row["xy_mm"], " mm"),
             fmt(row["drehung_grad"], "°"), fmt(row["dz_mm"], " mm"),
-            "-" if row["takte"] is None else "%d" % row["takte"], str(row["stopp"] or "")]
+            fmt(row.get("trainingsabstand_mm"), " mm"),
+            "-" if row.get("trainingslagen_umkreis") is None
+            else "%d" % row["trainingslagen_umkreis"],
+            "-" if row["takte"] is None else "%d" % row["takte"],
+            operation.stop_text(row["stopp"])]
 
 
-RUNS_HEADER = ["Lage", "Modell", "Fahrt", "Ergebnis", "xy", "Drehung", "dz", "Takte", "Stopp"]
+RUNS_HEADER = ["Lage", "Modell", "Fahrt", "Ergebnis", "xy", "Drehung", "dz",
+               "Trainingsabstand", "Training ≤3 cm", "Takte", "Stopp"]
+
+
+def lagen_view(rows, plan_xy=(), current=None, training=None, placed_xy=None):
+    """Lagen fuer die Draufsicht (bc/gui/pick_view.PickState.lagen).
+
+    ``plan_xy``: je Lage (ab Lage 1) ``(xy, yaw_deg)`` -- vorab geplant;
+    angefahrene Lagen nehmen den PICK der ersten Fahrt dort. ``current``:
+    Index der Lage in Arbeit (0-basiert), sonst die letzte angefahrene.
+    ``placed_xy``: gerade umgelegt (ohne Plan) -- wird die aktuelle Lage.
+    ``training``: {Modell: (N, 2) | None} -> ``known`` "alle"/"keins"/"teils"/None.
+    """
+    visited = {}
+    for row in rows:
+        if row["lage"] not in visited and row.get("pick_x_mm") is not None:
+            visited[row["lage"]] = ((row["pick_x_mm"] / 1e3, row["pick_y_mm"] / 1e3),
+                                    row.get("pick_drehung_grad"))
+    count = max([len(plan_xy)] + list(visited))
+    if placed_xy is not None and count <= max(list(visited) or [0]):
+        count += 1
+    if current is None:
+        current = (count - 1) if placed_xy is not None else (max(visited) - 1 if visited else 0)
+    out = []
+    for k in range(count):
+        if (k + 1) in visited:
+            xy, yaw = visited[k + 1]
+            status = "erledigt"
+        elif k < len(plan_xy):
+            xy, yaw = plan_xy[k]
+            status = "geplant"
+        elif placed_xy is not None and k == count - 1:
+            xy, yaw, status = placed_xy, None, "geplant"
+        else:
+            continue
+        if k == current:
+            status = "aktuell"
+        out.append({"xy": (float(xy[0]), float(xy[1])), "yaw_deg": yaw, "label": str(k + 1),
+                    "current": k == current, "status": status,
+                    "known": _known_by(xy, training)})
+    return out
+
+
+def _known_by(xy, training):
+    if not training:
+        return None
+    flags = [training_distance(xy, train) <= KNOWN_RADIUS_M
+             for train in training.values() if train is not None]
+    if not flags:
+        return None
+    return "alle" if all(flags) else "keins" if not any(flags) else "teils"
 
 
 # -- intern -------------------------------------------------------------------

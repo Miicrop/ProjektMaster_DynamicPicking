@@ -825,6 +825,9 @@ PTP_MIN_ABOVE_GRASP_M = 0.05
 #: von der Startstellung quer ueber den Tisch lief in einen
 #: Konfigurationssprung, |Delta q| 0,21 rad bei Schritt 24)
 RELOCATE_APPROACH_ABOVE_PICK_M = 0.10
+#: So viele fruehere Ablagen des Experten zaehlen fuer die Tischabdeckung --
+#: ueber Laeufe hinweg (Anwender 2026-11-24: sonst Pendeln zwischen zwei Stellen)
+EXPERT_PLACEMENT_MEMORY = 30
 #: Mindestpause zwischen deactivate_servo_interface und dem naechsten
 #: activate_servo_interface am Neura (Befund 2026-11-24): Fahrt 1 von
 #: 2026-11-23_16-40-02 (ohne Experte) startete ~0,1 s nach dem Rueckzug neu --
