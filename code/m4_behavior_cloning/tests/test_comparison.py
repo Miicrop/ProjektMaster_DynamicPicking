@@ -413,6 +413,6 @@ def test_collapsible_box_gives_up_its_height(tmp_path):
     QVBoxLayout(box.content).addWidget(QLabel("x"))
     assert box.is_expanded()
     box.set_expanded(False)
-    assert box.content.isHidden() and box.maximumHeight() < 80
+    assert box.frame.isHidden() and box.maximumHeight() < 80
     box.set_expanded(True)
-    assert not box.content.isHidden() and box.maximumHeight() > 1000
+    assert not box.frame.isHidden() and box.maximumHeight() > 1000

@@ -1362,3 +1362,48 @@ def test_recordings_are_found_in_an_absolute_extra_root(tmp_path):
     found = training.find_recordings(work, ["data_vm", str(other)])
     assert [p.name for p in found] == ["2026-10-27"]
     assert training.suggest_output(work, "x", str(other)).parent == other
+
+
+def test_grasp_check_line_is_read_into_the_rollout():
+    # Anwender 2026-11-25: Griffpruefung auch im Reiter Betrieb (Stufe, quer, laengs, Spiel)
+    from bc import known_pose
+    check = {"stufe": known_pose.GRASP_WARN, "gruende": ["laengs versetzt 6.0 mm"],
+             "quer_m": 0.0012, "laengs_m": 0.006, "yaw_deg": 2.0, "spiel_min_m": 0.0008}
+    progress = operation.RolloutProgress(total_episodes=1)
+    progress.feed("Fahrt 0: ERFOLG -- 96 Takte, Greifpunkt 5.3 mm, Ende 12.8 mm, Bahn p95 9.0 mm, "
+                  "kollision vorab (Nachlauf): tool an Tischebene, Vorhersage 116.4 ms, "
+                  "Overruns 2, gekappt 0")
+    progress.feed("   Lage: Stopp xy 8.0 mm, dz 10.3 mm, Drehung 0.6 Grad, Bahn p95 9.3 mm, "
+                  "Tisch min 18.7 mm, Vorhersage xy 5.3 mm")
+    assert progress.feed(known_pose.check_line(check, "vorhersage"))
+    rollout = progress.rollouts[0]
+    assert rollout.check["level"] == "warnung" and rollout.check["source"] == "vorhersage"
+    assert rollout.check["clearance_mm"] == 0.8 and rollout.check["reasons"] == "laengs versetzt 6.0 mm"
+    row = rollout.row()
+    assert row[1] == "Erfolg mit Warnung" and rollout.level == "warnung"
+    assert row[-3:] == ["1.2 mm", "6.0 mm", "0.8 mm"]
+    fail = dict(check, stufe=known_pose.GRASP_FAIL, spiel_min_m=-0.0032, gruende=[])
+    parsed = operation.parse_check_line(known_pose.check_line(fail))
+    assert parsed["level"] == "kein_erfolg" and parsed["clearance_mm"] == -3.2
+    assert operation.parse_check_line("   Griffpruefung: keine Griffpose") is None
+
+
+def test_totals_show_medians_of_correction_and_grasp_check():
+    from bc import known_pose
+    progress = operation.RolloutProgress(total_episodes=3)
+    for ep, (dx, yaw, cross, level) in enumerate(((2.0, 1.0, 0.5, known_pose.GRASP_OK),
+                                                   (7.0, -4.0, -3.0, known_pose.GRASP_FAIL),
+                                                   (3.0, 2.0, 1.0, known_pose.GRASP_WARN))):
+        ok = level != known_pose.GRASP_FAIL
+        progress.feed("Fahrt %d: %s -- 90 Takte, Greifpunkt 3.0 mm, Ende 5.0 mm, Bahn p95 9.0 mm, "
+                      "max_steps, Vorhersage 100.0 ms, Overruns 0, gekappt 0"
+                      % (ep, "ERFOLG" if ok else "kein Erfolg"))
+        progress.feed(known_pose.check_line({
+            "stufe": level, "gruende": [], "quer_m": cross / 1e3, "laengs_m": 0.002,
+            "yaw_deg": yaw, "spiel_min_m": 0.001 if ok else -0.001}))
+        progress.feed("   Experte: Korrektur dx %.1f mm, dy 0.0 mm, xy %.1f mm, Drehung %.1f Grad, "
+                      "Abstieg 10.0 mm" % (dx, dx, yaw))
+    text = progress.totals_line()
+    assert "Korrektur Median xy 3.0 mm, Drehung 2.0° (3 Fahrten)" in text
+    assert "|quer| 1.0 mm" in text and "(1 Erfolg, 1 Warnung, 1 kein Erfolg)" in text
+    assert operation.RolloutProgress().medians_line() == ""

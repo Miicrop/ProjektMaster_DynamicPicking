@@ -215,8 +215,8 @@ def predicted_grasp(actions, fk, known):
 # ``yaw`` gedreht; seine Backen-Innenflaechen liegen bei +-Oeffnung/2 in
 # Schliessrichtung und reichen +-Kontaktlaenge/2 entlang der Backe. Spiel je
 # Backe = Abstand der Innenflaeche zum am weitesten herausragenden Punkt des
-# Objekts innerhalb der Backenzone. Kleiner als der Sicherheitsabzug: die
-# Backe setzt auf dem Objekt auf -> kein Erfolg.
+# Objekts innerhalb der Backenzone. Negativ: die Backe setzt auf dem Objekt
+# auf -> kein Erfolg; unter dem Sicherheitsabzug: knapp -> Warnung.
 
 GRASP_OK, GRASP_WARN, GRASP_FAIL = "erfolg", "warnung", "kein_erfolg"
 GRASP_TEXT = {GRASP_OK: "Erfolg", GRASP_WARN: "Erfolg mit Warnung", GRASP_FAIL: "kein Erfolg"}
@@ -296,10 +296,15 @@ def grasp_check(pose, known, jaw_offset_deg=None):
         least = None
     else:
         least = min(plus, minus)
-        if least < safety:
+        if least < 0.0:
             level = GRASP_FAIL
-            reasons.append("Backe trifft Objekt (Spiel %.1f mm < %.1f mm, quer %.1f mm, "
-                           "Drehung %.1f Grad)" % (1e3 * least, 1e3 * safety, 1e3 * cross, yaw))
+            reasons.append("Backe trifft Objekt (Spiel %.1f mm, quer %.1f mm, Drehung %.1f Grad)"
+                           % (1e3 * least, 1e3 * cross, yaw))
+        elif least < safety:
+            # Anwender 2026-11-25: geometrisch frei, nur knapp -> Warnung
+            level = GRASP_WARN
+            reasons.append("Spiel knapp (%.1f mm < %.1f mm, quer %.1f mm, Drehung %.1f Grad)"
+                           % (1e3 * least, 1e3 * safety, 1e3 * cross, yaw))
         half_contact = config.GRASP_JAW_CONTACT_M / 2.0
         if abs(long_) > config.GRASP_OBJECT_LENGTH_M / 2.0 - half_contact:
             reasons.append("Backe nur teilweise am Objekt (laengs %.1f mm)" % (1e3 * long_))

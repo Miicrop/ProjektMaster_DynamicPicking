@@ -21,6 +21,8 @@ import json
 import re
 from pathlib import Path
 
+import numpy as np
+
 from .. import camera_check as camera_check_module
 from .. import config
 
@@ -418,6 +420,15 @@ _KNOWN = re.compile(
 #: "   Experte: Korrektur dx 1.0 mm, dy -2.0 mm, xy 2.2 mm, Drehung 3.0 Grad, Abstieg 10.0 mm"
 _EXPERT = re.compile(r"^\s*Experte:\s+Korrektur\s+dx\s+(?P<dx>[-\d.]+)\s*mm,\s*dy\s+(?P<dy>[-\d.]+)"
                      r"\s*mm,\s*xy\s+(?P<xy>[-\d.]+)\s*mm,\s*Drehung\s+(?P<yaw>[-\d.]+)")
+#: "   Griffpruefung (vorhersage): Erfolg mit Warnung -- quer 1.2 mm, laengs 6.0 mm, Drehung
+#:  2.0 Grad, Spiel min 0.8 mm (laengs versetzt 6.0 mm)" (bc/known_pose.check_line)
+_CHECK = re.compile(
+    r"^\s*Griffpruefung(?:\s*\((?P<source>[^)]*)\))?:\s+(?P<level>Erfolg mit Warnung|Erfolg|"
+    r"kein Erfolg)\s*--\s*quer\s+(?P<cross>[-\d.]+)\s*mm,\s*laengs\s+(?P<long>[-\d.]+)\s*mm"
+    r",\s*Drehung\s+(?P<yaw>[-\d.]+)\s*Grad,\s*Spiel min\s+(?P<clear>[-\d.]+)\s*mm"
+    r"(?:\s*\((?P<reasons>.*)\))?\s*$")
+#: Text der Griffpruefung -> Stufe wie bc/known_pose (erfolg / warnung / kein_erfolg)
+CHECK_LEVELS = {"Erfolg": "erfolg", "Erfolg mit Warnung": "warnung", "kein Erfolg": "kein_erfolg"}
 #: "KAMERAPRUEFUNG scene: WARNUNG -- Helligkeit ..." / "KAMERAPRUEFUNG gesamt: OK (...)"
 _CAMERA_CHECK = re.compile(r"^KAMERAPRUEFUNG\s+(?P<name>[^:]+):\s*(?P<text>.*)$")
 
@@ -436,6 +447,21 @@ def parse_known_line(line):
             "predicted_mm": _maybe_float(match.group("pred"))}
 
 
+def parse_check_line(line):
+    """Zeile "   Griffpruefung ...: ..." -> dict (mm, Grad, Stufe), sonst None."""
+    match = _CHECK.match((line or "").rstrip())
+    if not match:
+        return None
+    return {"level": CHECK_LEVELS[match.group("level")],
+            "text": match.group("level"),
+            "source": match.group("source"),
+            "cross_mm": _maybe_float(match.group("cross")),
+            "long_mm": _maybe_float(match.group("long")),
+            "yaw_deg": _maybe_float(match.group("yaw")),
+            "clearance_mm": _maybe_float(match.group("clear")),
+            "reasons": match.group("reasons") or ""}
+
+
 class Rollout(object):
     """Eine gefahrene Episode, aus der Zusammenfassungszeile gelesen."""
 
@@ -452,19 +478,33 @@ class Rollout(object):
         self.overruns = overruns
         self.clamped = clamped
         self.known = None        # parse_known_line, beim Policy-Test mit bekannter Lage
+        self.check = None        # parse_check_line: Griffpruefung (Anwender 2026-11-25)
         self.expert = None       # Korrektur des Experten nach dem Probegriff
 
     def row(self):
         """Spalten fuer die Tabelle im Reiter."""
         return [
             str(self.episode),
-            "Erfolg" if self.success else "kein Erfolg",
+            self.result_text(),
             str(self.steps),
             _mm(self.grasp_mm), _mm(self.end_mm), _mm(self.path_mm),
             "-" if self.predict_ms is None else "%.1f ms" % self.predict_ms,
             str(self.overruns),
             stop_text(self.stop_reason),
         ] + self.known_columns()
+
+    def result_text(self):
+        """Ergebnis: Stufe der Griffpruefung, wenn sie zum Erfolgslabel passt."""
+        if self.check and (self.check["level"] != "kein_erfolg") == bool(self.success):
+            return self.check["text"]
+        return "Erfolg" if self.success else "kein Erfolg"
+
+    @property
+    def level(self):
+        """erfolg / warnung / kein_erfolg -- fuer die Farbe im Reiter."""
+        if self.check and (self.check["level"] != "kein_erfolg") == bool(self.success):
+            return self.check["level"]
+        return "erfolg" if self.success else "kein_erfolg"
 
     def known_columns(self):
         """Spalten des Policy-Tests (leer ohne bekannte Lage)."""
@@ -476,9 +516,14 @@ class Rollout(object):
             return []
         e = self.expert
         expert = "-" if not e else "%.1f mm / %.1f°" % (e["xy_mm"], e["yaw_deg"])
+        c = self.check or {}
+
+        def cmm(key):
+            return "-" if c.get(key) is None else "%.1f mm" % c[key]
         return [mm("xy_mm"), mm("dz_mm"),
                 "-" if k.get("yaw_deg") is None else "%.1f°" % k["yaw_deg"],
-                mm("table_min_mm"), mm("predicted_mm"), expert]
+                mm("table_min_mm"), mm("predicted_mm"), expert,
+                cmm("cross_mm"), cmm("long_mm"), cmm("clearance_mm")]
 
 
 class RolloutProgress(object):
@@ -539,6 +584,12 @@ class RolloutProgress(object):
             if self.rollouts:
                 self.rollouts[-1].expert = {"xy_mm": float(match.group("xy")),
                                             "yaw_deg": float(match.group("yaw"))}
+            return True
+
+        check = parse_check_line(line)
+        if check is not None:
+            if self.rollouts:
+                self.rollouts[-1].check = check
             return True
 
         known = parse_known_line(line)
@@ -677,6 +728,39 @@ class RolloutProgress(object):
             reasons[rollout.stop_reason] = reasons.get(rollout.stop_reason, 0) + 1
         bits.append("Ende: " + ", ".join("%s (%dx)" % (k, v)
                                          for k, v in sorted(reasons.items())))
+        medians = self.medians_line()
+        return "  ·  ".join(bits) + ("\n" + medians if medians else "")
+
+    def medians_line(self):
+        """Mediane ueber die Fahrten (Anwender 2026-11-25): Korrektur des Experten
+        (DAgger/Probegriff) und Griffpruefung -- Betraege, die Richtung ist hier
+        egal. Leer, wenn keine Fahrt eins von beidem hat."""
+        def median(values):
+            values = [abs(v) for v in values if v is not None]
+            return (float(np.median(values)), len(values)) if values else (None, 0)
+
+        bits = []
+        experts = [r.expert for r in self.rollouts if r.expert]
+        if experts:
+            xy, n = median([e["xy_mm"] for e in experts])
+            yaw, _ = median([e["yaw_deg"] for e in experts])
+            bits.append("Korrektur Median xy %.1f mm, Drehung %.1f° (%d Fahrten)" % (xy, yaw, n))
+        checks = [r.check for r in self.rollouts if r.check]
+        if checks:
+            cross, n = median([c["cross_mm"] for c in checks])
+            yaw, _ = median([c["yaw_deg"] for c in checks])
+            long_, _ = median([c["long_mm"] for c in checks])
+            clear = [c["clearance_mm"] for c in checks if c["clearance_mm"] is not None]
+            levels = [r.level for r in self.rollouts if r.check]
+            text = "Griff Median |quer| %s, |Drehung| %s, |längs| %s" % (
+                "-" if cross is None else "%.1f mm" % cross,
+                "-" if yaw is None else "%.1f°" % yaw,
+                "-" if long_ is None else "%.1f mm" % long_)
+            if clear:
+                text += ", Spiel min %.1f mm" % float(np.median(clear))
+            text += " (%d Erfolg, %d Warnung, %d kein Erfolg)" % (
+                levels.count("erfolg"), levels.count("warnung"), levels.count("kein_erfolg"))
+            bits.append(text)
         return "  ·  ".join(bits)
 
 

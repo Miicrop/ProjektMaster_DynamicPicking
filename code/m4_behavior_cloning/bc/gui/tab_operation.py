@@ -555,11 +555,11 @@ class OperationTab(ModeTab):
             ["Fahrt", "Ergebnis", "Takte", "Greifpunkt", "Ende", "Bahn p95",
              "Vorhersage", "Überläufe", "Abbruchgrund",
              "Lage xy", "Lage dz", "Drehung", "Tisch min", "Vorh. Griff xy",
-             "Korrektur xy / Drehung"])
+             "Korrektur xy / Drehung", "quer", "längs", "Spiel min"])
         self.rollouts.setRootIsDecorated(False)
         self.rollouts.setMaximumHeight(170)
         for column, width in enumerate((55, 90, 60, 85, 70, 80, 85, 75, 130,
-                                        75, 75, 65, 75, 90, 140)):
+                                        75, 75, 65, 75, 90, 140, 70, 70, 80)):
             self.rollouts.setColumnWidth(column, width)
         progress_layout.addWidget(self.rollouts)
         boxes["fahrt"] = progress_box
@@ -1046,6 +1046,21 @@ class OperationTab(ModeTab):
         self._live_window.show()
         self._live_window.raise_()
 
+    def _colour_rollout(self, item, rollout):
+        """Zeile einer Fahrt fuellen und faerben (Ergebnis, Spiel min)."""
+        from . import vergleich as vergleich_module
+
+        for column, text in enumerate(rollout.row()):
+            item.setText(column, text)
+        item.setForeground(1, QBrush(QColor(
+            {"erfolg": GOOD, "warnung": WARN}.get(rollout.level, BAD))))
+        check = rollout.check or {}
+        item.setToolTip(1, check.get("reasons") or "")
+        level = vergleich_module.clearance_level(check.get("clearance_mm"))
+        if level is not None and rollout.known_columns():
+            column = len(rollout.row()) - 1
+            item.setForeground(column, QBrush(QColor(
+                {"schlecht": BAD, "knapp": WARN, "gut": GOOD}[level])))
     def _on_line(self, text):
         from .. import live as live_module
 
@@ -1063,14 +1078,12 @@ class OperationTab(ModeTab):
         for rollout in self._progress.rollouts[before:]:
             item = QTreeWidgetItem(self.rollouts, rollout.row())
             item.setToolTip(8, rollout.stop_reason)        # Abbruchgrund im Wortlaut
-            item.setForeground(1, QBrush(QColor(GOOD if rollout.success else WARN)))
             self.rollouts.addTopLevelItem(item)
             self.rollouts.scrollToItem(item)
-        # Die Lage-Zeile kommt nach der Ergebniszeile: Spalten nachtragen
+        # Lage- und Griffpruefungszeile kommen nach der Ergebniszeile: nachtragen
         if self._progress.rollouts and self.rollouts.topLevelItemCount():
             last = self.rollouts.topLevelItem(self.rollouts.topLevelItemCount() - 1)
-            for column, text in enumerate(self._progress.rollouts[-1].row()):
-                last.setText(column, text)
+            self._colour_rollout(last, self._progress.rollouts[-1])
         self._show_camera_check()
         self.headline.setText(self._progress.headline())
         self.detail_line.setText(self._progress.detail_line())

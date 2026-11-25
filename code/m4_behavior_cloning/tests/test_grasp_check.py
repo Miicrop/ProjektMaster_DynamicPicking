@@ -64,9 +64,11 @@ def test_grasp_check_levels_in_object_frame():
     assert abs(ok["quer_m"] - 0.001) < 1e-9 and abs(ok["laengs_m"] - 0.002) < 1e-9
     warn = known_pose.grasp_check(_shifted(known, 0.0, 0.010), known)
     assert warn["stufe"] == known_pose.GRASP_WARN and "laengs" in warn["gruende"][0]
-    # 2,2 mm quer: geometrisch frei (2,45), aber unter dem Sicherheitsabzug
+    # 2,2 mm quer: geometrisch frei (2,45), aber unter dem Sicherheitsabzug -> knapp
     tight = known_pose.grasp_check(_shifted(known, 0.0022, 0.0), known)
-    assert tight["stufe"] == known_pose.GRASP_FAIL
+    assert tight["stufe"] == known_pose.GRASP_WARN and "knapp" in tight["gruende"][0]
+    hit = known_pose.grasp_check(_shifted(known, 0.0026, 0.0), known)
+    assert hit["stufe"] == known_pose.GRASP_FAIL
     turned = known_pose.grasp_check(_shifted(known, 0.001, 0.010, yaw=9.5), known)
     assert turned["stufe"] == known_pose.GRASP_FAIL
     high = known_pose.grasp_check(_shifted(known, 0.0, 0.0, dz=0.008), known)
@@ -96,3 +98,5 @@ def test_comparison_shows_level():
     assert v.result_text(row) == "Erfolg mit Warnung"
     assert v.result_text({"erfolg": True}) == "Erfolg"
     assert v.result_text({"erfolg": False, "bewertung": "kein_erfolg"}) == "kein Erfolg"
+    assert [v.clearance_level(x) for x in (None, -0.1, 0.0, 0.3, 0.5, 2.45)] == [
+        None, "schlecht", "knapp", "knapp", "gut", "gut"]

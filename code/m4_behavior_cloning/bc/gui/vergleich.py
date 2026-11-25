@@ -26,6 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .. import config
 from . import operation
 
 FAHRT, UMLEGEN = "fahrt", "umlegen"
@@ -465,6 +466,20 @@ def stats_row(stat):
 STATS_HEADER = ["Modell", "Fahrten", "Erfolg", "davon Warnung", "|quer| Median",
                 "|Drehung| Median", "|längs| Median", "Spiel min Median", "xy Median",
                 "Streuung je Lage", "dz Median", "Takte"]
+
+
+def clearance_level(spiel_mm):
+    """Farbstufe fuer "Spiel min" (Anwender 2026-11-25): unter 0 trifft die Backe
+    ("schlecht"), unter dem Sicherheitsabzug knapp ("knapp"), sonst "gut"; None
+    ohne Wert. Zu viel Spiel gibt es nicht -- hoechstens (Oeffnung - Breite) / 2
+    = 2,45 mm je Backe bei mittigem, geradem Griff."""
+    if spiel_mm is None:
+        return None
+    if spiel_mm < 0:
+        return "schlecht"
+    if spiel_mm < 1e3 * config.GRASP_SAFETY_M:
+        return "knapp"
+    return "gut"
 
 
 def result_text(row):

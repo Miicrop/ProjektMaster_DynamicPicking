@@ -30,10 +30,11 @@ def test_progress_reads_known_line_and_camera_check():
     progress.feed("   Lage: Griff xy 4.2 mm, dz 1.0 mm, Drehung -2.0 Grad, Bahn p95 8.1 mm, "
                   "Tisch min 7.9 mm, Vorhersage xy - mm")
     row = progress.rollouts[0].row()
-    assert row[-6:] == ["4.2 mm", "1.0 mm", "-2.0°", "7.9 mm", "-", "-"]
+    assert row[-9:-3] == ["4.2 mm", "1.0 mm", "-2.0°", "7.9 mm", "-", "-"]
+    assert row[-3:] == ["-", "-", "-"]          # ohne Zeile Griffpruefung
     progress.feed("   Experte: Korrektur dx 1.0 mm, dy -2.0 mm, xy 2.2 mm, Drehung 3.0 Grad, "
                   "Abstieg 10.0 mm")
-    assert progress.rollouts[0].row()[-1] == "2.2 mm / 3.0°"
+    assert progress.rollouts[0].row()[-4] == "2.2 mm / 3.0°"
 
 
 def test_pick_state_from_the_sim_robot_and_warnings(tmp_path):

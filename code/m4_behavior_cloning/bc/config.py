@@ -487,8 +487,8 @@ KNOWN_POSE_SUCCESS_XY_M = 0.010
 #: Griffpruefung (bc/known_pose.grasp_check, Anwender 2026-11-25) -- ersetzt
 #: den reinen xy-Abstand als Erfolg im Policy-Test. Draufsicht: Objekt als
 #: Rechteck mittig an PICK, Innenflaechen der Backen als Strecken; trifft eine
-#: Backe das Objekt (Drehung und/oder Querversatz, mit Laengsversatz als
-#: Hebel), ist es kein Erfolg. Laengsversatz allein: nur Warnung.
+#: Backe das Objekt (Drehung und/oder Querversatz), ist es kein Erfolg.
+#: Laengsversatz und knappes Spiel: nur Warnung.
 #: Objekt (Anwender 2026-11-25): lange Seite 59 mm, kurze Seite 39,9 mm.
 GRASP_OBJECT_LENGTH_M = 0.059
 GRASP_OBJECT_WIDTH_M = 0.0399
@@ -496,7 +496,8 @@ GRASP_OBJECT_WIDTH_M = 0.0399
 #: der langen Objektseite) -- Spiel je Seite (44,8 - 39,9) / 2 = 2,45 mm
 GRASP_JAW_OPENING_M = 0.0448
 GRASP_JAW_CONTACT_M = 0.0149
-#: Sicherheitsabzug vom Spiel je Backe (Messfehler, Masstoleranz, Fasen)
+#: Spiel je Backe darunter (aber >= 0) gilt als knapp: Erfolg mit Warnung (Messfehler,
+#: Masstoleranz, Fasen; Anwender 2026-11-25). Unter 0 trifft die Backe: kein Erfolg.
 GRASP_SAFETY_M = 0.0005
 #: Laengsversatz (Greifermitte gegen Objektmitte, entlang der langen Seite)
 #: ab dem gewarnt wird

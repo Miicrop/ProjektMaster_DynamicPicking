@@ -649,6 +649,13 @@ class ComparisonTab(ModeTab):
         colour = {"erfolg": GOOD, "warnung": WARN}.get(row.get("bewertung"),
                                                        GOOD if row["erfolg"] else BAD)
         item.setForeground(3, QBrush(QColor(colour)))
+        level = vergleich_module.clearance_level(row.get("spiel_min_mm"))
+        if level is not None:
+            column = vergleich_module.RUNS_HEADER.index("Spiel min")
+            item.setForeground(column, QBrush(QColor(
+                {"schlecht": BAD, "knapp": WARN, "gut": GOOD}[level])))
+            item.setToolTip(column, "Restspiel der knapperen Backe: unter 0 trifft sie das "
+                                    "Objekt, unter %.1f mm knapp" % (1e3 * config.GRASP_SAFETY_M))
         self.runs.scrollToItem(item)
 
     def _start_resume(self):
