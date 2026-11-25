@@ -788,3 +788,47 @@ def test_reset_program_stops_and_initialises_between_rides():
     robot.reset_program()
     names = [c[0] for c in client.calls[before:]]
     assert names.index("stop") < names.index("init_program")
+
+
+def test_diagnose_state_reports_servo_start_and_survives_failing_queries():
+    # Anwender 2026-11-25: Servo-Interface nimmt keine Sollwerte mehr an, PTP geht
+    # -- beim Haenger soll der Zustand der Steuerung ins Protokoll
+    client = FakeNeuraClient()
+    client.program_status = lambda: "RUNNING"
+    client.get_diagnostics = lambda: {"critical": False, "issues": []}
+
+    def broken():
+        raise RuntimeError("keine Antwort")
+    client.is_robot_in_teach_mode = broken
+    robot = NeuraRobot(robot=client).connect()
+    robot.activate_servo()
+    hold = [0.0] * 6
+    for _ in range(12):
+        robot.servo_j(client.joints, hold, hold)
+    state = robot.diagnose_state()
+    assert state["program_status"] == "RUNNING" and state["teach_mode"] is None
+    assert state["diagnostics"]["critical"] is False
+    assert state["servo_aktiv"] and state["servo_eingeschaltet"]["modus"] == "position"
+    assert state["servo_eingeschaltet"]["seit_s"] >= 0
+    assert state["servo_codes_erste"] == [0] * 10            # nur die ersten zehn
+    import json
+    json.dumps(state)                                         # protokollierbar
+
+
+def test_report_stall_prints_controller_state():
+    import contextlib
+    import io
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "apps"))
+    import infer
+
+    class R(object):
+        def diagnose_state(self):
+            return {"program_status": "RUNNING"}
+    text = io.StringIO()
+    with contextlib.redirect_stdout(text):
+        assert infer.report_stall(R(), "Experte", "arm steht (faehrt nicht los): x")
+        assert infer.report_stall(object(), "Fahrt", "x") is None
+    assert "STEUERUNG (Experte, arm steht (faehrt nicht los))" in text.getvalue()
+    assert "RUNNING" in text.getvalue()

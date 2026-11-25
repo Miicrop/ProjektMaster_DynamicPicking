@@ -217,9 +217,11 @@ class StallGuard(object):
             raise ArmStalled(
                 "arm steht (faehrt nicht los): seit dem Einschalten des Servo-Interface "
                 "keine Bewegung, Ziel %.3f rad entfernt -- die Steuerung nimmt die "
-                "Sollwerte nicht an (oder Not-Aus schon vor dem Start). Bleibt das im "
-                "naechsten Lauf so: Steuerungsreset (half am 24.11.), dann neu "
-                "verbinden" % gap)
+                "Servo-Sollwerte nicht an (PTP-Fahrten davor zaehlen nicht, die laufen "
+                "ueber move_joint), oder Not-Aus schon vor dem Start. Bleibt das im "
+                "naechsten Lauf so: Steuerungsreset (half am 24.11. und 25.11.), dann neu "
+                "verbinden; Zustand der Steuerung steht unter STEUERUNG im Protokoll"
+                % gap)
         if self.count >= self.steps:
             raise ArmStalled(
                 "arm steht: %d Takte ohne Bewegung (< %.0e rad), Ziel %.3f rad entfernt "

@@ -351,6 +351,7 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
         robot.emergency_stop()
     except ArmStalled as exc:
         stop_reason = str(exc)
+        report_stall(robot, "Fahrt", exc)
         robot.emergency_stop()
     finally:
         watchdog.stop()
@@ -483,6 +484,7 @@ def planned_transport(robot, workspace, station_joints, clock, servo_rate_hz=con
         robot.emergency_stop()
     except ArmStalled as exc:
         out["stop_reason"] = "im transport: %s" % exc
+        report_stall(robot, "Transport/Rueckzug", exc)
         robot.emergency_stop()
     finally:
         watchdog.stop()
@@ -631,6 +633,23 @@ def evaluate_known(log, known, robot, probe):
                                    probe=probe, tcp=tcp,
                                    jaw_offset_deg=getattr(robot, "jaw_axis_offset_deg", None))
     return {"rows": rows, "summary": summary}
+
+
+def report_stall(robot, where, exc):
+    """Zustand der Steuerung ins Protokoll, wenn der Arm nicht folgt (Anwender
+    2026-11-25) -- VOR dem Not-Halt, damit er den Haengerzustand zeigt. Nur am
+    Neura-Adapter (``diagnose_state``); Fehler hier brechen nichts ab."""
+    diagnose = getattr(robot, "diagnose_state", None)
+    if diagnose is None:
+        return None
+    try:
+        state = diagnose()
+    except Exception as e:      # Diagnose darf den Abbruch nicht stoeren
+        print("   STEUERUNG (%s): nicht abfragbar (%s)" % (where, e))
+        return None
+    print("   STEUERUNG (%s, %s): %s" % (where, str(exc).split(":")[0],
+                                         json.dumps(state, ensure_ascii=False, default=str)))
+    return state
 
 
 def append_csv(path, columns, row):
@@ -856,6 +875,7 @@ def run_planned(robot, workspace, targets, gripper, clock, servo_rate_hz=config.
         robot.emergency_stop()
     except ArmStalled as exc:
         stop_reason = str(exc)
+        report_stall(robot, "Experte", exc)
         robot.emergency_stop()
     finally:
         watchdog.stop()

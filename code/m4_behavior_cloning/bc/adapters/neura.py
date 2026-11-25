@@ -134,6 +134,20 @@ def _unwrap_neurapy_error(exc, function_name):
     return None
 
 
+
+#: so viele Rueckgabewerte von servo_j nach dem Einschalten aufheben (Diagnose)
+SERVO_CODES_KEPT = 10
+
+
+def _plain(value):
+    """Antwort der Steuerung als JSON-taugliches Objekt (sonst als Text)."""
+    import json
+    try:
+        json.dumps(value)
+        return value
+    except (TypeError, ValueError):
+        return repr(value)
+
 class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
     """Schmale, robuste Huelle um ``neurapy.robot.Robot``.
 
@@ -643,6 +657,28 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
             "und erneut versuchen." % (self._call_safe("program_status"),)
         )
 
+    def diagnose_state(self):
+        """Zustand der Steuerung fuer das Protokoll -- nur lesende Abfragen, jede
+        einzeln abgesichert (Anwender 2026-11-25: Servo-Interface nimmt nach
+        einer Weile keine Sollwerte mehr an, PTP geht weiter; nur ein Reset hilft).
+        """
+        on = dict(getattr(self, "_servo_on", None) or {})
+        if on.get("zeit") is not None:
+            on["seit_s"] = round(host_time() - on.pop("zeit"), 3)
+        return {
+            "program_status": _plain(self._call_safe("program_status")),
+            "diagnostics": _plain(self._call_safe("get_diagnostics")),
+            "teach_mode": _plain(self._call_safe("is_robot_in_teach_mode")),
+            "free_drive": _plain(self._call_safe("is_free_drive_mode_enabled")),
+            "servo_aktiv": bool(self._servo_active),
+            "programm_bereit": bool(self._program_ready),
+            "servo_eingeschaltet": on,
+            "servo_codes_erste": list(getattr(self, "_servo_codes", None) or []),
+            "servo_code_letzter": _plain(self.last_servo_code),
+            "letzte_ptp": self.last_move,
+            "stopp_angefordert": bool(self._stop_requested.is_set()),
+        }
+
     def _ensure_program(self):
         """``init_program`` vor dem ersten Bewegungsbefehl, falls noch offen.
 
@@ -991,8 +1027,14 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         # Startstellung des Filters VOR der Aktivierung messen: der erste
         # Sollwert muss nahe an der Ist-Stellung liegen.
         self.servo_guard.reset(self.get_joint_angles(), host_time())
-        self._call("activate_servo_interface", mode)
+        result = self._call("activate_servo_interface", mode)
         self._servo_active = True
+        # Diagnose (Anwender 2026-11-25): was die Steuerung beim Einschalten und
+        # auf die ersten Sollwerte antwortet -- fuer diagnose_state()
+        self._servo_on = {"zeit": host_time(), "modus": mode, "antwort": _plain(result),
+                          "pause_s": round(self.last_reactivate_wait_s, 3),
+                          "programm_bereit": bool(self._program_ready)}
+        self._servo_codes = []
 
     def deactivate_servo(self):
         self.servo_guard.clear()
@@ -1042,6 +1084,9 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
             raise
         code = self._call("servo_j", *lists)
         self.last_servo_code = code
+        codes = getattr(self, "_servo_codes", None)
+        if codes is not None and len(codes) < SERVO_CODES_KEPT:
+            codes.append(_plain(code))
         if isinstance(code, (int, float)) and code >= SERVO_ERROR_CODE_MIN:
             raise RobotError("servo_j meldet Fehlercode %r" % (code,))
         return code
