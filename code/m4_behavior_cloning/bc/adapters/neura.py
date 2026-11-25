@@ -1028,13 +1028,37 @@ class NeuraRobot(RobotPort, PointSourcePort, PointStorePort, JogPort):
         # Sollwert muss nahe an der Ist-Stellung liegen.
         self.servo_guard.reset(self.get_joint_angles(), host_time())
         result = self._call("activate_servo_interface", mode)
-        self._servo_active = True
-        # Diagnose (Anwender 2026-11-25): was die Steuerung beim Einschalten und
-        # auf die ersten Sollwerte antwortet -- fuer diagnose_state()
-        self._servo_on = {"zeit": host_time(), "modus": mode, "antwort": _plain(result),
+        attempts = [_plain(result)]
+        if result is False:
+            # Anlage 2026-11-25 (Protokoll STEUERUNG): nach einer PTP-Fahrt bzw.
+            # einem frueheren Servo-Abschnitt im selben Prozess lehnte die
+            # Steuerung das Einschalten ab (Rueckgabe False, servo_j danach
+            # None, Arm stand). Wie reset_program (Befund 24.11.: nach stop +
+            # init_program fuhren Servofahrten an) -- bewegt nichts -- und
+            # einmal neu versuchen.
+            self._call_safe("deactivate_servo_interface")
+            self._program_ready = False
+            self._call_safe("stop")
+            self._init_program()
+            if self.servo_reactivate_pause_s > 0:
+                time.sleep(self.servo_reactivate_pause_s)
+            self.servo_guard.reset(self.get_joint_angles(), host_time())
+            result = self._call("activate_servo_interface", mode)
+            attempts.append(_plain(result))
+        # Diagnose (Anwender 2026-11-25): Antworten beim Einschalten, erste
+        # Rueckgaben von servo_j -- fuer diagnose_state()
+        self._servo_on = {"zeit": host_time(), "modus": mode, "antwort": attempts,
                           "pause_s": round(self.last_reactivate_wait_s, 3),
                           "programm_bereit": bool(self._program_ready)}
         self._servo_codes = []
+        if result is False:
+            self._call_safe("deactivate_servo_interface")
+            self._servo_off_at = host_time()
+            raise RobotError(
+                "Steuerung lehnt das Servo-Interface ab (activate_servo_interface = False, "
+                "auch nach stop + init_program) -- Steuerungsreset am Handbediengeraet, "
+                "dann neu verbinden")
+        self._servo_active = True
 
     def deactivate_servo(self):
         self.servo_guard.clear()

@@ -787,7 +787,7 @@ def test_reset_program_stops_and_initialises_between_rides():
     before = len(client.calls)
     robot.reset_program()
     names = [c[0] for c in client.calls[before:]]
-    assert names.index("stop") < names.index("init_program")
+    assert names[names.index("stop") + 1] == "init_program"     # nach dem Nein: Reset
 
 
 def test_diagnose_state_reports_servo_start_and_survives_failing_queries():
@@ -832,3 +832,31 @@ def test_report_stall_prints_controller_state():
         assert infer.report_stall(object(), "Fahrt", "x") is None
     assert "STEUERUNG (Experte, arm steht (faehrt nicht los))" in text.getvalue()
     assert "RUNNING" in text.getvalue()
+
+
+def test_refused_servo_activation_resets_program_once_then_gives_up():
+    # Anlage 2026-11-25: activate_servo_interface -> False nach einer PTP-Fahrt;
+    # nach stop + init_program (Befund 24.11.) einmal neu versuchen
+    client = FakeNeuraClient()
+    answers = [False, True]
+    client.activate_servo_interface = lambda mode: answers.pop(0)
+    robot = NeuraRobot(robot=client).connect()
+    robot.servo_reactivate_pause_s = 0.0
+    client.calls.clear()
+    robot.activate_servo()
+    names = _names(client)
+    assert names[names.index("stop") + 1] == "init_program"     # nach dem Nein: Reset
+    assert robot.diagnose_state()["servo_eingeschaltet"]["antwort"] == [False, True]
+    hold = [0.0] * 6
+    robot.servo_j(client.joints, hold, hold)
+
+    client = FakeNeuraClient()
+    client.activate_servo_interface = lambda mode: False
+    robot = NeuraRobot(robot=client).connect()
+    robot.servo_reactivate_pause_s = 0.0
+    try:
+        robot.activate_servo()
+        raise AssertionError("RobotError erwartet")
+    except RobotError as exc:
+        assert "lehnt das Servo-Interface ab" in str(exc)
+    assert not robot._servo_active
