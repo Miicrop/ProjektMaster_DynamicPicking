@@ -207,7 +207,131 @@ def predicted_grasp(actions, fk, known):
             "path": [[float(v) for v in p[:3]] for p in poses]}
 
 
-def summarize(rows, known, grasp_step=None, stop_step=None, predicted=None, probe=None):
+# -- Griffpruefung (Anwender 2026-11-25) ---------------------------------------
+#
+# Draufsicht im Objekt-KS: a quer (Schliessrichtung an PICK, kurze Seite),
+# b laengs (lange Seite). Das Objekt liegt mittig an PICK, ausgerichtet auf
+# die Backen an PICK. Der Greifer steht um (quer, laengs) versetzt und um
+# ``yaw`` gedreht; seine Backen-Innenflaechen liegen bei +-Oeffnung/2 in
+# Schliessrichtung und reichen +-Kontaktlaenge/2 entlang der Backe. Spiel je
+# Backe = Abstand der Innenflaeche zum am weitesten herausragenden Punkt des
+# Objekts innerhalb der Backenzone. Kleiner als der Sicherheitsabzug: die
+# Backe setzt auf dem Objekt auf -> kein Erfolg.
+
+GRASP_OK, GRASP_WARN, GRASP_FAIL = "erfolg", "warnung", "kein_erfolg"
+GRASP_TEXT = {GRASP_OK: "Erfolg", GRASP_WARN: "Erfolg mit Warnung", GRASP_FAIL: "kein Erfolg"}
+
+
+def _clip(poly, keep):
+    """Polygon an der Halbebene ``keep(p) >= 0`` abschneiden (Sutherland-Hodgman)."""
+    out = []
+    for i, a in enumerate(poly):
+        b = poly[(i + 1) % len(poly)]
+        fa, fb = keep(a), keep(b)
+        if fa >= 0:
+            out.append(a)
+        if (fa >= 0) != (fb >= 0):
+            t = fa / (fa - fb)
+            out.append(a + t * (b - a))
+    return out
+
+
+def jaw_clearance(cross_m, long_m, yaw_deg_, length_m=None, width_m=None, opening_m=None,
+                  contact_m=None):
+    """Spiel beider Backen (m) bei Versatz ``cross_m``/``long_m`` (Objekt-KS) und
+    Drehung ``yaw_deg_`` des Greifers gegen das Objekt.
+
+    Rueckgabe ``(spiel_plus, spiel_minus)``: Backe auf +quer bzw. -quer;
+    negativ = Backe ueberdeckt das Objekt. ``(None, None)``, wenn das Objekt
+    gar nicht in der Backenzone liegt (Backen daneben).
+    """
+    length = config.GRASP_OBJECT_LENGTH_M if length_m is None else float(length_m)
+    width = config.GRASP_OBJECT_WIDTH_M if width_m is None else float(width_m)
+    jaw = (config.GRASP_JAW_OPENING_M if opening_m is None else float(opening_m)) / 2.0
+    half = (config.GRASP_JAW_CONTACT_M if contact_m is None else float(contact_m)) / 2.0
+    a, b = width / 2.0, length / 2.0
+    th = np.radians(float(yaw_deg_))
+    c, s = np.cos(th), np.sin(th)
+    rot_inv = np.array([[c, s], [-s, c]])             # R(-yaw): Objekt-KS -> Greifer-KS
+    g = np.array([float(cross_m), float(long_m)])
+    poly = [rot_inv @ (np.array(p) - g) for p in ((a, b), (-a, b), (-a, -b), (a, -b))]
+    poly = _clip(poly, lambda p: half - p[1])
+    poly = _clip(poly, lambda p: p[1] + half) if poly else poly
+    if not poly:
+        return None, None
+    xs = [p[0] for p in poly]
+    return float(jaw - max(xs)), float(jaw + min(xs))
+
+
+def jaw_axis_deg(pose, plane, offset_deg=None):
+    """Schliessrichtung der Backen in der Tischebene (Grad, modulo 180)."""
+    offset = config.GRASP_JAW_AXIS_FROM_TOOL_X_DEG if offset_deg is None else float(offset_deg)
+    return float((yaw_deg(pose, plane) + offset) % 180.0)
+
+
+def grasp_check(pose, known, jaw_offset_deg=None):
+    """Bewertet einen Griff an ``pose`` (TCP, 7) gegen die bekannte Lage.
+
+    Rueckgabe dict: ``stufe`` (GRASP_OK / GRASP_WARN / GRASP_FAIL), ``gruende``
+    (Text), ``quer_m``/``laengs_m`` (Greifermitte gegen Objektmitte im
+    Objekt-KS), ``yaw_deg``, ``dz_m``, ``spiel_plus_m``/``spiel_minus_m``
+    (ohne Sicherheitsabzug) und ``spiel_min_m``. None ohne Pose.
+    """
+    if pose is None:
+        return None
+    pose = np.asarray(pose, dtype=float)
+    phi = np.radians(jaw_axis_deg(known.pick, known.table, jaw_offset_deg))
+    across = np.array([np.cos(phi), np.sin(phi)])
+    along = np.array([-np.sin(phi), np.cos(phi)])
+    d = pose[:2] - known.pick[:2]
+    cross, long_ = float(d @ across), float(d @ along)
+    yaw = _yaw_err(pose, known)
+    dz = float(pose[2] - known.pick[2])
+    plus, minus = jaw_clearance(cross, long_, yaw)
+    safety = config.GRASP_SAFETY_M
+    reasons, level = [], GRASP_OK
+    if plus is None:
+        level = GRASP_FAIL
+        reasons.append("Backen neben dem Objekt (laengs %.1f mm)" % (1e3 * long_))
+        least = None
+    else:
+        least = min(plus, minus)
+        if least < safety:
+            level = GRASP_FAIL
+            reasons.append("Backe trifft Objekt (Spiel %.1f mm < %.1f mm, quer %.1f mm, "
+                           "Drehung %.1f Grad)" % (1e3 * least, 1e3 * safety, 1e3 * cross, yaw))
+        half_contact = config.GRASP_JAW_CONTACT_M / 2.0
+        if abs(long_) > config.GRASP_OBJECT_LENGTH_M / 2.0 - half_contact:
+            reasons.append("Backe nur teilweise am Objekt (laengs %.1f mm)" % (1e3 * long_))
+            level = GRASP_WARN if level == GRASP_OK else level
+        elif abs(long_) > config.GRASP_LONG_WARN_M:
+            reasons.append("laengs versetzt %.1f mm" % (1e3 * long_))
+            level = GRASP_WARN if level == GRASP_OK else level
+    if abs(dz) > config.GRASP_DZ_WARN_M:
+        reasons.append("Hoehe %+.1f mm gegen PICK" % (1e3 * dz))
+        level = GRASP_WARN if level == GRASP_OK else level
+    return {"stufe": level, "gruende": reasons, "quer_m": cross, "laengs_m": long_,
+            "yaw_deg": yaw, "dz_m": dz, "spiel_plus_m": plus, "spiel_minus_m": minus,
+            "spiel_min_m": least, "sicherheit_m": safety,
+            "backenachse_grad": float(np.degrees(phi))}
+
+
+def check_line(check, source=""):
+    """Ergebniszeile ``   Griffpruefung: ...`` fuer das Protokoll."""
+    if not check:
+        return "   Griffpruefung: keine Griffpose"
+    least = check.get("spiel_min_m")
+    text = ("   Griffpruefung%s: %s -- quer %.1f mm, laengs %.1f mm, Drehung %.1f Grad, "
+            "Spiel min %s mm" % (" (%s)" % source if source else "", GRASP_TEXT[check["stufe"]],
+                                 1e3 * check["quer_m"], 1e3 * check["laengs_m"],
+                                 check["yaw_deg"], "-" if least is None else "%.1f" % (1e3 * least)))
+    if check["gruende"]:
+        text += " (%s)" % "; ".join(check["gruende"])
+    return text
+
+
+def summarize(rows, known, grasp_step=None, stop_step=None, predicted=None, probe=None,
+              tcp=None, jaw_offset_deg=None):
     """Zusammenfassung einer Fahrt fuer summary.json und die CSV.
 
     ``grasp_step``: Takt des Schliessbefehls der Policy (None: nicht
@@ -216,7 +340,21 @@ def summarize(rows, known, grasp_step=None, stop_step=None, predicted=None, prob
     n = len(rows["xy_pick"])
     if stop_step is None and n:
         stop_step = n - 1
+    # Griffpruefung an derselben Stelle wie der Erfolg (apps/infer.py): am
+    # Griff, sonst die Vorhersage beim Probegriff, sonst der Stopp
+    check_pose, check_source = None, None
+    tcp = None if tcp is None else np.asarray(tcp, dtype=float).reshape(-1, 7)
+    if tcp is not None and grasp_step is not None and -len(tcp) <= grasp_step < len(tcp):
+        check_pose, check_source = tcp[grasp_step], "griff"
+    elif predicted and predicted.get("pose") is not None:
+        check_pose, check_source = predicted["pose"], "vorhersage"
+    elif tcp is not None and stop_step is not None and -len(tcp) <= stop_step < len(tcp):
+        check_pose, check_source = tcp[stop_step], "stopp"
+    check = grasp_check(check_pose, known, jaw_offset_deg)
+    if check is not None:
+        check["quelle"] = check_source
     return {
+        "grasp_check": check,
         "pick": [float(v) for v in known.pick],
         "pick_yaw_deg": known.pick_yaw_deg,
         "pick_above_table_m": known.pick_above_table_m,

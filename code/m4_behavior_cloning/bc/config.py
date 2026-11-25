@@ -483,6 +483,33 @@ PROBE_TARGET_LOOKAHEAD_STEPS = 1.0
 #: Policy-Test "Erfolg": Greifpunkt (bzw. vorhergesagter) hoechstens so weit
 #: waagrecht von PICK -- wie das Kriterium von metrics.evaluate_rollout.
 KNOWN_POSE_SUCCESS_XY_M = 0.010
+
+#: Griffpruefung (bc/known_pose.grasp_check, Anwender 2026-11-25) -- ersetzt
+#: den reinen xy-Abstand als Erfolg im Policy-Test. Draufsicht: Objekt als
+#: Rechteck mittig an PICK, Innenflaechen der Backen als Strecken; trifft eine
+#: Backe das Objekt (Drehung und/oder Querversatz, mit Laengsversatz als
+#: Hebel), ist es kein Erfolg. Laengsversatz allein: nur Warnung.
+#: Objekt (Anwender 2026-11-25): lange Seite 59 mm, kurze Seite 39,9 mm.
+GRASP_OBJECT_LENGTH_M = 0.059
+GRASP_OBJECT_WIDTH_M = 0.0399
+#: Lichter Abstand der offenen Backen und Laenge ihrer Kontaktflaeche (entlang
+#: der langen Objektseite) -- Spiel je Seite (44,8 - 39,9) / 2 = 2,45 mm
+GRASP_JAW_OPENING_M = 0.0448
+GRASP_JAW_CONTACT_M = 0.0149
+#: Sicherheitsabzug vom Spiel je Backe (Messfehler, Masstoleranz, Fasen)
+GRASP_SAFETY_M = 0.0005
+#: Laengsversatz (Greifermitte gegen Objektmitte, entlang der langen Seite)
+#: ab dem gewarnt wird
+GRASP_LONG_WARN_M = 0.005
+#: Hoehe am Griff gegen PICK: mehr Abweichung gibt eine Warnung (kein Abbruch
+#: des Erfolgs -- zu tief verhindert der Tisch-Geofence)
+GRASP_DZ_WARN_M = 0.005
+#: Schliessrichtung der Backen gegen die Werkzeug-x-Achse, um die Tischnormale
+#: (Grad). Anlage: config/system.yaml -- bei rz = Home + 23 Grad schliessen die
+#: Backen entlang Basis-x, Werkzeug-x zeigt dann auf 23 Grad -> Schliessrichtung
+#: = Werkzeug-x - 23 Grad. Die Simulation setzt ihren eigenen Wert
+#: (Roboter-Attribut ``jaw_axis_offset_deg``, sim_mujoco/parameter.json).
+GRASP_JAW_AXIS_FROM_TOOL_X_DEG = -23.0
 #: Violation-Stopp des Geofence-Waechters an der Probegriff-Ebene zaehlt als
 #: Probegriff-Stopp, wenn das Werkzeug hoechstens so tief darunter war
 #: (Anlage 2026-11-16: 3,1 und 3,9 mm; 2026-11-17 Nachlauf bis 7,5 mm)

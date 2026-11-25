@@ -33,7 +33,8 @@ FAHRT, UMLEGEN = "fahrt", "umlegen"
 #: Ordner der Vergleiche, relativ zum Arbeitsordner
 ROOT = "vergleiche"
 
-CSV_COLUMNS = ("lage", "modell", "fahrt", "erfolg", "xy_mm", "dz_mm", "drehung_grad",
+CSV_COLUMNS = ("lage", "modell", "fahrt", "erfolg", "bewertung", "quer_mm", "laengs_mm",
+               "spiel_min_mm", "gruende", "xy_mm", "dz_mm", "drehung_grad",
                "tisch_min_mm", "takte", "vorhersage_ms", "ueberlaeufe", "stopp", "rueckzug",
                "griff_x_mm", "griff_y_mm", "pick_x_mm", "pick_y_mm", "pick_drehung_grad",
                "trainingsabstand_mm", "trainingslagen_umkreis", "ordner")
@@ -323,11 +324,18 @@ def evaluate(step, summary, code):
     at = lage.get("predicted") or lage.get("at_stop") or {}
     pick = lage.get("pick") or [None, None]
     pose = (lage.get("predicted") or {}).get("pose") or [None, None]
+    check = ep.get("grasp_check") or lage.get("grasp_check") or {}
     row = {
         "lage": step.lage + 1,
         "modell": model_name(step.model),
         "fahrt": step.index + 1,
         "erfolg": bool(ep.get("success")),
+        # Griffpruefung (bc/known_pose.grasp_check, Anwender 2026-11-25)
+        "bewertung": ep.get("grasp_level") or ("erfolg" if ep.get("success") else "kein_erfolg"),
+        "quer_mm": _mm(check.get("quer_m")),
+        "laengs_mm": _mm(check.get("laengs_m")),
+        "spiel_min_mm": _mm(check.get("spiel_min_m")),
+        "gruende": "; ".join(check.get("gruende") or ()),
         "xy_mm": _mm(ep.get("grasp_error_m")),
         "dz_mm": _mm(at.get("dz_m")),
         "drehung_grad": _num(at.get("yaw_deg")),
@@ -368,6 +376,7 @@ def aggregate(rows, models=None):
             "modell": name,
             "fahrten": len(mine),
             "erfolg": sum(1 for r in mine if r["erfolg"]),
+            "warnung": sum(1 for r in mine if r.get("bewertung") == "warnung"),
             "lagen": len({r["lage"] for r in mine}),
             "xy_median_mm": _stat(xy, np.median),
             "xy_mittel_mm": _stat(xy, np.mean),
@@ -401,20 +410,32 @@ def stats_row(stat):
         return "-" if value is None else "%.1f%s" % (value, unit)
     return [stat["modell"], "%d" % stat["fahrten"],
             "%d / %d" % (stat["erfolg"], stat["fahrten"]),
+            "%d" % stat.get("warnung", 0),
             fmt(stat["xy_median_mm"], " mm"), fmt(stat["xy_max_mm"], " mm"),
             fmt(stat["xy_streuung_mm"], " mm"), fmt(stat["drehung_median_grad"], "°"),
             fmt(stat["dz_median_mm"], " mm"), fmt(stat["takte_median"])]
 
 
-STATS_HEADER = ["Modell", "Fahrten", "Erfolg", "xy Median", "xy max",
+STATS_HEADER = ["Modell", "Fahrten", "Erfolg", "davon Warnung", "xy Median", "xy max",
                 "Streuung je Lage", "Drehung Median", "dz Median", "Takte"]
+
+
+def result_text(row):
+    """Ergebnis einer Fahrt: Stufe der Griffpruefung (ohne Angabe wie bisher)."""
+    level = row.get("bewertung")
+    if level == "warnung":
+        return "Erfolg mit Warnung"
+    if level == "erfolg" or (level is None and row["erfolg"]):
+        return "Erfolg"
+    return "kein Erfolg"
 
 
 def run_row(row):
     def fmt(value, unit=""):
         return "-" if value is None else "%.1f%s" % (value, unit)
     return ["%d" % row["lage"], row["modell"], "%d" % row["fahrt"],
-            "Erfolg" if row["erfolg"] else "kein Erfolg", fmt(row["xy_mm"], " mm"),
+            result_text(row), fmt(row.get("quer_mm"), " mm"), fmt(row.get("laengs_mm"), " mm"),
+            fmt(row.get("spiel_min_mm"), " mm"), fmt(row["xy_mm"], " mm"),
             fmt(row["drehung_grad"], "°"), fmt(row["dz_mm"], " mm"),
             fmt(row.get("trainingsabstand_mm"), " mm"),
             "-" if row.get("trainingslagen_umkreis") is None
@@ -423,7 +444,7 @@ def run_row(row):
             operation.stop_text(row["stopp"])]
 
 
-RUNS_HEADER = ["Lage", "Modell", "Fahrt", "Ergebnis", "xy", "Drehung", "dz",
+RUNS_HEADER = ["Lage", "Modell", "Fahrt", "Ergebnis", "quer", "längs", "Spiel min", "xy", "Drehung", "dz",
                "Trainingsabstand", "Training ≤3 cm", "Takte", "Stopp"]
 
 

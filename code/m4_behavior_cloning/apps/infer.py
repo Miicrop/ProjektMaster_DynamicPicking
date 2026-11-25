@@ -628,7 +628,8 @@ def evaluate_known(log, known, robot, probe):
         except Exception as exc:   # FK nach dem Stopp nicht verfuegbar o. ae.
             print("   Hinweis: vorhergesagter Greifpunkt nicht berechenbar (%s)" % exc)
     summary = known_pose.summarize(rows, known, grasp_step=grasp_step, predicted=predicted,
-                                   probe=probe)
+                                   probe=probe, tcp=tcp,
+                                   jaw_offset_deg=getattr(robot, "jaw_axis_offset_deg", None))
     return {"rows": rows, "summary": summary}
 
 
@@ -1959,13 +1960,21 @@ def main():
             summary["success"] = bool(log["reached_end"])
             if lage is not None:
                 # Policy-Test: Greifpunkt gegen die BEKANNTE Lage (am Griff, beim
-                # Probegriff vorhergesagt); Erfolg = vorgesehenes Ende und <= 10 mm
+                # Probegriff vorhergesagt). Erfolg (Anwender 2026-11-25) =
+                # vorgesehenes Ende und Griffpruefung ohne Backenkontakt
+                # (bc/known_pose.grasp_check); der alte 10-mm-Test bleibt als
+                # Information (success_xy).
                 s = lage["summary"]
                 at = s["at_grasp"] or s["predicted"] or s["at_stop"] or {}
+                check = s.get("grasp_check")
                 summary["grasp_error_m"] = at.get("xy_m")
-                summary["success"] = bool(expected_test_stop(log["stop_reason"], args.probegriff)
-                                          and at.get("xy_m") is not None
-                                          and at["xy_m"] <= config.KNOWN_POSE_SUCCESS_XY_M)
+                ended = expected_test_stop(log["stop_reason"], args.probegriff)
+                summary["success_xy"] = bool(ended and at.get("xy_m") is not None
+                                             and at["xy_m"] <= config.KNOWN_POSE_SUCCESS_XY_M)
+                summary["grasp_check"] = check
+                summary["grasp_level"] = (known_pose.GRASP_FAIL if not ended or not check
+                                          else check["stufe"])
+                summary["success"] = summary["grasp_level"] != known_pose.GRASP_FAIL
             predict = log["predict_s"][np.isfinite(log["predict_s"])] if len(log["predict_s"]) else np.array([])
             delays = log["delay_steps"][np.isfinite(log["delay_steps"])] if len(log["delay_steps"]) else np.array([])
             summary.update(
@@ -2023,6 +2032,8 @@ def main():
                 print("   %s" % replay.format_rollout_comparison(summary["replay"]))
             if lage is not None:
                 print(known_pose.result_line(lage["summary"]))
+                print(known_pose.check_line(lage["summary"].get("grasp_check"),
+                                            (lage["summary"].get("grasp_check") or {}).get("quelle")))
                 expert, stop_here = None, False
                 if args.probegriff == "objekt":
                     if str(log["stop_reason"]).startswith("arm steht"):

@@ -67,6 +67,9 @@ class MujocoRobot(SimRobot):
         super().__init__(clock=clock, faults=faults, seed=seed, home=home, points=points,
                          servo_guard=servo_guard, **kwargs)
         self._tool = np.asarray(welt.tool_offset, dtype=float)
+        #: Schliessrichtung gegen Werkzeug-x in der Tischebene (bc/known_pose.grasp_check):
+        #: Backen um +a um die Werkzeug-z gedreht, Werkzeug-z zeigt nach unten -> -a
+        self.jaw_axis_offset_deg = -float(welt.par["greifer"]["backen_drehung_grad"])
         self._stuetz = {name: (int(v["glied"]), np.asarray(v["punkt_m"], dtype=float))
                         for name, v in (welt.punkte.get("stuetzpunkte") or {}).items()}
         #: Greiferbefehle wie am Neura-Adapter: [(t, zu)], record.py legt sie

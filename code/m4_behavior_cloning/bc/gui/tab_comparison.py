@@ -616,8 +616,12 @@ class ComparisonTab(ModeTab):
                     self._training.get(row["modell"]))
             self._rows.append(row)
             item = QTreeWidgetItem(self.runs, vergleich_module.run_row(row))
-            item.setToolTip(8, str(row["stopp"] or ""))   # Abbruchgrund im Wortlaut
-            item.setForeground(3, QBrush(QColor(GOOD if row["erfolg"] else WARN)))
+            stop_col = len(vergleich_module.RUNS_HEADER) - 1
+            item.setToolTip(stop_col, str(row["stopp"] or ""))   # Abbruchgrund im Wortlaut
+            item.setToolTip(3, row.get("gruende") or "")          # Griffpruefung
+            colour = {"erfolg": GOOD, "warnung": WARN}.get(row.get("bewertung"),
+                                                           GOOD if row["erfolg"] else BAD)
+            item.setForeground(3, QBrush(QColor(colour)))
             self.runs.scrollToItem(item)
             self._show_stats()
         if step.kind == vergleich_module.UMLEGEN and not reason:
