@@ -243,6 +243,8 @@ def test_comparison_tab_runs_the_whole_series(tmp_path):
         result = json.loads((tmp_path / tab._root / "vergleich.json").read_text(encoding="utf-8"))
         assert result["abgeschlossen"] is True and len(result["fahrten"]) == 8
         assert (tmp_path / tab._root / "vergleich.csv").is_file()
+        first = tmp_path / tab._root / v.plan(MODELS, 2, 2)[0].out / v.STEP_LOG
+        assert "Rueckgabewert 0" in first.read_text(encoding="utf-8")
         assert tab.btn_start.isEnabled() and not tab.btn_stop.isEnabled()
         assert [l["label"] for l in tab.pick_view.state.lagen] == ["1", "2"]
     finally:
@@ -352,3 +354,65 @@ def test_grid_poses_spacing_follows_lage_count():
     # nicht erreichbare Lagen werden ersetzt, nicht weggelassen
     left = v.plan_grid_poses(known, 4, reachable=lambda pose: pose[1] < -0.1)
     assert len(left) == 4 and all(p["xy"][1] < -0.1 for p in left)
+
+
+def test_resume_point_keeps_finished_rides_and_redoes_the_broken_step(tmp_path):
+    steps = v.plan(MODELS, 1, 2)                       # 2 Fahrten, Umlegen, 2 Fahrten
+    summaries = {steps[0].out: _summary(v.FAHRT), steps[1].out: _summary(v.FAHRT),
+                 steps[2].out: _summary(v.UMLEGEN, ok=False)}
+    rows, index, note = v.resume_point(tmp_path, steps,
+                                       lambda p: summaries.get(Path(p).relative_to(tmp_path)
+                                                               .as_posix()))
+    assert len(rows) == 2 and index == 2 and "IK" in note   # Umlegen neu
+    del summaries[steps[2].out]
+    assert v.resume_point(tmp_path, steps, lambda p: summaries.get(
+        Path(p).relative_to(tmp_path).as_posix()))[1] == 2
+    try:
+        v.load_meta(tmp_path)
+        raise AssertionError("ValueError erwartet")
+    except ValueError:
+        pass
+
+
+def test_comparison_tab_resumes_an_aborted_series(tmp_path):
+    if _app() is None:
+        return
+    for path in MODELS:
+        (tmp_path / path).mkdir(parents=True)
+    tab, runner = _tab(tmp_path)
+    try:
+        tab.fahrten.setValue(2)
+        tab.lagen.setValue(2)
+        _drive(tab, _FakeProcess(tab, fail_at=1))       # Abbruch nach Fahrt 2
+        root = tab._root
+        tab.runs.clear()
+        tab.resume.setChecked(True)
+        assert not tab.models.isEnabled() and tab.btn_start.text() == "Vergleich fortsetzen"
+        assert tab.load_resume(tmp_path / root)
+        assert "2 von 9 Schritten" in tab.resume_info.text()
+        fake = _FakeProcess(tab)
+        _drive(tab, fake)
+        assert len(fake.argvs) == 7 and tab._root == root
+        assert tab.runs.topLevelItemCount() == 8 and tab.headline.text().startswith("Fertig")
+        result = json.loads((tmp_path / root / "vergleich.json").read_text(encoding="utf-8"))
+        assert result["abgeschlossen"] is True and len(result["fahrten"]) == 8
+        assert result["fortgesetzt"][0]["ab_schritt"] == 3
+        assert not tab.load_resume(tmp_path / root)     # vollstaendig
+        assert "|quer| Median" in v.STATS_HEADER
+    finally:
+        tab.shutdown()
+        runner.shutdown()
+
+
+def test_collapsible_box_gives_up_its_height(tmp_path):
+    if _app() is None:
+        return
+    from PySide6.QtWidgets import QLabel, QVBoxLayout
+    from bc.gui.widgets import CollapsibleBox
+    box = CollapsibleBox("Ausgabe")
+    QVBoxLayout(box.content).addWidget(QLabel("x"))
+    assert box.is_expanded()
+    box.set_expanded(False)
+    assert box.content.isHidden() and box.maximumHeight() < 80
+    box.set_expanded(True)
+    assert not box.content.isHidden() and box.maximumHeight() > 1000

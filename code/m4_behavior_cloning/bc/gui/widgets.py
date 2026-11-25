@@ -724,6 +724,62 @@ def select_data(combo, value):
     return False
 
 
+# -- Einklappbarer Bereich (Anwender 2026-11-25) ---------------------------
+
+class CollapsibleBox(QFrame):
+    """Rahmen mit Titelzeile zum Ein- und Ausklappen, Inhalt in ``.content``.
+
+    Wie eine QGroupBox benutzen, nur das Layout auf ``box.content`` setzen.
+    Eingeklappt bleibt nur die Titelzeile; in einem QSplitter gibt der
+    Bereich dann seinen Platz an die anderen ab (Hoehe auf die Titelzeile
+    begrenzt).
+    """
+
+    toggled = Signal(bool)          # True = ausgeklappt
+
+    def __init__(self, title, collapsed=False, parent=None):
+        super().__init__(parent)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.header = QToolButton()
+        self.header.setText(title)
+        self.header.setCheckable(True)
+        self.header.setAutoRaise(True)
+        self.header.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        font = self.header.font()
+        font.setBold(True)
+        self.header.setFont(font)
+        self.header.toggled.connect(self._apply)
+        self.content = QWidget()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 2, 4, 4)
+        layout.setSpacing(2)
+        layout.addWidget(self.header)
+        layout.addWidget(self.content, 1)
+        self.header.setChecked(not collapsed)
+        self._apply(not collapsed)
+
+    def title(self):
+        return self.header.text()
+
+    def is_expanded(self):
+        return self.header.isChecked()
+
+    def set_expanded(self, expanded):
+        self.header.setChecked(bool(expanded))
+
+    def _apply(self, expanded):
+        self.header.setArrowType(Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow)
+        self.content.setVisible(expanded)
+        if expanded:
+            self.setMaximumHeight(16777215)
+        else:
+            margins = self.layout().contentsMargins()
+            self.setMaximumHeight(self.header.sizeHint().height() + margins.top()
+                                  + margins.bottom() + 2 * self.frameWidth())
+        self.toggled.emit(bool(expanded))
+
+
 # -- Eingabefelder, die beim Scrollen nichts verstellen --------------------
 
 def block_wheel(widget):

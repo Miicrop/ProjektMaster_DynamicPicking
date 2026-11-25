@@ -32,6 +32,8 @@ FAHRT, UMLEGEN = "fahrt", "umlegen"
 
 #: Ordner der Vergleiche, relativ zum Arbeitsordner
 ROOT = "vergleiche"
+#: Mitschrift der Ausgabe von apps/infer.py je Schritt (im Schrittordner)
+STEP_LOG = "ausgabe.txt"
 
 CSV_COLUMNS = ("lage", "modell", "fahrt", "erfolg", "bewertung", "quer_mm", "laengs_mm",
                "spiel_min_mm", "gruende", "xy_mm", "dz_mm", "drehung_grad",
@@ -113,6 +115,45 @@ def step_argv(step, root, probe_gap_mm, regrasp=True, **common):
     if step.target is not None:
         argv += ["--ablage-pose", ",".join("%.6f" % float(v) for v in step.target)]
     return argv
+
+
+def load_meta(root):
+    """Rahmen eines frueheren Vergleichs aus ``vergleich.json`` (dict) -- wirft
+    ValueError, wenn der Ordner kein Vergleich ist oder Angaben fehlen."""
+    path = Path(root) / "vergleich.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("kein Vergleich in %s (%s)" % (root, exc))
+    for key in ("modelle_pfade", "fahrten_je_lage", "lagen"):
+        if not data.get(key):
+            raise ValueError("%s: Angabe '%s' fehlt" % (path, key))
+    return data
+
+
+def resume_point(root, steps, read_summary):
+    """Wie weit kam ein frueherer Vergleich? Liest jeden Schritt aus seinem
+    Ordner (``read_summary(pfad) -> dict | None``, wie operation.read_summary).
+
+    Rueckgabe ``(rows, index, note)``: die Zeilen der erledigten Fahrten,
+    der erste noch zu fahrende Schritt und was am Abbruchschritt stand.
+    Erledigt ist eine Fahrt mit Ergebnis (auch wenn der Arm danach nicht
+    sicher am Start stand -- die Messung gilt) und ein Umlegen ohne Fehler.
+    """
+    rows, last = [], None
+    for index, step in enumerate(steps):
+        summary = read_summary(Path(root) / step.out)
+        if not summary:
+            return rows, index, last or "%s: noch nicht gefahren" % step.label
+        row, reason = evaluate(step, summary, 0)
+        if step.kind == FAHRT and row is not None:
+            rows.append(row)
+            last = reason            # Messung gilt; Grund merken, falls hier abgebrochen
+            continue
+        if reason:
+            return rows, index, reason
+        last = None
+    return rows, len(steps), None
 
 
 def attach_targets(steps, planned):
@@ -383,6 +424,10 @@ def aggregate(rows, models=None):
             "xy_max_mm": _stat(xy, np.max),
             "xy_streuung_mm": _spread_within_lage(mine),
             "drehung_median_grad": _stat(yaw, np.median),
+            # Betraege: Richtung des Versatzes ist fuer die Bewertung egal
+            "quer_median_mm": _stat([abs(v) for v in _values(mine, "quer_mm")], np.median),
+            "laengs_median_mm": _stat([abs(v) for v in _values(mine, "laengs_mm")], np.median),
+            "spiel_min_median_mm": _stat(_values(mine, "spiel_min_mm"), np.median),
             "dz_median_mm": _stat(_values(mine, "dz_mm"), np.median),
             "takte_median": _stat(_values(mine, "takte"), np.median),
         })
@@ -411,13 +456,15 @@ def stats_row(stat):
     return [stat["modell"], "%d" % stat["fahrten"],
             "%d / %d" % (stat["erfolg"], stat["fahrten"]),
             "%d" % stat.get("warnung", 0),
-            fmt(stat["xy_median_mm"], " mm"), fmt(stat["xy_max_mm"], " mm"),
-            fmt(stat["xy_streuung_mm"], " mm"), fmt(stat["drehung_median_grad"], "°"),
+            fmt(stat.get("quer_median_mm"), " mm"), fmt(stat["drehung_median_grad"], "°"),
+            fmt(stat.get("laengs_median_mm"), " mm"), fmt(stat.get("spiel_min_median_mm"), " mm"),
+            fmt(stat["xy_median_mm"], " mm"), fmt(stat["xy_streuung_mm"], " mm"),
             fmt(stat["dz_median_mm"], " mm"), fmt(stat["takte_median"])]
 
 
-STATS_HEADER = ["Modell", "Fahrten", "Erfolg", "davon Warnung", "xy Median", "xy max",
-                "Streuung je Lage", "Drehung Median", "dz Median", "Takte"]
+STATS_HEADER = ["Modell", "Fahrten", "Erfolg", "davon Warnung", "|quer| Median",
+                "|Drehung| Median", "|längs| Median", "Spiel min Median", "xy Median",
+                "Streuung je Lage", "dz Median", "Takte"]
 
 
 def result_text(row):

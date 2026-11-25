@@ -37,7 +37,8 @@ from . import training as training_module
 from . import vergleich as vergleich_module
 from .runner import ProcessRunner
 from .tab_base import ModeTab
-from .widgets import BAD, GOOD, NEUTRAL, WARN, CameraAssignmentView, LogView, block_wheel
+from .widgets import (BAD, GOOD, NEUTRAL, WARN, CameraAssignmentView, CollapsibleBox, LogView,
+                      block_wheel)
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +75,7 @@ class ComparisonTab(ModeTab):
         layout.addWidget(self.requirement_view)
         layout.addWidget(splitter, 1)
         self.refresh()
+        self._on_resume_toggled(False)
 
     # -- Aufbau -------------------------------------------------------------
 
@@ -82,8 +84,8 @@ class ComparisonTab(ModeTab):
         column = QVBoxLayout(page)
         column.setContentsMargins(0, 0, 0, 0)
 
-        box = QGroupBox("1. Modelle (Reihenfolge wie in der Liste)")
-        inner = QVBoxLayout(box)
+        box = CollapsibleBox("1. Modelle (Reihenfolge wie in der Liste)")
+        inner = QVBoxLayout(box.content)
         self.models = QListWidget()
         self.models.setMinimumHeight(140)
         self.models.itemChanged.connect(self._update_plan_text)
@@ -105,14 +107,14 @@ class ComparisonTab(ModeTab):
         inner.addLayout(row)
         column.addWidget(box)
 
-        box = QGroupBox("2. Kameras")
-        inner = QVBoxLayout(box)
+        box = CollapsibleBox("2. Kameras")
+        inner = QVBoxLayout(box.content)
         self.cameras = CameraAssignmentView(self.runner)      # gemeinsam mit den anderen Reitern
         inner.addWidget(self.cameras)
         column.addWidget(box)
 
-        box = QGroupBox("3. Ablauf")
-        form = QFormLayout(box)
+        box = CollapsibleBox("3. Ablauf")
+        form = QFormLayout(box.content)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.fahrten = block_wheel(QSpinBox())
         self.fahrten.setRange(1, 20)
@@ -158,6 +160,29 @@ class ComparisonTab(ModeTab):
         self.lagen.valueChanged.connect(self._drop_stale_plan)
         self.lagen_wahl.currentIndexChanged.connect(self._drop_stale_plan)
         column.addWidget(box)
+
+        box = CollapsibleBox("4. Abgebrochenen Vergleich fortsetzen")
+        inner = QVBoxLayout(box.content)
+        self.resume = QCheckBox("Fortsetzen statt neu beginnen")
+        self.resume.setToolTip(
+            "Setzt einen abgebrochenen Vergleich im selben Ordner fort: Modelle, Fahrten, "
+            "Lagen und geplante Lagen kommen aus dessen vergleich.json, erledigte Fahrten "
+            "werden übernommen, der abgebrochene Schritt wird neu gefahren.")
+        self.resume.toggled.connect(self._on_resume_toggled)
+        inner.addWidget(self.resume)
+        row = QHBoxLayout()
+        self.btn_resume_folder = QPushButton("Ordner wählen …")
+        self.btn_resume_folder.clicked.connect(self.choose_resume_folder)
+        row.addWidget(self.btn_resume_folder)
+        row.addStretch(1)
+        inner.addLayout(row)
+        self.resume_info = QLabel("")
+        self.resume_info.setWordWrap(True)
+        self.resume_info.setStyleSheet("color:%s" % NEUTRAL)
+        inner.addWidget(self.resume_info)
+        #: (Ordner relativ zum Arbeitsordner, meta, Schritte, Zeilen, Index, Hinweis)
+        self._resume = None
+        column.addWidget(box)
         column.addStretch(1)
 
         area = QScrollArea()
@@ -190,8 +215,8 @@ class ComparisonTab(ModeTab):
 
     def _build_output(self):
         splitter = QSplitter(Qt.Orientation.Vertical)
-        box = QGroupBox("Stand")
-        inner = QVBoxLayout(box)
+        box = CollapsibleBox("Stand")
+        inner = QVBoxLayout(box.content)
         self.headline = QLabel("noch nichts gestartet")
         font = QFont()
         font.setBold(True)
@@ -207,8 +232,8 @@ class ComparisonTab(ModeTab):
             inner.addWidget(widget)
         splitter.addWidget(box)
 
-        box = QGroupBox("Lagen und aktueller PICK")
-        row = QHBoxLayout(box)
+        box = CollapsibleBox("Lagen und aktueller PICK")
+        row = QHBoxLayout(box.content)
         self.pick_view = pick_view_module.PickView()
         self.pick_view.setMinimumSize(360, 300)
         self.pick_view.setToolTip(
@@ -244,28 +269,30 @@ class ComparisonTab(ModeTab):
         row.addLayout(side, 1)
         splitter.addWidget(box)
 
-        box = QGroupBox("Ergebnis je Modell")
-        inner = QVBoxLayout(box)
+        box = CollapsibleBox("Ergebnis je Modell")
+        inner = QVBoxLayout(box.content)
         self.stats = QTreeWidget()
         self.stats.setHeaderLabels(vergleich_module.STATS_HEADER)
         self.stats.setRootIsDecorated(False)
         self.stats.setToolTip(
+            "quer/längs = Versatz des vorhergesagten Griffpunkts im Objekt-KS (Beträge), "
+            "Spiel min = kleinstes Restspiel einer Backe (Griffprüfung). "
             "xy = Abstand des vorhergesagten Griffpunkts zum PICK. Streuung je Lage = "
             "größter Abstand zwischen den Griffpunkten DESSELBEN Modells an derselben "
             "Lage (Varianz von Lauf zu Lauf), gemittelt über die Lagen.")
         inner.addWidget(self.stats)
         splitter.addWidget(box)
 
-        box = QGroupBox("Fahrten")
-        inner = QVBoxLayout(box)
+        box = CollapsibleBox("Fahrten")
+        inner = QVBoxLayout(box.content)
         self.runs = QTreeWidget()
         self.runs.setHeaderLabels(vergleich_module.RUNS_HEADER)
         self.runs.setRootIsDecorated(False)
         inner.addWidget(self.runs)
         splitter.addWidget(box)
 
-        box = QGroupBox("Ausgabe")
-        inner = QVBoxLayout(box)
+        box = CollapsibleBox("Ausgabe")
+        inner = QVBoxLayout(box.content)
         self.output = LogView()
         inner.addWidget(self.output)
         splitter.addWidget(box)
@@ -512,8 +539,202 @@ class ComparisonTab(ModeTab):
                     glaettung=self.glaettung.value(),
                     real_robot=status.is_real_plant)
 
+    # -- Fortsetzen -------------------------------------------------------------
+
+    def _on_resume_toggled(self, on):
+        self.btn_resume_folder.setEnabled(bool(on))
+        for widget in (self.models, self.fahrten, self.lagen, self.lagen_wahl,
+                       self.btn_up, self.btn_down, self.btn_plan):
+            widget.setEnabled(not on)
+        if not on:
+            self._resume = None
+            self.resume_info.setText("")
+        elif self._resume is None:
+            self.resume_info.setText("Ordner des abgebrochenen Vergleichs wählen "
+                                     "(unter %s)." % vergleich_module.ROOT)
+        self.btn_start.setText("Vergleich fortsetzen" if on else "Vergleich starten")
+
+    def choose_resume_folder(self):
+        from PySide6.QtWidgets import QFileDialog
+
+        start = self.workdir / vergleich_module.ROOT
+        folder = QFileDialog.getExistingDirectory(self, "Abgebrochenen Vergleich wählen",
+                                                  str(start if start.exists() else self.workdir))
+        if folder:
+            self.load_resume(folder)
+
+    def load_resume(self, folder):
+        """Stand eines frueheren Vergleichs lesen und anzeigen; True, wenn fortsetzbar."""
+        folder = Path(folder)
+        try:
+            meta = vergleich_module.load_meta(folder)
+            models = list(meta["modelle_pfade"])
+            missing = [m for m in models if not (self.workdir / m).exists() and not Path(m).exists()]
+            if missing:
+                raise ValueError("Modell nicht gefunden: %s" % ", ".join(missing))
+            steps = vergleich_module.plan(models, int(meta["fahrten_je_lage"]), int(meta["lagen"]))
+        except ValueError as exc:
+            self._resume = None
+            self.resume_info.setText("Nicht fortsetzbar: %s" % exc)
+            self.resume_info.setStyleSheet("color:%s" % BAD)
+            return False
+        vergleich_module.attach_targets(steps, [{"pose": p} for p in meta.get("geplante_lagen") or []])
+        rows, index, note = vergleich_module.resume_point(folder, steps,
+                                                          operation_module.read_summary)
+        try:
+            root = folder.resolve().relative_to(self.workdir.resolve())
+        except ValueError:
+            root = folder
+        self._resume = (root, meta, steps, rows, index, note)
+        lage = steps[index].lage + 1 if index < len(steps) else meta["lagen"]
+        if index >= len(steps):
+            text = "Dieser Vergleich ist schon vollständig (%d Fahrten)." % len(rows)
+            colour = WARN
+        else:
+            text = ("%s: %d von %d Schritten erledigt (%d Fahrten), weiter bei Lage %d von %d -- "
+                    "%s.\nAbbruch: %s" % (folder.name, index, len(steps), len(rows), lage,
+                                          meta["lagen"], steps[index].label, note or "-"))
+            colour = NEUTRAL
+        self.resume_info.setText(text)
+        self.resume_info.setStyleSheet("color:%s" % colour)
+        # Einstellungen des alten Laufs anzeigen (die Liste bleibt gesperrt)
+        self._select_models(models)
+        self.fahrten.setValue(int(meta["fahrten_je_lage"]))
+        self.lagen.setValue(int(meta["lagen"]))
+        if meta.get("probe_abstand_mm"):
+            self.probe_gap.setValue(float(meta["probe_abstand_mm"]))
+        if meta.get("glaettung"):
+            self.glaettung.setValue(float(meta["glaettung"]))
+        if "nachgreifen" in meta:
+            self.regrasp.setChecked(bool(meta["nachgreifen"]))
+        return index < len(steps)
+
+    def _select_models(self, models):
+        """Genau ``models`` in dieser Reihenfolge ankreuzen (vorn in der Liste)."""
+        items = [self.models.takeItem(0) for _ in range(self.models.count())]
+        by_path = {item.data(Qt.ItemDataRole.UserRole): item for item in items}
+        self.models.blockSignals(True)
+        for path in models:
+            item = by_path.pop(path, None)
+            if item is None:
+                item = QListWidgetItem(vergleich_module.model_name(path))
+                item.setToolTip(path)
+                item.setData(Qt.ItemDataRole.UserRole, path)
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked)
+            self.models.addItem(item)
+        for item in items:
+            if item.data(Qt.ItemDataRole.UserRole) in by_path:
+                item.setCheckState(Qt.CheckState.Unchecked)
+                self.models.addItem(item)
+        self.models.blockSignals(False)
+        self._update_plan_text()
+        self._on_models_changed()
+
+    def _add_row(self, row):
+        """Fahrt in die Tabelle (mit Trainingsabstand) und in ``self._rows``."""
+        if row.get("pick_x_mm") is not None:
+            d = vergleich_module.training_distance(
+                (row["pick_x_mm"] / 1e3, row["pick_y_mm"] / 1e3),
+                self._training.get(row["modell"]))
+            row["trainingsabstand_mm"] = None if d is None else round(1e3 * d, 1)
+            row["trainingslagen_umkreis"] = vergleich_module.training_density(
+                (row["pick_x_mm"] / 1e3, row["pick_y_mm"] / 1e3),
+                self._training.get(row["modell"]))
+        self._rows.append(row)
+        item = QTreeWidgetItem(self.runs, vergleich_module.run_row(row))
+        stop_col = len(vergleich_module.RUNS_HEADER) - 1
+        item.setToolTip(stop_col, str(row["stopp"] or ""))   # Abbruchgrund im Wortlaut
+        item.setToolTip(3, row.get("gruende") or "")          # Griffpruefung
+        colour = {"erfolg": GOOD, "warnung": WARN}.get(row.get("bewertung"),
+                                                       GOOD if row["erfolg"] else BAD)
+        item.setForeground(3, QBrush(QColor(colour)))
+        self.runs.scrollToItem(item)
+
+    def _start_resume(self):
+        if self._resume is None or self._resume[4] >= len(self._resume[2]):
+            QMessageBox.information(self, "Vergleich fortsetzen",
+                                    self.resume_info.text() or "Erst einen Ordner wählen.")
+            return
+        root, meta, steps, rows, index, note = self._resume
+        # neu einlesen: der Ordner koennte sich seit der Auswahl geaendert haben
+        if not self.load_resume(self.workdir / root):
+            return
+        root, meta, steps, rows, index, note = self._resume
+        assignment = self.cameras.assignment()
+        keys = ["torch", "lerobot", "cuda"] + cameras_module.required_backend_keys(assignment)
+        if self._robot_kind() == "neura":
+            keys.append("neurapy")
+        if not self.ensure_requirements("Der Modellvergleich", keys):
+            return
+        status = self.session.status()
+        step = steps[index]
+        lines = ["Fortsetzen: %s" % root,
+                 "%d von %d Schritten erledigt, %d Fahrten übernommen." % (index, len(steps),
+                                                                           len(rows)),
+                 "Weiter mit: %s" % step.label, "Abbruch damals: %s" % (note or "-"), ""]
+        if step.kind == vergleich_module.UMLEGEN:
+            lines.append("ACHTUNG: Es geht mit dem UMLEGEN weiter. Liegt das Teil noch am PICK "
+                         "der Steuerung (nicht im Greifer, nicht schon umgelegt)?")
+        else:
+            lines.append("Liegt das Teil am PICK der Steuerung (Lage %d)? Sonst erst den PICK "
+                         "nachführen (Reiter Betrieb)." % (step.lage + 1))
+        lines += ["Backend laut Steuerung: %s" % status.text,
+                  "Kameras: %s" % cameras_module.describe(assignment)]
+        if status.is_real_plant:
+            lines += ["", "ACHTUNG: Das ist die REALE ANLAGE, nicht die Simulation."]
+        lines += ["", "Arbeitsraum frei? Not-Aus in Reichweite?"]
+        if not self.confirm("Modellvergleich fortsetzen", "\n".join(lines)):
+            return
+        if not self._take_cameras(assignment):
+            return
+        # Ordner des abgebrochenen Schritts beiseite (nicht loeschen)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        broken = self.workdir / root / step.out
+        if broken.exists():
+            broken.rename(broken.with_name("%s_abgebrochen_%s" % (broken.name, stamp)))
+        self._steps, self._index, self._rows, self._stopped = steps, index, [], False
+        self._models = list(meta["modelle_pfade"])
+        self._root = Path(root)
+        self._meta = {k: v for k, v in meta.items()
+                      if k not in ("modelle", "fahrten", "abgeschlossen", "abbruch")}
+        self._meta["fortgesetzt"] = list(meta.get("fortgesetzt") or []) + [
+            {"zeit": stamp, "ab_schritt": index + 1, "abbruch_vorher": meta.get("abbruch")}]
+        self._plan = [{"pose": p} for p in meta.get("geplante_lagen") or []]
+        self.stats.clear()
+        self.runs.clear()
+        self.output.clear()
+        for row in rows:
+            self._add_row(row)
+        self._show_stats()
+        self.folder_line.setText("Protokoll: %s (fortgesetzt)" % self._root)
+        self.headline.setStyleSheet("font-weight:bold")
+        self.read_pick(quiet=True)
+        self._show_pick()
+        self.output.append_record("Fortgesetzt ab Schritt %d von %d (%s)"
+                                  % (index + 1, len(steps), step.label), logging.INFO)
+        self._set_running(True)
+        self._start_step()
+
+    def _take_cameras(self, assignment):
+        if cameras_module.all_simulated(assignment):
+            return True
+        closed, blocked = self.cameras.share.take_over(CAMERA_OWNER)
+        if blocked:
+            QMessageBox.information(
+                self, "Kameras belegt",
+                "Die Kameras sind gerade belegt: %s. Erst dort beenden." % ", ".join(blocked))
+            return False
+        for other in closed:
+            self.output.append_record("Kameras: %s geschlossen." % other, logging.INFO)
+        self.cameras.share.claim(CAMERA_OWNER)
+        return True
+
     def start(self):
         if self.process.running:
+            return
+        if self.resume.isChecked():
+            self._start_resume()
             return
         models = self.selected_models()
         try:
@@ -543,16 +764,8 @@ class ComparisonTab(ModeTab):
         lines += ["", "Arbeitsraum frei? Not-Aus in Reichweite?"]
         if not self.confirm("Modellvergleich", "\n".join(lines)):
             return
-        if not cameras_module.all_simulated(assignment):
-            closed, blocked = self.cameras.share.take_over(CAMERA_OWNER)
-            if blocked:
-                QMessageBox.information(
-                    self, "Kameras belegt",
-                    "Die Kameras sind gerade belegt: %s. Erst dort beenden." % ", ".join(blocked))
-                return
-            for other in closed:
-                self.output.append_record("Kameras: %s geschlossen." % other, logging.INFO)
-            self.cameras.share.claim(CAMERA_OWNER)
+        if not self._take_cameras(assignment):
+            return
         self._steps, self._index, self._rows, self._stopped = steps, 0, [], False
         self._models = models
         stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -587,6 +800,19 @@ class ComparisonTab(ModeTab):
         self.step_line.setText(step.label)
         self.progress_bar.setValue(int(100 * self._index / len(self._steps)))
         self.output.append_record("== %s" % step.label, logging.INFO)
+        # Ausgabe des Schritts mitschreiben (Anlage 2026-11-25: Lage 9 brach mit
+        # Rueckgabewert 1 ab, bevor infer.py den Ordner anlegte -- der Grund
+        # stand nur im Ausgabefeld)
+        self._log_path = self.workdir / self._root / step.out / vergleich_module.STEP_LOG
+        try:
+            self._log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._log_path, "a", encoding="utf-8") as handle:
+                handle.write("== %s  %s\n%s\n" % (datetime.now().isoformat(timespec="seconds"),
+                                                   step.label, " ".join(map(str, argv))))
+        except OSError as exc:
+            self._log_path = None
+            self.output.append_record("Ausgabe wird nicht mitgeschrieben (%s)" % exc,
+                                      logging.WARNING)
         try:
             self.process.start(argv, stdin_text="ANLAGE\n"
                                if self.session.status().is_real_plant else None)
@@ -595,34 +821,29 @@ class ComparisonTab(ModeTab):
 
     def _on_line(self, text):
         self.output.append_line(text)
+        self._write_log(text)
+
+    def _write_log(self, text):
+        if getattr(self, "_log_path", None) is None:
+            return
+        try:
+            with open(self._log_path, "a", encoding="utf-8") as handle:
+                handle.write(str(text).rstrip("\n") + "\n")
+        except OSError:
+            self._log_path = None
 
     def _on_finished(self, code, _text):
         if not self._steps:
             return
         step = self._steps[self._index]
+        self._write_log("== Ende, Rueckgabewert %s" % code)
         if self._stopped:
             self._finish("Abgebrochen mit STOPP (%s)" % step.label)
             return
         summary = operation_module.read_summary(self.workdir / self._root / step.out)
         row, reason = vergleich_module.evaluate(step, summary, code)
         if row is not None:
-            if row.get("pick_x_mm") is not None:
-                d = vergleich_module.training_distance(
-                    (row["pick_x_mm"] / 1e3, row["pick_y_mm"] / 1e3),
-                    self._training.get(row["modell"]))
-                row["trainingsabstand_mm"] = None if d is None else round(1e3 * d, 1)
-                row["trainingslagen_umkreis"] = vergleich_module.training_density(
-                    (row["pick_x_mm"] / 1e3, row["pick_y_mm"] / 1e3),
-                    self._training.get(row["modell"]))
-            self._rows.append(row)
-            item = QTreeWidgetItem(self.runs, vergleich_module.run_row(row))
-            stop_col = len(vergleich_module.RUNS_HEADER) - 1
-            item.setToolTip(stop_col, str(row["stopp"] or ""))   # Abbruchgrund im Wortlaut
-            item.setToolTip(3, row.get("gruende") or "")          # Griffpruefung
-            colour = {"erfolg": GOOD, "warnung": WARN}.get(row.get("bewertung"),
-                                                           GOOD if row["erfolg"] else BAD)
-            item.setForeground(3, QBrush(QColor(colour)))
-            self.runs.scrollToItem(item)
+            self._add_row(row)
             self._show_stats()
         if step.kind == vergleich_module.UMLEGEN and not reason:
             self._show_pick((summary.get("umlegen") or {}).get("placed_xy"), current=step.lage + 1)
@@ -656,6 +877,8 @@ class ComparisonTab(ModeTab):
         self._set_running(False)
         self.cameras.share.free(CAMERA_OWNER)
         self._steps = []
+        if self.resume.isChecked() and self._root is not None:
+            self.load_resume(self.workdir / self._root)     # Stand fuer ein weiteres Fortsetzen
         if reason is None:
             self.headline.setText("Fertig: %d Fahrten" % len(self._rows))
             self.headline.setStyleSheet("color:%s; font-weight:bold" % GOOD)
@@ -679,9 +902,12 @@ class ComparisonTab(ModeTab):
     def _set_running(self, running):
         for widget in (self.btn_start, self.btn_rescan, self.models, self.cameras,
                        self.fahrten, self.lagen, self.lagen_wahl, self.probe_gap, self.glaettung, self.regrasp,
-                       self.btn_up, self.btn_down, self.btn_read_pick, self.btn_plan):
+                       self.btn_up, self.btn_down, self.btn_read_pick, self.btn_plan,
+                       self.resume, self.btn_resume_folder):
             widget.setEnabled(not running)
         self.btn_stop.setEnabled(running)
+        if not running:
+            self._on_resume_toggled(self.resume.isChecked())
 
     # -- Lebenszyklus ---------------------------------------------------------
 
