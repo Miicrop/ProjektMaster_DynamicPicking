@@ -12,18 +12,22 @@ einzelner Verfahren.
 Alle Messungen fanden am realen Aufbau statt, mit allen Modulen in der Betriebsstufe
 \enquote{Real} (\cref{sec:teststrategie}): Top-down-Kamera und Seitenkamera lieferten Live-Bilder,
 der Roboter fuhr mit Greifer, und als Bauteil diente das Gutteil aus \cref{sec:hardware}. Die
-Evaluation stützt sich auf zwei Datenquellen aus derselben Inbetriebnahme:
+Evaluation stützt sich auf zwei Labortage:
 \begin{itemize}
-  \item die Zeigetests zur Greifposition, bei denen der Roboter über dem erkannten Bauteil
-        stehen bleibt und der Versatz abgelesen wird (\cref{sec:koordinatensysteme}), und
-  \item vollständige Arbeitszyklen im automatischen Ablauf, bei denen das Bauteil vor jedem
-        Zyklus von Hand an eine neue Stelle des Arbeitsbereichs gelegt wurde. Jeder Zyklus ist
-        mit Pose, Prüfergebnis, Urteil und Dauer im Zyklusprotokoll festgehalten
-        (\cref{sec:int-protokoll}).
+  \item Am ersten Labortag wurde die Greifposition mit Zeigetests vermessen, bei denen der
+        Roboter über dem erkannten Bauteil stehen bleibt und der Versatz abgelesen wird
+        (\cref{sec:koordinatensysteme}). Danach liefen sieben erste Arbeitszyklen.
+  \item Am zweiten Labortag liefen 25 Arbeitszyklen mit Prüfergebnis, zum Teil im
+        Dauerbetrieb, in dem das System selbstständig auf das nächste Bauteil wartet. Das
+        Bauteil wurde vor jedem Zyklus von Hand an eine neue Stelle und in neuer Orientierung in
+        den Arbeitsbereich gelegt. Alle Zyklen sind im Zyklusprotokoll festgehalten
+        (\cref{sec:int-protokoll}), die meisten zusätzlich mit allen Zwischenbildern beider
+        Bildverarbeitungen.
 \end{itemize}
 Gezielt gefertigte Fehlerteile standen nicht zur Verfügung. Ob die Sichtprüfung fehlende
 Merkmale erkennt, wurde deshalb nur an Testbildern mit übermalten Merkmalen geprüft
-(\cref{ch:sichtpruefung}).
+(\cref{ch:sichtpruefung}) und an einem versehentlich gewendet eingelegten Bauteil, dessen
+Rückseite weder Etikett noch Kerbe trägt (\cref{sec:eval-robustheit}).
 
 \section{Erkennung und Greifposition}
 \label{sec:eval-greifposition}
@@ -40,61 +44,144 @@ der Backen zum \SI{40}{\milli\metre} breiten Bauteil ist allerdings gering.
 \section{Vollständige Arbeitszyklen}
 \label{sec:eval-zyklus}
 
-\Cref{tab:eval-zyklen} zeigt die sieben Zyklen der Messreihe. Die ersten beiden brachen bei der
-Sichtprüfung mit der Meldung ab, dass kein Bauteil im Bild sei. Ursache war ein veraltetes Bild:
-Die Seitenkamera lieferte nach einer Pause beim ersten Abruf noch ein Bild aus ihrem Puffer, das
-die leere Prüfvorrichtung zeigte. Nach der Korrektur, die den Puffer vor jeder Aufnahme verwirft,
-liefen alle weiteren Zyklen vollständig durch. Greifen und Ablegen an der Prüfposition gelangen
-in allen sieben Zyklen, auch in den beiden abgebrochenen, da der Abbruch erst nach dem Ablegen
-erfolgte.
+Am ersten Labortag brachen die ersten beiden von sieben Zyklen bei der Sichtprüfung mit der
+Meldung ab, dass kein Bauteil im Bild sei. Die Seitenkamera lieferte nach einer Pause beim
+ersten Abruf noch ein Bild aus ihrem Puffer, das die leere Prüfvorrichtung zeigte. Nach der
+Korrektur, die den Puffer vor jeder Aufnahme verwirft, liefen die übrigen fünf Zyklen
+vollständig durch. Gegriffen und an der Prüfposition abgelegt wurde das Bauteil in allen sieben
+Zyklen. Seriennummer und Kerbe wurden in allen fünf vollständigen Zyklen erkannt; sortiert wurde
+das Gutteil aber nur zweimal als Gutteil, weil der Lochdurchmesser mit
+\SIrange{9,54}{9,58}{\milli\metre} knapp unter der Toleranzgrenze von \SI{9,6}{\milli\metre}
+lag.
+
+\Cref{tab:eval-protokoll} fasst das Zyklusprotokoll des zweiten Labortags zusammen. Von den
+80 Einträgen sind 48 Abfragen ohne Bauteil: Im Dauerbetrieb prüft die Objekterkennung
+fortlaufend, ob ein neues Bauteil im Arbeitsbereich liegt, und kehrt ohne Fehler in den
+Ruhezustand zurück, solange keines da ist. Keine dieser Abfragen löste einen Zyklus aus. Sieben
+Einträge sind Abbrüche, die alle vor dem Greifen endeten und in \cref{sec:eval-robustheit}
+erklärt werden. In den übrigen 25 Zyklen wurde das Bauteil erkannt, gegriffen, an der
+Prüfposition abgelegt, geprüft und an einem der beiden Ablageorte abgelegt.
 
 \begin{table}[htbp]
   \centering
-  \caption[Arbeitszyklen am realen Aufbau]{Arbeitszyklen am realen Aufbau mit dem Gutteil.
-  Position und Winkel der erkannten Pose im Basis-\ac{ks}, Lochdurchmesser in mm (Sollwert
-  \SI{10}{\milli\metre}, Toleranz \SI{\pm 0,4}{\milli\metre}).}
-  \label{tab:eval-zyklen}
-  \begin{tabular}{@{}r r r r l r l l r@{}}
+  \caption[Zyklusprotokoll des zweiten Labortags]{Zyklusprotokoll des zweiten Labortags mit dem
+  Gutteil. Die Lochmessung wurde nach den ersten drei Zyklen vom Ellipsen- auf den Kreis-Fit
+  umgestellt (\cref{sec:m3-loch}).}
+  \label{tab:eval-protokoll}
+  \begin{tabular}{@{}l r l@{}}
     \toprule
-    Nr. & $x$ / mm & $y$ / mm & $\theta$ / ° & Seriennr. & Loch & Kerbe & Urteil & Dauer / s \\
+    Eintrag & Anzahl & Ergebnis \\
     \midrule
-    1 & 419,3 & $-155{,}1$ & 79,8 & \multicolumn{4}{l}{Abbruch: kein Bauteil im Prüfbild} & 36,5 \\
-    2 & 376,8 & $-133{,}7$ & 92,3 & \multicolumn{4}{l}{Abbruch: kein Bauteil im Prüfbild} & 38,7 \\
-    3 & 403,8 & $-99{,}7$ & 88,3 & 69420 & 9,58 & ja & schlecht & 86,1 \\
-    4 & 409,8 & $-136{,}2$ & 71,7 & 69420 & 9,62 & ja & gut & 78,0 \\
-    5 & 314,3 & $-187{,}1$ & 86,8 & 69420 & 9,63 & ja & gut & 84,0 \\
-    6 & 456,9 & $-177{,}3$ & 83,1 & 69420 & 9,58 & ja & schlecht & 81,7 \\
-    7 & 354,1 & $-115{,}9$ & 200,9 & 69420 & 9,54 & ja & schlecht & 112,9 \\
+    Abfrage ohne Bauteil (Dauerbetrieb)        & 48 & kein Zyklus ausgelöst \\
+    Abbruch: Marker 2 von Hand verdeckt          & 5  & vor dem Greifen \\
+    Abbruch: Bauteil gewendet erkannt            & 1  & vor dem Greifen \\
+    Abbruch: Hand als Bauteil, Software-Stopp    & 1  & Roboter im Anflug angehalten \\
+    \midrule
+    Zyklus mit Prüfung, Ellipsen-Fit             & 3  & 0 gut, 3 schlecht (Loch zu klein) \\
+    Zyklus mit Prüfung, Kreis-Fit                & 22 & 21 gut, 1 schlecht (Bauteil gewendet) \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-In den fünf vollständigen Zyklen wurde das Bauteil jedes Mal erkannt, gegriffen, an der
-Prüfposition abgelegt, geprüft und an einem Ablageort abgelegt. Die Seriennummer wurde in allen
-fünf Zyklen richtig gelesen und die Kerbe immer erkannt. Sortiert wurde das Gutteil aber nur
-zweimal als Gutteil und dreimal als Schlechtteil. Grund war in allen drei Fällen der
-Lochdurchmesser: Er lag mit \SIrange{9,54}{9,58}{\milli\metre} knapp unter der Toleranzgrenze
-von \SI{9,6}{\milli\metre}.
+Nach der Umstellung der Lochmessung wurde das Gutteil in allen 21 Zyklen, in denen es richtig
+herum eingelegt war, als Gutteil sortiert. Die Seriennummer wurde in allen 24 Zyklen mit richtig
+eingelegtem Bauteil gelesen, die Kerbe immer erkannt. Der einzige weitere Schlecht-Befund betraf
+das gewendet eingelegte Bauteil; hier hat die Sichtprüfung richtig entschieden, denn sie sah
+eine Seite ohne Etikett und ohne Kerbe.
 
-Ein vollständiger Zyklus dauerte zwischen \num{78} und \SI{113}{\second}, im Median
-\SI{84}{\second}. Die Bewegungen sind für die Inbetriebnahme bewusst langsam ausgelegt
-(\cref{sec:m2-sequenz}); eine kürzere Zykluszeit war kein Ziel des Projekts.
+Die Zykluszeit hing vor allem von der eingestellten Robotergeschwindigkeit ab, die im Laufe
+des Tages mehrfach verändert wurde. Mit langsamer Einstellung dauerten zehn Zyklen
+\SIrange{136}{160}{\second}, mit der für den Dauerbetrieb genutzten 14 Zyklen
+\SIrange{34,6}{43,0}{\second} (Median \SI{35,9}{\second}) und mit der schnellsten ein Zyklus
+\SI{18,9}{\second}. Eine kürzere Zykluszeit war kein Ziel des
+Projekts; die Bewegungen sind für die Inbetriebnahme bewusst langsam ausgelegt
+(\cref{sec:m2-sequenz}).
 
 \section{Bewertung der Sichtprüfung}
 \label{sec:eval-pruefung}
 
-Die Fehlurteile gehen nicht auf zufällige Ausreißer zurück, sondern auf eine systematische
-Abweichung. Alle gemessenen Lochdurchmesser liegen in einem schmalen Band von
-\SIrange{9,54}{9,63}{\milli\metre}, also etwa \SI{4}{\percent} unter dem Sollwert. Die Messung ist
-damit gut wiederholbar, aber nicht richtig kalibriert. Als Ursache kommt vor allem das
-Fensterlicht infrage, das sich im Loch spiegelt (\cref{fig:m3-aufbau}). Ein Korrekturfaktor in
-der Größenordnung von \num{1,04} hätte alle fünf Messungen in die Toleranz gebracht. Er müsste
-aber an unabhängigen Messungen mit bekannten Gutteilen bestimmt werden und gilt nur, solange
-das Licht an der Prüfstation gleich bleibt. Die robustere Lösung ist eine eigene, abgeschirmte
-Beleuchtung (\cref{sec:ausblick}).
+An beiden Labortagen lag der mit dem Ellipsen-Fit gemessene Lochdurchmesser systematisch
+unter dem Sollwert, am ersten Tag bei \SIrange{9,54}{9,63}{\milli\metre}, am zweiten bei
+\SIrange{9,42}{9,48}{\milli\metre}. Die Zwischenbilder zeigten die Ursache: Das Fensterlicht
+spiegelt sich auf der unteren Bohrungswand, dieser Bereich erscheint so hell wie die
+Seitenfläche, und die Lochkontur verläuft dort innerhalb des Lochrands (\cref{fig:loch-fit}). Die
+Abweichung wechselt mit dem Tageslicht und lässt sich daher nicht zuverlässig mit einem festen
+Korrekturfaktor ausgleichen.
 
-Seriennummer und Kerbe wurden dagegen zuverlässig erkannt. Ob fehlende Merkmale an echten
-Fehlerteilen ebenso sicher erkannt werden, wie es die Testbilder zeigen, bleibt offen.
+Um die Umstellung auf den Kreis-Fit mit Verwerfen der nach innen gezogenen Konturpunkte
+(\cref{sec:m3-loch}) unabhängig vom Tageslicht zu bewerten, wurden alle Prüfbilder des zweiten
+Labortags nachträglich mit beiden Verfahren ausgewertet, jeweils an derselben Lochkontur
+(\cref{fig:eval-loch}). Auf den 19 Bildern mit richtig eingelegtem Bauteil ergibt der
+Ellipsen-Fit \SIrange{9,42}{9,55}{\milli\metre} (Mittelwert \SI{9,49}{\milli\metre}) und liegt
+kein einziges Mal in der Toleranz. Der Kreis-Fit ergibt \SIrange{9,67}{9,81}{\milli\metre}
+(Mittelwert \SI{9,75}{\milli\metre}, Standardabweichung \SI{0,04}{\milli\metre}) und liegt
+jedes Mal in der Toleranz, mit mindestens \SI{0,07}{\milli\metre} Abstand zur unteren Grenze.
+Die Werte, die die Sichtprüfung im laufenden Betrieb in das Protokoll schrieb, stimmen damit
+überein (\SIrange{9,70}{9,80}{\milli\metre} in den 21 Zyklen nach der Umstellung).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{eval/lochdurchmesser_20261126.pdf}
+  \caption[Lochdurchmesser mit Ellipsen- und Kreis-Fit]{Lochdurchmesser des Gutteils in allen
+  Zyklen des zweiten Labortags mit Prüfbild, nachträglich mit beiden Verfahren an derselben
+  Kontur ausgewertet. Grün: Toleranzband \SI{10,0 \pm 0,4}{\milli\metre}.}
+  \label{fig:eval-loch}
+\end{figure}
+
+Auch mit dem Kreis-Fit liegt der Messwert etwa \SI{2,5}{\percent} unter dem Sollwert. Die
+Streuung ist klein, die Messung ist also gut wiederholbar, aber nicht vollständig richtig.
+Mögliche Ursachen sind der Maßstab über die sichtbare Bauteilhöhe, die bei leicht schräger
+Ansicht etwas zu groß erscheint, und Fertigungsabweichungen des gedruckten Bauteils. Für die
+Gut-/Schlecht-Entscheidung reicht die Genauigkeit aus. Für eine echte Fertigungstoleranz müsste
+der Maßstab an Teilen mit bekanntem Lochmaß kalibriert werden.
+
+Seriennummer und Kerbe wurden zuverlässig erkannt. Ob fehlende Merkmale an echten
+Fehlerteilen ebenso sicher erkannt werden wie auf den Testbildern und auf der Rückseite des
+gewendeten Bauteils, bleibt offen.
+
+\section{Robustheit im Dauerbetrieb}
+\label{sec:eval-robustheit}
+
+Der Dauerbetrieb brachte Fälle hervor, die in Einzelzyklen nicht auftreten, weil dort niemand in
+den Arbeitsbereich greift, während das System arbeitet (\cref{fig:eval-fehler}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{eval/fehlerfaelle_20261126.png}
+  \caption[Fehlerfälle im Dauerbetrieb]{Fehlerfälle im Dauerbetrieb. a)~Beim Nachlegen verdeckt
+  die Hand den Marker oben links im Bild (Marker~2); die Erkennung bricht ab, bevor der Roboter fährt. b)~Ein
+  gewendet eingelegtes Bauteil zeigt der Seitenkamera die Rückseite ohne Etikett und Kerbe.}
+  \label{fig:eval-fehler}
+\end{figure}
+
+\paragraph{Verdeckte Marker.} Fünf Abbrüche gehen auf Marker~2 zurück, der beim Nachlegen eines Bauteils von Hand oder Arm verdeckt war. Ohne alle vier Marker
+kann die Objekterkennung die Draufsicht nicht entzerren und meldet einen Fehler, statt eine
+ungenaue Pose zu liefern. Der Abbruch ist damit das gewünschte Verhalten. Für den Bediener ist er
+aber lästig, weil er quittiert werden muss. Die Prüfung auf eine ruhige Szene
+(\cref{sec:m1-segmentierung}) wartet inzwischen, bis der Arbeitsbereich drei Aufnahmen lang
+unverändert ist. Eine Hand im Bild führt dadurch nicht mehr zu einem Zyklus mit falscher Pose.
+Ob sie die Abbrüche durch verdeckte Marker vollständig verhindert, wurde noch nicht erprobt.
+
+\paragraph{Hand als Bauteil.} Einmal wurde eine Hand, die ein Bauteil hielt, selbst als Bauteil
+erkannt, weil sie hell genug war und im zulässigen Flächenbereich lag. Der Zyklus startete, und
+der Roboter fuhr auf die vermeintliche Greifposition zu. Der Bediener hielt ihn im Anflug mit dem
+Software-Stopp der Oberfläche an (\cref{sec:int-fehler}). Das Greifen schlug danach mit der Meldung
+fehl, dass der Roboter gestoppt ist und erst quittiert werden muss; nach dem Quittieren lief der
+nächste Zyklus normal. Die daraufhin eingeführte Formprüfung (\cref{sec:m1-segmentierung}) lässt
+nur Konturen mit den Abmessungen und dem Füllgrad des Bauteils zu, und die Ruheprüfung startet
+keinen Zyklus, solange sich im Arbeitsbereich etwas bewegt.
+
+\paragraph{Gewendetes Bauteil.} Ein Bauteil wurde kopfüber eingelegt. Die Objekterkennung fand es,
+der Roboter griff es, und die Sichtprüfung sortierte es als Schlechtteil aus, weil Seriennummer
+und Kerbe auf der Rückseite fehlten. Das Urteil war richtig, der Zyklus aber unnötig. Seitdem
+prüft die Objekterkennung, auf welcher Seite der Längsachse die Fase liegt (\cref{sec:m1-pose}).
+In 15 richtig eingelegten Zyklen lag sie immer auf derselben Seite. Beim nächsten gewendet
+eingelegten Bauteil brach die Erkennung mit dem Hinweis ab, es umzudrehen, bevor der Roboter
+fuhr.
+
+Sechs der sieben Abbrüche erfolgten, bevor der Roboter sich bewegte; im siebten musste der
+Bediener eingreifen, was die Formprüfung inzwischen verhindern soll. In keinem Fall wurde ein
+Bauteil an einer falschen Pose gegriffen oder falsch einsortiert.
 
 \section{Vergleich klassischer und KI-basierter Ansatz}
 \label{sec:eval-vergleich}
@@ -119,8 +206,8 @@ Bedingungen am selben Aufbau entstanden sind, aber mit unterschiedlichen Verfahr
     Abweichung vom Greifpunkt & höchstens \SI{2}{\milli\metre} nach Positionskorrektur
       (11 Zeigetests, \cref{sec:eval-greifposition}) & im Median \SI{8.7}{\milli\metre},
       \SIrange{1.0}{18.0}{\milli\metre} (8 Probegriffe, \cref{sec:m4-ergebnisse}) \\
-    Greifen im Zyklus & 7 von 7 gegriffen (\cref{sec:eval-zyklus}) & nicht geprüft: Probegriffe
-      wurden vor dem Schließen angehalten \\
+    Greifen im Zyklus & in allen 32 Zyklen beider Labortage gegriffen (\cref{sec:eval-zyklus})
+      & nicht geprüft: Probegriffe wurden vor dem Schließen angehalten \\
     Vorbereitung & Teachen der festen Posen, Kalibrierung, Zeigetests & Teachen von drei
       Punkten, über 900 Demonstrationen, Training \\
     Reaktion auf neue Lagen & jede Lage im Arbeitsbereich, sofern die Erkennung das Bauteil
@@ -149,10 +236,14 @@ Varianten im Zyklus bleibt offen.
 \section{Grenzen der Evaluation}
 \label{sec:eval-grenzen}
 
-Die Evaluation umfasst eine kleine Zahl von Durchläufen an einem Tag mit einem einzigen Gutteil.
+Die Evaluation umfasst 32 vollständige Zyklen an zwei Labortagen mit einem einzigen Gutteil.
 Die Lagen im Arbeitsbereich wurden von Hand gewählt und decken nicht alle Bereiche und
 Orientierungen gleichmäßig ab; die Zeigetests ergänzen hier die Ränder und Ecken. Echte
-Fehlerteile, wechselnde Lichtverhältnisse und ein Dauerbetrieb über viele Zyklen wurden nicht
-untersucht. Die Ergebnisse belegen daher, dass die Kette aus Erkennung, Greifen, Prüfen und
-Sortieren am realen Aufbau durchgängig funktioniert. Eine statistisch belastbare Aussage über
-Erfolgsquoten erlauben sie nicht.
+Fehlerteile wurden nicht untersucht, und das Licht an der Prüfstation hing vom Tageslicht ab.
+Der Kreis-Fit wurde an den Bildern desselben Tages entwickelt, an dem er auch bewertet wurde;
+die Nachauswertung zeigt, dass er die Spiegelung auf diesen Bildern ausgleicht, nicht aber,
+dass er bei jedem Licht genügt. Die Ergebnisse belegen, dass die Kette aus Erkennung, Greifen,
+Prüfen und Sortieren am realen Aufbau durchgängig und auch im Dauerbetrieb funktioniert. Die
+nach den Fehlerfällen ergänzten Prüfungen auf Form und ruhige Szene sind durch Tests abgesichert,
+wurden im Dauerbetrieb aber nur kurz erprobt. Eine statistisch
+belastbare Aussage über Erfolgsquoten erlauben sie nicht.

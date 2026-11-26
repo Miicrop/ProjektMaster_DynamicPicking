@@ -552,11 +552,6 @@ export function createCell(ctx) {
   camM3.position.copy(sideCamPos).setZ(sideCamPos.z + 0.02);
   camM3.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), faceN.clone().negate());
   cell.add(camM3);
-  // Hintergrund der Prüfvorrichtung hinter dem Teil (zwischen Teil und Roboter), damit sich das Loch abhebt
-  const backdrop = keep(solid(new THREE.BoxGeometry(0.075, 0.004, 0.05), '#1E2328'));
-  backdrop.position.set(insp[0] / 1000, insp[1] / 1000, (insp[2] - 4 + 25) / 1000).addScaledVector(faceN, -0.03);
-  backdrop.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), faceN);
-  cell.add(backdrop);
   C3[3][2] = worldOf(camM3);
   const callouts = C3.map(([n, label, at, off]) => callout(n, label, at, off));
 
@@ -1751,7 +1746,7 @@ export const CELL_SCENES = [
     cams: [C.m4, C.m4top],
   },
   {
-    id: '7.5', world: 'cell',
+    id: '7.7', world: 'cell',
     steps: [
       (tl, S) => {
         tl.to(S, { m4back: 1, duration: CELL.M4BACK, ease: 'none' }, 0);
@@ -1763,7 +1758,7 @@ export const CELL_SCENES = [
     cams: [C.game, C.game, C.game],
   },
   {
-    id: '7.6', world: 'cell',
+    id: '7.8', world: 'cell',
     steps: [
       (tl, S, ctx) => {
         // Rückbau aus dem Ausblick (7.5): Spielfeld weg, Teil B zurück in den Greifer, dann der Schlechtfall

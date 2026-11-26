@@ -357,6 +357,68 @@ def export_lab2(cfg: dict) -> dict | None:
             "exposure_us": cfg["topdown_camera"].get("exposure_us"), "focus": cfg["inspection_camera"].get("focus")}
 
 
+LAB3_DAY = "20261126"
+
+
+def export_lab3(cfg: dict) -> dict | None:
+    """Labortag 26.11.: Zyklusprotokoll (logs/cycles_20261126.csv), Nachauswertung aller Prüfbilder
+    (logs/20261126/*/steps/m3_01_original.jpg) mit Ellipsen- und Kreis-Fit an derselben Lochkontur,
+    GUI-Screenshot und Fehlerbilder. Wie thesis/tools/eval_20261126.py; logs/ ist nicht im Repo:
+    fehlen die Dateien, bleibt der Stand aus dem alten data.json."""
+    cy_file, runs = CODE / "logs" / f"cycles_{LAB3_DAY}.csv", CODE / "logs" / LAB3_DAY
+    if not (cy_file.exists() and runs.exists()):
+        old = OUT_DATA / "data.json"
+        prev = json.loads(old.read_text(encoding="utf-8")).get("lab3") if old.exists() else None
+        print("  Labortag 26.11.: logs fehlen, alter Stand aus data.json" if prev else "  Labortag 26.11.: keine Daten")
+        return prev
+    with open(cy_file, encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh, delimiter=";"))
+    cycles = [{"time": r["time"][11:16], "run": Path(r["images"]).name if r["images"] else "",
+               "ok": r["ok"] == "True", "error": r["error"], "duration_s": float(r["duration_s"]),
+               "part": bool(r["x_mm"]), "serial": r["serial"], "notch": r["notch"] == "True",
+               "hole_mm": float(r["hole_mm"]) if r["hole_mm"] else None, "good": r["good"] == "True"}
+              for r in rows]
+    by_run = {c["run"]: c for c in cycles if c["run"]}
+    ic = cfg["inspection"]
+    pipe = InspectionPipeline(cfg)
+    reeval = []
+    for d in sorted(runs.iterdir()):
+        c = by_run.get(d.name)
+        f = d / "steps" / "m3_01_original.jpg"
+        if not (c and c["hole_mm"] is not None and f.exists()):
+            continue
+        det = pipe.process(cv2.imread(str(f)))
+        mmpp = ic["part_height_mm"] / det.part_box[3]
+        (_, _), (a, b), _ = cv2.fitEllipse(det.hole.contour)
+        reeval.append({"time": c["time"], "ellipse": round((a + b) / 2 * mmpp, 3),
+                       "circle": round(det.result.hole_diameter_mm, 3), "upside_down": not det.result.serial_number})
+    dst = OUT_IMG / "lab3"
+    dst.mkdir(parents=True, exist_ok=True)
+    photos = {}
+
+    def photo(name: str, img: np.ndarray, max_w: int = MAX_W) -> None:
+        url, s = save_img(img, f"lab3/{name}.jpg", max_w)
+        photos[name] = {"url": url, "w": int(img.shape[1] * s), "h": int(img.shape[0] * s)}
+
+    shot = CODE / "logs" / "Screenshot 2026-11-26 103844.png"
+    if shot.exists():
+        photo("gui", cv2.imread(str(shot)))
+    fit = ROOT / "thesis" / "figures" / "eval" / "loch_vorher_nachher.png"
+    if fit.exists():
+        photo("fit", cv2.imread(str(fit)))
+    hand = runs / "111559_c006" / "steps" / "m1_02_aruco_markers.jpg"
+    if hand.exists():
+        photo("hand", cv2.imread(str(hand)), 1440)
+    back = runs / "112017_c003" / "steps" / "m3_01_original.jpg"
+    if back.exists():
+        img = cv2.imread(str(back))
+        h, w = img.shape[:2]
+        photo("rueckseite", img[int(0.40 * h):int(0.90 * h), int(0.06 * w):int(0.96 * w)], 1600)
+    print(f"  Labortag 26.11.: {len(cycles)} Einträge, {len(reeval)} Prüfbilder nachausgewertet")
+    return {"date": "2026-11-26", "cycles": cycles, "reeval": reeval, "photos": photos,
+            "hole_nominal_mm": ic["hole_nominal_mm"], "hole_tolerance_mm": ic["hole_tolerance_mm"]}
+
+
 def export_m4() -> dict:
     """M4: geteachte Punkte der Anlage (TCP im Basis-KS, mm/°) und echte Rauschbahnen aus bc/noise.py.
 
@@ -461,7 +523,7 @@ def main() -> None:
     print("M2 robot_check …")
     m2 = {"check": export_m2_check()}
     data = {"part": PART, "config": export_config(cfg), "m1": m1, "m2": m2, "m3": m3, "logs": export_logs(),
-            "figures": copy_figures(), "tests": export_tests(), "lab": export_lab(), "lab2": export_lab2(cfg),
+            "figures": copy_figures(), "tests": export_tests(), "lab": export_lab(), "lab2": export_lab2(cfg), "lab3": export_lab3(cfg),
             "m4": export_m4()}
     (OUT_DATA / "data.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"→ {OUT_DATA / 'data.json'}")

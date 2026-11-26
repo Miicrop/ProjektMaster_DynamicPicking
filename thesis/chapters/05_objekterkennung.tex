@@ -159,6 +159,19 @@ gefundenen Konturen werden nur solche mit plausibler Fläche betrachtet; die gr�
 ist das Bauteil. Wird keine passende Kontur gefunden, meldet das Modul \enquote{kein Bauteil},
 und der Orchestrator kehrt ohne Fehler in den Ruhezustand zurück.
 
+Im Dauerbetrieb am Aufbau zeigte sich, dass die Fläche allein nicht genügt: Eine Hand, die ein
+neues Bauteil in den Arbeitsbereich legte, war hell genug und lag mit etwa
+\SI{14000}{\milli\metre\squared} im zulässigen Flächenbereich, sodass ein Zyklus startete. Seitdem
+muss eine Kontur zusätzlich die Form des Bauteils haben. Ihr kleinstes umschließendes Rechteck
+darf in Länge und Breite höchstens \SI{20}{\percent} von den $60 \times \SI{40}{\milli\metre}$ des
+Bauteils abweichen, und die Kontur muss mindestens \SI{80}{\percent} dieses Rechtecks füllen.
+Gemessen wurden am Aufbau \SIrange{59}{61}{\milli\metre} mal \SIrange{38,5}{41}{\milli\metre}
+bei einem Füllgrad von 0,90 bis 0,95. Außerdem startet ein Zyklus erst, wenn die Szene ruhig
+ist: Drei Aufnahmen im Abstand von \SI{0,3}{\second} müssen das Bauteil an derselben Pose zeigen
+(innerhalb von \SI{2}{\milli\metre} und \ang{2}), und im übrigen Arbeitsbereich dürfen sich
+höchstens \SI{0,5}{\percent} der Pixel ändern. Eine Hand, die gerade ein Bauteil ablegt, hält den
+Zyklus damit an, bis sie den Arbeitsbereich verlassen hat.
+
 % ------------------------------------------------------------------------------
 \section{Bestimmung der Pose}
 \label{sec:m1-pose}
@@ -177,6 +190,12 @@ Bauteilbreite außerhalb, gilt die Fase als gefunden, und die Längsachse wird s
 dass sie zur Fase zeigt. Der Winkel ist dann im Bereich \ang{0} bis \ang{360} eindeutig. Wird
 keine Fase gefunden, wird der Winkel auf \ang{0} bis \ang{180} begrenzt und die Konfidenz der
 Pose herabgesetzt. \Cref{fig:m1-pose} fasst das Vorgehen zusammen.
+
+Die Fase verrät außerdem, ob das Bauteil richtig herum liegt. Von oben gesehen erscheint sie bei
+einem gewendeten Bauteil gespiegelt, also auf der anderen Seite der Längsachse. Liegt die Fase
+nicht auf der erwarteten Seite, bricht die Erkennung vor dem Greifen mit dem Hinweis ab, das
+Bauteil umzudrehen. Ohne diese Prüfung hätte die Seitenkamera die Rückseite ohne Etikett
+gesehen, und ein Gutteil wäre als Schlechtteil aussortiert worden (\cref{sec:eval-robustheit}).
 
 \begin{figure}[htbp]
   \centering
@@ -317,5 +336,7 @@ Position je nach Lage um bis zu \SI{8}{\milli\metre} nach außen. Eine feste Bel
 lineare Positionskorrektur aus Zeigetests reichen aus, um diesen Versatz auf höchstens
 \SI{2}{\milli\metre} zu verringern; auf eine intrinsische Kalibrierung konnte verzichtet werden.
 
-In allen sieben Arbeitszyklen am Aufbau wurde das Bauteil erkannt und an der erkannten Pose
-gegriffen (\cref{sec:eval-zyklus}).
+In allen Arbeitszyklen mit Bauteil an beiden Labortagen wurde das Bauteil erkannt und an der
+erkannten Pose gegriffen (\cref{sec:eval-zyklus}). Im Dauerbetrieb kamen Formprüfung,
+Ruheprüfung und die Prüfung auf ein gewendetes Bauteil hinzu; sie verhindern, dass eine Hand im
+Arbeitsbereich oder ein falsch eingelegtes Bauteil einen Zyklus auslöst.

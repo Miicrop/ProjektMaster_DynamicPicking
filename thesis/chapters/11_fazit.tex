@@ -15,11 +15,12 @@ Demonstrationen gelernte Policy (\cref{ch:kigreifen}). Ein Zustandsautomat verbi
 zu einem Arbeitszyklus, und eine grafische Oberfläche macht jedes Modul einzeln und den
 Gesamtablauf bedienbar (\cref{ch:integration}).
 
-Am realen Aufbau lief die Kette mit beiden Kameras und Greifer durch. Das Bauteil wurde in allen
-sieben Zyklen der Evaluation gegriffen und an der Prüfstation abgelegt; Seriennummer und Kerbe
-wurden in allen vollständigen Zyklen richtig erkannt. Der Lochdurchmesser wurde systematisch zu
-klein gemessen, sodass das Gutteil in drei von fünf Zyklen als Schlechtteil sortiert wurde
-(\cref{ch:evaluation}).
+Am realen Aufbau lief die Kette mit beiden Kameras und Greifer durch, am zweiten Labortag auch
+im Dauerbetrieb. Das Bauteil wurde in allen 32 Zyklen beider Labortage gegriffen, geprüft und
+abgelegt; Seriennummer und Kerbe wurden bei richtig eingelegtem Bauteil immer erkannt. Der
+Lochdurchmesser wurde zunächst durch Spiegelungen systematisch zu klein gemessen. Nach der
+Umstellung auf einen Kreis-Fit, der die betroffenen Konturpunkte verwirft, wurde das Gutteil in
+allen 21 Zyklen als Gutteil sortiert (\cref{ch:evaluation}).
 
 \section{Diskussion}
 \label{sec:diskussion}
@@ -39,8 +40,10 @@ dadurch entstehende Versatz musste empirisch korrigiert werden (\cref{sec:m1-kor
 Korrektur gilt nur für die aktuelle Kameraposition, und der Spielraum der Greiferbacken bleibt
 gering. Die Sichtprüfung reagiert empfindlich auf das Umgebungslicht: Spiegelungen im Loch führten
 zu einem systematisch zu kleinen Durchmesser und damit zu Fehlurteilen
-(\cref{sec:eval-pruefung}). Beide Punkte sind keine grundsätzlichen Schwächen des Konzepts,
-sondern lassen sich mit Kalibrierung und Beleuchtung beheben. Die Evaluation selbst ist klein und
+(\cref{sec:eval-pruefung}). Der Kreis-Fit gleicht das auf den Bildern beider Labortage aus,
+beseitigt aber nicht die Ursache, und ein Rest von etwa \SI{2,5}{\percent} unter dem Sollwert
+bleibt. Beide Punkte sind keine grundsätzlichen Schwächen des Konzepts, sondern lassen sich mit
+Kalibrierung und Beleuchtung beheben. Die Evaluation selbst ist klein und
 belegt die Funktion, aber keine Erfolgsquote (\cref{sec:eval-grenzen}).
 
 \paragraph{Probleme bei der Inbetriebnahme.} Am realen Aufbau traten Effekte auf, die mit

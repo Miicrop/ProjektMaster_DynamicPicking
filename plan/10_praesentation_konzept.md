@@ -124,6 +124,8 @@ Jeder Akt = ein Sprecher, die Zelle ist die gemeinsame Bühne (Rückfahrt in die
 - Die Szene „Zwei Python-Welten“ ist verworfen (01.11.), weil sie für die Zuschauer keine Rolle spielt.
 
 **Akt 7 – Ergebnis & Ausblick (alle)**
+> **Stand 26.11.:** Akt 7 hat jetzt acht Szenen, maßgeblich ist `src/storyboard.js`: 7.1 Labortag 06.10., 7.2 Labortag 12.11., 7.3 Messwerte 12.11., **7.4 Labortag 26.11.** (Dauerbetrieb, GUI-Screenshot, Fehlerfälle → neue Prüfungen), **7.5 Lochmessung gelöst** (Fit-Vergleich, alle Prüfbilder mit Ellipse/Kreis nachgerechnet), 7.6 Was noch fehlt, 7.7 Ausblick, 7.8 Finale. Die Liste darunter ist der ältere Entwurf.
+
 - 7.1 Labortag 06.10.: erster vollständiger Ablauf am echten Roboter (ehrlich: noch ohne Greiferansteuerung, M1/M3 mit Testbildern).
 - 7.2 Messwerte (Platzhalter, datengetrieben): Kalibrier-RMS, Zeigetest-Versatz, Zyklusdauer, Erkennungs-/Prüfquote.
 - 7.3 Erledigt/offen (Stand 01.11.): erledigt sind u. a. „M4 eingebunden, Übergabe in der VM getestet“ und „Greifer öffnet/schließt“. Offen: Kameras live, Greifen im Ablauf, M4 mit Modell, Messreihen samt Vergleich M2/M4.

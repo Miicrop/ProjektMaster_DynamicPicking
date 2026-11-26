@@ -158,11 +158,12 @@ Meldungen aller Module an.
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=\textwidth]{gui/auto.png}
-  \caption{Bedienoberfläche, Reiter \enquote{Ablauf} nach drei Zyklen mit Testfotos und
-  simuliertem Roboter. Oben die Auswahl der Varianten, darunter die Ablaufkette, die Bilder
-  von Erkennung und Prüfung, die Draufsicht auf den Roboterarbeitsraum und die
-  Ergebnistabelle.}
+  \includegraphics[width=\textwidth]{gui/auto_labor.png}
+  \caption{Bedienoberfläche, Reiter \enquote{Ablauf} nach einem vollständigen Zyklus am realen
+  Aufbau mit dem Urteil Gutteil. Oben die Auswahl der Varianten, darunter die Ablaufkette,
+  die Live-Bilder von Erkennung (Pose im Basis-\ac{ks}, Fase erkannt) und Prüfung
+  (Seriennummer, Lochdurchmesser, Kerbe), die Draufsicht auf den Roboterarbeitsraum, die
+  Ergebnistabelle und das Protokoll des Zustandsautomaten.}
   \label{fig:gui-ablauf}
 \end{figure}
 
@@ -181,9 +182,6 @@ Meldungen aller Module an.
   \caption{Bedienoberfläche, Reiter \enquote{M4 Behavior Cloning}, Unterreiter Systemcheck}
   \label{fig:gui-m4}
 \end{figure}
-
-\todo[inline]{Screenshots mit echten Kamerabildern am Aufbau ersetzen, sobald vorhanden; für M4
-z.\,B.\ den Unterreiter \enquote{Aufnahme} mit Live-Bildern beider Kameras.}
 
 Alle Reiter greifen auf eine gemeinsame Sitzung zu, die Konfiguration, Kameras und
 Roboterverbindung hält. Eine Kamera oder eine Roboterverbindung wird dadurch nur einmal
