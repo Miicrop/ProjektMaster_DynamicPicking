@@ -13,6 +13,8 @@ log = logging.getLogger(__name__)
 
 
 class SerialReader:
+    roi_height = 300   # label ROI is scaled to this height [px] before OCR
+
     def __init__(self, allowlist: str = "0123456789", gpu: bool = False):
         self._allowlist = allowlist
         self._gpu = gpu
@@ -30,9 +32,11 @@ class SerialReader:
 
     def read(self, roi: np.ndarray, pattern: str) -> tuple[str | None, float]:
         """Best text in the ROI matching `pattern`. Returns (text, confidence)."""
-        if roi.shape[0] < 64:  # small text -> upscale for the detector
-            f = 64 / roi.shape[0]
-            roi = cv2.resize(roi, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC)
+        # normalise the label height: the 4K camera gives ~820 px, where EasyOCR's confidence
+        # varied strongly between near-identical images (lab 2026-11-26: 0.99 vs 0.39). At 300 px
+        # the minimum over lab and test images was 0.88.
+        f = self.roi_height / roi.shape[0]
+        roi = cv2.resize(roi, None, fx=f, fy=f, interpolation=cv2.INTER_AREA if f < 1 else cv2.INTER_CUBIC)
         results = self._get_reader().readtext(roi, allowlist=self._allowlist, detail=1)
         candidates = [(text.replace(" ", ""), float(conf)) for _, text, conf in results]
         log.debug("OCR candidates: %s", candidates)

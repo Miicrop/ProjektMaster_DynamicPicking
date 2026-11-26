@@ -208,7 +208,9 @@ class AutoTab(QWidget):
                         f"Fase {'erkannt' if m1.part.chamfer_found else 'nicht erkannt (θ nur mod 180°)'}"
             self.stage_feedback.emit("m1", m1.overlay_image(img) if m1 is not None and img is not None else img, text)
         elif state is State.IDLE and res.pose is None and before is State.DETECT:
-            self.stage_feedback.emit("m1", getattr(det, "last_image", None), "kein Bauteil gefunden (Rohbild)")
+            why = getattr(det, "last_reject", None)
+            self.stage_feedback.emit("m1", getattr(det, "last_image", None),
+                                     "kein Bauteil gefunden (Rohbild)" + (f"\n{why}" if why else ""))
         elif state is State.INSPECT:
             self.stage_feedback.emit("m3", None, f"Zyklus {res.cycle_id}: prüfe …")
         elif state is State.PICK_INSPECT:

@@ -163,8 +163,33 @@ def find_hole(img: np.ndarray, box: Box, ic: dict[str, Any],
         _trace_candidates(trace, "hole_candidates", roi, off, scored, best)
     if best is None:
         return None
-    (_, _), (a, b), _ = cv2.fitEllipse(best.contour)
-    return best, (a + b) / 2.0
+    return best, _outer_circle_diameter(best.contour)
+
+
+def _fit_circle(p: np.ndarray) -> tuple[float, float, float]:
+    """Least-squares circle (Kasa) through points p (N x 2). Returns (cx, cy, r)."""
+    a = np.c_[2 * p[:, 0], 2 * p[:, 1], np.ones(len(p))]
+    cx, cy, k = np.linalg.lstsq(a, (p ** 2).sum(1), rcond=None)[0]
+    return cx, cy, float(np.sqrt(k + cx * cx + cy * cy))
+
+
+def _outer_circle_diameter(contour: np.ndarray, tol: float = 0.02, iters: int = 5) -> float:
+    """Hole diameter from a circle fit that ignores contour points pulled inwards.
+
+    Reflections on the bore wall look like face and cut the hole mask (lab 2026-11-26: lower
+    wall lit by the window, contour 531 px wide but only 490 px high -> ellipse fit 9.45 instead
+    of 9.7 mm). Such errors only ever shrink the contour, so points clearly inside the fitted
+    circle are dropped and the fit repeated.
+    """
+    p = contour.reshape(-1, 2).astype(float)
+    keep = p
+    for _ in range(iters):
+        cx, cy, r = _fit_circle(keep)
+        outer = p[np.hypot(p[:, 0] - cx, p[:, 1] - cy) > (1 - tol) * r]
+        if len(outer) < 0.3 * len(p):
+            break
+        keep = outer
+    return 2.0 * _fit_circle(keep)[2]
 
 
 def find_notch(img: np.ndarray, box: Box, ic: dict[str, Any], trace: Trace | None = None) -> Feature | None:

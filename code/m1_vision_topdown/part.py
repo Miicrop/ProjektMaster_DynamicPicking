@@ -23,6 +23,9 @@ class PartPose:
     chamfer_found: bool
     contour: np.ndarray
     box: np.ndarray             # minAreaRect corners (debug)
+    # side of the part axis the chamfer lies on in the image (+1 / -1, 0 = no or ambiguous chamfer). Seen from
+    # above, a part lying upside down shows the chamfer mirrored -> the other sign.
+    chamfer_side: int = 0
 
 
 def segment_part(rect_img: np.ndarray, cfg: dict[str, Any], px_per_mm: float,
@@ -58,14 +61,40 @@ def segment_part(rect_img: np.ndarray, cfg: dict[str, Any], px_per_mm: float,
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     min_px = pc["min_area_mm2"] * px_per_mm ** 2
     max_px = pc["max_area_mm2"] * px_per_mm ** 2
-    candidates = [c for c in contours if min_px <= cv2.contourArea(c) <= max_px]
+    sized = [(c, shape_mismatch(c, px_per_mm, pc)) for c in contours
+             if min_px <= cv2.contourArea(c) <= max_px]
+    candidates = [c for c, why in sized if why is None]
+    rejected = [why for _, why in sized if why is not None]
     best = max(candidates, key=cv2.contourArea) if candidates else None
     if trace is not None:   # all blobs grey with area, the selected part red
         trace.add("part_candidates", draw_candidates(
             rect_img, contours, best, [f"{cv2.contourArea(c) / px_per_mm ** 2:.0f} mm2" for c in contours]))
     if best is None:
+        if rejected:   # something part-sized but not part-shaped, e.g. a hand in the workspace
+            raise VisionError(f"No part found in workspace (wrong shape: {'; '.join(rejected)})")
         raise VisionError("No part found in workspace")
     return best
+
+
+def shape_mismatch(contour: np.ndarray, px_per_mm: float, pc: dict[str, Any]) -> str | None:
+    """Why the blob is not the part (size of its min-area rectangle or fill ratio), None if it fits.
+
+    Without this a hand reaching into the workspace (bright, ~14000 mm2) passed the area check and
+    the cycle started (lab 2026-11-26). Lab parts measure 59-61 x 38.5-41 mm, fill 0.90-0.95; the
+    phone test photos up to 69 x 46 mm (lower camera -> more parallax of the part top).
+    """
+    size = pc.get("part_size_mm")
+    if not size:
+        return None
+    (_, _), (a, b), _ = cv2.minAreaRect(contour)
+    length, width = max(a, b) / px_per_mm, min(a, b) / px_per_mm
+    tol = pc["part_size_tolerance"]
+    if abs(length - size[0]) > tol * size[0] or abs(width - size[1]) > tol * size[1]:
+        return f"{length:.0f} x {width:.0f} mm instead of {size[0]:.0f} x {size[1]:.0f} mm"
+    fill = cv2.contourArea(contour) / max(a * b, 1e-6)
+    if fill < pc["part_fill_min"]:
+        return f"fill {fill:.2f} < {pc['part_fill_min']}"
+    return None
 
 
 def part_pose(contour: np.ndarray, chamfer_min_frac: float = 0.08) -> PartPose:
@@ -91,13 +120,17 @@ def part_pose(contour: np.ndarray, chamfer_min_frac: float = 0.08) -> PartPose:
     dists = [-cv2.pointPolygonTest(contour, (float(p[0]), float(p[1])), True) for p in box]
     k = int(np.argmax(dists))
     chamfer = dists[k] > chamfer_min_frac * width
+    side = 0
     if chamfer:
-        centre = np.array(rect[0])
-        if np.dot(box[k] - centre, axis) < 0:
+        to_corner = box[k] - np.array(rect[0])
+        if np.dot(to_corner, axis) < 0:
             axis = -axis
+        # only with exactly one cut corner: a part clipped at the workspace edge has a second one
+        if sorted(dists)[-2] <= chamfer_min_frac * width:
+            side = 1 if axis[0] * to_corner[1] - axis[1] * to_corner[0] > 0 else -1   # 2D cross product
     theta = math.degrees(math.atan2(axis[1], axis[0]))
     theta = theta % 360.0 if chamfer else theta % 180.0
-    return PartPose(u, v, theta, length, width, bool(chamfer), contour, box)
+    return PartPose(u, v, theta, length, width, bool(chamfer), contour, box, side)
 
 
 def draw_part_pose(rect_img: np.ndarray, p: PartPose) -> np.ndarray:

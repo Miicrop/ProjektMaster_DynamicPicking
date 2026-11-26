@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import random
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -92,6 +93,9 @@ class TopDownPipeline:
         part = part_pose(contour, self.cfg["part_topdown"]["chamfer_min_frac"])
         if trace is not None:
             trace.add("part_pose", draw_part_pose(rect, part))
+        expected = self.cfg["part_topdown"].get("chamfer_side")
+        if expected and part.chamfer_side and part.chamfer_side != expected:
+            raise VisionError("Part is upside down (chamfer mirrored) - turn it over")
 
         x_ws, y_ws = correct_position(*ws.rect_to_mm(part.u, part.v), self.cfg["part_topdown"])
         period = 360.0 if part.chamfer_found else 180.0
@@ -108,19 +112,40 @@ class TopDownPipeline:
         return result
 
 
+def _unstable(a: TopDownResult, img_a: np.ndarray, b: TopDownResult, img_b: np.ndarray,
+              sc: dict[str, Any]) -> str | None:
+    """Why two consecutive detections do not show a still scene, None if they do."""
+    d_mm = float(np.hypot(a.x_ws_mm - b.x_ws_mm, a.y_ws_mm - b.y_ws_mm))
+    period = 360.0 if a.part.chamfer_found and b.part.chamfer_found else 180.0
+    d_deg = abs((a.theta_ws_deg - b.theta_ws_deg + period / 2) % period - period / 2)
+    if d_mm > sc["pose_tol_mm"] or d_deg > sc["pose_tol_deg"]:
+        return f"part moved {d_mm:.1f} mm / {d_deg:.1f} deg"
+    # whole workspace, both images rectified with the same (first) homography
+    ga, gb = (cv2.GaussianBlur(cv2.cvtColor(a.workspace.rectify(i), cv2.COLOR_BGR2GRAY), (5, 5), 0)
+              for i in (img_a, img_b))
+    changed = (cv2.absdiff(ga, gb) > sc["pixel_delta"]).astype(np.uint8)
+    changed = cv2.morphologyEx(changed, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    frac = float(changed.mean())
+    if frac > sc["max_changed_frac"]:
+        return f"{100 * frac:.1f} % of the workspace changed"
+    return None
+
+
 class TopDownDetector(ObjectDetector):
     """Real M1 detector: camera + TopDownPipeline."""
 
     def __init__(self, cfg: dict[str, Any], camera=None):
+        self._cfg = cfg
         self._pipeline = TopDownPipeline(cfg)
         self._owns_camera = camera is None
         self._camera = camera or open_camera(cfg["topdown_camera"])
         self.last_result: TopDownResult | None = None
         self.last_image: np.ndarray | None = None
+        self.last_reject: str | None = None        # why the last detect() returned None (GUI text)
         self.trace_steps = False                   # collect intermediate images (documentation)
         self.last_trace: Trace | None = None
 
-    def detect(self) -> ObjectPose | None:
+    def _detect_once(self) -> TopDownResult | None:
         img = self._camera.read()
         self.last_image = img
         self.last_result = None
@@ -129,11 +154,34 @@ class TopDownDetector(ObjectDetector):
             self.last_result = self._pipeline.process(img, self.last_trace)
         except VisionError as e:
             if "No part" in str(e):
-                log.info("No part in workspace")
+                self.last_reject = str(e)
                 return None
             raise
-        log.info("Part detected: %s", self.last_result.pose)
-        return self.last_result.pose
+        return self.last_result
+
+    def detect(self) -> ObjectPose | None:
+        """Part pose, or None if there is no part or the scene is not still yet (see `stability`)."""
+        self.last_reject = None
+        sc = self._cfg["part_topdown"].get("stability") or {}
+        frames = sc.get("frames", 1) if getattr(self._camera, "is_live", True) else 1
+        prev = self._detect_once()
+        for _ in range(frames - 1):
+            if prev is None:
+                break
+            prev_img = self.last_image
+            time.sleep(sc["interval_s"])
+            cur = self._detect_once()
+            why = None if cur is None else _unstable(prev, prev_img, cur, self.last_image, sc)
+            if why:
+                self.last_reject = f"scene not still: {why}"
+                self.last_result = None
+                cur = None
+            prev = cur
+        if prev is None:
+            log.info("No part detected: %s", self.last_reject)
+            return None
+        log.info("Part detected: %s", prev.pose)
+        return prev.pose
 
     def close(self) -> None:
         if self._owns_camera:
