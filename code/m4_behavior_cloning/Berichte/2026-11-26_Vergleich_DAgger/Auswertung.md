@@ -207,3 +207,47 @@ Die Lagegenauigkeit verbessert DAgger nur, wenn die Korrekturen selbst nicht neu
    oder je Lage zwei Fahrten. Fest gegen gemischt zeigt, dass Trainingsstreuung allein 9/15 gegen 4/15 ergeben kann.
 5. G2-D fest ist ein interessanter Nebenbefund: Es greift quer genauer, pendelt aber stark. Ein Weitertrainieren
    lohnt erst, wenn sich in Schritt 3 zeigt, dass eine hohe Übernahme das Pendeln verhindert.
+
+## 11. Nachmittag 26.11.: DAgger mit Stoß und echte Griffe (G2b)
+
+Daten: `data/2026-11-26_dagger` (40 Episoden, G2b, Glättung 0,5, Probe-Abstand 14 mm), Rollouts
+`checkpoints/G2b_580_dagger_nur_griff/policy/rollouts/2026-11-26_14-*` (DAgger-Läufe ohne `summary.json`:
+der JSON-Fehler der Stoß-Einstellung, inzwischen behoben; echte Griffe 14-30 bis 14-36).
+
+**Stoß:** 27 der 40 Fahrten mit Stoß, in drei Stufen. Übernahme durch den Experten bei 22–25 mm über PICK.
+
+| Einstellung | Fahrten | xy beim Stopp | \|quer\| | Spiel | Fehlgriff |
+|---|---|---|---|---|---|
+| ohne Stoß (alle Stufen) | 14 | 2,1 mm | 1,3–1,7 mm | 0,6–0,9 mm | 3 |
+| 4–8 mm, 0–4°, 70–110 mm | 9 | 1,7–2,1 mm | 0,5–0,7 mm | 1,7–1,9 mm | 1 |
+| 6–10 mm, 0–5°, 50–80 mm | 10 | 2,4 mm | 1,1 mm | 1,3 mm | 0 |
+| 10–16 mm, 0–10°, 50–80 mm | 7 | 2,0 mm | 1,2 mm | 1,1 mm | 0 |
+
+G2b fängt auch Stöße bis ~15 mm und 8° vollständig, bevor es 14 mm über der Oberkante ist. Die Fahrten mit Stoß
+sind dort nicht schlechter als die ohne. Der Experte korrigiert danach im Median ~2 mm und < 0,5°.
+
+**Griffprüfung bei 14 mm:** 35 von 40 sind „Warnung“, aber fast immer nur wegen der Höhe. Der Rest der
+Vorhersage endet 14–19 mm über PICK (Warnung ab 5 mm), die letzten ~15 mm bewertet die Prüfung also nicht.
+`--dagger-nur-fehlgriffe` lässt nur „Erfolg“ weg und behält damit hier fast alles.
+
+**Echte Griffe: Das Schwanken sitzt auf den letzten ~10 mm.** Seitlicher Weg und Takte je Band über der Greifhöhe
+(Höhe beim Schließen):
+
+| Lauf | 150–60 mm | 60–30 | 30–20 | 20–10 | **10 bis Griff** |
+|---|---|---|---|---|---|
+| 14-32 (Griff) | 5,8 mm / 10 T | 9,9 / 23 | 2,5 / 9 | 4,9 / 11 | **13,7 / 17** |
+| 14-34 (Griff) | 6,4 / 10 | 12,7 / 28 | 3,7 / 10 | 7,1 / 15 | **9,9 / 12** |
+| 14-35 (Tisch-Stopp) | 4,7 / 10 | 12,5 / 33 | 3,4 / 10 | 6,6 / 13 | **11,5 / 6** |
+| 14-36 (Griff) | 5,7 / 10 | 13,1 / 28 | 3,5 / 9 | 2,8 / 9 | **13,4 / 15** |
+| 14-30 (Arm steht) | 6,9 / 11 | 13,9 / 27 | 6,8 / 11 | 6,6 / 11 | **15,9 / 23** |
+
+Unterhalb der Objektoberkante macht die Policy in 3–5 Takten seitliche Sprünge von 4–10 mm (14-32: Takt
+119–124 von −5 auf 0 mm, 14-35: Takt 125–129 von +9,6 auf 0 mm), die Höhe springt um ±3 mm, und die Streuung
+der Vorhersagen steigt von ~0,005 auf 0,02–0,1 rad. Die Policy ist dort unsicher und springt zwischen Lösungen.
+Diesen Bereich sieht kein Test mit Probegriff und keine DAgger-Fahrt, weil beide über der Oberkante stoppen.
+Auf den Höhen, auf denen DAgger arbeitet, ist G2b schon gut.
+
+**Folgerung:** Mehr DAgger über dem Objekt bringt wenig. Am wirksamsten wäre ein **geplanter Endabstieg**:
+Die Policy führt bis etwa 10–15 mm über die Oberkante, dann wird senkrecht auf die Greifhöhe abgesenkt
+(Tischhöhe + Greifhöhe sind bekannt, PICK wird nicht gebraucht) und geschlossen, wie beim geplanten Transport.
+Nach den DAgger-Stopps von heute (xy ~2 mm, Spiel meist > 0,5 mm) gelänge das in ~36 von 40 Fahrten.

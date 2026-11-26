@@ -52,6 +52,7 @@ keinen Hardware-Not-Aus (AP 4.2).
 """
 
 import argparse
+import dataclasses
 import json
 import re
 import sys
@@ -125,12 +126,16 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 end_joints=None, end_gripper=None, min_steps=0, threaded_watchdog=True,
                 progress=print, servo_rate_hz=config.SERVO_RATE_HZ, execution=None,
                 frame_guard=None, stop_at_grasp=False, on_tick=None, mitschrieb=None,
-                target_lookahead=0.0, live=None, glaettung=1.0, stoerung=None):
+                target_lookahead=0.0, live=None, glaettung=1.0, stoerung=None, end_below=None):
     """Eine Policy-Fahrt. Rueckgabe: Log-dict (Arrays je Takt + Zusammenfassung).
 
     ``stoerung``: bc/stoerung.Stoerung (schon gezogen) -- einmal je Fahrt ein
     geplanter Stoss unterhalb einer Hoehe ueber PICK, danach faehrt die Policy
     aus der verschobenen Lage weiter (nur servo_j). Ergebnis in ``stoerung``.
+
+    ``end_below``: ``f(tcp) -> bool`` (geplanter Endabstieg, bc/endabstieg.py) --
+    die Policy endet, sobald der TCP darunter ist oder sie schliessen will
+    (stop_reason "endabstieg ..."); Abstieg und Griff plant der Aufrufer.
 
     ``glaettung``: alpha des Tiefpasses auf die Ziele (bc/servo.CommandLowpass,
     1 = aus). Wirkt hinter dem TargetLimiter und vor der Kollisionspruefung;
@@ -229,6 +234,9 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 frame_guard.check(frames, clock.now())
                 action = executor.next_action(obs)
             predicted = executor.predictions > before
+            if end_below is not None and end_below(state.tcp_quat):
+                stop_reason = "endabstieg: Hoehe erreicht"
+                break
             targets = None
             if (stoerung is not None and not online and prev_gripper is not None
                     and stoerung.faellig(state.tcp_quat)):
@@ -326,6 +334,11 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 stop_reason = "stopp: %s" % (watchdog.tripped or "angefordert")
                 break
             gripper = dataset.gripper_from_action(action)
+            if (end_below is not None and gripper and prev_gripper is not None
+                    and not prev_gripper):
+                # Endabstieg: die Policy schliesst nicht selbst
+                stop_reason = "endabstieg: Policy wollte schliessen"
+                break
             wait_s = 0.0
             if halt and prev_gripper is not None and gripper != prev_gripper:
                 # Haltepunkt: das Ziel dieser Action halten, bis der Arm dort
@@ -559,6 +572,88 @@ def planned_transport(robot, workspace, station_joints, clock, servo_rate_hz=con
     return {**{k: np.asarray(v, dtype=float) for k, v in log.items()}, **out}
 
 
+def planned_descent(robot, workspace, target_pose, clock, servo_rate_hz=config.SERVO_RATE_HZ,
+                    planner=None, threaded_watchdog=True):
+    """Geplanter Endabstieg (bc/endabstieg.py): LIN auf ``target_pose`` mit
+    Anflugtempo, Greifer offen, dann schliessen. Rueckgabe wie
+    :func:`planned_transport` (stop_reason "gegriffen" bei Erfolg)."""
+    from bc.kinematics import IKFailure, Kinematics
+    from bc.trajectory import MOTION_LIN, Waypoint, build_ideal_trajectory
+
+    planner = planner or {}
+    log = {k: [] for k in ("t", "joints", "tcp", "action", "gripper_cmd")}
+    out = {"stop_reason": None, "pacer_overruns": 0, "steps_planned": 0}
+    kin = Kinematics(robot)
+    q0 = np.asarray(robot.read_state().joints, dtype=float)
+    try:
+        p0 = np.asarray(robot.fk(q0), dtype=float)
+        target_pose = np.asarray(target_pose, dtype=float)
+        q1 = kin.ik(target_pose, q0)
+        waypoints = [Waypoint(p0, gripper_closed=False, name="ENDE_POLICY", joints=q0),
+                     Waypoint(target_pose, gripper_closed=False, name="GRIFF", motion=MOTION_LIN,
+                              joints=q1)]
+        ideal = build_ideal_trajectory(
+            waypoints, fk=robot.fk,
+            transit_speed=planner.get("approach_speed_ms") or config.APPROACH_SPEED_MS,
+            approach_speed=planner.get("approach_speed_ms") or config.APPROACH_SPEED_MS,
+            ptp_joint_speed=planner.get("ptp_joint_speed_rads") or config.PTP_JOINT_SPEED_RADS)
+        targets = kin.solve_path(ideal.poses_quat, q0, fixed_joints=ideal.joints)
+        for q in targets:
+            check_target(workspace, robot, q)
+    except (IKFailure, TargetRejected, ValueError) as exc:
+        out["stop_reason"] = "endabstieg nicht planbar: %s" % exc
+        return {**{k: np.asarray(v, dtype=float) for k, v in log.items()}, **out}
+    out["steps_planned"] = len(targets)
+
+    watchdog = Watchdog(robot, [geofence_check(robot, workspace)], clock)
+    if threaded_watchdog:
+        watchdog.start()
+    interp = ServoInterpolator(servo_rate_hz=servo_rate_hz).reset(q0)
+    stall = StallGuard()
+    robot.activate_servo("position")
+    pacer = Pacer(clock, servo_rate_hz).start()
+    try:
+        for q in targets:
+            if not threaded_watchdog and watchdog.run_once() is not None:
+                out["stop_reason"] = "geofence: %s" % watchdog.tripped
+                break
+            for qq, v, a in interp.window(q):
+                if robot.stop_requested:
+                    break
+                pacer.tick()
+                robot.servo_j(qq, v, a)
+            if robot.stop_requested:
+                out["stop_reason"] = "stopp: %s" % (watchdog.tripped or "angefordert")
+                break
+            state = robot.read_state()
+            log["t"].append(clock.now())
+            log["joints"].append(state.joints)
+            log["tcp"].append(np.asarray(state.tcp_quat, dtype=float))
+            log["action"].append(np.append(q, config.GRIPPER_OPEN))
+            log["gripper_cmd"].append(0.0)
+            stall.check(state.joints, q)
+        else:
+            # stehen, bis das letzte Ziel erreicht ist, dann schliessen
+            for _ in range(config.GRIPPER_DWELL_STEPS * interp.substeps):
+                q, v, a = interp.hold()
+                pacer.tick()
+                robot.servo_j(q, v, a)
+            robot.gripper_command(True)
+            out["stop_reason"] = "gegriffen"
+    except RobotError as exc:
+        out["stop_reason"] = "abgelehnt im endabstieg: %s" % exc
+        robot.emergency_stop()
+    except ArmStalled as exc:
+        out["stop_reason"] = "im endabstieg: %s" % exc
+        report_stall(robot, "Endabstieg", exc)
+        robot.emergency_stop()
+    finally:
+        watchdog.stop()
+        robot.deactivate_servo()
+    out["pacer_overruns"] = pacer.overruns
+    return {**{k: np.asarray(v, dtype=float) for k, v in log.items()}, **out}
+
+
 def merge_transport(log, transport, robot):
     """Haengt die geplante Fahrt an das Log der Policy-Fahrt an."""
     n = len(transport["t"])
@@ -625,6 +720,7 @@ def add_recorded_workspace(workspace, info, robot, robot_kind, progress=print,
             plane = None
     if plane is None and recorded is not None:
         plane, keepouts, source = recorded, recorded_keepouts, "aufnahme"
+    workspace.tisch_ebene = plane     # fuer den Endabstieg (bc/endabstieg.grasp_z)
     if plane is not None:
         clearance_m = config.TABLE_MIN_CLEARANCE_M if table_clearance is None else table_clearance
         workspace.add_box(TableSurface(plane, min_clearance=clearance_m))
@@ -1437,6 +1533,26 @@ def parse_args():
                              "PTP zur Endstellung aus bc_policy.json (Policies, die nur auf Anflug "
                              "und Griff trainiert sind, tools/export_variante.py --abschneiden-nach)"
                              % (100 * TRANSPORT_LIFT_M))
+    parser.add_argument("--transport-ziel", dest="transport_ziel", default="PRE_PLACE", metavar="PUNKT",
+                        help="Ziel des geplanten Transports: Punkt der Steuerung (Default "
+                             "%(default)s). Fehlt er, gilt die Endstellung des Modells -- bei "
+                             "Aufnahmen mit pick_bis_griff ist das UEBER_TISCH (15 cm ueber ID4). "
+                             "'modell' = immer die Endstellung des Modells")
+    ea = parser.add_argument_group("Endabstieg (bc/endabstieg.py)")
+    ea.add_argument("--endabstieg", choices=("aus", "senkrecht", "pick"), default="aus",
+                    help="Policy nur bis --endabstieg-abstand ueber der Objektoberkante, dann geplant: "
+                         "'senkrecht' = von der Lage der Policy gerade runter, 'pick' = auf den PICK "
+                         "(--pick-quelle steuerung/m1), wenn er zur Policy passt, sonst senkrecht. "
+                         "Danach schliessen und geplanter Transport (Default %(default)s)")
+    ea.add_argument("--endabstieg-abstand", dest="endabstieg_abstand", type=float, default=12.0,
+                    metavar="MM", help="Hoehe ueber der Objektoberkante, ab der geplant wird "
+                                       "(Default %(default)s)")
+    ea.add_argument("--endabstieg-max-xy", dest="endabstieg_max_xy", type=float, default=6.0,
+                    metavar="MM", help="'pick': hoechstens so weit darf der PICK neben der Policy "
+                                       "liegen, sonst senkrecht (Default %(default)s)")
+    ea.add_argument("--endabstieg-max-grad", dest="endabstieg_max_grad", type=float, default=5.0,
+                    metavar="GRAD", help="'pick': hoechstens so viel Drehung gegen die Policy "
+                                         "(Default %(default)s)")
     parser.add_argument("--lage-bekannt", dest="lage_bekannt", action="store_true",
                         help="Policy-Test mit bekannter Lage (bc/known_pose.py): PICK und Tisch "
                              "live aus der Steuerung, Idealbahn aus der Ablaufdatei; je Takt die "
@@ -1512,6 +1628,7 @@ def parse_args():
     if args.lage_bekannt and args.replay:
         parser.error("--lage-bekannt nicht mit --replay: die eingespielten Bilder zeigen eine "
                      "andere Lage")
+    args.transport_explizit = args.transport_geplant is not None
     if args.transport_geplant is None:
         args.transport_geplant = not args.lage_bekannt
     if args.lage_bekannt and args.transport_geplant:
@@ -1562,8 +1679,16 @@ def parse_args():
             parser.error("--stoerung: hoechstens 20 mm Versatz und 15 Grad Drehung")
         if args.stoerung.hoehe_mm[0] < 30:
             parser.error("--stoerung-hoehe: nicht unter 30 mm ueber PICK (Weg zum Korrigieren)")
-    if args.pick_quelle != "steuerung" and not args.lage_bekannt:
-        parser.error("--pick-quelle gilt nur mit --lage-bekannt")
+    if args.endabstieg != "aus":
+        if args.lage_bekannt:
+            parser.error("--endabstieg nicht mit --lage-bekannt (der Policy-Test endet selbst)")
+        if not args.transport_geplant:
+            parser.error("--endabstieg braucht den geplanten Transport (nicht --no-transport-geplant)")
+        if not 0.0 <= args.endabstieg_abstand <= 60.0:
+            parser.error("--endabstieg-abstand: 0..60 mm")
+    if (args.pick_quelle != "steuerung" and not args.lage_bekannt
+            and args.endabstieg != "pick"):
+        parser.error("--pick-quelle gilt nur mit --lage-bekannt oder --endabstieg pick")
     if not args.hold and not args.checkpoint:
         parser.error("--checkpoint fehlt (oder --hold fuer den Verdrahtungstest)")
     args.replay_episodes = []
@@ -1826,6 +1951,31 @@ def main():
             args.episodes > 1 or args.dagger or not args.experte or args.nur_umlegen):
         expert_workspace = build_workspace(table_z, info, robot, robot_info, args, known,
                                            None, progress=lambda *_: None)
+    # Endabstieg (bc/endabstieg.py): Lage aus dem Ablauf fuer Tisch, PICK-Hoehe und PICK
+    ziel, end_below = None, None
+    if args.endabstieg != "aus" and args.episodes:
+        from bc import endabstieg as endabstieg_module
+        try:
+            ziel = load_known_pose(args, info, robot, rec_planner)
+            print("Endabstieg %s: %s" % (args.endabstieg, ziel.describe()))
+        except (SystemExit, Exception) as exc:
+            print("Endabstieg %s: Lage aus dem Ablauf nicht lesbar (%s) -- Greifhoehe aus Tisch "
+                  "bzw. Demonstrationen, PICK unbekannt (senkrecht)" % (args.endabstieg, exc))
+        plane = getattr(workspace, "tisch_ebene", None)
+        tcp_now = np.asarray(robot.read_state().tcp_quat, dtype=float)
+        z_test, z_source = endabstieg_module.grasp_z(tcp_now[:2], ziel, plane, None,
+                                                     info.get("ideal_z_min"))
+        if z_test is None:
+            raise SystemExit("--endabstieg: Greifhoehe unbekannt (kein Tisch, kein Ablauf, keine "
+                             "Demonstrationshoehe im Modell)")
+        abstand_m = 1e-3 * float(args.endabstieg_abstand)
+
+        def end_below(tcp):
+            zg, _ = endabstieg_module.grasp_z(tcp[:2], ziel, plane, None, info.get("ideal_z_min"))
+            return float(tcp[2]) <= endabstieg_module.stop_height(zg, abstand_m)
+
+        print("Endabstieg %s: Policy bis %.0f mm ueber der Oberkante, Greifhoehe aus %s"
+              % (args.endabstieg, args.endabstieg_abstand, z_source))
     start = np.asarray(info["start_joints"]) if info.get("start_joints") else None
     end = np.asarray(info["end_joints"]) if info.get("end_joints") else None
     start_gripper, end_gripper = info.get("start_gripper"), info.get("end_gripper")
@@ -1833,6 +1983,15 @@ def main():
         print("WARNUNG: bc_policy.json ohne end_gripper (aelterer Export) -- Ende nur "
               "ueber die Stellung erkennbar, kann zu frueh ausloesen.")
     min_steps = int(0.5 * info.get("episode_length_median", 0))
+    transport_end = end
+    if args.transport_geplant and str(args.transport_ziel).lower() != "modell":
+        try:
+            transport_end = np.asarray(robot.get_point(args.transport_ziel)[0], dtype=float)
+            print("Geplanter Transport: nach dem Griff anheben, dann PTP zu %s (Steuerung)"
+                  % args.transport_ziel)
+        except (KeyError, AttributeError) as exc:
+            print("Geplanter Transport: Punkt %s nicht in der Steuerung (%s) -- Endstellung "
+                  "des Modells" % (args.transport_ziel, exc))
 
     out = Path(args.out) if args.out else (
         (Path(checkpoint) if not args.hold else Path("rollouts"))
@@ -1853,10 +2012,16 @@ def main():
              "asynchron" if asynchronous else "synchron", out))
 
     if args.transport_geplant:
-        if execution["mode"] == execution_module.ONLINE or end is None:
-            raise SystemExit("--transport-geplant braucht servo_j und eine Endstellung in bc_policy.json")
-        print("Transport geplant: Policy bis zum Griff, dann %.0f cm anheben und PTP zur Endstellung"
-              % (100 * TRANSPORT_LIFT_M))
+        if execution["mode"] == execution_module.ONLINE or transport_end is None:
+            if args.transport_explizit or args.endabstieg != "aus":
+                raise SystemExit("--transport-geplant braucht servo_j und eine Endstellung "
+                                 "(bc_policy.json oder --transport-ziel in der Steuerung)")
+            # nur der Standard (seit 26.11.): ohne Ziel wie frueher ohne geplanten Transport
+            print("Hinweis: geplanter Transport aus (keine Endstellung bzw. Ausfuehrung online)")
+            args.transport_geplant = False
+        else:
+            print("Transport geplant: Policy bis zum Griff, dann %.0f cm anheben und PTP zum Ziel"
+                  % (100 * TRANSPORT_LIFT_M))
 
     if args.kamerapruefung != "aus":
         try:
@@ -2001,13 +2166,18 @@ def main():
                 ep_start_gripper = float(replay_arrays["observation.state"][0, 13])
                 print("Fahrt %d: Replay Episode %d (%d Takte)"
                       % (ep, replay_ep, len(replay_arrays["observation.state"])))
-            lokal = None
+            lokal, pick_unbekannt = None, False
             if localizer is not None:
                 try:
                     if live is not None:
                         live.phase("Lokalisierung (Fotostellung)")
-                    lokal, known = localize_pick(robot, captures, localizer, known, args, info,
-                                                 rec_planner, pick_state, clock)
+                    if known is None and ziel is not None:
+                        # Endabstieg 'pick' ohne Policy-Test: PICK aus M1 fuer den Abstieg
+                        lokal, ziel = localize_pick(robot, captures, localizer, ziel, args, info,
+                                                    rec_planner, pick_state, clock)
+                    else:
+                        lokal, known = localize_pick(robot, captures, localizer, known, args,
+                                                     info, rec_planner, pick_state, clock)
                     if live is not None:
                         live.set_known(known)
                         try:
@@ -2016,14 +2186,20 @@ def main():
                             print("   Live-Ansicht: keine Abbildung fuer das Kamerabild (%s)" % exc)
                 except Exception as exc:
                     print("Fahrt %d: Lokalisierung gescheitert -- %s" % (ep, exc))
-                    if not pick_state.get("used_xy"):
+                    if known is None and ziel is not None:
+                        # Endabstieg: ohne PICK blind senkrecht (Anwender 2026-11-26)
+                        print("   Endabstieg ohne PICK: senkrecht von der Lage der Policy")
+                        lokal = {"fehler": str(exc), "pick_quelle": "keine"}
+                        pick_unbekannt = True
+                    elif not pick_state.get("used_xy"):
                         print("Beendet: ohne Lage keine Fahrt (Teil, Marker und Fotostellung "
                               "pruefen).")
                         break
-                    # Der Experte hat das Teil selbst abgelegt -- sein PICK ist bekannt
-                    # (z. B. ausserhalb des M1-Bereichs zwischen den Markern abgelegt)
-                    print("   weiter mit dem PICK des Experten (Teil von ihm abgelegt)")
-                    lokal = {"fehler": str(exc), "pick_quelle": "experte"}
+                    else:
+                        # Der Experte hat das Teil selbst abgelegt -- sein PICK ist bekannt
+                        # (z. B. ausserhalb des M1-Bereichs zwischen den Markern abgelegt)
+                        print("   weiter mit dem PICK des Experten (Teil von ihm abgelegt)")
+                        lokal = {"fehler": str(exc), "pick_quelle": "experte"}
             ideal_q = None
             if mitschrieb is not None:
                 mitschrieb.reset()
@@ -2074,19 +2250,49 @@ def main():
                               on_tick=None if known is None else _deviation_text(known),
                               mitschrieb=mitschrieb if ideal_q is not None else None,
                               live=live, glaettung=args.glaettung, stoerung=stoss,
+                              end_below=end_below,
                               target_lookahead=(config.PROBE_TARGET_LOOKAHEAD_STEPS
                                                 if known is not None and args.probegriff == "objekt"
                                                 else 0.0))
             lage = None
             if known is not None:
                 lage = evaluate_known(log, known, robot, args.probegriff)
+            ea_info, ea_policy_steps = None, None
+            if end_below is not None and str(log["stop_reason"]).startswith("endabstieg"):
+                q_now = np.asarray(robot.read_state().joints, dtype=float)
+                p_now = np.asarray(robot.fk(q_now), dtype=float)
+                zg, zq = endabstieg_module.grasp_z(p_now[:2], ziel, getattr(workspace, "tisch_ebene", None),
+                                                   None, info.get("ideal_z_min"))
+                target_pose, ea_info = endabstieg_module.target(
+                    args.endabstieg, p_now, zg,
+                    ziel if args.endabstieg == "pick" and not pick_unbekannt else None,
+                    max_xy_m=1e-3 * args.endabstieg_max_xy, max_grad=args.endabstieg_max_grad)
+                ea_info.update(greifhoehe_quelle=zq, ausloeser=log["stop_reason"])
+                print("Fahrt %d: %s" % (ep, endabstieg_module.describe(ea_info)))
+                if not -0.002 <= ea_info["abstieg_m"] <= endabstieg_module.MAX_DESCENT_M:
+                    log["stop_reason"] = ("endabstieg abgelehnt: %.0f mm statt hoechstens %.0f mm"
+                                          % (1e3 * ea_info["abstieg_m"],
+                                             1e3 * endabstieg_module.MAX_DESCENT_M))
+                    ea_info["ergebnis"] = log["stop_reason"]
+                else:
+                    ea_policy_steps = len(log["t"])
+                    down = planned_descent(robot, workspace, target_pose, clock,
+                                           servo_rate_hz=args.servo_rate, planner=rec_planner,
+                                           threaded_watchdog=not isinstance(clock, SimClock))
+                    ea_info["ergebnis"] = down["stop_reason"]
+                    log = merge_transport(log, down, robot)
+                    log["policy_steps"] = ea_policy_steps
+                    log["stop_reason"] = "griff" if down["stop_reason"] == "gegriffen" else down["stop_reason"]
+                    print("Fahrt %d: Endabstieg %d Takte -> %s" % (ep, len(down["t"]), down["stop_reason"]))
             if args.transport_geplant and log["stop_reason"] == "griff":
-                transport = planned_transport(robot, workspace, end, clock,
+                transport = planned_transport(robot, workspace, transport_end, clock,
                                               servo_rate_hz=args.servo_rate, planner=rec_planner,
                                               threaded_watchdog=not isinstance(clock, SimClock))
                 print("Fahrt %d: Griff nach %d Takten, geplanter Transport %d Takte -> %s"
                       % (ep, len(log["t"]), len(transport["t"]), transport["stop_reason"]))
                 log = merge_transport(log, transport, robot)
+                if ea_policy_steps is not None:
+                    log["policy_steps"] = ea_policy_steps
             wall = time.perf_counter() - t0
             rollout = {"tcp": np.vstack([log["tcp"], log["final_tcp"][None]]) if len(log["tcp"]) else log["final_tcp"][None],
                        "gripper_cmd": np.append(log["gripper_cmd"], log["gripper_cmd"][-1] if len(log["gripper_cmd"]) else 0.0),
@@ -2150,6 +2356,8 @@ def main():
                 summary["lokalisierung"] = lokal
             if log.get("stoerung") is not None:
                 summary["stoerung"] = log["stoerung"]
+            if ea_info is not None:
+                summary["endabstieg"] = ea_info
             results.append(summary)
             arrays_out = {k: v for k, v in log.items() if isinstance(v, np.ndarray)}
             # jede rohe Vorhersage (Anwender 2026-11-17: springt die Drehung?)
@@ -2256,7 +2464,9 @@ def main():
     report = {
         "checkpoint": None if args.hold else str(checkpoint),
         "created": datetime.now().isoformat(timespec="seconds"),
-        "args": vars(args),
+        # Stoerung (bc/stoerung.StoerungConfig) als dict, sonst scheitert json.dumps
+        "args": {k: (dataclasses.asdict(v) if dataclasses.is_dataclass(v) else v)
+                 for k, v in vars(args).items()},
         "robot": robot_info,
         # was die Kameras wirklich eingestellt hatten (Befund 2026-11-24:
         # Weissabgleich der Fahrten war nicht nachvollziehbar)

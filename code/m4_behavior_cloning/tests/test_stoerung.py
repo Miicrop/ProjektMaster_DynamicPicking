@@ -100,3 +100,24 @@ def test_discard_before_laesst_den_naechsten_takt_gedeckt():
     ens.next_action(obs)
     ens.discard_before(ens.step - 1)
     assert all(s >= ens.step - 1 for s, _ in ens._chunks) or len(ens._chunks) == 1
+
+
+def test_infer_mit_stoss_schreibt_summary_und_dagger(tmp_path):
+    """Ganzer Lauf mit Stoss: summary.json (args mit StoerungConfig) und DAgger-meta."""
+    import json
+
+    from test_known_pose import _run_infer
+
+    error, log, _ = _run_infer(tmp_path, [
+        "--episodes", "2", "--probegriff", "objekt", "--dagger", str(tmp_path / "dagger"),
+        "--stoerung-anteil", "1", "--stoerung-hoehe", "2000-2000", "--stoerung-versatz", "5"])
+    assert error is None, log[-4000:]
+    assert "STOSS" in log, log[-3000:]
+    summary = json.loads((tmp_path / "out" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["args"]["stoerung"]["anteil"] == 1.0
+    st = summary["episodes"][0]["stoerung"]
+    assert st["erfolgt"] and abs(st["versatz_mm"] - 5.0) < 1e-9
+    metas = sorted((tmp_path / "dagger").glob("ep_*/meta.json"))
+    assert metas, "keine DAgger-Episode"
+    meta = json.loads(metas[0].read_text(encoding="utf-8"))
+    assert meta["metadata"]["dagger"]["stoerung"]["erfolgt"]

@@ -284,7 +284,8 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
                real_robot=False, seed=None, known_pose=False, probe="tisch",
                sequence=None, camera_check="an", pick_source="steuerung",
                photo_point=None, dagger_dir=None, probe_gap_mm=None, expert=True,
-               inference_steps=None, glaettung=None, regrasp=False, stoerung=None):
+               inference_steps=None, glaettung=None, regrasp=False, stoerung=None,
+               endabstieg=None, decay=None, sync_predict=False):
     """Kommandozeile fuer apps/infer.py (ohne das Python-Programm).
 
     ``known_pose``: Policy-Test mit bekannter Lage (``--lage-bekannt``,
@@ -319,6 +320,12 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
         argv += ["--replan", str(int(replan))]
     if no_ensemble:
         argv.append("--no-ensemble")
+        sync_predict = True     # apps/infer.py: --no-ensemble nur mit synchroner Vorhersage
+    if decay is not None and not hold:
+        # Gewicht exp(-decay*Alter): > 0 neuere Chunks staerker, < 0 aeltere
+        argv += ["--decay", "%g" % float(decay)]
+    if sync_predict:
+        argv.append("--sync-predict")
     if inference_steps and not hold:
         argv += ["--inference-steps", str(int(inference_steps))]
     if glaettung is not None:
@@ -355,6 +362,18 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
                 if stoerung.get(key) is not None:
                     lo, hi = stoerung[key]
                     argv += [flag, "%g-%g" % (float(lo), float(hi))]
+    if endabstieg and endabstieg.get("modus", "aus") != "aus" and not known_pose:
+        # Geplanter Endabstieg (bc/endabstieg.py), nicht mit dem Policy-Test
+        argv += ["--endabstieg", str(endabstieg["modus"])]
+        for key, flag in (("abstand_mm", "--endabstieg-abstand"),
+                          ("max_xy_mm", "--endabstieg-max-xy"),
+                          ("max_grad", "--endabstieg-max-grad")):
+            if endabstieg.get(key) is not None:
+                argv += [flag, "%g" % float(endabstieg[key])]
+        if endabstieg["modus"] == "pick" and pick_source and pick_source != "steuerung":
+            argv += ["--pick-quelle", str(pick_source)]
+            if photo_point:
+                argv += ["--foto-punkt", str(photo_point)]
     if camera_check and camera_check != "an":
         argv += ["--kamerapruefung", str(camera_check)]
     if out:
