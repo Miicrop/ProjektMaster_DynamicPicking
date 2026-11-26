@@ -1364,8 +1364,9 @@ def parse_args():
                              "auto = nur an der realen Anlage (Default %(default)s)")
     parser.add_argument("--no-start-move", action="store_true",
                         help="nicht vorher an die Startstellung fahren")
-    parser.add_argument("--transport-geplant", action="store_true",
-                        help="Policy nur bis zum Griff; danach Dwell, %.0f cm senkrecht anheben und "
+    parser.add_argument("--transport-geplant", action=argparse.BooleanOptionalAction, default=None,
+                        help="Standard AN (seit 26.11., keine aktuelle Policy kennt die Zeit nach "
+                             "dem Griff; --no-transport-geplant schaltet ab). Policy nur bis zum Griff; danach Dwell, %.0f cm senkrecht anheben und "
                              "PTP zur Endstellung aus bc_policy.json (Policies, die nur auf Anflug "
                              "und Griff trainiert sind, tools/export_variante.py --abschneiden-nach)"
                              % (100 * TRANSPORT_LIFT_M))
@@ -1433,6 +1434,8 @@ def parse_args():
     if args.lage_bekannt and args.replay:
         parser.error("--lage-bekannt nicht mit --replay: die eingespielten Bilder zeigen eine "
                      "andere Lage")
+    if args.transport_geplant is None:
+        args.transport_geplant = not args.lage_bekannt
     if args.lage_bekannt and args.transport_geplant:
         parser.error("--lage-bekannt endet selbst mit dem Griff -- ohne --transport-geplant")
     if args.dagger and not args.experte:
@@ -1819,7 +1822,13 @@ def main():
             camera_settings=now_settings or None,
             sequence_file=args.ablauf or (info.get("table_spec") or {}).get("sequence_file"),
             extra={"checkpoint": None if args.hold else str(checkpoint),
-                   "pick_source": args.pick_quelle})
+                   "pick_source": args.pick_quelle,
+                   # Inferenz-Einstellungen der Policy-Phase (Anwender 2026-11-26): die
+                   # Glaettung bestimmt, welche Zustaende die Policy-Phase besucht
+                   "glaettung": float(args.glaettung),
+                   "inference_steps": (None if args.hold else int(
+                       args.inference_steps or (info.get("policy") or {}).get("inference_steps")
+                       or config.POLICY_INFERENCE_STEPS))})
         print("DAgger: Episoden nach %s (bisher %d)"
               % (args.dagger, len(dagger_writer._index["episodes"])))
 

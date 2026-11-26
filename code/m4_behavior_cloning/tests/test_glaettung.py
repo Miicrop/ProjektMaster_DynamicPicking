@@ -85,3 +85,34 @@ def test_argv_ddim_and_glaettung():
         except ValueError:
             continue
         raise AssertionError("ohne Modell/Aufnahme haette es abbrechen muessen")
+
+
+def test_dagger_backfill_matches_rollout_and_keeps_existing(tmp_path):
+    import importlib.util
+    import json
+    from pathlib import Path
+
+    tool = Path(__file__).resolve().parents[1] / "tools" / "dagger_glaettung_nachtragen.py"
+    spec = importlib.util.spec_from_file_location("dagger_glaettung_nachtragen", tool)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    rng = np.random.default_rng(1)
+    action = np.cumsum(rng.normal(0, 0.01, (40, 7)), axis=0)
+    ziel = lowpass_series(action[:, :6], 0.5)
+    run = tmp_path / "checkpoints" / "M" / "policy" / "rollouts" / "2026-11-23_16-00-00"
+    run.mkdir(parents=True)
+    np.savez(run / "rollout_000.npz", action=action, ziel=ziel)
+    (run / "summary.json").write_text(json.dumps({"args": {"glaettung": 0.5, "inference_steps": None}}))
+    data = tmp_path / "dagger"
+    for i, cmd in enumerate((ziel, ziel + 0.5)):           # zweite Episode passt zu keiner Fahrt
+        ep = data / ("ep_%05d" % i)
+        ep.mkdir(parents=True)
+        np.savez(ep / "arrays.npz", aux__joints_command=cmd)
+        (ep / "meta.json").write_text(json.dumps({"metadata": {"mode": "dagger"}}))
+
+    assert mod.main([str(data), "--root", str(tmp_path), "--schreiben"]) == 1   # eine ohne Zuordnung
+    meta = json.loads((data / "ep_00000" / "meta.json").read_text())["metadata"]
+    assert meta["glaettung"] == 0.5 and meta["inference_steps"] == 10
+    assert meta["glaettung_nachtrag"]["quelle"] == "summary.json"
+    assert "glaettung" not in json.loads((data / "ep_00001" / "meta.json").read_text())["metadata"]

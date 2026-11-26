@@ -84,6 +84,14 @@ def parse_args():
                         help="DAgger-Episoden (apps/infer.py --dagger, metadata mode 'dagger') "
                              "K-mal in den Datensatz -- wenige Korrekturen neben vielen Demos "
                              "haetten sonst kaum Gewicht (Default %(default)s)")
+    parser.add_argument("--dagger-nur-fehlgriffe", action="store_true",
+                        help="DAgger-Episoden weglassen, deren Griff laut geometrischer Pruefung "
+                             "(meta dagger.lage.grasp_check.stufe) auch ohne Experten gelungen waere. "
+                             "Episoden ohne Pruefung (vor 25.11.) bleiben")
+    parser.add_argument("--dagger-gross", default=None, metavar="XY_MM,GRAD",
+                        help="DAgger-Episoden mit Expertenkorrektur >= XY_MM oder |Drehung| >= GRAD "
+                             "bekommen --dagger-gross-gewicht Kopien (statt --dagger-gewicht)")
+    parser.add_argument("--dagger-gross-gewicht", type=int, default=2, metavar="K")
     parser.add_argument("--label-kappen", type=float, default=None, metavar="RAD",
                         help="Gelenk-Label auf hoechstens RAD Abstand zur Ist-Stellung begrenzen")
     add_export_arguments(parser)
@@ -179,6 +187,7 @@ def main():
     for spec in args.ohne_episoden:
         folder, idx = spec.rsplit("=", 1)
         skip.setdefault(Path(folder).resolve(), set()).update(int(x) for x in idx.split(",") if x.strip())
+    gross = tuple(float(v) for v in args.dagger_gross.split(",")) if args.dagger_gross else None
     stats = Counter()
     trimmed = []
     orig_scan = lerobot_io.scan_sources
@@ -204,8 +213,22 @@ def main():
                     stats["Drehung nicht bestimmbar (behalten)"] += 1
             copies = 1
             if (meta.get("metadata") or {}).get("mode") == "dagger":
+                dg = (meta.get("metadata") or {}).get("dagger") or {}
+                stufe = ((dg.get("lage") or {}).get("grasp_check") or {}).get("stufe")
+                if args.dagger_nur_fehlgriffe:
+                    if stufe == "erfolg":
+                        stats["weggelassen: DAgger, Griff waere gelungen"] += 1
+                        continue
+                    if stufe is None:
+                        stats["DAgger ohne Griffpruefung (behalten)"] += 1
                 stats["DAgger-Episoden"] += 1
                 copies = max(1, int(args.dagger_gewicht))
+                if gross is not None:
+                    corr = (dg.get("experte") or {}).get("correction") or {}
+                    if (1e3 * float(corr.get("xy_m") or 0) >= gross[0]
+                            or abs(float(corr.get("yaw_deg") or 0)) >= gross[1]):
+                        stats["DAgger mit grosser Korrektur"] += 1
+                        copies = max(1, int(args.dagger_gross_gewicht))
                 stats["DAgger-Kopien (Gewicht)"] += copies
             kept.extend([(root, i, meta)] * copies)
         stats["behalten"] = len(kept)
@@ -240,6 +263,9 @@ def main():
         "dagger_gewicht": int(args.dagger_gewicht),
         "ohne_episoden": list(args.ohne_episoden),
         "label_kappen": args.label_kappen,
+        "dagger_nur_fehlgriffe": bool(args.dagger_nur_fehlgriffe),
+        "dagger_gross": args.dagger_gross,
+        "dagger_gross_gewicht": int(args.dagger_gross_gewicht),
     }
     print("Quellen: %s" % ", ".join(map(str, sources)))
     print("Regeln: %s" % rules)
