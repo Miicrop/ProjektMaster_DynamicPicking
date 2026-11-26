@@ -107,6 +107,8 @@ class DahengCamera:
 class FileCamera:
     """Replays image files in a loop."""
 
+    is_live = False   # consecutive reads give different files -> no multi-frame stability check (M1)
+
     def __init__(self, pattern: str):
         path = Path(pattern)
         if not path.is_absolute():

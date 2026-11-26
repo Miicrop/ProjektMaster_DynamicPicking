@@ -52,7 +52,27 @@ part_topdown:
   chroma_delta: 20
   min_area_mm2: 300
   max_area_mm2: 20000
+  # Shape check against hands/arms in the workspace (lab 2026-11-26: a hand was taken as the part).
+  # Min-area rectangle of the blob must match the part size, contour area / rectangle area >= fill.
+  # Measured: lab 59-61 x 38.5-41 mm, fill 0.90-0.95; phone photos (lower camera) up to 69 x 46 mm.
+  part_size_mm: [60.0, 40.0]    # null = shape check off
+  part_size_tolerance: 0.2      # +/- fraction per side
+  part_fill_min: 0.8
+  # Only start when the scene is still: `frames` images `interval_s` apart must all show the part at
+  # the same pose (within pose_tol) and the rest of the workspace must not change (moving hand next
+  # to the part). Not used for image file replay. null or frames 1 = off.
+  stability:
+    frames: 3
+    interval_s: 0.3
+    pose_tol_mm: 2.0
+    pose_tol_deg: 2.0
+    pixel_delta: 30             # grey value change that counts as "changed" (rectified image)
+    max_changed_frac: 0.005     # changed share of the workspace allowed (0.5 % ~ 23 x 23 mm)
   chamfer_min_frac: 0.08        # chamfer depth relative to short side to count as found
+  # Side of the part axis the chamfer lies on in the rectified image for a part lying the right way up
+  # (+1 in all 15 correct lab cycles 2026-11-26, -1 for the one upside down -> M3 saw the back without
+  # label). Mismatch = error before the pick. null = no check.
+  chamfer_side: 1
   # Empirical: the detected centre drifts outward from the image centre (parallax of the 15 mm part
   # top + uncalibrated lens). Fit from 21 pointing tests (lab 2026-11-12, logs/point_tests.csv, all
   # without correction): offset = -scale * (pos - center_mm), residual rms 0.5 mm (x) / 1.2 mm (y).
@@ -78,7 +98,7 @@ robot:
   # in the lab). The robot backup still has 210 mm -> set offsetZ of the tool on the pendant to this value.
   tool_tcp_mm: [0.0, 0.0, 197.5]
   home_point: Home              # named point stored on the robot
-  override: 0.8                 # global speed override 0..1 (keep low while testing)
+  override: 0.2                 # global speed override 0..1 (keep low while testing)
   joint_speed_percent: 20
   linear_speed_mps: 0.10
   approach_speed_mps: 0.03      # final linear approach / retreat

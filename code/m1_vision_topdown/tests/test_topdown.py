@@ -29,8 +29,9 @@ def _scene_px(x, y, h):
     return (x + MARGIN) * S, (h + MARGIN - y) * S
 
 
-def synth_scene(x_mm, y_mm, theta_deg, part_size=(60.0, 40.0), chamfer=10.0, warp=True):
-    """Top-down scene: grey board, white frame, ArUco markers with quiet zone, chamfered part."""
+def synth_scene(x_mm, y_mm, theta_deg, part_size=(60.0, 40.0), chamfer=10.0, warp=True, upside_down=False):
+    """Top-down scene: grey board, white frame, ArUco markers with quiet zone, chamfered part
+    (chamfer on the side the real parts show when lying the right way up, mirrored if `upside_down`)."""
     w, h = CFG["workspace"]["size_mm"]
     img = np.full((int((h + 2 * MARGIN) * S), int((w + 2 * MARGIN) * S), 3), 70, np.uint8)
 
@@ -47,10 +48,12 @@ def synth_scene(x_mm, y_mm, theta_deg, part_size=(60.0, 40.0), chamfer=10.0, war
         y0, x0 = int(cy - m.shape[0] / 2), int(cx - m.shape[1] / 2)
         img[y0:y0 + m.shape[0], x0:x0 + m.shape[1]] = m
 
-    # part outline in part frame (x = long axis, chamfer at the +x end, +y side)
+    # part outline in part frame (x = long axis, chamfer at the +x end, -y side; +y if upside down)
     L, W = part_size
-    poly = np.array([[-L / 2, -W / 2], [L / 2, -W / 2], [L / 2, W / 2 - chamfer],
-                     [L / 2 - chamfer, W / 2], [-L / 2, W / 2]])
+    poly = np.array([[-L / 2, W / 2], [L / 2, W / 2], [L / 2, -W / 2 + chamfer],
+                     [L / 2 - chamfer, -W / 2], [-L / 2, -W / 2]])
+    if upside_down:
+        poly[:, 1] *= -1
     c, s = math.cos(math.radians(theta_deg)), math.sin(math.radians(theta_deg))
     pts = poly @ np.array([[c, s], [-s, c]]) + [x_mm, y_mm]
     cv2.fillPoly(img, [np.array([_scene_px(px, py, h) for px, py in pts], np.int32)], (200, 120, 190))
@@ -163,3 +166,71 @@ def test_detector_keeps_trace_only_when_enabled():
     det.trace_steps = True
     det.detect()
     assert det.last_trace.names[0] == "original" and det.last_trace.names[-1] == "result"
+
+
+# --- protection against hands in the workspace (lab 2026-11-26) ----------------------------
+
+def _hand(img, x_mm, y_mm, size=(80.0, 170.0), colour=(150, 170, 210)):
+    """Bright skin-coloured blob (unwarped scene only)."""
+    h = CFG["workspace"]["size_mm"][1]
+    p0, p1 = _scene_px(x_mm, y_mm + size[1], h), _scene_px(x_mm + size[0], y_mm, h)
+    out = img.copy()
+    cv2.rectangle(out, tuple(map(int, p0)), tuple(map(int, p1)), colour, -1)
+    return out
+
+
+def test_hand_is_not_taken_as_part():
+    img = _hand(synth_scene(200, 200, 0, warp=False), 40, 40)
+    # hand alone: no part, reason says wrong shape
+    empty = _hand(synth_scene(200, 200, 0, part_size=(1.0, 1.0), chamfer=0.0, warp=False), 40, 40)
+    with pytest.raises(VisionError, match="wrong shape"):
+        TopDownPipeline(CFG).process(empty)
+    # hand next to the part: the part is still found
+    r = TopDownPipeline(CFG).process(img)
+    assert r.x_ws_mm == pytest.approx(200, abs=2.0) and r.y_ws_mm == pytest.approx(200, abs=2.0)
+
+
+class _SeqCamera:
+    """Live camera stand-in returning the given images in order (last one repeated)."""
+    def __init__(self, images):
+        self.images, self.i = images, 0
+
+    def read(self):
+        img = self.images[min(self.i, len(self.images) - 1)]
+        self.i += 1
+        return img
+
+
+def _detector(images):
+    from m1_vision_topdown import TopDownDetector
+    cfg = copy.deepcopy(CFG)
+    cfg["part_topdown"]["stability"]["interval_s"] = 0.0
+    return TopDownDetector(cfg, _SeqCamera(images))
+
+
+def test_still_scene_is_detected():
+    img = synth_scene(200, 200, 30)
+    det = _detector([img])
+    assert det.detect() is not None and det.last_reject is None
+    assert det._camera.i == CFG["part_topdown"]["stability"]["frames"]
+
+
+def test_moving_part_is_not_detected():
+    det = _detector([synth_scene(200, 200, 30), synth_scene(210, 200, 30)])
+    assert det.detect() is None
+    assert "part moved" in det.last_reject
+
+
+def test_hand_moving_next_to_part_is_not_detected():
+    base = synth_scene(200, 200, 30, warp=False)
+    det = _detector([base, _hand(base, 20, 20)])
+    assert det.detect() is None
+    assert "changed" in det.last_reject
+
+
+def test_upside_down_part_raises():
+    with pytest.raises(VisionError, match="upside down"):
+        TopDownPipeline(CFG).process(synth_scene(200, 200, 30, upside_down=True))
+    cfg = copy.deepcopy(CFG)
+    cfg["part_topdown"]["chamfer_side"] = None   # check off -> picked as before
+    assert TopDownPipeline(cfg).process(synth_scene(200, 200, 30, upside_down=True)).part.chamfer_found
