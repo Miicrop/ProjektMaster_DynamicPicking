@@ -356,6 +356,28 @@ class OperationTab(ModeTab):
             "Export: tools/export_variante.py --data <Demos> <Ordner> --dagger-gewicht 5.")
         self.dagger_dir.textChanged.connect(self._update_command)
         form.addRow("DAgger-Ordner", self.dagger_dir)
+        # Stoss waehrend der Policy-Fahrt (bc/stoerung.py, Anwender 2026-11-26)
+        self.stoss_anteil = block_wheel(QSpinBox())
+        self.stoss_anteil.setRange(0, 100)
+        self.stoss_anteil.setSingleStep(10)
+        self.stoss_anteil.setSuffix(" %")
+        self.stoss_anteil.setValue(0)
+        self.stoss_anteil.setToolTip(
+            "Anteil der Fahrten, in denen die Policy einmal gestoßen wird (0 = aus): "
+            "unterhalb der Höhe hält sie kurz an, der Arm wird weich seitlich versetzt und "
+            "gedreht (Höhe bleibt), danach fährt die Policy von dort weiter und muss sich "
+            "fangen. Den Rest korrigiert wie sonst der Experte. Nur mit Lage bekannt.")
+        self.stoss_anteil.valueChanged.connect(self._on_probe_changed)
+        form.addRow("Stoß-Anteil", self.stoss_anteil)
+        self.stoss_versatz = self._range_row(form, "Stoß-Versatz", (0.0, 20.0), (4.0, 8.0), " mm",
+                                             "Waagrechter Versatz, Richtung zufällig.")
+        self.stoss_drehung = self._range_row(form, "Stoß-Drehung", (0.0, 15.0), (0.0, 4.0), " °",
+                                             "Drehung um die Senkrechte, Vorzeichen zufällig.")
+        self.stoss_hoehe = self._range_row(
+            form, "Stoß-Höhe über PICK", (30.0, 300.0), (70.0, 110.0), " mm",
+            "TCP-Höhe über PICK, bei der gestoßen wird (zufällig im Bereich). Ab etwa "
+            "60 mm sinkt die Policy langsam -- darüber bleibt ihr die ganze langsame Phase "
+            "zum Korrigieren. Die Objektoberkante liegt etwa 7 mm über PICK.")
         layout.addLayout(form)
 
         row = QHBoxLayout()
@@ -398,9 +420,43 @@ class OperationTab(ModeTab):
             widget.setEnabled(False)
         return box
 
+    def _range_row(self, form, label, limits, values, suffix, tip):
+        """Zwei Felder MIN / MAX in einer Zeile; Rueckgabe (min, max)."""
+        row = QHBoxLayout()
+        boxes = []
+        for value in values:
+            box = block_wheel(QDoubleSpinBox())
+            box.setRange(*limits)
+            box.setDecimals(1)
+            box.setSingleStep(1.0)
+            box.setSuffix(suffix)
+            box.setValue(value)
+            box.setToolTip(tip)
+            box.valueChanged.connect(self._update_command)
+            boxes.append(box)
+        row.addWidget(boxes[0])
+        row.addWidget(QLabel("bis"))
+        row.addWidget(boxes[1])
+        form.addRow(label, row)
+        return tuple(boxes)
+
+    def _stoss_widgets(self):
+        return (self.stoss_versatz + self.stoss_drehung + self.stoss_hoehe)
+
+    def _stoerung(self):
+        """Einstellungen des Stosses fuer operation.infer_argv (None = aus)."""
+        if not self.stoss_anteil.value():
+            return None
+        pair = lambda boxes: (min(b.value() for b in boxes), max(b.value() for b in boxes))
+        return {"anteil": self.stoss_anteil.value() / 100.0,
+                "versatz_mm": pair(self.stoss_versatz),
+                "drehung_grad": pair(self.stoss_drehung),
+                "hoehe_mm": pair(self.stoss_hoehe)}
+
     def _known_widgets(self):
         return (self.probe, self.probe_gap, self.expert, self.sequence, self.pick_source,
-                self.photo_point, self.dagger_dir, self.regrasp)
+                self.photo_point, self.dagger_dir, self.regrasp,
+                self.stoss_anteil) + self._stoss_widgets()
 
     def _on_probe_changed(self, *_):
         objekt = self.known.isChecked() and self.probe.currentData() == "objekt"
@@ -408,6 +464,10 @@ class OperationTab(ModeTab):
         self.expert.setEnabled(objekt)
         self.dagger_dir.setEnabled(objekt and self.expert.isChecked())
         self.regrasp.setEnabled(objekt and self.expert.isChecked())
+        known = self.known.isChecked()
+        self.stoss_anteil.setEnabled(known)
+        for box in self._stoss_widgets():
+            box.setEnabled(known and self.stoss_anteil.value() > 0)
         self._update_command()
 
     def _on_pick_source_changed(self, *_):
@@ -822,7 +882,8 @@ class OperationTab(ModeTab):
             camera_check=camera_check or self.camera_check.currentData(),
             pick_source=self.pick_source.currentData(),
             photo_point=self.photo_point.text().strip() or None,
-            dagger_dir=self.dagger_dir.text().strip() or None)
+            dagger_dir=self.dagger_dir.text().strip() or None,
+            stoerung=self._stoerung())
 
     def _update_command(self):
         status = self.session.status()

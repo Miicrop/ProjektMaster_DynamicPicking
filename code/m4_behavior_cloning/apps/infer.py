@@ -125,8 +125,12 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 end_joints=None, end_gripper=None, min_steps=0, threaded_watchdog=True,
                 progress=print, servo_rate_hz=config.SERVO_RATE_HZ, execution=None,
                 frame_guard=None, stop_at_grasp=False, on_tick=None, mitschrieb=None,
-                target_lookahead=0.0, live=None, glaettung=1.0):
+                target_lookahead=0.0, live=None, glaettung=1.0, stoerung=None):
     """Eine Policy-Fahrt. Rueckgabe: Log-dict (Arrays je Takt + Zusammenfassung).
+
+    ``stoerung``: bc/stoerung.Stoerung (schon gezogen) -- einmal je Fahrt ein
+    geplanter Stoss unterhalb einer Hoehe ueber PICK, danach faehrt die Policy
+    aus der verschobenen Lage weiter (nur servo_j). Ergebnis in ``stoerung``.
 
     ``glaettung``: alpha des Tiefpasses auf die Ziele (bc/servo.CommandLowpass,
     1 = aus). Wirkt hinter dem TargetLimiter und vor der Kollisionspruefung;
@@ -225,6 +229,66 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
                 frame_guard.check(frames, clock.now())
                 action = executor.next_action(obs)
             predicted = executor.predictions > before
+            targets = None
+            if (stoerung is not None and not online and prev_gripper is not None
+                    and stoerung.faellig(state.tcp_quat)):
+                # Geplanter Stoss (bc/stoerung.py): die Action dieses Takts
+                # wird verworfen, die Policy rechnet waehrend des Stosses mit
+                # (Beobachtungshistorie, asynchrone Vorhersage laeuft weiter).
+                from bc.kinematics import IKFailure, Kinematics
+                try:
+                    targets = stoerung.plan(Kinematics(robot), state.joints, step)
+                except IKFailure as exc:
+                    stoerung.info["fehler"] = "IK: %s" % exc
+                    if progress:
+                        progress("  Takt %4d  Stoss ausgelassen (IK ohne Loesung)" % step)
+            if targets is not None:
+                mark = executor.step
+                if progress:
+                    progress("  Takt %4d  STOSS %.1f mm Richtung %.0f Grad, Drehung %+.1f Grad "
+                         "(%.0f mm ueber PICK)" % (step, stoerung.info["versatz_mm"],
+                                                   stoerung.info["richtung_grad"],
+                                                   stoerung.info["drehung_grad"],
+                                                   stoerung.info["start_hoehe_mm"]))
+                for k, q_soll in enumerate(targets):
+                    if k:
+                        frames = {}
+                        obs, state = build_observation(robot, captures, frames)
+                        frame_guard.check(frames, clock.now())
+                        executor.next_action(obs)
+                    ziel = limiter.limit(q_soll)
+                    check_target(workspace, robot, ziel, prev_ziel, target_lookahead)
+                    prev_ziel = ziel
+                    for q, v, a in interp.window(ziel):
+                        if robot.stop_requested:
+                            break
+                        pacer.tick()
+                        robot.servo_j(q, v, a)
+                    if robot.stop_requested:
+                        break
+                    g = float(prev_gripper)
+                    log["t"].append(clock.now())
+                    log["joints"].append(state.joints)
+                    log["tcp"].append(np.asarray(state.tcp_quat, dtype=float))
+                    log["action"].append(np.r_[ziel, g])
+                    log["ziel"].append(np.asarray(ziel, dtype=float))
+                    log["gripper_cmd"].append(g)
+                    log["predict_s"].append(np.nan)
+                    log["delay_steps"].append(np.nan)
+                    log["ensemble_spread"].append(0.0)
+                    log["ensemble_count"].append(0)
+                    log["halt_s"].append(0.0)
+                    if mitschrieb is not None:
+                        mitschrieb.add(obs, ziel, bool(prev_gripper), dagger.POLICY)
+                    stall.check(state.joints, ziel)
+                if robot.stop_requested:
+                    stop_reason = "stopp: %s" % (watchdog.tripped or "angefordert")
+                    break
+                # Vorhersagen von vor dem Stoss verwerfen: ab der Haelfte des
+                # Stosses zaehlt nur noch, was die Policy aus der neuen Lage will
+                executor.discard_before(mark + len(targets) // 2)
+                lowpass.reset(prev_ziel)
+                continue
             check_action(action, state.joints, guard)
 
             # Weiche Stufe: Zielaenderung je Takt begrenzen (servo.TargetLimiter);
@@ -373,6 +437,8 @@ def run_episode(robot, captures, executor, clock, max_steps, workspace,
     arrays.update(execution_module.reach_summary(reach_waits))
     if probe_actions is not None:
         arrays["probe_actions"] = probe_actions
+    if stoerung is not None:
+        arrays["stoerung"] = dict(stoerung.info or {}, erfolgt=bool(stoerung.erfolgt))
     return arrays
 
 
@@ -1145,6 +1211,7 @@ def localize_pick(robot, captures, localizer, known, args, info, planner, pick_s
 
 
 def write_dagger_episode(writer, rec, known, ideal_q, expert, log, lage, meta, ep, lokal=None):
+    # Stoss (bc/stoerung.py) steht in meta.dagger.stoerung -- Export kann filtern
     """Policy + Experte einer Fahrt als Episode schreiben (bc/dagger.py).
 
     Nicht geschrieben: Not-Aus (Arm steht) und Fahrten ohne Policy-Takte.
@@ -1173,7 +1240,7 @@ def write_dagger_episode(writer, rec, known, ideal_q, expert, log, lage, meta, e
         "points": {"PICK": {"pose_quat": [float(v) for v in known.pick]}},
         "dagger": {"lage": (lage or {}).get("summary"), "experte": {
             k: expert.get(k) for k in ("correction", "result", "new_pick", "placed_xy")},
-            "lokalisierung": lokal},
+            "lokalisierung": lokal, "stoerung": log.get("stoerung")},
     })
     try:
         episode, info = dagger.build_episode(rec, known.ideal, ideal_q,
@@ -1394,6 +1461,17 @@ def parse_args():
                         help="mit Experte: nach dem Ablegen auf Greifhoehe noch einmal "
                              "schliessen und oeffnen -- der Greifer schiebt das Teil mittig, "
                              "es liegt dann am nachgefuehrten PICK (Anwender 2026-11-24)")
+    st = parser.add_argument_group("Stoerung (bc/stoerung.py, mit --lage-bekannt)")
+    st.add_argument("--stoerung-anteil", dest="stoerung_anteil", type=float, default=0.0,
+                    metavar="P", help="Anteil der Fahrten mit geplantem Stoss, 0..1 (Default 0 = aus)")
+    st.add_argument("--stoerung-versatz", dest="stoerung_versatz", default="4-8", metavar="MIN-MAX",
+                    help="waagrechter Versatz in mm, Richtung zufaellig (Default %(default)s)")
+    st.add_argument("--stoerung-drehung", dest="stoerung_drehung", default="0-4", metavar="MIN-MAX",
+                    help="Drehung um die Senkrechte in Grad, Vorzeichen zufaellig (Default %(default)s)")
+    st.add_argument("--stoerung-hoehe", dest="stoerung_hoehe", default="70-110", metavar="MIN-MAX",
+                    help="TCP-Hoehe ueber PICK in mm, bei der gestossen wird (Default %(default)s)")
+    st.add_argument("--stoerung-takte", dest="stoerung_takte", type=int, default=6, metavar="N",
+                    help="Dauer des Stosses in Regeltakten (Default %(default)s)")
     parser.add_argument("--ohne-experte", dest="experte", action="store_false",
                         help="mit --probegriff objekt: nach dem Stopp ueber dem Objekt NICHT "
                              "korrigieren/greifen/umlegen -- senkrecht anheben, zurueck zum "
@@ -1464,6 +1542,26 @@ def parse_args():
         parser.error("--probe-abstand: 0 < mm <= 100")
     if args.probe_abstand is not None and args.probegriff != "objekt":
         parser.error("--probe-abstand gilt nur mit --probegriff objekt")
+    args.stoerung = None
+    if args.stoerung_anteil:
+        from bc.stoerung import StoerungConfig, parse_range
+        if not 0.0 < args.stoerung_anteil <= 1.0:
+            parser.error("--stoerung-anteil: 0 < P <= 1")
+        if not args.lage_bekannt:
+            parser.error("--stoerung-anteil braucht --lage-bekannt (Hoehe ueber PICK)")
+        try:
+            args.stoerung = StoerungConfig(
+                anteil=float(args.stoerung_anteil),
+                versatz_mm=parse_range(args.stoerung_versatz, "--stoerung-versatz"),
+                drehung_grad=parse_range(args.stoerung_drehung, "--stoerung-drehung"),
+                hoehe_mm=parse_range(args.stoerung_hoehe, "--stoerung-hoehe"),
+                takte=max(1, int(args.stoerung_takte)))
+        except ValueError as exc:
+            parser.error(str(exc))
+        if args.stoerung.versatz_mm[1] > 20 or args.stoerung.drehung_grad[1] > 15:
+            parser.error("--stoerung: hoechstens 20 mm Versatz und 15 Grad Drehung")
+        if args.stoerung.hoehe_mm[0] < 30:
+            parser.error("--stoerung-hoehe: nicht unter 30 mm ueber PICK (Weg zum Korrigieren)")
     if args.pick_quelle != "steuerung" and not args.lage_bekannt:
         parser.error("--pick-quelle gilt nur mit --lage-bekannt")
     if not args.hold and not args.checkpoint:
@@ -1782,6 +1880,8 @@ def main():
     if args.ablage_seed is None:
         args.ablage_seed = int(np.random.SeedSequence().entropy % (2 ** 32))
     rng = np.random.default_rng(args.ablage_seed)
+    # eigener Zufall fuer den Stoss: die Ablagen des Experten bleiben wie ohne Stoss
+    stoss_rng = np.random.default_rng([args.ablage_seed, 1])
     if args.experte and known is not None:
         print("Ablage-Zufall des Experten: %d (--ablage-seed zum Wiederholen)" % args.ablage_seed)
     reference_pick = None if known is None else known.pick.copy()
@@ -1953,6 +2053,18 @@ def main():
                         break
             if live is not None:
                 live.start_episode(ep)
+            stoss = None
+            if args.stoerung is not None and known is not None:
+                if execution["mode"] == execution_module.ONLINE:
+                    if ep == 0:
+                        print("Hinweis: Stoerung nur mit Ausfuehrung servo_j -- hier aus")
+                else:
+                    from bc.stoerung import Stoerung
+                    stoss = Stoerung(args.stoerung, stoss_rng, known.pick[2])
+                    plan = stoss.ziehen()
+                    print("Fahrt %d: %s" % (ep, "Stoss bei %.0f mm ueber PICK: %.1f mm, %+.1f Grad"
+                                            % (plan["hoehe_mm"], plan["versatz_mm"], plan["drehung_grad"])
+                                            if plan["geplant"] else "ohne Stoss"))
             t0 = time.perf_counter()
             log = run_episode(robot, captures, executor, clock, max_steps, workspace,
                               end_joints=end, end_gripper=end_gripper, min_steps=min_steps,
@@ -1961,7 +2073,7 @@ def main():
                               stop_at_grasp=args.transport_geplant or known is not None,
                               on_tick=None if known is None else _deviation_text(known),
                               mitschrieb=mitschrieb if ideal_q is not None else None,
-                              live=live, glaettung=args.glaettung,
+                              live=live, glaettung=args.glaettung, stoerung=stoss,
                               target_lookahead=(config.PROBE_TARGET_LOOKAHEAD_STEPS
                                                 if known is not None and args.probegriff == "objekt"
                                                 else 0.0))
@@ -2036,6 +2148,8 @@ def main():
                 summary["lage"] = lage["summary"]
             if lokal is not None:
                 summary["lokalisierung"] = lokal
+            if log.get("stoerung") is not None:
+                summary["stoerung"] = log["stoerung"]
             results.append(summary)
             arrays_out = {k: v for k, v in log.items() if isinstance(v, np.ndarray)}
             # jede rohe Vorhersage (Anwender 2026-11-17: springt die Drehung?)

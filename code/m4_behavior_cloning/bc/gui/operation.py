@@ -284,7 +284,7 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
                real_robot=False, seed=None, known_pose=False, probe="tisch",
                sequence=None, camera_check="an", pick_source="steuerung",
                photo_point=None, dagger_dir=None, probe_gap_mm=None, expert=True,
-               inference_steps=None, glaettung=None, regrasp=False):
+               inference_steps=None, glaettung=None, regrasp=False, stoerung=None):
     """Kommandozeile fuer apps/infer.py (ohne das Python-Programm).
 
     ``known_pose``: Policy-Test mit bekannter Lage (``--lage-bekannt``,
@@ -346,6 +346,15 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
                 argv += ["--foto-punkt", str(photo_point)]
         if dagger_dir and probe == "objekt" and expert:
             argv += ["--dagger", str(dagger_dir)]
+        if stoerung and float(stoerung.get("anteil") or 0) > 0:
+            # Stoss waehrend der Policy-Fahrt (bc/stoerung.py); Bereiche "MIN-MAX"
+            argv += ["--stoerung-anteil", "%g" % float(stoerung["anteil"])]
+            for key, flag in (("versatz_mm", "--stoerung-versatz"),
+                              ("drehung_grad", "--stoerung-drehung"),
+                              ("hoehe_mm", "--stoerung-hoehe")):
+                if stoerung.get(key) is not None:
+                    lo, hi = stoerung[key]
+                    argv += [flag, "%g-%g" % (float(lo), float(hi))]
     if camera_check and camera_check != "an":
         argv += ["--kamerapruefung", str(camera_check)]
     if out:
