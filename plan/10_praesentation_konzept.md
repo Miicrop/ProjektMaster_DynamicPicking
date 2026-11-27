@@ -79,7 +79,7 @@ Jeder Akt = ein Sprecher, die Zelle ist die gemeinsame Bühne (Rückfahrt in die
 - 1.2 Die Zelle: Plan extrudiert zu 3D, Positionsnummern ①–⑧ (LARA, Greifer, Kamera oben M1 (Daheng, zugleich Szene für M4), Seitenkamera M3 (USB), Handgelenkkamera M4 (Daheng, Fisheye), Rahmen + ArUco, Prüfposition, Ablagen GUT/SCHLECHT).
 - 1.3 Das Bauteil: lila Quader mit Fase dreht sich, Hinweislinien auf Fase, Etikett 69420, Loch, Kerbe.
 - 1.4 ★ **Ein Zyklus**: der komplette Ablauf einmal im Zeitraffer (Zustandsnamen erscheinen als Stempel IDLE → DETECT → … → SORT).
-- 1.5 Erfolgskriterium + Abgrenzung (ein Teil, flach, 2D-Pose, unter Aufsicht).
+- 1.5 Erfolgskriterium + Abgrenzung (ein Teil, kein Greiferdesign, flach liegend mit 2D-Pose).
 - 1.6 (k) Vorprojekt GROB in einem Blatt mit Bildern aus `thesis/figures/grob/` (freigegeben 21.10.).
 
 **Akt 2 – Architektur & Integration (Niklas)**
@@ -133,7 +133,7 @@ Jeder Akt = ein Sprecher, die Zelle ist die gemeinsame Bühne (Rückfahrt in die
 > | Akt | Aufgabe | Idee | Am Aufbau | Lösung |
 > |---|---|---|---|---|
 > | 2 | 2.1 | 2.2–2.4 | 2.5 Das alte Bild (Kamerapuffer) | 2.5 Schritt 2 |
-> | 3 M1 | 3.1 | 3.2–3.5 | 3.6 Parallaxe, 3.7 Menschen im Arbeitsraum, 3.8 Belichtung | Schritt 2 in 3.6–3.8 (Bilanz M1) |
+> | 3 M1 | 3.1 | 3.2–3.5 | 3.6 Parallaxe, 3.7 Probleme im Arbeitsraum, 3.8 Belichtung | Schritt 2 in 3.6–3.8 (Bilanz M1) |
 > | 4 M2 | 4.1 | 4.2–4.7 | 4.8 Greifer 23°, Achse 6 bei 178°, Ablegen 8 mm | 4.8 Schritt 2 |
 > | 5 M3 | 5.1 | 5.2–5.6 | 5.7 Die echte Kamera, 5.8 Loch zu klein | 5.9 Kreis-Fit |
 > | 6 M4 | 6.1 | 6.2–6.4 | 6.5, 6.6 | 6.6 Schritt 2, 6.7, 6.8 |

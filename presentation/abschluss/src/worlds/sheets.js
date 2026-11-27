@@ -13,22 +13,19 @@ const fmt = (v, d = 1) => Number(v).toFixed(d).replace('.', ',');
 
 // ---------------------------------------------------------------- 1.5 Erfolgskriterium
 function sheet15(api) {
-  const cfg = api.ctx.data.config;
   api.text(0, 'Läuft Erkennen, Greifen, Prüfen und Sortieren vollständig automatisch durch?', { font: 'title', size: 0.52, anchorY: 'top', maxWidth: 14.2, lineHeight: 1.15 }, [X0 + 0.7, 2.55], { delay: 0.1 });
   api.text(0, 'Das ist das Erfolgskriterium. Messwerte dienen der Demonstration, nicht echten Toleranzen.', { font: 'sans', size: 0.24, hex: T.inkSoft, anchorY: 'top' }, [X0 + 0.7, 1.15], { delay: 0.3 });
   api.text(1, 'ABGRENZUNG', { font: 'mono', size: 0.15, hex: T.inkSoft, letterSpacing: 0.08 }, [X0 + 0.7, 0.3]);
   const rows = [
     ['Ein Bauteil', 'kein Schüttgut, keine Vereinzelung'],
+    ['Kein Greiferdesign', 'vorhandener Greifer – deshalb ein einfaches Bauteil, das er sicher fassen kann'],
     ['Flach liegend', `Pose in der Ebene: x, y und Winkel – die Greifhöhe ist bekannt`],
-    ['Unter Aufsicht', `keine sicherheitszertifizierte Anlage, Override ${Math.round(cfg.robot.override * 100)} %, Not-Halt in Reichweite`],
-    ['M4 optional', 'lernbasiertes Greifen aus dem Rahmen bis über die Prüfung (statt PICK von M2), nicht Voraussetzung für den Demonstrator'],
   ];
   rows.forEach(([t, b], i) => {
     const x = X0 + 0.7 + (i % 2) * 7.3;
     const y = -0.2 - Math.floor(i / 2) * 1.55;
     api.row(1, i + 1, t, b, y, { x, width: 6.3, size: 0.32, delay: 0.1 + i * 0.12 });
   });
-  api.stamp(1, 'ERFOLGSKRITERIUM', [4.6, -3.55], { size: 0.34, rot: -0.05, hex: T.ink }, { delay: 0.6 });
 }
 
 // ---------------------------------------------------------------- 1.6 Vorprojekt GROB
@@ -48,7 +45,7 @@ function sheet16(api) {
     card.object.position.set(4.3 + (i - 1) * 0.9, 1.0 - i * 1.55, 0.05 + i * 0.05);
     card.object.rotation.z = (i - 1) * -0.05;
     card.opacity = 0;
-    api.add(1, card, { delay: i * 0.18, dur: 0.6 });
+    api.add(1 + i, card, { delay: 0, dur: 0.6 }); // ein Bild pro Klick
   });
 }
 
@@ -824,7 +821,7 @@ export function sheetScenes(storyboard) {
   const e = (id) => storyboard.find((s) => s.id === id);
   return [
     sheetScene(e('1.5'), 2, sheet15),
-    sheetScene(e('1.6'), 2, sheet16),
+    sheetScene(e('1.6'), 4, sheet16),
     sheetScene(e('2.4'), 2, sheet24),
     sheetScene(e('4.7'), 2, sheet47),
     sheetScene(e('6.3'), 2, sheetFunnel),

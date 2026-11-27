@@ -79,9 +79,18 @@ function sheet17(api) {
       api.line(0, [[m - 0.72, IY], [m + 0.72, IY]], { width: 1.2 }, { delay: d + 0.15 });
       api.line(0, [[m, IY - 0.72], [m, IY + 0.72]], { width: 1.2 }, { delay: d + 0.15 });
     } else if (i === 1) {
-      const tri = [[m - 0.55, IY - 0.38], [m + 0.6, IY - 0.38], [m - 0.1, IY + 0.55]];
-      api.line(0, tri, { closed: true, width: 1.8 }, { delay: d + 0.1 });
-      api.line(0, circ(m - 0.02, IY - 0.03, 0.66), { closed: true, width: 1.1, hex: T.inkSoft, dashed: true }, { delay: d + 0.2 });
+      // Glühbirne: Kolben, Hals, Sockel, Glühfaden, Strahlen
+      const BY = IY + 0.16, BR = 0.42, A = (54 * Math.PI) / 180;
+      const bulb = [[m - 0.17, IY - 0.42], ...arcPts(m, BY, BR, -Math.PI / 2 - A + 2 * Math.PI, -Math.PI / 2 + A, 40), [m + 0.17, IY - 0.42]];
+      api.line(0, bulb, { width: 1.8 }, { delay: d + 0.1 });
+      api.line(0, [[m - 0.19, IY - 0.48], [m + 0.19, IY - 0.48]], { width: 1.6 }, { delay: d + 0.2 });
+      api.line(0, [[m - 0.15, IY - 0.58], [m + 0.15, IY - 0.58]], { width: 1.6 }, { delay: d + 0.22 });
+      api.line(0, [[m - 0.07, IY - 0.67], [m + 0.07, IY - 0.67]], { width: 1.6 }, { delay: d + 0.24 });
+      api.line(0, [[m - 0.1, IY - 0.38], [m - 0.1, IY + 0.08], [m - 0.04, IY + 0.18], [m + 0.04, IY + 0.08], [m + 0.1, IY + 0.18], [m + 0.1, IY - 0.38]], { width: 1.1, hex: T.inkSoft }, { delay: d + 0.25 });
+      [-60, -25, 25, 60].forEach((deg) => {
+        const a = ((90 + deg) * Math.PI) / 180;
+        api.line(0, [[m + Math.cos(a) * 0.55, BY + Math.sin(a) * 0.55], [m + Math.cos(a) * 0.72, BY + Math.sin(a) * 0.72]], { width: 1.2, hex: T.inkSoft }, { delay: d + 0.3 });
+      });
     } else if (i === 2) {
       bolt(api, 0, [m, IY], 0.9, { delay: d + 0.1 });
     } else {
@@ -105,8 +114,6 @@ function sheet17(api) {
     const hex = i === 2 ? T.signal : i === 3 ? T.good : T.ink;
     api.text(1, t, { font: 'sansMedium', size: 0.22, hex, anchorY: 'top', maxWidth: W - 0.2, lineHeight: 1.3 }, [cx(i) + 0.1, -1.75], { delay: 0.15 + i * 0.3 });
   });
-  api.text(1, 'Die vier Schritte stehen ab jetzt unten rechts im Schriftfeld.', { font: 'sans', size: 0.2, hex: T.inkSoft, anchorX: 'right' }, [-X0 - 0.2, -3.3], { delay: 1.5 });
-  arrow(api, 1, [-X0 - 0.6, -3.5], [-X0 - 0.2, -3.95], { width: 1.4, hex: T.inkSoft }, { delay: 1.6 });
 }
 
 // ---------------------------------------------------------------- 2.5 Das alte Bild
@@ -218,7 +225,7 @@ function sheet25(api) {
   };
 }
 
-// ---------------------------------------------------------------- 3.7 Menschen im Arbeitsraum
+// ---------------------------------------------------------------- 3.7 Probleme im Arbeitsraum
 function sheet37(api) {
   const L = api.ctx.data.lab3;
   if (!L) return;
@@ -357,12 +364,12 @@ function sheet48(api) {
   const partOld = fill(api, 0, [DX + 1.1, DY + 0.8 + 0.25], 1.2, 0.5, T.part, { delay: 1.5 });
   const dimOld = api.line(0, [[DX + 2.0, DY], [DX + 2.0, DY + 0.8]], { width: 1.4, hex: T.signal }, { delay: 1.6 });
   const tOld = api.text(0, '8 mm: fällt hörbar', { font: 'monoMedium', size: 0.16, hex: T.signal }, [DX + 2.1, DY + 0.4], { delay: 1.6 });
-  note(api, 0, [X0 + 0.7, -1.6], 'Sanft ablegen', 'Die Posen sind mit aufsitzendem Teil geteacht. Öffnet der Greifer 8 mm darüber, fällt das Teil hörbar auf die Prüfstation.', { hex: T.signal, width: 6.4, size: 0.24, delay: 1.5 });
+  note(api, 0, [X0 + 0.7, -1.6], 'Sanft ablegen', 'Der Greifer öffnet place_height_mm über der Pose. Der Startwert 8 mm war für ohne Teil geteachte Posen gedacht – unsere sind mit aufsitzendem Teil geteacht, also fiel es hörbar auf die Prüfstation.', { hex: T.signal, width: 6.4, size: 0.24, delay: 1.5 });
   api.fade(1, [dimOld, tOld], { dur: 0.4 });
   api.add(1, (v) => { partOld.material.opacity *= 1 - v; partOld.visible = partOld.material.opacity > 0.001; }, { dur: 0.4 });
   fill(api, 1, [DX + 1.1, DY + 0.1 + 0.25], 1.2, 0.5, T.part, { delay: 1.1 });
-  api.text(1, `${cfg.place_height_mm ?? 1} mm`, { font: 'monoMedium', size: 0.16, hex: T.good }, [DX + 2.1, DY + 0.12], { delay: 1.2 });
-  api.text(1, `place_height_mm = ${cfg.place_height_mm ?? 1}`, { font: 'mono', size: 0.15, hex: T.good }, [X0 + 0.7, -2.95], { delay: 1.2 });
+  api.text(1, `${cfg.place_height_mm ?? 1} mm: liegt exakt auf`, { font: 'monoMedium', size: 0.16, hex: T.good }, [DX + 2.1, DY + 0.12], { delay: 1.2 });
+  api.text(1, `place_height_mm = ${cfg.place_height_mm ?? 1}`, { font: 'mono', size: 0.15, hex: T.good }, [X0 + 0.7, -3.3], { delay: 1.2 });
   api.stamp(1, 'ALLES IN DER KONFIGURATION', [5.0, -1.9], { size: 0.26, rot: -0.03, hex: T.good, sub: 'gripper_angle_offset_deg · place_height_mm' }, { delay: 1.5 });
 }
 

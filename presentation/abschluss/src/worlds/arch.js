@@ -129,9 +129,9 @@ export function createArch(ctx) {
   // ---------- 2.2 Orchestrator und Module ----------
   const orch = box(0, AY + 2.9, 5.2, 1.2, 'Orchestrator', 'orchestrator/  ·  Zustandsautomat', MODULE_COLOR.ORCH);
   const MODS = [
-    { key: 'M1', x: -6, title: 'M1 Erkennung', sub: 'ObjectDetector.detect()', tabs: ['mock', 'replay', 'camera'], sel: [0, 1, 2] },
-    { key: 'M2', x: 0, title: 'M2 Roboter', sub: 'RobotController.pick/place()', tabs: ['mock', 'sim', 'vm', 'real'], sel: [0, 1, 3] },
-    { key: 'M3', x: 6, title: 'M3 Prüfung', sub: 'Inspector.inspect()', tabs: ['mock', 'replay', 'camera'], sel: [0, 1, 2] },
+    { key: 'M1', x: -6, title: 'M1 Erkennung', sub: 'ObjectDetector.detect()', tabs: ['mock', 'replay', 'camera'], sel: [[0, 0], [1, 1], [2, 2]] },
+    { key: 'M2', x: 0, title: 'M2 Roboter', sub: 'RobotController.pick/place()', tabs: ['mock', 'sim', 'vm', 'real'], sel: [[0, 0], [1, 2], [3, 3]] }, // Simulator und VM gemeinsam markiert
+    { key: 'M3', x: 6, title: 'M3 Prüfung', sub: 'Inspector.inspect()', tabs: ['mock', 'replay', 'camera'], sel: [[0, 0], [1, 1], [2, 2]] },
   ];
   const mods = MODS.map((m) => ({ ...m, b: box(m.x, AY, 4.4, 1.3, m.title, m.sub, MODULE_COLOR[m.key]) }));
   const common = box(0, AY - 3.25, 16.4, 0.7, 'common/  ·  interfaces · config · camera · transforms', null, T.inkSoft, { titleSize: 0.22 });
@@ -290,15 +290,17 @@ export function createArch(ctx) {
         it.l.progress = v;
         it.t.opacity = clamp01(v * 2 - 1);
       });
-      // Auswahl gleitet: plug 0 → sel[0], 1 → sel[1], 2 → sel[2]
+      // Auswahl gleitet: plug 0 → sel[0], 1 → sel[1], 2 → sel[2]; jede Auswahl ist ein Bereich [von, bis]
       const a = Math.min(1, Math.floor(S.plug));
       const fr = S.plug - a;
-      const xi = m.sel[a] + (m.sel[Math.min(2, a + 1)] - m.sel[a]) * fr;
+      const [lo0, hi0] = m.sel[a], [lo1, hi1] = m.sel[Math.min(2, a + 1)];
+      const lo = lo0 + (lo1 - lo0) * fr, hi = hi0 + (hi1 - hi0) * fr;
       const tw = 4.2 / m.tabs.length;
-      sel.position.x = m.x - 2.1 + tw * (xi + 0.5);
+      sel.position.x = m.x - 2.1 + tw * ((lo + hi) / 2 + 0.5);
+      sel.scale.x = ((hi - lo + 1) * tw - 0.14) / (tw - 0.14);
       sel.material.opacity = clamp01(S.plugs * 2 - 1) * 0.28;
       sel.visible = sel.material.opacity > 0.001;
-      items.forEach((it, i) => (it.t.color = Math.abs(i - xi) < 0.5 ? color(MODULE_COLOR[m.key]).getHex() : color(T.ink).getHex()));
+      items.forEach((it, i) => (it.t.color = i > lo - 0.5 && i < hi + 0.5 ? color(MODULE_COLOR[m.key]).getHex() : color(T.ink).getHex()));
     });
     plugCaptions.forEach((t, i) => (t.opacity = clamp01(1 - Math.abs(S.plug - i) * 2) * clamp01(S.plugs * 2 - 1)));
     const tests = Math.round(ctx.data.tests.total * S.tests);
@@ -322,9 +324,8 @@ export const ARCH_SCENES = [
     id: '2.1', world: 'arch',
     steps: [
       (tl, S) => to(tl, S, { states: 1, duration: 2.8, ease: 'power1.inOut' }, 0.2),
-      (tl, S) => to(tl, S, { cycle: 1, duration: 7, ease: 'none' }, 0),
     ],
-    cams: [C.sm, C.sm],
+    cams: [C.sm],
   },
   {
     id: '2.2', world: 'arch',
