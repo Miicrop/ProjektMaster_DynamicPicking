@@ -1,0 +1,83 @@
+C:\Users\nikla\Documents\CodeProjects\ProjektMaster\.venv\Lib\site-packages\torch\ao\nn\quantized\dynamic\modules\rnn.py:162: UserWarning: torch.quantize_per_tensor, torch.quantize_per_channel and other quantized tensor creation functions that produce tensors with dtype torch.quint8, torch.qint8, and torch.qint32 are deprecated and will be removed in a future PyTorch release. Please see https://github.com/pytorch/pytorch/issues/184982 for more information. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\aten\src\ATen\quantized\Quantizer.cpp:116.)
+  w_ih = torch.quantize_per_tensor(
+C:\Users\nikla\Documents\CodeProjects\ProjektMaster\.venv\Lib\site-packages\torch\utils\data\dataloader.py:759: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
+  super().__init__(loader)
+C:\Users\nikla\Documents\CodeProjects\ProjektMaster\.venv\Lib\site-packages\torch\utils\data\dataloader.py:759: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
+  super().__init__(loader)
+== Zyklusprotokoll
+Zeilen 80: ohne Bauteil 48, Fehler 7, mit Prüfung 25
+  Fehler 10:34: PICK: Robot stopped - acknowledge first (GUI: 'Fehler quittieren' / 'Freigeben')
+  Fehler 11:15: DETECT: ArUco markers not found: [2] (found [0, 1, 3])
+  Fehler 11:18: DETECT: ArUco markers not found: [2] (found [0, 1, 3])
+  Fehler 11:21: DETECT: ArUco markers not found: [2] (found [0, 1, 3])
+  Fehler 11:38: DETECT: Part is upside down (chamfer mirrored) - turn it over
+  Fehler 11:40: DETECT: ArUco markers not found: [2] (found [0, 1, 3])
+  Fehler 11:41: DETECT: ArUco markers not found: [2] (found [0, 1, 3])
+  vor Fix: n=3 gut=0 Loch 9.422..9.481 Mittel 9.461 s=0.034
+    schlecht 09:40: hole diameter 9.481 mm out of tolerance 10.0 +/- 0.4 mm
+    schlecht 09:43: hole diameter 9.481 mm out of tolerance 10.0 +/- 0.4 mm
+    schlecht 10:11: hole diameter 9.422 mm out of tolerance 10.0 +/- 0.4 mm
+  nach Fix: n=22 gut=21 Loch 9.600..9.804 Mittel 9.745 s=0.043
+    schlecht 11:19: serial number invalid: None; hole diameter 9.600 mm out of tolerance 10.0 +/- 0.4 mm; notch missing
+  Dauer mit Prüfung: [18.9, 34.61, 34.83, 35.01, 35.11, 35.2, 35.41, 35.82, 35.88, 35.99, 36.13, 38.47, 39.0, 41.95, 42.97, 136.17, 137.09, 139.57, 143.29, 143.62, 146.02, 147.17, 156.8, 157.03, 160.0]
+== Nachauswertung Prüfbilder
+  094541_c001: GOOD ser=69420 conf=1.00 ell=9.480 circ=9.723 csv=9.481 
+  101405_c001: GOOD ser=69420 conf=0.97 ell=9.417 circ=9.669 csv=9.422 
+  104150_c001: GOOD ser=69420 conf=1.00 ell=9.551 circ=9.806 csv=9.804 
+  104425_c001: GOOD ser=69420 conf=0.78 ell=9.501 circ=9.768 csv=9.768 
+  104724_c001: GOOD ser=69420 conf=1.00 ell=9.463 circ=9.708 csv=9.696 
+  104909_c001: GOOD ser=69420 conf=1.00 ell=9.517 circ=9.775 csv=9.782 
+  111556_c004: GOOD ser=69420 conf=1.00 ell=9.522 circ=9.781 csv=9.761 
+  111558_c005: GOOD ser=69420 conf=1.00 ell=9.522 circ=9.781 csv=None 
+  111559_c006: GOOD ser=69420 conf=1.00 ell=9.522 circ=9.781 csv=None 
+  111701_c001: GOOD ser=69420 conf=0.86 ell=9.437 circ=9.698 csv=9.701 
+  111702_c002: GOOD ser=69420 conf=0.86 ell=9.437 circ=9.698 csv=None 
+  111740_c003: GOOD ser=69420 conf=0.72 ell=9.517 circ=9.787 csv=9.774 
+  111741_c004: GOOD ser=69420 conf=0.72 ell=9.517 circ=9.787 csv=None 
+  111818_c005: GOOD ser=69420 conf=1.00 ell=9.483 circ=9.746 csv=9.732 
+  111819_c006: GOOD ser=69420 conf=1.00 ell=9.483 circ=9.746 csv=None 
+  111939_c001: GOOD ser=69420 conf=0.93 ell=9.503 circ=9.777 csv=9.765 
+  111940_c002: GOOD ser=69420 conf=0.93 ell=9.503 circ=9.777 csv=None 
+  112017_c003: BAD  ser=None conf=0.00 ell=9.378 circ=9.600 csv=9.6 serial number invalid: None; notch missing
+  112018_c004: BAD  ser=None conf=0.00 ell=9.378 circ=9.600 csv=None serial number invalid: None; notch missing
+  112102_c005: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=9.758 
+  112103_c006: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112105_c007: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112106_c008: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112108_c009: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112109_c010: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112110_c011: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112112_c012: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112113_c013: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112114_c014: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112116_c015: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112117_c016: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112118_c017: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112120_c018: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112121_c019: GOOD ser=69420 conf=1.00 ell=9.511 circ=9.758 csv=None 
+  112219_c001: GOOD ser=69420 conf=1.00 ell=9.491 circ=9.732 csv=9.707 
+  112220_c002: GOOD ser=69420 conf=1.00 ell=9.491 circ=9.732 csv=None 
+  112221_c003: GOOD ser=69420 conf=1.00 ell=9.491 circ=9.732 csv=None 
+  112259_c004: GOOD ser=69420 conf=1.00 ell=9.469 circ=9.721 csv=9.712 
+  113413_c001: GOOD ser=69420 conf=1.00 ell=9.496 circ=9.764 csv=9.761 
+  113952_c012: GOOD ser=69420 conf=1.00 ell=9.520 circ=9.783 csv=9.767 
+  113954_c013: GOOD ser=69420 conf=1.00 ell=9.520 circ=9.783 csv=None 
+  114030_c014: GOOD ser=69420 conf=1.00 ell=9.495 circ=9.735 csv=9.723 
+  114032_c015: GOOD ser=69420 conf=1.00 ell=9.495 circ=9.735 csv=None 
+  114033_c016: GOOD ser=69420 conf=1.00 ell=9.495 circ=9.735 csv=None 
+  114128_c001: GOOD ser=69420 conf=1.00 ell=9.513 circ=9.769 csv=9.766 
+  114130_c002: GOOD ser=69420 conf=1.00 ell=9.513 circ=9.769 csv=None 
+  114131_c003: GOOD ser=69420 conf=1.00 ell=9.513 circ=9.769 csv=None 
+  114133_c004: GOOD ser=69420 conf=1.00 ell=9.513 circ=9.769 csv=None 
+  114134_c005: GOOD ser=69420 conf=1.00 ell=9.513 circ=9.769 csv=None 
+  114135_c006: GOOD ser=69420 conf=1.00 ell=9.513 circ=9.769 csv=None 
+  114137_c007: GOOD ser=69420 conf=1.00 ell=9.513 circ=9.769 csv=None 
+  114138_c008: GOOD ser=69420 conf=1.00 ell=9.513 circ=9.769 csv=None 
+  114140_c009: GOOD ser=69420 conf=1.00 ell=9.513 circ=9.769 csv=None 
+  114141_c010: GOOD ser=69420 conf=1.00 ell=9.513 circ=9.769 csv=None 
+  114227_c001: GOOD ser=69420 conf=0.99 ell=9.477 circ=9.719 csv=9.73 
+  hole_ellipse: n=20 9.378..9.551 Mittel 9.487 Median 9.495 s=0.040 in Toleranz 0/20
+  hole_circle: n=20 9.600..9.806 Mittel 9.741 Median 9.752 s=0.048 in Toleranz 20/20
+  Urteil neu (aktueller Code): gut 19/20
+  OCR-Konfidenz neu: min 0.00 Median 1.00
+Abbildungen in C:\Users\nikla\Documents\CodeProjects\ProjektMaster\thesis\figures\eval

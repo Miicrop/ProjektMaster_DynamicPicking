@@ -372,6 +372,14 @@ führt die Anpassung auf ein verallgemeinertes Eigenwertproblem zurück. Da ein 
 bei leicht schräger Ansicht als Ellipse erscheint, eignet sich eine Ellipsenanpassung auch
 zur Messung von Kreisen.
 
+Für einen Kreis allein genügt ein einfacherer Ansatz. Schreibt man die Kreisgleichung als
+$x^2 + y^2 = 2ax + 2by + k$ mit $k = r^2 - a^2 - b^2$, ist sie linear in den Unbekannten
+$(a, b, k)$, und die Lösung im Sinne der kleinsten Quadrate folgt direkt aus einem linearen
+Gleichungssystem. Wie jede Anpassung nach kleinsten Quadraten reagiert sie empfindlich auf
+Ausreißer. Liegen alle Ausreißer auf derselben Seite der Form, lassen sie sich iterativ
+entfernen: Punkte mit großem Abstand zur angepassten Form werden verworfen und die Anpassung
+mit den übrigen wiederholt.
+
 \subsection{Formmerkmale und Template-Matching}
 
 Um zu entscheiden, ob ein gefundener Bereich eine bestimmte Form hat, werden einfache

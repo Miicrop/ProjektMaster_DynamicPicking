@@ -20,6 +20,19 @@
 - **Fehlt vor allem:** kleine Versuchsreihe mit Zahlen, Kap. 08 aus Jeremys Doku, Evaluation,
   Fazit und Kurzfassung, Durchsicht, Präsentation auf den Laborstand.
 
+## Labortag 26.11. (ausgewertet am 26.11.)
+
+- Daten: `code/logs/cycles_20261126.csv`, `code/logs/20261126/` (70 Läufe mit Zwischenbildern),
+  GUI-Screenshot. Auswertung: `thesis/tools/eval_20261126.py` → `thesis/figures/eval/`.
+- Ergebnis: 25 Zyklen mit Prüfung, 7 Abbrüche alle vor dem Greifen (5× Marker 2 von Hand verdeckt,
+  1× gewendet erkannt, 1× Hand als Bauteil → Software-Stopp), 48 Abfragen ohne Bauteil ohne Fehlauslösung.
+  Lochmessung: Ellipsen-Fit 0/19 in Toleranz, Kreis-Fit 19/19 (9,67–9,81 mm). Nach dem Fix 21/21 gut.
+- Eingearbeitet: Kap. 03 (Kreis-Fit), 05 (Form-/Ruheprüfung, gewendetes Teil), 07 (OCR 300 px,
+  Kreis-Fit, Abb. Fit-Vergleich), 09 (Screenshot vom Labor), 10 (neu geschrieben), 11, Kurzfassung.
+- [x] **N** – Todos Kap. 10 geklärt: Zykluszeiten durch geänderte Robotergeschwindigkeit, Hand-Fall = 10:34 mit Software-Stopp.
+- [x] **N** – Präsentation auf den 26.11. gebracht: neue Blätter 7.4 Labortag 26.11. und 7.5 Lochmessung gelöst, 7.6 Was noch fehlt aktualisiert, Ausblick/Finale jetzt 7.7/7.8 (26.11.).
+- „Versuchsreihe 1“ und „GUI-Screenshots mit echten Kamerabildern“ (Labortag unten) sind damit erledigt.
+
 ## A – Ohne das keine Abgabe
 
 - [ ] **T** – **Deadline, Umfang der Ausarbeitung und Vortragsdauer** festhalten.
@@ -34,7 +47,7 @@
   vom 30.10., gekürzt auf Kapitellänge; die ausführliche Doku als Anhang oder eigenes Dokument.
   Danach mit Jeremy abstimmen, was aus „Verwendung offen“-Berichten rein darf.
 - [ ] **J/N** – Kap. 10.5 M2/M4-Vergleich nach Klärung mit Jeremy ergänzen.
-- [ ] **N** – **Fazit (Zusammenfassung, Diskussion) und Ergebnissatz der Kurzfassung.**
+- [x] **N** – **Fazit und Ergebnissatz der Kurzfassung** auf Stand 26.11. (26.11.).
 - [ ] **N** – Gesamte Arbeit durchsehen, dann `/ars-reviewer`, Befunde mit `/ars-revision` einarbeiten.
 - [ ] **T** – Korrekturlesen, Abgabe.
 - [x] **N** – **Präsentation auf den Laborstand vom 12.11. gebracht** (24.11.): Bauteil mit Fase auf der
@@ -60,24 +73,17 @@
   ggf. (k)-Szenen streichen, endgültigen Titel festlegen.
 - [ ] **J** – Akt 6 der Präsentation prüfen (6.1–6.8) gegen seinen aktuellen Stand.
 
-### Labortag (optional, nur falls doch Zeit ist)
+### Labortag – entfällt (kein Labortermin mehr, Stand 26.11.)
 
-Logs vom 12.11. liegen in `code/logs/` (Kopie von `I:\logs`).
-
-- [ ] **P3** – Lochmaßstab: 2–3 bekannte Gutteile je 3 Aufnahmen, Korrekturfaktor eintragen.
-  Toleranz nicht aufweiten. Zuerst, sonst fallen Gutteile in der Versuchsreihe durch.
-- [ ] **T** – **Versuchsreihe 1:** Gutteil in zufälliger Lage, z. B. 10 Zyklen. Greiferfolg,
-  Prüfurteil, Zykluszeit (`cycles_*.csv`).
-- [ ] **P3** – **Versuchsreihe 2:** je Fehlerart (Kerbe, Loch, Etikett) wenige Teile, je 3 Durchläufe.
-  Daraus eine kleine Konfusionsmatrix.
-- [ ] **N** – Kalibrierung mit `robot_check calib` wiederholen, RMS notieren (Kap. 04/06).
-- [ ] **P2** – Wiederholgenauigkeit an der Prüfposition (z. B. 5× ablegen, Lage im M3-Bild vergleichen).
-- [ ] **N** – GUI-Screenshots mit echten Kamerabildern (Kap. 09), 1–2 Zyklen mit „Bilder speichern“.
-- [ ] **N** – `code/logs/point_tests.csv` (Zeigetests vom 12.11.) vom Laborlaptop sichern.
-- [ ] **N** – Ablesen für Kap. 04/07: Brennweite des Objektivs oben, genaues Logitech-Modell,
-  Abstand Seitenkamera–Bauteil, Licht an der Prüfstation.
-- [ ] **N** – Klären, welche Lastdaten für `ZimmerLWR50` in der Steuerung stehen: Datenblatt
-  1,75 kg, Lastermittlung am Pendant 1,16 kg (Schwerpunkt −26 / −58 / 150 mm).
+- [x] Versuchsreihe 1 → am 26.11. gefahren (25 Zyklen, Kap. 10).
+- [x] Lochmaßstab → durch Kreis-Fit gelöst statt Korrekturfaktor (19/19 in Toleranz).
+- [x] GUI-Screenshot mit echten Kamerabildern (Kap. 09, Reiter Ablauf).
+- [x] `point_tests.csv` liegt in `code/logs/`.
+- [x] Fehlerbehandlung real erprobt (Software-Stopp, Quittieren, 26.11.).
+- Entfällt, in Kap. 10 „Grenzen“ bzw. Ausblick benannt: Versuchsreihe 2 mit Fehlerteilen,
+  Kalibrierung wiederholen, Wiederholgenauigkeit Prüfposition, Ablesen Objektiv/Logitech-Modell
+  (Thesis hat dort keine offenen Lücken), Lastdaten `ZimmerLWR50` (nur Anlagensicherheit, nicht Thesis).
+- Abbrüche durch verdeckten Marker im Dauerbetrieb: Systemeigenschaft, vernachlässigt.
 
 **Worauf achten**
 - **Marker-Zuordnung:** Passt die Zuordnung von ID zu Ecke nicht zur Config, wird das Bild ohne
@@ -89,10 +95,10 @@ Logs vom 12.11. liegen in `code/logs/` (Kopie von `I:\logs`).
 
 - [ ] **J** – Kap. 08 der Thesis (nach der Übernahme) durchsehen und freigeben; Totzeit des
   Greifers und Override 0,5 (Sicherheitsthema) mit dem Betreuer klären.
-- [ ] **P1–P3** – Kapitel 05–07 durchsehen, Zwischenfazits mit den Zahlen der Versuchsreihe ergänzen.
+- [~] **P1–P3** – Kapitel 05–07 durchsehen; Zwischenfazits mit Zahlen vom 26.11. ergänzt (26.11.).
 - [ ] **J** – Freigabe echte Anlage: Im Ablauf ersetzt die Rückfrage „Automatischer Ablauf mit
   dem echten Roboter – M4 Behavior Cloning greift“ das Eintippen von „ANLAGE“. Bestätigen.
-- [ ] **T** – Fehlerbehandlung am realen System kurz erproben (STOPP, Quittieren, Neustart).
+- [x] **T** – Fehlerbehandlung am realen System erprobt (26.11.: Software-Stopp, Quittieren).
 
 ## C – Nur wenn Zeit bleibt
 
@@ -100,9 +106,8 @@ Logs vom 12.11. liegen in `code/logs/` (Kopie von `I:\logs`).
   `\todo`s sind entfernt (24.11.).
 - [ ] **T** – Quellen für die Motivation (Kap. 1) und Normen zu Cobots (ISO 10218, ISO/TS 15066):
   vorerst weggelassen, `\todo`s entfernt.
-- [ ] **N** – GUI-Screenshots mit echten Bildern (Kap. 09), falls noch ein Labortermin; sonst das
-  `\todo` entfernen.
-- [ ] **N** – Video eines kompletten Zyklus.
+- [x] **N** – GUI-Screenshot Ablauf ersetzt, `\todo` in Kap. 09 entfernt (26.11.).
+- [ ] ~~**N** – Video eines kompletten Zyklus.~~ Entfällt, kein Labortermin mehr.
 - [ ] **N** – `public/urdf/collision/` (15 MB) aus `public/` der Präsentation nehmen.
 - [ ] **J/N** – M4 im Gesamtablauf mit trainiertem Modell (im Ausblick als Dauerlauf-Inferenz erwähnt).
 

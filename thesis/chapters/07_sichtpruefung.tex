@@ -85,7 +85,7 @@ diesen Fall mit einer verringerten Konfidenz.
   \centering
   \includegraphics[width=\textwidth]{m3/m3_14_result.jpg}
   \caption{Seitenansicht eines Testbilds mit dem Ergebnis der Sichtprüfung: Bauteil-Box (grün),
-  Prüfbereiche für Etikett, Loch und Kerbe, angepasste Ellipse am Loch (rot) und erkannte
+  Prüfbereiche für Etikett, Loch und Kerbe, Lochkontur (rot) und erkannte
   Kerbe (blau). Oben links das Urteil mit Seriennummer, Lochdurchmesser und Kerbe.}
   \label{fig:m3-rois}
 \end{figure}
@@ -123,8 +123,12 @@ gelesen~\cite{easyocr}, einer lernbasierten \ac{ocr}-Bibliothek, die ohne separa
 Installation einer \ac{ocr}-Software auskommt (\cref{sec:ocr}). Tesseract~\cite{smith2007}
 wäre eine Alternative gewesen.
 
-Der Etikettbereich wird ausgeschnitten und bei geringer Höhe vergrößert, da die
-Texterkennung auf sehr kleine Schrift schlechter anspricht. Die Erkennung ist auf Ziffern
+Der Etikettbereich wird ausgeschnitten und auf eine feste Höhe von \SI{300}{px} skaliert.
+Zunächst wurde er nur bei geringer Höhe vergrößert. An der 4K-Seitenkamera ist das Etikett aber
+rund \SI{820}{px} hoch, und dort schwankte die Konfidenz von EasyOCR zwischen nahezu gleichen
+Bildern stark, im Extremfall zwischen 0,99 und 0,39. Mit der festen Höhe lag sie auf allen
+19 Prüfbildern des zweiten Labortags mit richtig eingelegtem Bauteil bei mindestens 0,72 und
+damit deutlich über der Mindestschwelle von 0,4 (\cref{sec:eval-pruefung}). Die Erkennung ist auf Ziffern
 beschränkt. Aus den erkannten Textkandidaten wird derjenige mit der höchsten Konfidenz
 gewählt, der dem erwarteten Format entspricht; das Format ist als regulärer Ausdruck für
 genau fünf Ziffern in der Konfiguration hinterlegt. Liegt die Konfidenz unter einer
@@ -144,13 +148,33 @@ bauteilfarbenen Pixel im Bereich.
 Die so gefundenen Regionen werden morphologisch bereinigt und auf eine Mindestgröße gefiltert.
 Für jede Region wird ihre Rundheit bestimmt, also das Verhältnis ihrer Fläche zur Fläche des
 kleinsten umschließenden Kreises. Die rundeste Region ist das Loch, sofern ihre Rundheit eine
-Mindestschwelle überschreitet. An ihre Kontur wird eine Ellipse nach der Methode der
-kleinsten Quadrate angepasst (\cref{sec:messtechnik}); der Mittelwert der beiden Achsenlängen
-ergibt den Durchmesser in Pixeln, der mit dem Maßstab aus \cref{sec:m3-lokalisierung} in
-Millimeter umgerechnet wird. Die Ellipse berücksichtigt, dass ein kreisrundes Loch bei leicht
-schräger Ansicht elliptisch erscheint. Eine Kreisdetektion mit der Hough-Transformation
-(\cref{sec:messtechnik}) wäre möglich, liefert den Radius aber nur in der Auflösung ihres
-Akkumulators, während der Ellipsen-Fit alle Konturpunkte nutzt.
+Mindestschwelle überschreitet. An ihre Kontur wird ein Kreis nach der Methode der kleinsten
+Quadrate angepasst (\cref{sec:messtechnik}). Sein Durchmesser in Pixeln wird mit dem Maßstab aus
+\cref{sec:m3-lokalisierung} in Millimeter umgerechnet.
+
+Der Kreis-Fit ist robust gegen Spiegelungen gemacht. Fällt Licht auf die Bohrungswand, erscheint
+dieser Teil des Lochs so hell wie die Seitenfläche und wird von der Lochmaske abgeschnitten. Die
+Kontur verläuft dann ein Stück weit innerhalb des eigentlichen Lochrands
+(\cref{fig:loch-fit}). Ein solcher Fehler kann die Kontur nur verkleinern, nie vergrößern. Deshalb
+werden nach dem ersten Fit alle Konturpunkte verworfen, die mehr als \SI{2}{\percent} innerhalb
+des Kreises liegen, und der Fit wird mit den übrigen Punkten wiederholt, höchstens fünfmal und
+nur solange mindestens \SI{30}{\percent} der Punkte übrig bleiben. Ursprünglich wurde an alle
+Konturpunkte eine Ellipse angepasst, damit auch ein leicht schräg gesehenes Loch richtig
+gemessen wird. Am Aufbau zog die Spiegelung den Fit aber systematisch nach innen; in einem Bild
+war die Kontur \SI{531}{px} breit, aber nur \SI{490}{px} hoch, und der Ellipsen-Fit ergab
+\SI{9,45}{\milli\metre} statt etwa \SI{9,7}{\milli\metre}. Eine Kreisdetektion mit der
+Hough-Transformation (\cref{sec:messtechnik}) wäre ebenfalls möglich, liefert den Radius aber nur
+in der Auflösung ihres Akkumulators, während der Fit alle verbleibenden Konturpunkte nutzt.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{eval/loch_vorher_nachher.png}
+  \caption[Lochmessung mit Ellipsen- und Kreis-Fit]{Dieselbe Lochkontur (gelb) am Aufbau,
+  ausgewertet mit beiden Verfahren. Links: Ellipsen-Fit über alle Konturpunkte; die Spiegelung
+  am unteren Rand zieht ihn nach innen. Rechts: Kreis-Fit nach Verwerfen der nach innen gezogenen
+  Punkte (grau).}
+  \label{fig:loch-fit}
+\end{figure}
 
 % ------------------------------------------------------------------------------
 \section{Prüfung auf Kerbe}
@@ -243,27 +267,24 @@ entspricht. Künstlich erzeugte Fehler, bei denen Kerbe oder Loch im Bild überm
 als Schlechtteil erkannt.
 
 An der Seitenkamera am Aufbau (\cref{fig:m3-aufbau}) wurden Seriennummer und Kerbe in allen
-vollständigen Zyklen richtig erkannt (\cref{sec:eval-zyklus}). Das Loch des Gutteils misst die
-Sichtprüfung dort aber mit \SIrange{9,54}{9,68}{\milli\metre} statt \SI{10}{\milli\metre}; das
-Verhältnis von Lochdurchmesser zu Bauteilhöhe liegt bei etwa 0,64 statt 0,667. Die Werte
-streuen untereinander wenig, liegen aber systematisch etwa \SI{4}{\percent} zu niedrig und
-damit um die untere Toleranzgrenze von \SI{9,6}{\milli\metre}. Das Gutteil wurde deshalb in drei
-von fünf Zyklen als Schlechtteil eingestuft.
-
-Eine wahrscheinliche Ursache zeigt \cref{fig:m3-aufbau}: Die Seitenkamera blickt in Richtung
-Fenster, und auf der Innenwand des Lochs spiegelt sich das einfallende Licht. Der helle Bereich
-am unteren Rand des Lochs verschiebt die Kante, an die die Ellipse angepasst wird, nach innen.
-Abhilfe schaffen zwei Maßnahmen: ein Korrekturfaktor für den Maßstab, der mit bekannten
-Gutteilen bestimmt wird, und eine eigene, gegen Fensterlicht abgeschirmte Beleuchtung der
-Prüfstation. Die Toleranz aufzuweiten wäre dagegen keine Lösung, da sie dann auch fehlerhafte
-Löcher durchließe.
+vollständigen Zyklen mit richtig eingelegtem Bauteil erkannt (\cref{sec:eval-zyklus}). Das Loch
+dagegen maß die Sichtprüfung mit dem ursprünglichen Ellipsen-Fit systematisch zu klein, am ersten
+Labortag mit \SIrange{9,54}{9,63}{\milli\metre}, am zweiten mit \SIrange{9,42}{9,48}{\milli\metre},
+und sortierte das Gutteil deshalb mehrfach als Schlechtteil aus. Ursache ist die Spiegelung des
+Fensterlichts auf der Bohrungswand (\cref{fig:m3-aufbau}), die die Lochkontur am unteren Rand
+nach innen zieht. Der Kreis-Fit mit Verwerfen dieser Punkte (\cref{sec:m3-loch}) misst auf
+denselben 19 Bildern des zweiten Labortags \SIrange{9,67}{9,81}{\milli\metre} statt
+\SIrange{9,42}{9,55}{\milli\metre} und bringt alle Messungen in die Toleranz
+(\cref{sec:eval-pruefung}). Die Toleranz aufzuweiten wäre keine Lösung gewesen, da sie auch
+fehlerhafte Löcher durchließe. Eine eigene, gegen Fensterlicht abgeschirmte Beleuchtung der
+Prüfstation würde die Ursache beseitigen statt sie im Algorithmus auszugleichen.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\textwidth]{m3/aufbau_pruefung.jpg}
-  \caption[Sichtprüfung am Aufbau]{Sichtprüfung am Aufbau mit der Seitenkamera: Seriennummer
-  gelesen, Kerbe erkannt (blau), angepasste Ellipse am Loch (rot). Im Loch spiegelt sich das
-  Fensterlicht; der gemessene Durchmesser liegt mit \SI{9,58}{\milli\metre} knapp unter der
-  Toleranz.}
+  \caption[Sichtprüfung am Aufbau]{Sichtprüfung am Aufbau mit der Seitenkamera (erster
+  Labortag, noch mit Ellipsen-Fit): Seriennummer gelesen, Kerbe erkannt (blau), Lochkontur (rot).
+  Im Loch spiegelt sich das Fensterlicht; der gemessene Durchmesser lag mit
+  \SI{9,58}{\milli\metre} knapp unter der Toleranz.}
   \label{fig:m3-aufbau}
 \end{figure}

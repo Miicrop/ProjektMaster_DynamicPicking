@@ -1,4 +1,5 @@
-// Ruhige Blätter (Baukasten src/kit/sheet.js): 1.5, 1.6, 2.4, 4.7, 6.3–6.7, 7.1, 7.3, A.1–A.4.
+// Ruhige Blätter (Baukasten src/kit/sheet.js): 1.5, 1.6, 2.4, 3.6, 4.7, 5.9, 6.3–6.7, 7.4, A.1–A.8.
+// Die Blätter zum Muster „Aufgabe → Idee → Am Aufbau → Lösung“ stehen in aufbau.js.
 // Inhalte aus thesis/blueprint.md, thesis 02b_vorprojekt.tex, plan/06_offen.md, plan/07_erledigt.md, der M4-Doku und
 // data.json (config, Zwischenbilder, GUI-Screenshot, Zykluslog, Labortag, Tests, M4-Messwerte).
 import * as THREE from 'three';
@@ -12,22 +13,19 @@ const fmt = (v, d = 1) => Number(v).toFixed(d).replace('.', ',');
 
 // ---------------------------------------------------------------- 1.5 Erfolgskriterium
 function sheet15(api) {
-  const cfg = api.ctx.data.config;
   api.text(0, 'Läuft Erkennen, Greifen, Prüfen und Sortieren vollständig automatisch durch?', { font: 'title', size: 0.52, anchorY: 'top', maxWidth: 14.2, lineHeight: 1.15 }, [X0 + 0.7, 2.55], { delay: 0.1 });
   api.text(0, 'Das ist das Erfolgskriterium. Messwerte dienen der Demonstration, nicht echten Toleranzen.', { font: 'sans', size: 0.24, hex: T.inkSoft, anchorY: 'top' }, [X0 + 0.7, 1.15], { delay: 0.3 });
   api.text(1, 'ABGRENZUNG', { font: 'mono', size: 0.15, hex: T.inkSoft, letterSpacing: 0.08 }, [X0 + 0.7, 0.3]);
   const rows = [
     ['Ein Bauteil', 'kein Schüttgut, keine Vereinzelung'],
+    ['Kein Greiferdesign', 'vorhandener Greifer – deshalb ein einfaches Bauteil, das er sicher fassen kann'],
     ['Flach liegend', `Pose in der Ebene: x, y und Winkel – die Greifhöhe ist bekannt`],
-    ['Unter Aufsicht', `keine sicherheitszertifizierte Anlage, Override ${Math.round(cfg.robot.override * 100)} %, Not-Halt in Reichweite`],
-    ['M4 optional', 'lernbasiertes Greifen aus dem Rahmen bis über die Prüfung (statt PICK von M2), nicht Voraussetzung für den Demonstrator'],
   ];
   rows.forEach(([t, b], i) => {
     const x = X0 + 0.7 + (i % 2) * 7.3;
     const y = -0.2 - Math.floor(i / 2) * 1.55;
     api.row(1, i + 1, t, b, y, { x, width: 6.3, size: 0.32, delay: 0.1 + i * 0.12 });
   });
-  api.stamp(1, 'ERFOLGSKRITERIUM', [4.6, -3.55], { size: 0.34, rot: -0.05, hex: T.ink }, { delay: 0.6 });
 }
 
 // ---------------------------------------------------------------- 1.6 Vorprojekt GROB
@@ -47,7 +45,7 @@ function sheet16(api) {
     card.object.position.set(4.3 + (i - 1) * 0.9, 1.0 - i * 1.55, 0.05 + i * 0.05);
     card.object.rotation.z = (i - 1) * -0.05;
     card.opacity = 0;
-    api.add(1, card, { delay: i * 0.18, dur: 0.6 });
+    api.add(1 + i, card, { delay: 0, dur: 0.6 }); // ein Bild pro Klick
   });
 }
 
@@ -475,10 +473,9 @@ function sheetJitter(api) {
   api.text(1, 'Quelle: m4_behavior_cloning/Dokumentation/Zittern-an-der-Anlage.md, Labortag-2026-10-16-Uebergabe.md (13.–19.10.)', { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 1.1 });
 }
 
-// ---------------------------------------------------------------- 7.1 Labortag
+// ---------------------------------------------------------------- A.5 Labortag
 function sheet71(api) {
   const lab = api.ctx.data.lab;
-  const cfg = api.ctx.data.config;
   const w = lab.workspace_to_robot.after;
   const rows = [
     ['Posen geteacht', 'Prüfplatz und Ablagen direkt am Roboter angefahren und übernommen'],
@@ -487,24 +484,7 @@ function sheet71(api) {
     ['Erster vollständiger Ablauf', 'im Automatikbetrieb – ehrlich: noch ohne Greiferansteuerung und ohne Arbeitsraumkamera, M1/M3 mit Testbildern'],
   ];
   rows.forEach(([t, b], i) => api.row(0, i + 1, t, b, 2.3 - i * 1.5, { x: X0 + 0.7, width: 6.4, size: 0.3, delay: 0.1 + i * 0.15 }));
-  // Schritt 1: Schätzung aus der Skizze gegen die geteachten Posen
-  const TXL = 0.9;
-  api.text(1, 'SCHÄTZUNG AUS DER SKIZZE → GETEACHT  (x / y / z in mm)', { font: 'mono', size: 0.15, hex: T.inkSoft, letterSpacing: 0.06 }, [TXL, 2.2]);
-  const names = { inspection: 'Prüfplatz', bin_good: 'Ablage GUT', bin_bad: 'Ablage SCHLECHT' };
-  const xyz = (p) => p.slice(0, 3).map((v) => fmt(v, 0)).join(' / ');
-  const dist = Object.values(lab.poses).map(({ before, after }) => Math.hypot(...[0, 1, 2].map((j) => after[j] - before[j])));
-  Object.entries(lab.poses).forEach(([k, { before, after }], i) => {
-    const y = 1.45 - i * 0.95;
-    const t = { delay: 0.15 + i * 0.15 };
-    api.text(1, names[k], { font: 'sansMedium', size: 0.26 }, [TXL, y], t);
-    api.text(1, `${xyz(before)}  →  ${xyz(after)}`, { font: 'mono', size: 0.2, hex: T.inkSoft }, [TXL, y - 0.36], t);
-    api.text(1, `${fmt(dist[i], 0)} mm`, { font: 'monoMedium', size: 0.3, hex: MODULE_COLOR.M2, anchorX: 'right' }, [TXL + 6.4, y - 0.18], { delay: t.delay + 0.1 });
-  });
-  const rz = lab.poses.inspection;
-  api.text(1, `Greiferdrehung rz ${fmt(rz.before[5], 0)}° → ${fmt(rz.after[5], 0)}°: die 23° stecken in jeder Pose.`, { font: 'sans', size: 0.22, anchorY: 'top', maxWidth: 6.4 }, [TXL, -1.55], { delay: 0.7 });
-  const cm = (v) => Math.round(v / 10);
-  api.stamp(1, 'TEACHEN IST PFLICHT', [TXL + 3.2, -2.75], { size: 0.3, rot: -0.04, hex: MODULE_COLOR.M2, sub: `Schätzungen lagen ${cm(Math.min(...dist))}–${cm(Math.max(...dist))} cm daneben` }, { delay: 0.9 });
-  api.text(1, `Quelle: system.yaml vor/nach Commit ${lab.commit} (${lab.date.split('-').reverse().join('.')})`, { font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, -3.85], { delay: 1.0 });
+  api.text(0, `Quelle: system.yaml vor/nach Commit ${lab.commit} (${lab.date.split('-').reverse().join('.')})`, { font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, -3.85], { delay: 1.0 });
 }
 
 // Pfeil als drei Tuschestriche (Schaft + Spitze)
@@ -568,7 +548,7 @@ function sheet36(api) {
   api.stamp(1, `HÖCHSTENS ${fmt(worst, 0)} mm`, [RX + 3.4, -3.35], { size: 0.32, rot: -0.04, hex: T.good, sub: 'gilt nur für diese Kameraposition' }, { delay: 1.0 });
 }
 
-// ---------------------------------------------------------------- 7.2 Labortag 12.11.
+// ---------------------------------------------------------------- A.6 Labortag 12.11.
 function sheet72(api) {
   const L = api.ctx.data.lab2;
   if (!L) return;
@@ -595,7 +575,7 @@ function sheet72(api) {
   api.stamp(1, 'ERSTER ZYKLUS MIT KAMERAS', [X0 + 3.6, -4.0], { size: 0.26, rot: -0.03, hex: MODULE_COLOR.M2 }, { delay: 0.9 });
 }
 
-// ---------------------------------------------------------------- 7.3 Messwerte
+// ---------------------------------------------------------------- A.7 Messwerte 12.11.
 function sheet73m(api) {
   const L = api.ctx.data.lab2;
   if (!L) return;
@@ -647,7 +627,104 @@ function sheet73m(api) {
     card.opacity = 0;
     api.add(1, card, { delay: 0.4, dur: 0.6 });
   }
-  api.stamp(1, 'SPIEGELUNG IM LOCH', [2.2, -3.95], { size: 0.26, rot: 0.04, hex: T.signal, sub: 'Fensterlicht · Abhilfe: Faktor + Abschirmung' }, { delay: 1.0 });
+  api.stamp(1, 'SPIEGELUNG IM LOCH', [2.2, -3.95], { size: 0.26, rot: 0.04, hex: T.signal, sub: 'Fensterlicht · gelöst am 26.11. (5.9)' }, { delay: 1.0 });
+}
+
+// Fotokarte, die mit dem Schritt einblendet
+function card(api, step, f, [x, y], width, rot = 0, timing = {}) {
+  if (!f) return null;
+  const c = new PhotoCard(f.url, { width, aspect: f.h / f.w });
+  c.object.position.set(x, y, 0.05);
+  c.object.rotation.z = rot;
+  c.opacity = 0;
+  return api.add(step, c, { dur: 0.6, ...timing });
+}
+
+// ---------------------------------------------------------------- A.8 Labortag 26.11.
+function sheet74lab(api) {
+  const L = api.ctx.data.lab3;
+  if (!L) return;
+  const cy = L.cycles;
+  const empty = cy.filter((c) => c.ok && !c.part).length;
+  const full = cy.filter((c) => c.hole_mm != null);
+  const fast = full.map((c) => c.duration_s).filter((d) => d > 30 && d < 50);
+  const markers = cy.filter((c) => /ArUco/.test(c.error)).length;
+  const rows = [
+    ['Dauerbetrieb', `Das System wartet selbst auf das nächste Teil: ${empty} Abfragen ohne Teil, keine startete einen Zyklus.`],
+    [`${full.length} Zyklen mit Prüfung`, 'jedes Mal erkannt, gegriffen, geprüft und einsortiert – mit echten Kameras und Greifer'],
+    [`${fmt(median(fast), 0)} s je Zyklus`, `Median im Dauerbetrieb (${fmt(Math.min(...fast), 0)}–${fmt(Math.max(...fast), 0)} s), Geschwindigkeit im Lauf des Tages angepasst`],
+    ['Lochmessung neu', 'Spiegelung im Loch nicht mehr kompensiert per Faktor, sondern im Kreis-Fit (5.9)'],
+  ];
+  rows.forEach(([t, b], i) => api.row(0, i + 1, t, b, 2.75 - i * 1.4, { x: X0 + 0.7, width: 6.2, size: 0.3, delay: 0.1 + i * 0.12 }));
+  const gui = card(api, 0, L.photos?.gui, [3.95, 0.55], 7.4, -0.02, { delay: 0.3 });
+  const guiCap = api.text(0, 'Bedienoberfläche nach einem Zyklus am Aufbau: alle Schritte grün, Urteil GUTTEIL', { font: 'mono', size: 0.13, hex: T.inkSoft, anchorX: 'center' }, [3.95, -2.05], { delay: 0.6 });
+  // Schritt 1: was im Dauerbetrieb schiefging und was daraus wurde
+  api.fade(1, gui ? [gui, guiCap] : [guiCap], { dur: 0.4 });
+  api.text(1, 'WAS DER DAUERBETRIEB GEZEIGT HAT', { font: 'mono', size: 0.15, hex: T.inkSoft, letterSpacing: 0.06 }, [0.65, 2.75], { delay: 0.3 });
+  card(api, 1, L.photos?.hand, [2.35, 1.0], 3.3, 0.025, { delay: 0.4 });
+  card(api, 1, L.photos?.rueckseite, [6.0, 1.6], 3.6, -0.03, { delay: 0.6 });
+  const cap = { font: 'sans', size: 0.19, hex: T.inkSoft, anchorY: 'top', maxWidth: 3.4, lineHeight: 1.3 };
+  const head = { font: 'sansMedium', size: 0.22, anchorY: 'top', maxWidth: 3.4 };
+  api.text(1, 'Hand als Teil erkannt', head, [0.7, -0.5], { delay: 0.7 });
+  api.text(1, `Roboter per Software-Stopp angehalten. Neu: Form- und Ruheprüfung. Verdeckter Marker beim Nachlegen (${markers}x): sauberer Abbruch.`, cap, [0.7, -0.85], { delay: 0.75 });
+  api.text(1, 'Teil kopfüber eingelegt', head, [4.25, 0.6], { delay: 0.9 });
+  api.text(1, 'Rückseite ohne Etikett und Kerbe, richtig als SCHLECHT. Neu: die Fase verrät die Lage, Abbruch vor dem Greifen.', cap, [4.25, 0.25], { delay: 0.95 });
+  api.stamp(1, 'KEIN TEIL FALSCH SORTIERT', [4.4, -3.2], { size: 0.28, rot: -0.04, hex: T.good, sub: 'jeder Fehlerfall wurde zu einer neuen Prüfung' }, { delay: 1.1 });
+  api.text(1, 'Quelle: logs/cycles_20261126.csv, logs/20261126/ (Zwischenbilder aller Läufe)', { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 1.2 });
+}
+
+// ---------------------------------------------------------------- 5.9 Lochmessung gelöst
+function sheet75(api) {
+  const L = api.ctx.data.lab3;
+  if (!L) return;
+  const nom = L.hole_nominal_mm, tol = L.hole_tolerance_mm;
+  const rows = [
+    ['Spiegelung schneidet das Loch an', 'Die helle Bohrungswand sieht aus wie die Seitenfläche – die Kontur läuft unten nach innen, der Ellipsen-Fit wird zu klein.'],
+    ['Fehler wirkt nur in eine Richtung', 'Er kann die Kontur nur verkleinern. Also: Punkte deutlich innerhalb des Kreises verwerfen, Kreis neu anpassen.'],
+  ];
+  rows.forEach(([t, b], i) => api.row(0, i + 1, t, b, 2.75 - i * 1.55, { x: X0 + 0.7, width: 6.3, size: 0.3, delay: 0.1 + i * 0.15 }));
+  card(api, 0, L.photos?.fit, [4.2, 0.95], 6.9, -0.015, { delay: 0.3 });
+  // Schritt 1: alle Prüfbilder des Tages mit beiden Verfahren nachgerechnet
+  const R = L.reeval;
+  const right = R.filter((r) => !r.upside_down);
+  const inTol = (v) => Math.abs(v - nom) <= tol;
+  const A0 = 9.3, A1 = 10.1, CX0 = X0 + 1.3, CX1 = 0.9, CY0 = -3.35, CY1 = -0.25;
+  const Y = (v) => CY0 + ((v - A0) / (A1 - A0)) * (CY1 - CY0);
+  const X = (i) => CX0 + ((i + 0.5) / R.length) * (CX1 - CX0);
+  api.text(1, 'LOCHDURCHMESSER ALLER PRÜFBILDER VOM 26.11. (mm)', { font: 'mono', size: 0.14, hex: T.inkSoft, letterSpacing: 0.05 }, [CX0 - 0.6, CY1 + 0.3], { delay: 0.05 });
+  api.line(1, [[CX0, (Y(nom - tol) + Y(A1)) / 2], [CX1, (Y(nom - tol) + Y(A1)) / 2]], { width: 112, hex: '#D6EBD8' }, { delay: 0.1 });
+  api.line(1, [[CX0, Y(nom - tol)], [CX1, Y(nom - tol)]], { width: 1.4, hex: T.good }, { delay: 0.1 });
+  api.text(1, `untere Grenze ${fmt(nom - tol, 1)}`, { font: 'mono', size: 0.13, hex: T.good, anchorX: 'right', anchorY: 'bottom' }, [CX1, Y(nom - tol) + 0.05], { delay: 0.2 });
+  api.line(1, [[CX0 - 0.1, CY0], [CX0 - 0.1, CY1]], { width: 1.2 }, { delay: 0.1 });
+  [9.4, 9.6, 9.8, 10.0].forEach((v) => {
+    api.line(1, [[CX0 - 0.18, Y(v)], [CX0 - 0.1, Y(v)]], { width: 1.2 }, { delay: 0.15 });
+    api.text(1, fmt(v, 1), { font: 'mono', size: 0.14, anchorX: 'right', anchorY: 'middle' }, [CX0 - 0.24, Y(v)], { delay: 0.15 });
+  });
+  R.forEach((r, i) => {
+    const t = { delay: 0.3 + i * 0.04, dur: 0.3 };
+    dot(api, 1, [X(i), Y(r.ellipse)], 0.07, { width: 2.2, hex: T.signal }, t);
+    dot(api, 1, [X(i), Y(r.circle)], 0.07, { width: 3.2, hex: r.upside_down ? T.inkSoft : T.good }, { ...t, delay: t.delay + 0.5 });
+  });
+  api.text(1, 'Ellipse (bisher)', { font: 'sansMedium', size: 0.18, hex: T.signal }, [CX0 + 0.1, Y(9.36)], { delay: 0.9 });
+  api.text(1, 'Kreis-Fit (neu)', { font: 'sansMedium', size: 0.18, hex: T.good }, [CX0 + 0.1, Y(9.92)], { delay: 1.1 });
+  // Kennzahlen unter dem Bild
+  const ell = right.filter((r) => inTol(r.ellipse)).length, cir = right.filter((r) => inTol(r.circle)).length;
+  const c = right.map((r) => r.circle);
+  const m = c.reduce((a, b) => a + b, 0) / c.length;
+  const sd = Math.sqrt(c.reduce((a, b) => a + (b - m) ** 2, 0) / (c.length - 1));
+  const cyc = L.cycles.filter((x) => x.hole_mm != null && x.serial && x.time >= '10:20');
+  const figs = [
+    [`${cir} / ${right.length}`, `Prüfbilder in Toleranz\n(mit Ellipse: ${ell} / ${right.length})`, T.good],
+    [`${cyc.filter((x) => x.good).length} / ${cyc.length}`, 'Gutteile im Betrieb\nals GUT sortiert', T.good],
+    [`± ${fmt(sd, 2)} mm`, `Streuung, Mittel ${fmt(m, 2)} mm\n(Rest ~${fmt((1 - m / nom) * 100, 1)} % unter Soll)`, T.ink],
+  ];
+  figs.forEach(([big, small, hex], i) => {
+    const x = 1.75 + i * 2.35;
+    api.text(1, big, { font: 'title', size: 0.42, hex }, [x, -1.35], { delay: 1.0 + i * 0.12 });
+    api.text(1, small, { font: 'sans', size: 0.17, hex: T.inkSoft, anchorY: 'top', lineHeight: 1.3 }, [x, -1.75], { delay: 1.05 + i * 0.12 });
+  });
+  api.stamp(1, 'GELÖST IM ALGORITHMUS', [4.3, -3.35], { size: 0.27, rot: -0.04, hex: T.good, sub: 'die Ursache bleibt: Prüfstation gegen Fensterlicht abschirmen' }, { delay: 1.4 });
+  api.text(1, 'grau: Teil kopfüber, Rückseite geprüft · gleiche Kontur, nur das Verfahren unterscheidet sich', { font: 'mono', size: 0.12, hex: T.inkSoft }, [CX0 - 0.6, CY0 - 0.42], { delay: 1.2 });
 }
 
 // ---------------------------------------------------------------- 7.4 Was noch fehlt
@@ -656,22 +733,24 @@ function sheet74(api) {
   const done = [
     ['Ablauf ohne Hardware', `Testfotos + Simulator der Steuerung, ${t.total} automatische Tests, GUI mit Logbuch`],
     ['Kameras und Greifer am Aufbau', 'feste Belichtung und Fokus, Positionskorrektur, Greifer über Digitalausgänge'],
-    ['Vollständiger Zyklus', 'erkannt, gegriffen, geprüft und sortiert – mit echten Kameras'],
+    ['Dauerbetrieb', '25 Zyklen am 26.11. erkannt, gegriffen, geprüft und sortiert; Fehlerfälle abgefangen'],
+    ['Lochmessung', 'Kreis-Fit gleicht die Spiegelung aus – alle Prüfbilder in Toleranz'],
     ['M4 eingebunden', 'eigener Reiter, Policy greift im Ablauf; Übergabe M4 → M2 in der Neura-VM getestet'],
   ];
   const open = [
-    ['Lochmaßstab und Licht', 'Korrekturfaktor mit bekannten Gutteilen, Prüfstation gegen Fensterlicht abschirmen'],
+    ['Licht an der Prüfstation', 'abschirmen statt im Algorithmus ausgleichen; Rest ~2,5 % unter Soll kalibrieren'],
     ['Kalibrierte Kamera', 'intrinsische Kalibrierung und Entzerrung auf Bauteilhöhe statt empirischer Korrektur'],
     ['M4 an der Anlage', 'Ergebnisse und Vergleich mit dem klassischen Greifen (Jeremy)'],
-    ['Größere Messreihe', 'mehr Zyklen, echte Fehlerteile, wechselndes Licht'],
+    ['Echte Fehlerteile', 'gezielt gefertigte Teile ohne Kerbe, mit falschem Loch, ohne Etikett; wechselndes Licht'],
   ];
   const col = (step, items, x, n0, label, hex) => {
     api.stamp(step, label, [x + 1.2, 2.4], { size: 0.26, rot: -0.04, hex }, { delay: 0.05 });
-    items.forEach(([ti, b], i) => api.row(step, n0 + i, ti, b, 1.65 - i * 1.4, { x, width: 6.0, size: 0.28, delay: 0.15 + i * 0.12 }));
+    const dy = items.length > 4 ? 1.12 : 1.4;
+    items.forEach(([ti, b], i) => api.row(step, n0 + i, ti, b, 1.65 - i * dy, { x, width: 6.0, size: 0.28, delay: 0.15 + i * 0.12 }));
   };
   col(0, done, X0 + 0.7, 1, 'ERLEDIGT', T.good);
-  col(1, open, 0.9, 5, 'OFFEN', T.signal);
-  api.text(1, 'Stand 24.11. · Quelle: plan/06_offen.md, plan/07_erledigt.md',{ font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, -3.85], { delay: 0.7 });
+  col(1, open, 0.9, done.length + 1, 'OFFEN', T.signal);
+  api.text(1, 'Stand 26.11. · Quelle: plan/06_offen.md, plan/07_erledigt.md',{ font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, -4.0], { delay: 0.7 });
 }
 
 // ---------------------------------------------------------------- A.1 Konfiguration
@@ -742,7 +821,7 @@ export function sheetScenes(storyboard) {
   const e = (id) => storyboard.find((s) => s.id === id);
   return [
     sheetScene(e('1.5'), 2, sheet15),
-    sheetScene(e('1.6'), 2, sheet16),
+    sheetScene(e('1.6'), 4, sheet16),
     sheetScene(e('2.4'), 2, sheet24),
     sheetScene(e('4.7'), 2, sheet47),
     sheetScene(e('6.3'), 2, sheetFunnel),
@@ -751,13 +830,15 @@ export function sheetScenes(storyboard) {
     sheetScene(e('6.6'), 2, sheetJitter),
     sheetScene(e('6.7'), 2, sheetTiming),
     sheetScene(e('3.6'), 2, sheet36),
-    sheetScene(e('7.1'), 2, sheet71),
-    sheetScene(e('7.2'), 2, sheet72),
-    sheetScene(e('7.3'), 2, sheet73m),
+    sheetScene(e('5.9'), 2, sheet75),
     sheetScene(e('7.4'), 2, sheet74),
     sheetScene(e('A.1'), 2, sheetA1),
     sheetScene(e('A.2'), 1, stepsSheet('steps_m1', 5, 2.7)),
     sheetScene(e('A.3'), 1, stepsSheet('steps_m3', 5, 2.7)),
     sheetScene(e('A.4'), 1, sheetA4),
+    sheetScene(e('A.5'), 1, sheet71),
+    sheetScene(e('A.6'), 2, sheet72),
+    sheetScene(e('A.7'), 2, sheet73m),
+    sheetScene(e('A.8'), 2, sheet74lab),
   ];
 }

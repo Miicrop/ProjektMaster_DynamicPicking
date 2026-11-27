@@ -16,12 +16,13 @@ import { createVision, VISION_SCENES } from './worlds/vision.js';
 import { createInspect, INSPECT_SCENES } from './worlds/inspect.js';
 import { createArch, ARCH_SCENES } from './worlds/arch.js';
 import { sheetScenes } from './worlds/sheets.js';
+import { aufbauScenes } from './worlds/aufbau.js';
 import { createCell, CELL_SCENES } from './worlds/cell.js';
 import { loadLara } from './kit/lara.js';
 
 // Welten: Name → createWorld(ctx). Gebaute Szenen: { id, world, steps, cams }. Alles andere wird Entwurfsblatt.
 const WORLDS = { vision: createVision, inspect: createInspect, arch: createArch, cell: createCell };
-const BUILT = new Map([...CELL_SCENES, ...ARCH_SCENES, ...VISION_SCENES, ...INSPECT_SCENES, ...sheetScenes(STORYBOARD)].map((s) => [s.id, s]));
+const BUILT = new Map([...CELL_SCENES, ...ARCH_SCENES, ...VISION_SCENES, ...INSPECT_SCENES, ...sheetScenes(STORYBOARD), ...aufbauScenes(STORYBOARD)].map((s) => [s.id, s]));
 const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜabcdefghijklmnopqrstuvwxyzäöüß0123456789.,:;–-_·/()[]?!„“"\'%×+=<>~›…°Ø ';
 
 async function boot() {

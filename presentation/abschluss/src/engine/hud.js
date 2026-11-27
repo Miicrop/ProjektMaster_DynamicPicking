@@ -1,5 +1,5 @@
 // HUD im Stil eines Schriftfelds: Szene, Akt, Sprecher, Fortschritt; dazu Übersicht und Sprungeingabe.
-import { ACTS } from '../storyboard.js';
+import { ACTS, PHASES } from '../storyboard.js';
 
 export class Hud {
   constructor(root, storyboard) {
@@ -7,6 +7,7 @@ export class Hud {
     root.innerHTML = `
       <div class="hud" id="hud">
         <div class="hud-progress" id="hud-progress"></div>
+        <div class="hud-phase" id="hud-phase">${PHASES.map(([k, label]) => `<span data-phase="${k}">${label}</span>`).join('')}</div>
         <div class="hud-block">
           <div class="hud-cell hud-title"><span class="hud-key">SZENE</span><span id="hud-title"></span></div>
           <div class="hud-cell hud-ff"><span class="hud-key">SPRICHT</span><span id="hud-ff"></span></div>
@@ -29,6 +30,11 @@ export class Hud {
     this.el('hud-title').textContent = e?.title ?? '';
     this.el('hud-act').textContent = ACTS[sc.act] ?? '';
     this.el('hud-ff').textContent = e?.speaker ?? '–';
+    // Phase im Muster Aufgabe → Idee → Am Aufbau → Lösung (Liste: je Schritt, Index = Schritt − 1)
+    const ph = Array.isArray(e?.phase) ? e.phase[Math.min(e.phase.length - 1, Math.max(0, nav.k - 1))] : e?.phase;
+    const phaseEl = this.el('hud-phase');
+    phaseEl.classList.toggle('on', !!ph);
+    phaseEl.querySelectorAll('span').forEach((sp) => sp.classList.toggle('cur', sp.dataset.phase === ph));
     // Fortschritt: ein Strich je Szene des aktuellen Akts, Schritte als Füllung
     const act = nav.scenes.filter((s) => s.act === sc.act && nav.visible(s));
     this.el('hud-progress').innerHTML = act
