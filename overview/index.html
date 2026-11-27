@@ -26,22 +26,26 @@
   <p class="lead">Je Modul eine Seite, die erklärt, wie es aufgebaut ist, wie die einzelnen Teile funktionieren,
     warum sie so gebaut sind und welche Fragen in der Präsentation kommen können. Alle Bilder stammen aus der echten
     Pipeline, die interaktiven Beispiele rechnen mit den Werten aus <code>config/system.yaml</code>.</p>
+  <div class="tip"><p><b>Stand 27.11.:</b> Alle Module laufen am echten Aufbau. Am letzten Labortag (26.11.) wurden
+    25 Zyklen mit Prüfung gefahren, zum Teil im Dauerbetrieb: alle erkannt, gegriffen, geprüft und einsortiert,
+    nach der Umstellung der Lochmessung alle 21 richtig eingelegten Gutteile als GUT. 48 Abfragen ohne Bauteil
+    lösten keinen Zyklus aus, 7 Abbrüche endeten vor dem Greifen bzw. per Software-Stopp.</p></div>
 
   <div class="mods">
     <a href="m1_objekterkennung.html" style="--c:#0f766e">
       <div class="k">M1 · Person 1</div><h3>Objekterkennung</h3>
       <p>Top-down-Kamera → Bauteilpose (x, y, θ) im Roboter-KS</p>
-      <ul><li>ArUco-Marker &amp; Homographie</li><li>Segmentierung mit Lab-Chroma</li><li>Fase → eindeutiger Winkel</li><li>Klick-Demo: Pixel → Roboter-mm</li></ul>
+      <ul><li>ArUco-Marker &amp; Homographie</li><li>Segmentierung mit Lab-Chroma</li><li>Fase → eindeutiger Winkel, gewendetes Teil</li><li>Form- und Ruheprüfung</li><li>Positionskorrektur aus Zeigetests</li></ul>
     </a>
     <a href="m2_robotersteuerung.html" style="--c:#c2410c">
       <div class="k">M2 · Person 2</div><h3>Robotersteuerung</h3>
       <p>Neura LARA greift, legt ab und sortiert</p>
-      <ul><li>NeuraPy, Simulator &amp; VM</li><li>Greifsequenz PTP + LIN (Animation)</li><li>Greiferwinkel 113°</li><li>Kalibrierung &amp; Sicherheitskonzept</li></ul>
+      <ul><li>NeuraPy, Simulator &amp; VM</li><li>Greifsequenz PTP + LIN (Animation)</li><li>Greiferwinkel −67°, Greifer über Digitalausgänge</li><li>Kalibrierung, Zeigetest &amp; Sicherheitskonzept</li></ul>
     </a>
     <a href="m3_sichtpruefung.html" style="--c:#7c3aed">
       <div class="k">M3 · Person 3</div><h3>Sichtprüfung</h3>
       <p>Seitenkamera → Seriennummer, Loch, Kerbe → gut/schlecht</p>
-      <ul><li>ROIs relativ zur Bauteil-Box</li><li>Maßstab aus der Bauteilhöhe</li><li>OCR, Rundheit, Rechteckigkeit</li><li>Entscheidungs-Spielwiese</li></ul>
+      <ul><li>ROIs relativ zur Bauteil-Box</li><li>Maßstab aus der Bauteilhöhe</li><li>OCR, Rundheit, Rechteckigkeit</li><li>Kreis-Fit gegen Spiegelungen</li><li>Entscheidungs-Spielwiese</li></ul>
     </a>
   </div>
 
@@ -56,8 +60,8 @@
   <div class="grid2">
     <div class="card"><h3>Interface + Mock je Modul</h3><p style="font-size:.92rem">Jedes Modul hat eine abstrakte
       Schnittstelle und eine Mock-Implementierung. Dadurch lief der Gesamtablauf vom ersten Tag an, und jede Person
-      konnte ihr Modul isoliert entwickeln. M4 (KI-Greifen) übernimmt per Konfiguration das Greifen und
-      Ablegen an der Prüfung von M2.</p></div>
+      konnte ihr Modul isoliert entwickeln. M4 (KI-Greifen, Behavior Cloning) übernimmt per Umschalter im
+      Reiter <i>Ablauf</i> das Greifen von M2 und übergibt über der Prüfvorrichtung, abgelegt wird immer von M2.</p></div>
     <div class="card"><h3>Pipeline ohne Kamera</h3><p style="font-size:.92rem">M1 und M3 trennen die Bildverarbeitung
       (Bild rein, Ergebnis raus) vom Kamerazugriff. Dieselbe Pipeline läuft live, mit gespeicherten Fotos
       (<code>replay</code>) und in automatischen Tests.</p></div>
@@ -66,10 +70,10 @@
       gibt es keine „magischen Zahlen“ für den Aufbau.</p></div>
     <div class="card"><h3>Nachvollziehbarkeit</h3><p style="font-size:.92rem">Jeder Zyklus wird als Zeile in
       <code>logs/cycles_&lt;datum&gt;.csv</code> protokolliert, optional mit Debug- und Zwischenbildern. Das ist die
-      Datengrundlage für die Evaluation. Insgesamt laufen 105 automatische Tests.</p></div>
+      Datengrundlage für die Evaluation. Insgesamt gibt es 126 automatische Tests.</p></div>
   </div>
 
-  <footer style="margin-top:40px">Stand: 20.10.2026. Öffnen per Doppelklick, funktioniert offline in jedem aktuellen Browser.
+  <footer style="margin-top:40px">Stand: 27.11.2026 (erstellt 20.10., aktualisiert nach den Labortagen 12.11. und 26.11.). Öffnen per Doppelklick, funktioniert offline in jedem aktuellen Browser.
     Weiterführend: <code>ANLEITUNG.md</code>, <code>plan/</code>, Thesis Kapitel 5–7.</footer>
 </main>
 </body>

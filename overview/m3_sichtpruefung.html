@@ -43,9 +43,9 @@
     Es liest die <b>Seriennummer</b>, vermisst den <b>Lochdurchmesser</b> und prüft, ob die <b>Kerbe</b>
     vorhanden ist. Nur wenn alle drei passen, ist das Teil ein Gutteil.</p>
   <div class="facts">
-    <div class="fact"><div class="v">4 / 4</div><div class="l">Testbilder korrekt (69420, Loch, Kerbe)</div></div>
-    <div class="fact"><div class="v">3</div><div class="l">unabhängige Prüfmerkmale</div></div>
-    <div class="fact"><div class="v">± 0,4 mm</div><div class="l">Toleranz Lochdurchmesser (Platzhalter)</div></div>
+    <div class="fact"><div class="v">21 / 21</div><div class="l">richtig eingelegte Gutteile als GUT sortiert (26.11.)</div></div>
+    <div class="fact"><div class="v">19 / 19</div><div class="l">Lochmessungen in Toleranz mit Kreis-Fit (Ellipse: 0 / 19)</div></div>
+    <div class="fact"><div class="v">24 / 24</div><div class="l">Seriennummern gelesen</div></div>
     <div class="fact"><div class="v">0 Kalib.</div><div class="l">Maßstab aus der Bauteilhöhe</div></div>
   </div>
 </header>
@@ -55,9 +55,10 @@
   <h2><span class="num">01</span>Auf einen Blick</h2>
   <div class="grid2">
     <div class="card"><h3>Eingabe</h3>
-      <p>Ein Bild der Seitenkamera (3840 × 2160 px). Das Bauteil liegt an der Prüfposition, Etikett, Loch und
-        Kerbe zeigen zur Kamera. Dafür sorgt die eindeutige Orientierung aus M1 (Fase) zusammen mit der festen
-        Ablagepose von M2.</p></div>
+      <p>Ein Bild der Seitenkamera, einer Logitech-Webcam mit 3840 × 2160 px und festem Fokus (Autofokus aus). Sie
+        steht auf der vom Roboter abgewandten Seite der gedruckten Prüfvorrichtung. Das Bauteil liegt dort mit Etikett,
+        Loch und Kerbe zur Kamera. Dafür sorgen die eindeutige Orientierung aus M1 (Fase), der Greiferwinkel von M2
+        (−67°) und die feste Ablagepose.</p></div>
     <div class="card"><h3>Ausgabe</h3>
       <p>Ein <code>InspectionResult</code>: <code>serial_number</code>, <code>hole_diameter_mm</code>,
         <code>notch_present</code>, <code>is_good</code> und eine Liste <code>reasons</code> mit allen
@@ -71,7 +72,7 @@
         <rect x="4" y="70" width="140" height="60" rx="9" class="f-surface2"/><text x="74" y="96" text-anchor="middle" font-weight="700" class="f-text">Seitenbild</text><text x="74" y="114" text-anchor="middle" class="f-muted" font-size="11">camera.read()</text>
         <rect x="180" y="70" width="170" height="60" rx="9" class="f-accsoft"/><text x="265" y="96" text-anchor="middle" font-weight="700" class="f-text">Bauteil + Maßstab</text><text x="265" y="114" text-anchor="middle" class="f-muted" font-size="11">locate_part()</text>
         <rect x="400" y="6" width="170" height="54" rx="9" class="f-accsoft"/><text x="485" y="30" text-anchor="middle" font-weight="700" class="f-text">Seriennummer</text><text x="485" y="47" text-anchor="middle" class="f-muted" font-size="11">EasyOCR + Regex</text>
-        <rect x="400" y="73" width="170" height="54" rx="9" class="f-accsoft"/><text x="485" y="97" text-anchor="middle" font-weight="700" class="f-text">Lochdurchmesser</text><text x="485" y="114" text-anchor="middle" class="f-muted" font-size="11">Rundheit + Ellipsen-Fit</text>
+        <rect x="400" y="73" width="170" height="54" rx="9" class="f-accsoft"/><text x="485" y="97" text-anchor="middle" font-weight="700" class="f-text">Lochdurchmesser</text><text x="485" y="114" text-anchor="middle" class="f-muted" font-size="11">Rundheit + Kreis-Fit</text>
         <rect x="400" y="140" width="170" height="54" rx="9" class="f-accsoft"/><text x="485" y="164" text-anchor="middle" font-weight="700" class="f-text">Kerbe</text><text x="485" y="181" text-anchor="middle" class="f-muted" font-size="11">Rechteckigkeit</text>
         <rect x="620" y="70" width="140" height="60" rx="9" class="f-surface2"/><text x="690" y="96" text-anchor="middle" font-weight="700" class="f-text">evaluate()</text><text x="690" y="114" text-anchor="middle" class="f-muted" font-size="11">alle drei erfüllt?</text>
         <rect x="800" y="50" width="94" height="40" rx="8" fill="var(--good-soft)"/><text x="847" y="75" text-anchor="middle" font-weight="700" fill="var(--good)">GUT</text>
@@ -87,7 +88,8 @@
   </div>
   <div class="say"><p>„M3 sucht das violette Bauteil im Seitenbild und legt darauf drei Prüfbereiche fest, alle
     relativ zur Bauteilgröße. Im Etikett liest eine OCR die Seriennummer, im Lochbereich suchen wir die rundeste
-    Region und messen sie mit einem Ellipsen-Fit, im Kerbenbereich die rechteckigste Region. Den Maßstab liefert
+    Region und messen sie mit einem Kreis-Fit, der Spiegelungen auf der Bohrungswand ignoriert, im Kerbenbereich die
+    rechteckigste Region. Den Maßstab liefert
     die bekannte Bauteilhöhe, wir brauchen also keine separate Kalibrierung. Gut ist ein Teil nur, wenn alle drei
     Merkmale passen, und jeder Fehler wird mit Grund protokolliert.“</p></div>
 </section>
@@ -120,8 +122,9 @@
     und in Tests. Die Gut/Schlecht-Logik <code>evaluate()</code> ist eine eigene Funktion, die Mock und echter
     Inspektor gemeinsam nutzen. So entscheiden beide immer nach denselben Regeln.</p>
   <div class="files">
-    <div class="file"><div class="name">features.py</div><div class="desc"><code>locate_part()</code> (Bauteil-Box), <code>sub_roi()</code> (Prüfbereich relativ zur Box), <code>find_hole()</code>, <code>find_notch()</code> mit Hilfsfunktionen für Regionen und Kanten.</div></div>
-    <div class="file"><div class="name">ocr.py</div><div class="desc"><code>SerialReader</code>: EasyOCR mit Ziffern-Allowlist. Das Modell wird erst beim ersten Aufruf geladen (dauert einige Sekunden), kleine ROIs werden vergrößert.</div></div>
+    <div class="file"><div class="name">features.py</div><div class="desc"><code>locate_part()</code> (Bauteil-Box), <code>sub_roi()</code> (Prüfbereich relativ zur Box), <code>find_hole()</code> mit <code>_outer_circle_diameter()</code> (Kreis-Fit ohne nach innen gezogene Punkte), <code>find_notch()</code> mit Hilfsfunktionen für Regionen und Kanten.</div></div>
+    <div class="file"><div class="name">ocr.py</div><div class="desc"><code>SerialReader</code>: EasyOCR mit Ziffern-Allowlist. Das Modell wird erst beim ersten Aufruf geladen (dauert einige Sekunden). Die Etikett-ROI wird auf 300 px Höhe skaliert.</div></div>
+    <div class="file"><div class="name">common/camera.py</div><div class="desc"><code>OpenCVCamera</code> mit festem Fokus (<code>focus</code>) und verworfenem Pufferbild: Nach einer Pause lieferte die Kamera sonst ein altes Bild der leeren Vorrichtung (Labor 12.11.).</div></div>
     <div class="file"><div class="name">inspector.py</div><div class="desc"><code>evaluate()</code> (Gut/Schlecht), <code>InspectionPipeline</code>, <code>CameraInspector</code> (implementiert <code>Inspector</code>), <code>MockInspector</code> (ca. 70 % Gutteile, zufälliger Fehler), <code>InspectionDetails</code> mit Debug-Bild.</div></div>
     <div class="file"><div class="name">run.py</div><div class="desc">Kommandozeile: Prüfung auf Bilddateien oder ein Kamerabild, Debug-Bilder nach <code>logs/m3</code>.</div></div>
     <div class="file"><div class="name">tests/</div><div class="desc">Echte Seitenbilder (Seriennummer 69420) müssen „gut“ ergeben. Künstlich erzeugte Fehler (Kerbe bzw. Loch übermalt) müssen „schlecht“ ergeben. Dazu Tests der Entscheidungslogik.</div></div>
@@ -132,13 +135,15 @@
 <!-- ============================================================== -->
 <section id="kette">
   <h2><span class="num">04</span>Verarbeitung Schritt für Schritt</h2>
-  <p>Die Bilder stammen aus der echten Pipeline (<code>InspectionPipeline.process(img, trace)</code>). Die
-    Vollbilder sind hier auf das Bauteil zugeschnitten. Oben lässt sich das Testbild wechseln, Bild 3 und 4
-    sind Nahaufnahmen.</p>
+  <p>Die Bilder stammen aus der echten Pipeline (<code>InspectionPipeline.process(img, trace)</code>, Code-Stand
+    27.11.). Die Vollbilder sind hier auf das Bauteil zugeschnitten. <b>Labor 1–2</b> sind Aufnahmen der fest
+    montierten Seitenkamera aus zwei Zyklen vom 26.11., <b>Bild 1–4</b> die Testbilder aus der Entwicklung (Bild 3 und
+    4 sind Nahaufnahmen).</p>
   <div class="stepper" id="steps"></div>
   <script>
   makeStepper(document.getElementById("steps"),
-    [1,2,3,4].map(k => ({label: "Bild " + k, dir: "img/m3/bild" + k})),
+    [1,2].map(k => ({label: "Labor " + k, dir: "img/m3/labor" + k}))
+      .concat([1,2,3,4].map(k => ({label: "Bild " + k, dir: "img/m3/bild" + k}))),
     [
       {file: "c_01_original.jpg", title: "Originalbild (Ausschnitt)", fn: "trace.add('original')",
        text: "Seitenansicht: violettes Bauteil mit weißem Etikett, Durchgangsloch und kleiner eckiger Öffnung (Kerbe) rechts."},
@@ -147,21 +152,21 @@
       {file: "c_03_part_opened.png", title: "Öffnen", pix: true, fn: "MORPH_OPEN 7×7",
        text: "Entfernt kleine violette Störflecken im Hintergrund."},
       {file: "c_04_part_closed.png", title: "Schließen über die Bauteilhöhe", pix: true, fn: "MORPH_CLOSE, Kernel (H/4 × H)",
-       text: "Ein Strukturelement so hoch wie das Bauteil schließt die Lücken von Etikett, Loch und Kerbe. Erst dadurch erfasst die Box die ganze Seitenfläche."},
+       text: "Ein Strukturelement so hoch wie das Bauteil schließt die Lücken von Etikett, Loch und Kerbe. Erst dadurch erfasst die Box die ganze Seitenfläche. Die Maske wird dafür mit Nullen aufgefüllt: OpenCV behandelt Pixel außerhalb des Bildes beim Erodieren als gesetzt, und ein Teil nahe am Bildrand wuchs sonst bis zum Rand (Labor 12.11.: Box 1166 statt 837 px hoch)."},
       {file: "c_05_part_box.jpg", title: "Bauteil-Box", fn: "cv2.boundingRect",
        text: "Das umschließende Rechteck (grün) ist die Referenz für alles Weitere. Die ROIs sind relativ dazu angegeben, und seine Höhe in Pixeln liefert den Maßstab."},
       {file: "m3_06_label_roi.jpg", title: "Etikett-ROI", fn: "label_roi = [0, 0, 0.58, 1]",
-       text: "Die linken 58 % der Box gehen an die OCR. EasyOCR erkennt nur Ziffern (Allowlist), das Ergebnis muss zu <code>^[0-9]{5}$</code> passen."},
+       text: "Die linken 58 % der Box gehen an die OCR. Der Ausschnitt wird auf 300 px Höhe skaliert, EasyOCR erkennt nur Ziffern (Allowlist), das Ergebnis muss zu <code>^[0-9]{5}$</code> passen."},
       {file: "m3_07_hole_roi.jpg", title: "Loch-ROI", fn: "hole_roi = [0.52, 0, 0.86, 1]",
        text: "Ausschnitt um das Durchgangsloch über die volle Bauteilhöhe."},
       {file: "m3_08_hole_mask.png", title: "„Nicht Stirnfläche“-Maske", pix: true, fn: "_non_face_features()",
        text: "Gesucht wird nicht eine bestimmte Lochfarbe, sondern alles, was <b>keine helle violette Stirnfläche</b> ist: die dunkle Bohrungswand ebenso wie heller Hintergrund, der durch das Loch scheint. Referenz ist das 70. Perzentil der Helligkeit der violetten Pixel."},
       {file: "m3_09_hole_candidates.jpg", title: "Loch-Kandidaten mit Rundheit", fn: "find_hole(): Fläche / Umkreisfläche",
-       text: "Für jede Region wird die Rundheit berechnet (Fläche geteilt durch die Fläche des kleinsten umschließenden Kreises, 1,0 = perfekter Kreis). Die rundeste gewinnt, wenn sie ≥ 0,75 ist. Ein Ellipsen-Fit liefert dann den Durchmesser in Pixeln."},
+       text: "Für jede Region wird die Rundheit berechnet (Fläche geteilt durch die Fläche des kleinsten umschließenden Kreises, 1,0 = perfekter Kreis). Die rundeste gewinnt, wenn sie ≥ 0,75 ist. Ein Kreis-Fit liefert dann den Durchmesser in Pixeln. Er verwirft Konturpunkte, die deutlich innerhalb des Kreises liegen, etwa wo Licht auf der Bohrungswand die Maske anschneidet (Abschnitt 07)."},
       {file: "m3_10_notch_roi.jpg", title: "Kerben-ROI", fn: "notch_roi = [0.84, 0.1, 1, 0.9]",
        text: "Rechter Rand der Box, oben und unten je 10 % abgeschnitten."},
       {file: "m3_11_notch_region_mask.png", title: "Kerbe: Regionen", pix: true, fn: "_region_features()",
-       text: "Pixel, die deutlich dunkler (&lt; 85 % der Flächenhelligkeit) oder deutlich anders gesättigt (± 40) sind als die umgebende Fläche. Die Referenz ist der Median am ROI-Rand."},
+       text: "Pixel, die deutlich dunkler (&lt; 75 % der Flächenhelligkeit, <code>notch_brightness_frac</code>) oder deutlich anders gesättigt (± 40) sind als die umgebende Fläche. Die Referenz ist der Median am ROI-Rand. Vorher galten 85 % wie beim Loch, aber an der Prüfstation wird die Fläche zum rechten Ende hin dunkler, und die Kerbe verschmolz mit diesem Schatten."},
       {file: "m3_12_notch_edges.png", title: "Kerbe: Kanten", pix: true, fn: "_edge_features(): Canny 30/90",
        text: "Zweiter, unabhängiger Weg: geschlossene Kantenzüge. Er greift, wenn die Öffnung dieselbe Farbe wie die Fläche hat und sich nur über ihre Ränder abzeichnet."},
       {file: "m3_13_notch_candidates.jpg", title: "Kerben-Kandidaten mit Rechteckigkeit", fn: "find_notch(): Fläche / minAreaRect",
@@ -187,31 +192,33 @@
         nötig, und der Maßstab bleibt bei kleinen Abstandsänderungen richtig.</p></div>
   </div>
   <div class="demo">
-    <div class="dh"><h4>Prüfbereiche auf dem Testbild</h4></div>
+    <div class="dh"><h4>Prüfbereiche auf dem Bauteil</h4></div>
     <div class="controls">
-      <label>Bild <select id="rImg"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+      <label>Bild <select id="rImg"><option value="labor1">Labor 1</option><option value="labor2">Labor 2</option><option value="bild1">Test 1</option><option value="bild2">Test 2</option><option value="bild3">Test 3</option><option value="bild4">Test 4</option></select></label>
       <label><input type="checkbox" id="rBox" checked> Box</label>
       <label><input type="checkbox" id="rL" checked> <span style="color:#0891b2">■</span> Etikett</label>
       <label><input type="checkbox" id="rH" checked> <span style="color:#ea580c">■</span> Loch</label>
       <label><input type="checkbox" id="rN" checked> <span style="color:#c026d3">■</span> Kerbe</label>
     </div>
     <div style="position:relative;max-width:820px">
-      <img id="rPic" src="img/m3/bild1/crop.jpg" alt="Bauteil mit Prüfbereichen" style="width:100%;display:block;border-radius:8px">
+      <img id="rPic" src="img/m3/labor1/crop.jpg" alt="Bauteil mit Prüfbereichen" style="width:100%;display:block;border-radius:8px">
       <svg id="rSvg" viewBox="0 0 1000 1000" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%"></svg>
     </div>
-    <p style="font-size:.86rem;margin-top:10px">Die Bilder haben unterschiedliche Abstände und Hintergründe. Weil die
-      ROIs relativ zur Box definiert sind, sitzen sie trotzdem überall richtig. Die Box-Koordinaten stammen aus der
-      echten Pipeline.</p>
+    <p style="font-size:.86rem;margin-top:10px">Die Testbilder haben unterschiedliche Abstände und Hintergründe, die
+      Laborbilder kommen von der festen Kamera. Weil die ROIs relativ zur Box definiert sind, sitzen sie überall
+      richtig, ohne dass sie für den Aufbau nachjustiert werden mussten. Die Box-Koordinaten stammen aus der echten
+      Pipeline.</p>
   </div>
   <script>
   (function () {
     // Bauteil-Box relativ zum Bildausschnitt [x, y, w, h] (aus locate_part, img/results.json)
-    const CROP = {1: [0.0961, 0.236, 0.8078, 0.528], 2: [0.0964, 0.2354, 0.8072, 0.5291], 3: [0.0964, 0.2333, 0.8071, 0.5334], 4: [0.0968, 0.2411, 0.8065, 0.5178]};
+    const CROP = {labor1: [0.0966, 0.2362, 0.8068, 0.5374], labor2: [0.0968, 0.2367, 0.8065, 0.5358],
+                  bild1: [0.0961, 0.236, 0.8078, 0.528], bild2: [0.0964, 0.2354, 0.8072, 0.5291], bild3: [0.0964, 0.2333, 0.8071, 0.5334], bild4: [0.0968, 0.2411, 0.8065, 0.5178]};
     const ROI = {rL: [[0, 0, .58, 1], "#0891b2"], rH: [[.52, 0, .86, 1], "#ea580c"], rN: [[.84, .1, 1, .9], "#c026d3"]};
     const ids = ["rImg", "rBox", "rL", "rH", "rN"].map(i => document.getElementById(i));
     function draw() {
       const k = ids[0].value;
-      document.getElementById("rPic").src = `img/m3/bild${k}/crop.jpg`;
+      document.getElementById("rPic").src = `img/m3/${k}/crop.jpg`;
       const [bx, by, bw, bh] = CROP[k], X = v => v * 1000, s = [];
       if (ids[1].checked) s.push(`<rect x="${X(bx)}" y="${X(by)}" width="${X(bw)}" height="${X(bh)}" fill="none" stroke="#22c55e" stroke-width="4" vector-effect="non-scaling-stroke"/>`);
       Object.entries(ROI).forEach(([id, [r, c]], n) => {
@@ -235,7 +242,8 @@
     </div>
     <p style="font-size:.86rem;margin-top:10px">Ändert sich der Abstand, ändern sich Loch und Bauteilhöhe im Bild im
       selben Verhältnis. Der gemessene Durchmesser bleibt gleich. Auf den Testbildern liegt D/H bei 0,647 bis 0,683,
-      unabhängig davon, ob das Teil 218 oder 784 px hoch ist.</p>
+      unabhängig davon, ob das Teil 218 oder 784 px hoch ist. An der festen Laborkamera ist das Teil etwa 815–819 px
+      hoch, D/H 0,648–0,652.</p>
   </div>
   <script>
   (function () {
@@ -259,8 +267,9 @@
   })();
   </script>
   <div class="warn"><p><b>Voraussetzung:</b> Seitenfläche und Kamera stehen annähernd parallel, und
-    <code>part_height_mm</code> stimmt. Der aktuelle Wert von 15 mm ist ein Platzhalter und muss aus der
-    Bauteilzeichnung übernommen werden. Ein Fehler hier skaliert jede Durchmessermessung.</p></div>
+    <code>part_height_mm</code> stimmt (Bauteil 60 × 40 × 15 mm). Ein Fehler hier skaliert jede Durchmessermessung.
+    Auch mit dem Kreis-Fit liegt der Messwert am Aufbau etwa 2,5 % unter 10 mm. Mögliche Ursachen sind eine bei
+    leicht schräger Ansicht etwas zu groß erscheinende Bauteilhöhe und Fertigungsabweichungen des Drucks.</p></div>
 </section>
 
 <!-- ============================================================== -->
@@ -270,8 +279,10 @@
     <li><b>EasyOCR</b>: eine lernbasierte OCR-Bibliothek (Textdetektion + Erkennung über neuronale Netze), die sich per
       <code>pip</code> installieren lässt. Tesseract wäre die klassische Alternative, braucht aber eine separate
       Installation.</li>
-    <li>Ist die Etikett-ROI niedriger als 64 px, wird sie hochskaliert, weil die Erkennung auf sehr kleine Schrift
-      schlechter anspricht.</li>
+    <li>Die Etikett-ROI wird immer auf <b>300 px Höhe</b> skaliert (seit 26.11.). An der 4K-Kamera ist das Etikett etwa
+      820 px hoch, und dort schwankte die Konfidenz zwischen fast gleichen Bildern stark (0,99 gegenüber 0,39, also
+      knapp unter der Schwelle). Mit 300 px lag das Minimum über Labor- und Testbilder bei 0,88. Vorher wurden nur
+      ROIs unter 64 px hochskaliert.</li>
     <li><b>Allowlist</b> „0123456789“: Das Netz darf nur Ziffern ausgeben, Verwechslungen wie O/0 oder I/1 fallen
       dadurch weg.</li>
     <li>Von allen Textkandidaten wird der mit der höchsten Konfidenz gewählt, der zum <b>regulären Ausdruck</b>
@@ -280,9 +291,9 @@
     <li>Liegt die Konfidenz unter <code>ocr_min_confidence</code> = 0,4, gilt die Nummer als nicht lesbar
       (<code>None</code>).</li>
   </ul>
-  <div class="note"><p>Konfidenzen auf den Testbildern: 0,89 · 0,54 · 1,00 · 0,78. Alle liegen über 0,4, und alle
-    lesen „69420“. Bild 2 ist am weitesten entfernt und hat die kleinste Schrift, daher die niedrigere Konfidenz.
-    Eine feste Kamera mit eigener Beleuchtung sollte das verbessern.</p></div>
+  <div class="note"><p>Am 26.11. wurde die Seriennummer in allen 24 Zyklen mit richtig eingelegtem Bauteil gelesen.
+    Die Laborbilder oben ergeben mit dem aktuellen Code 0,99 und 1,00. Auf den alten Testbildern lagen die
+    Konfidenzen mit der früheren Skalierung bei 0,89 · 0,54 · 1,00 · 0,78.</p></div>
 </section>
 
 <!-- ============================================================== -->
@@ -296,19 +307,39 @@
       als 5 % von H² sind.</li>
     <li><b>Rundheit</b> = Fläche / (π · r²) mit r = Radius des kleinsten umschließenden Kreises. Die rundeste Region
       wird genommen, wenn sie ≥ 0,75 ist.</li>
-    <li><b>Ellipsen-Fit</b> (<code>cv2.fitEllipse</code>, Least Squares über alle Konturpunkte). Durchmesser = Mittelwert
-      der beiden Achsen, umgerechnet mit dem Maßstab.</li>
+    <li><b>Kreis-Fit ohne nach innen gezogene Punkte</b> (seit 26.11., <code>_outer_circle_diameter()</code>):
+      Least-Squares-Kreis durch alle Konturpunkte (Kasa-Verfahren), dann werden alle Punkte verworfen, die mehr als
+      2 % innerhalb des Kreises liegen, und der Fit wird wiederholt (bis zu 5-mal, mindestens 30 % der Punkte bleiben).
+      Durchmesser = 2 r, umgerechnet mit dem Maßstab.</li>
   </ol>
   <div class="grid3">
     <div class="card" style="text-align:center"><svg viewBox="0 0 100 100" width="90"><circle cx="50" cy="50" r="40" fill="var(--accent)" fill-opacity=".6"/><circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-dasharray="3 3"/></svg><div><b>Kreis</b> → 1,00</div></div>
     <div class="card" style="text-align:center"><svg viewBox="0 0 100 100" width="90"><rect x="22" y="22" width="56" height="56" fill="var(--accent)" fill-opacity=".6"/><circle cx="50" cy="50" r="39.6" fill="none" stroke="currentColor" stroke-dasharray="3 3"/></svg><div><b>Quadrat</b> → 0,64</div></div>
     <div class="card" style="text-align:center"><svg viewBox="0 0 100 100" width="90"><ellipse cx="50" cy="50" rx="40" ry="16" fill="var(--accent)" fill-opacity=".6"/><circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-dasharray="3 3"/></svg><div><b>Schlitz</b> → 0,40</div></div>
   </div>
-  <p>Die Schwelle 0,75 trennt also klar zwischen Loch (gemessen 0,96–0,97) und eckigen oder länglichen Störungen.</p>
-  <div class="tip"><p><b>Warum Ellipse statt Kreis?</b> Ein kreisrundes Loch erscheint bei leicht schräger Ansicht
-    elliptisch. Der Mittelwert der Achsen bleibt dabei ein guter Schätzer. Die Hough-Kreistransformation wäre eine
-    Alternative, liefert den Radius aber nur in der Auflösung ihres Akkumulators, während der Ellipsen-Fit alle
-    Konturpunkte nutzt (Subpixel-Genauigkeit).</p></div>
+  <p>Die Schwelle 0,75 trennt also klar zwischen Loch (Testbilder 0,96–0,97, Labor 0,92) und eckigen oder länglichen
+    Störungen.</p>
+  <h3>Vom Ellipsen- zum Kreis-Fit: das Problem am Aufbau</h3>
+  <p>Bis zum 26.11. maß M3 das Loch mit einem Ellipsen-Fit (<code>cv2.fitEllipse</code>) über alle Konturpunkte. An der
+    echten Prüfstation lag das Ergebnis systematisch unter dem Sollwert: am 12.11. bei 9,54–9,63 mm, am 26.11. bei
+    9,42–9,48 mm, also knapp oder deutlich unter der Toleranzgrenze von 9,6 mm. Das Gutteil wurde dadurch als
+    Schlechtteil sortiert. Die Zwischenbilder zeigten die Ursache: Das Fensterlicht spiegelt sich auf der unteren
+    Bohrungswand, dieser Bereich wirkt so hell wie die Seitenfläche, und die Lochkontur verläuft dort innerhalb des
+    Lochrands (Kontur 531 px breit, aber nur 490 px hoch).</p>
+  <figure><img class="photo" src="img/m3/loch_fit.jpg" alt="Ellipsen-Fit gegen Kreis-Fit auf demselben Loch">
+    <figcaption>Derselbe Zyklus, dieselbe Kontur. Links der Ellipsen-Fit über alle Punkte (9,48 mm → Schlechtteil),
+      rechts der Kreis-Fit, der die Punkte an der Spiegelung verwirft (grau, 9,72 mm → Gutteil).</figcaption></figure>
+  <p>Solche Störungen ziehen die Kontur immer nur <i>nach innen</i>, nie nach außen. Deshalb darf der Fit Punkte, die
+    deutlich innerhalb des Kreises liegen, als Ausreißer verwerfen. Ein fester Korrekturfaktor hätte nicht gereicht,
+    weil die Abweichung mit dem Tageslicht wechselt.</p>
+  <figure><img class="photo" src="img/m3/lochdurchmesser.png" alt="Lochdurchmesser aller Zyklen am 26.11.">
+    <figcaption>Nachauswertung aller Prüfbilder vom 26.11. mit beiden Verfahren an derselben Kontur. Ellipsen-Fit
+      9,42–9,55 mm, 0 von 19 in Toleranz. Kreis-Fit 9,67–9,81 mm (Mittel 9,75, s = 0,04 mm), 19 von 19 in Toleranz.
+      Der Punkt bei 9,60 mm ist das kopfüber eingelegte Teil.</figcaption></figure>
+  <div class="tip"><p><b>Warum nicht Hough-Kreise?</b> Die Hough-Kreistransformation liefert den Radius nur in der
+    Auflösung ihres Akkumulators und reagiert ebenso auf die angeschnittene Kontur. Der iterative Kreis-Fit nutzt alle
+    verbleibenden Konturpunkte (Subpixel-Genauigkeit) und ist mit wenigen Zeilen erklärbar. Die schräge Ansicht, die
+    früher für die Ellipse sprach, ist an der festen Kamera gering.</p></div>
 </section>
 
 <!-- ============================================================== -->
@@ -326,7 +357,10 @@
   </div>
   <p>Aus allen Kandidaten zählen nur die, die vollständig in der ROI liegen, eine plausible Größe haben
     (2–30 % von H²) und deren Seitenverhältnis zwischen 0,5 und 2 liegt. Bewertet wird die <b>Rechteckigkeit</b> =
-    Fläche / Fläche des minAreaRect. Ist der beste Wert ≥ 0,7, gilt die Kerbe als vorhanden (gemessen 0,95–0,97).</p>
+    Fläche / Fläche des minAreaRect. Ist der beste Wert ≥ 0,7, gilt die Kerbe als vorhanden (Testbilder 0,95–0,97,
+    Labor 0,84). Für die Regionen gilt eine eigene Helligkeitsschwelle von 75 % (<code>notch_brightness_frac</code>), weil
+    die Fläche an der Prüfstation zum rechten Ende hin dunkler wird. Am 26.11. wurde die Kerbe in allen Zyklen mit
+    richtig eingelegtem Teil erkannt.</p>
   <div class="note"><p><b>Alternative Template-Matching:</b> Man könnte gegen ein Referenzbild der Kerbe vergleichen.
     Das reagiert aber empfindlicher auf Beleuchtung, Maßstab und Lage. Die Formmerkmale Rundheit und Rechteckigkeit
     sind dagegen skalierungsunabhängig.</p></div>
@@ -387,19 +421,46 @@ is_good = <span class="k">not</span> reasons</code></pre>
         <line x1="30" y1="34" x2="570" y2="34" stroke="currentColor" stroke-opacity=".4"/>
         ${[8.5, 9, 9.5, 10, 10.5, 11, 11.5].map(d => `<text x="${X(d)}" y="52" font-size="11" text-anchor="middle" class="f-muted">${fmt(d)}</text>`).join("")}
         <text x="${X(NOM)}" y="13" font-size="11" text-anchor="middle" fill="var(--good)">10,0 ± 0,4 mm</text>
-        ${[9.71, 9.94, 9.74, 10.24].map((d, k) => `<circle cx="${X(d)}" cy="26" r="3.5" fill="var(--accent)"/>`).join("")}
+        ${[9.758, 9.782, 9.765, 9.804, 9.768, 9.696, 9.782, 9.767, 9.761, 9.701, 9.774, 9.732, 9.765, 9.758, 9.707, 9.712, 9.761, 9.767, 9.723, 9.766, 9.730].map(d => `<circle cx="${X(d)}" cy="22" r="2.5" fill="currentColor" fill-opacity=".55"/>`).join("")}
+        ${[9.71, 9.94, 9.74, 10.24].map((d, k) => `<circle cx="${X(d)}" cy="30" r="3.5" fill="var(--accent)"/>`).join("")}
         ${hf.checked ? `<line x1="${X(+h.value)}" y1="14" x2="${X(+h.value)}" y2="38" stroke="${good || Math.abs(+h.value - NOM) <= TOL ? "var(--good)" : "var(--bad)"}" stroke-width="3"/>` : ""}`;
     }
     [s, hf, h, n].forEach(e => e.oninput = e.onchange = run); run();
   })();
   </script>
-  <p style="font-size:.88rem">Violette Punkte: die vier gemessenen Testbilder. Die Toleranz dient der Demonstration und
-    entspricht keiner Fertigungsvorgabe.</p>
+  <p style="font-size:.88rem">Graue Punkte: die 21 Zyklen vom 26.11. nach der Umstellung auf den Kreis-Fit
+    (9,70–9,80 mm). Violette Punkte: die vier Testbilder. Soll 10 mm ist bestätigt, die Toleranz ± 0,4 mm dient der
+    Demonstration und entspricht keiner Fertigungsvorgabe.</p>
 </section>
 
 <!-- ============================================================== -->
 <section id="ergebnisse">
-  <h2><span class="num">10</span>Ergebnisse auf den Testbildern</h2>
+  <h2><span class="num">10</span>Ergebnisse</h2>
+  <h3>Labortag 26.11. an der festen Prüfstation</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Zyklen mit Prüfung</th><th class="n">Anzahl</th><th>Ergebnis</th></tr></thead>
+    <tbody>
+      <tr><td>mit Ellipsen-Fit (vor der Umstellung)</td><td class="n">3</td><td><span class="pill bad">0 gut, 3 schlecht</span> Loch 9,42–9,48 mm zu klein</td></tr>
+      <tr><td>mit Kreis-Fit, Teil richtig eingelegt</td><td class="n">21</td><td><span class="pill good">21 gut</span> Loch 9,70–9,80 mm</td></tr>
+      <tr><td>mit Kreis-Fit, Teil kopfüber</td><td class="n">1</td><td><span class="pill bad">schlecht</span> richtig: Rückseite ohne Etikett und Kerbe</td></tr>
+    </tbody>
+  </table></div>
+  <p>Seriennummer und Kerbe wurden in allen 24 Zyklen mit richtig eingelegtem Teil erkannt. Am 12.11. waren es 5 von 5
+    vollständigen Zyklen, dort wurde das Gutteil aber nur zweimal als gut sortiert, weil der Ellipsen-Fit 9,54–9,58 mm
+    ergab. Die zwei Laborbilder im Stepper, nachgerechnet mit dem aktuellen Code:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Bild</th><th class="n">Box-Höhe</th><th>Seriennr.</th><th class="n">OCR-Konf.</th><th class="n">Loch px</th><th class="n">D/H</th><th class="n">Ø mm</th><th class="n">Rundheit</th><th class="n">Rechteckigk.</th><th>Urteil</th></tr></thead>
+    <tbody>
+      <tr><td>Labor 1</td><td class="n">819</td><td>69420</td><td class="n">0,99</td><td class="n">530,7</td><td class="n">0,648</td><td class="n">9,72</td><td class="n">0,92</td><td class="n">0,84</td><td><span class="pill good">GUT</span></td></tr>
+      <tr><td>Labor 2</td><td class="n">815</td><td>69420</td><td class="n">1,00</td><td class="n">531,1</td><td class="n">0,652</td><td class="n">9,77</td><td class="n">0,92</td><td class="n">0,84</td><td><span class="pill good">GUT</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="warn"><p><b>Keine echten Fehlerteile:</b> Gezielt gefertigte Schlechtteile standen nicht zur Verfügung.
+    Dass fehlende Merkmale erkannt werden, ist nur an Testbildern mit übermalten Merkmalen und an der Rückseite des
+    gewendeten Teils gezeigt.</p></div>
+
+  <h3>Testbilder aus der Entwicklung</h3>
+  <p>Werte mit dem damaligen Code (Ellipsen-Fit, alte OCR-Skalierung):</p>
   <div class="tablewrap"><table>
     <thead><tr><th>Bild</th><th class="n">Box-Höhe</th><th>Seriennr.</th><th class="n">OCR-Konf.</th><th class="n">Loch px</th><th class="n">D/H</th><th class="n">Ø mm</th><th class="n">Rundheit</th><th class="n">Rechteckigk.</th><th>Urteil</th></tr></thead>
     <tbody>
@@ -413,8 +474,8 @@ is_good = <span class="k">not</span> reasons</code></pre>
     <div class="tip"><p><b>Maßstab funktioniert:</b> Die Bauteilhöhe im Bild variiert um den Faktor 3,6 (218–784 px).
       Der Durchmesser bleibt trotzdem bei 9,7–10,2 mm.</p></div>
     <div class="warn"><p><b>Bild 4 weicht ab</b> (D/H 0,683 statt ≈ 0,65): Die Nahaufnahme mit stärkerer Perspektive
-      zeigt mehr Bohrungswand. Am finalen Aufbau mit fester Kamera und festem Abstand fällt dieser Effekt weg.
-      Die Messwiederholbarkeit wird dort bestimmt.</p></div>
+      zeigt mehr Bohrungswand. An der festen Kamera fällt dieser Effekt weg, die Streuung liegt dort bei
+      s = 0,04 mm.</p></div>
   </div>
   <p>In den automatischen Tests werden zusätzlich <b>künstliche Schlechtteile</b> geprüft: Kerbe bzw. Loch werden im
     Bild mit Bauteilfarbe übermalt, das Ergebnis muss „schlecht“ mit dem richtigen Grund sein.</p>
@@ -426,15 +487,18 @@ is_good = <span class="k">not</span> reasons</code></pre>
   <div class="tablewrap"><table>
     <thead><tr><th>Schlüssel</th><th>Wert</th><th>Bedeutung</th></tr></thead>
     <tbody>
-      <tr><td><code>inspection_camera.source</code></td><td>1</td><td>Kameranummer oder Bild-Glob (Replay)</td></tr>
+      <tr><td><code>inspection_camera.source</code></td><td>0</td><td>Kameranummer (Labor-Laptop, kann sich beim Umstecken ändern: <code>python -m common.camera</code>) oder Bild-Glob (Replay)</td></tr>
+      <tr><td><code>inspection_camera.width</code>, <code>height</code></td><td>3840, 2160</td><td>Volle Auflösung, kleinere schneiden bei dieser Kamera das Bildfeld ab</td></tr>
+      <tr><td><code>inspection_camera.focus</code></td><td>90</td><td>Fester Fokus, Autofokus aus. Die Kamera stellte sonst auf den Hintergrund scharf. Schärfemaximum der Fokusreihe bei 90–95.</td></tr>
       <tr><td><code>part_hue</code></td><td>[115, 165]</td><td>Farbton des violetten Bauteils (OpenCV H 0–180)</td></tr>
       <tr><td><code>part_saturation_min</code>, <code>part_value_min</code></td><td>50, 80</td><td>Mindest-Sättigung/-Helligkeit für die Bauteilmaske</td></tr>
-      <tr><td><code>face_brightness_frac</code></td><td>0.85</td><td>dunkler als 85 % der Fläche → Loch/Kerbe</td></tr>
+      <tr><td><code>face_brightness_frac</code></td><td>0.85</td><td>dunkler als 85 % der Fläche → Loch</td></tr>
+      <tr><td><code>notch_brightness_frac</code></td><td>0.75</td><td>eigene Schwelle für die Kerbe (Schatten am rechten Ende)</td></tr>
       <tr><td><code>face_saturation_delta</code></td><td>40</td><td>Sättigungsabweichung → Loch/Kerbe</td></tr>
       <tr><td><code>label_roi</code> / <code>hole_roi</code> / <code>notch_roi</code></td><td>relativ zur Box</td><td>Prüfbereiche <code>[x0, y0, x1, y1]</code></td></tr>
-      <tr><td><code>part_height_mm</code></td><td>15.0</td><td>Maßstab (Platzhalter, aus Zeichnung)</td></tr>
+      <tr><td><code>part_height_mm</code></td><td>15.0</td><td>Maßstab (Bauteil 60 × 40 × 15 mm)</td></tr>
       <tr><td><code>serial_pattern</code>, <code>ocr_min_confidence</code></td><td><code>^[0-9]{5}$</code>, 0.4</td><td>Format und Mindestkonfidenz der Seriennummer</td></tr>
-      <tr><td><code>hole_nominal_mm</code>, <code>hole_tolerance_mm</code></td><td>10.0, 0.4</td><td>Soll-Durchmesser und Toleranz (Platzhalter)</td></tr>
+      <tr><td><code>hole_nominal_mm</code>, <code>hole_tolerance_mm</code></td><td>10.0, 0.4</td><td>Soll-Durchmesser (bestätigt) und Toleranz (zur Demonstration gewählt)</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -465,10 +529,12 @@ pytest m3_inspection</code></pre></div>
     <thead><tr><th>Thema</th><th>Stand / Begründung</th></tr></thead>
     <tbody>
       <tr><td>Klassische BV + OCR-Netz</td><td>Formmerkmale sind erklärbar und kommen ohne Trainingsdaten aus. Nur für den Text wird ein vortrainiertes Netz (EasyOCR) genutzt, weil Schriftlesen klassisch aufwändig wäre.</td></tr>
-      <tr><td>Bauteilmaße</td><td><code>part_height_mm</code>, <code>hole_nominal_mm</code> und die Toleranz sind Platzhalter und müssen aus der Bauteilzeichnung übernommen werden.</td></tr>
-      <tr><td>Aufbau</td><td>Die Testbilder haben verschiedene Abstände und Hintergründe. Am finalen Aufbau mit fester Kamera, eigener Beleuchtung und Anschlag an der Prüfposition werden ROIs und Schwellen nachjustiert.</td></tr>
-      <tr><td>Echte Schlechtteile</td><td>Bisher gibt es nur künstliche Fehler. Ein Testset mit echten Schlechtteilen (fehlende Kerbe, falsches Loch, unlesbares Etikett) fehlt noch für die Konfusionsmatrix.</td></tr>
-      <tr><td>Lage an der Prüfposition</td><td>M3 setzt voraus, dass Etikett, Loch und Kerbe zur Kamera zeigen. Das hängt an der Fasenerkennung (M1) und der Wiederholgenauigkeit der Ablage (M2).</td></tr>
+      <tr><td>Bauteilmaße</td><td>Höhe 15 mm und Loch 10 mm bestätigt. Die Toleranz ± 0,4 mm ist zur Demonstration gewählt.</td></tr>
+      <tr><td>Lochmaß</td><td>Mit dem Kreis-Fit gut wiederholbar (s = 0,04 mm), aber etwa 2,5 % unter 10 mm. Für Gut/Schlecht reicht das. Für eine echte Fertigungstoleranz müsste der Maßstab an Teilen mit bekanntem Lochmaß kalibriert werden.</td></tr>
+      <tr><td>Licht</td><td>Keine eigene Beleuchtung, Fensterlicht spiegelt sich in der Bohrung. Der Kreis-Fit fängt das ab, die Kerbe hat eine eigene Schwelle für den Schatten am rechten Ende.</td></tr>
+      <tr><td>Aufbau</td><td>Feste Kamera mit festem Fokus auf der vom Roboter abgewandten Seite. ROIs und Schwellen aus den Testbildern passten ohne Nachjustieren, angepasst wurden nur die Kerbenschwelle und die Lochmessung.</td></tr>
+      <tr><td>Echte Schlechtteile</td><td>Es gibt nur künstliche Fehler (übermalte Merkmale) und die Rückseite des gewendeten Teils. Ein Testset mit echten Schlechtteilen für eine Konfusionsmatrix fehlt.</td></tr>
+      <tr><td>Lage an der Prüfposition</td><td>M3 setzt voraus, dass Etikett, Loch und Kerbe zur Kamera zeigen. Das hängt an der Fasenerkennung (M1), dem Greiferwinkel −67° und der Ablage (M2). Am 26.11. passte es in allen 24 richtig eingelegten Zyklen. Ein kopfüber liegendes Teil fängt jetzt schon M1 ab.</td></tr>
       <tr><td>Farbabhängigkeit</td><td>Die Bauteilmaske nutzt den Farbton Violett. Für andere Bauteilfarben muss <code>part_hue</code> angepasst werden.</td></tr>
       <tr><td>OCR-Laufzeit</td><td>Das Laden des EasyOCR-Modells dauert beim ersten Aufruf einige Sekunden (lazy loading), danach geht es schnell. Läuft auf der CPU (<code>gpu=False</code>).</td></tr>
     </tbody>
@@ -484,15 +550,24 @@ pytest m3_inspection</code></pre></div>
       <li>Wir finden das Bauteil über seine Farbe, schließen die Lücken über die Bauteilhöhe und legen alle Prüfbereiche relativ zu dieser Box fest.</li>
       <li>Den Maßstab liefert die bekannte Bauteilhöhe. Damit ist die Messung abstandsunabhängig und braucht keine Kalibrierplatte.</li>
       <li>Die Seriennummer liest EasyOCR, beschränkt auf Ziffern und geprüft gegen das Format „fünf Ziffern“.</li>
-      <li>Loch = rundeste Region (Rundheit ≥ 0,75) mit Ellipsen-Fit. Kerbe = rechteckigste Region (≥ 0,7) aus Regionen- und Kantensuche.</li>
-      <li>Gut nur, wenn alle drei Merkmale passen. Jeder Fehler wird mit Grund protokolliert, die Grundlage für die Auswertung.</li>
+      <li>Loch = rundeste Region (Rundheit ≥ 0,75) mit Kreis-Fit, der Spiegelungen ignoriert. Damit 19 von 19 Messungen in Toleranz statt 0 von 19 mit dem Ellipsen-Fit. Kerbe = rechteckigste Region (≥ 0,7) aus Regionen- und Kantensuche.</li>
+      <li>Gut nur, wenn alle drei Merkmale passen. Jeder Fehler wird mit Grund protokolliert. Am 26.11. wurden alle 21 richtig eingelegten Gutteile als GUT sortiert.</li>
     </ol>
   </div>
   <h3>Mögliche Fragen</h3>
   <details class="qa"><summary>Wie genau ist die Durchmessermessung?</summary><div class="a">
-    <p>Auf den drei Bildern mit ähnlicher Perspektive streut D/H um ±1,2 % (0,647–0,663), bei 15 mm Bauteilhöhe also
-      etwa ±0,1 mm. Die Nahaufnahme weicht mit 0,683 stärker ab. Die eigentliche Wiederholgenauigkeit wird am festen
-      Aufbau gemessen, dafür gibt es die CSV-Protokolle je Zyklus.</p></div></details>
+    <p>Am festen Aufbau gut wiederholbar: 19 Prüfbilder vom 26.11. ergeben mit dem Kreis-Fit 9,67–9,81 mm, Mittelwert
+      9,75 mm, Standardabweichung 0,04 mm. Absolut liegt der Wert etwa 2,5 % unter dem Sollmaß von 10 mm, vermutlich
+      wegen des Maßstabs über die Bauteilhöhe bei leicht schräger Ansicht und wegen Fertigungsabweichungen des Drucks.
+      Für Gut/Schlecht reicht das, für eine echte Fertigungstoleranz müsste man an Teilen mit bekanntem Lochmaß
+      kalibrieren.</p></div></details>
+  <details class="qa"><summary>Warum habt ihr vom Ellipsen- auf den Kreis-Fit umgestellt?</summary><div class="a">
+    <p>Weil das Gutteil am Aufbau als Schlechtteil sortiert wurde: Fensterlicht spiegelt sich auf der unteren
+      Bohrungswand, dort sieht sie aus wie die Seitenfläche, und die Lochkontur ist unten abgeschnitten. Der Ellipsen-Fit
+      über alle Punkte ergab 9,42–9,48 mm. Solche Störungen ziehen die Kontur nur nach innen, deshalb verwirft der
+      Kreis-Fit iterativ alle Punkte deutlich innerhalb des Kreises. Nachgerechnet auf allen 19 Bildern: Ellipse 0/19,
+      Kreis 19/19 in Toleranz. Ein Korrekturfaktor hätte nicht gereicht, weil die Abweichung mit dem Tageslicht
+      wechselt.</p></div></details>
   <details class="qa"><summary>Warum keine Kamerakalibrierung für den Maßstab?</summary><div class="a">
     <p>Weil jedes Bild seine eigene Referenz mitbringt: die Bauteilhöhe. Verschiebt sich das Teil etwas zur Kamera hin,
       werden Loch und Höhe gleichermaßen größer, und das Verhältnis bleibt. Voraussetzung ist eine annähernd parallele
@@ -500,7 +575,9 @@ pytest m3_inspection</code></pre></div>
   <details class="qa"><summary>Warum EasyOCR und nicht Tesseract?</summary><div class="a">
     <p>EasyOCR ist lernbasiert, robust auf Fotos mit unruhigem Hintergrund und per <code>pip</code> installierbar, ohne
       separates Programm. Mit Ziffern-Allowlist und Regex-Prüfung ist es für fünfstellige Nummern sehr zuverlässig:
-      69420 auf allen Testbildern. Tesseract wäre eine gleichwertige Alternative mit mehr Vorverarbeitungsaufwand.</p></div></details>
+      69420 auf allen Testbildern und in allen 24 Laborzyklen. Wichtig war, das Etikett auf eine feste Höhe von 300 px
+      zu skalieren, an der 4K-Kamera schwankte die Konfidenz sonst zwischen 0,99 und 0,39. Tesseract wäre eine
+      gleichwertige Alternative mit mehr Vorverarbeitungsaufwand.</p></div></details>
   <details class="qa"><summary>Warum nach „nicht Fläche“ suchen statt nach dem Loch selbst?</summary><div class="a">
     <p>Weil das Loch je nach Licht und Hintergrund ganz verschieden aussieht: dunkle Bohrungswand oder heller Hintergrund
       durch das Loch. Das Einzige, was sicher gilt: Es ist nicht die helle violette Stirnfläche. Die Form (Rundheit)
@@ -508,12 +585,15 @@ pytest m3_inspection</code></pre></div>
   <details class="qa"><summary>Was passiert, wenn das Teil falsch herum an der Prüfposition liegt?</summary><div class="a">
     <p>Dann liegen die Merkmale nicht in ihren ROIs. Seriennummer, Loch oder Kerbe werden nicht gefunden, und das Teil
       wird als schlecht einsortiert, mit Gründen im Protokoll. Das ist ein „sicheres“ Fehlverhalten: Ein unklares Teil
-      wird nie als gut durchgelassen. Verhindert wird es über die eindeutige Orientierung aus M1 (Fase).</p></div></details>
+      wird nie als gut durchgelassen. Genau das ist am 26.11. passiert, als ein Teil kopfüber eingelegt war: M3 sah die
+      Rückseite und meldete „serial number invalid; notch missing“. Seitdem erkennt M1 ein gewendetes Teil an der
+      Fasenseite und bricht schon vor dem Greifen ab.</p></div></details>
   <details class="qa"><summary>Kann ein schlechtes Teil als gut durchrutschen?</summary><div class="a">
     <p>Die Logik ist bewusst konservativ: Jedes fehlende oder unsichere Merkmal (niedrige OCR-Konfidenz, Rundheit unter
       Schwelle, Durchmesser außer Toleranz) führt zu „schlecht“. Ein falsch-gut wäre nur möglich, wenn eine Störung zufällig
-      wie Loch oder Kerbe aussieht. Die Formschwellen und Größenfilter machen das unwahrscheinlich. Bewertet wird das mit
-      einer Konfusionsmatrix auf einem Testset.</p></div></details>
+      wie Loch oder Kerbe aussieht. Die Formschwellen und Größenfilter machen das unwahrscheinlich. Eine Konfusionsmatrix
+      mit echten Fehlerteilen gibt es nicht, weil keine gefertigt wurden. Gezeigt ist es an übermalten Testbildern und
+      am gewendeten Teil.</p></div></details>
   <details class="qa"><summary>Wie wird das ohne Kamera getestet?</summary><div class="a">
     <p>Die Pipeline ist kamerafrei: Die Variante <code>replay</code> spielt Bilddateien ab. Die Tests prüfen echte Gutteile
       und künstlich erzeugte Schlechtteile (übermalte Merkmale). Der MockInspector liefert zufällige, aber logisch
@@ -535,13 +615,14 @@ pytest m3_inspection</code></pre></div>
     <dt>Morphologisches Schließen</dt><dd>Dilatation, dann Erosion: füllt Lücken, deren Größe kleiner als das Strukturelement ist.</dd>
     <dt>Rundheit</dt><dd>Fläche / Fläche des kleinsten umschließenden Kreises (1 = Kreis).</dd>
     <dt>Rechteckigkeit</dt><dd>Fläche / Fläche des kleinsten umschließenden (gedrehten) Rechtecks (1 = Rechteck).</dd>
-    <dt>Ellipsen-Fit</dt><dd>Ellipse, die die Konturpunkte nach kleinsten Fehlerquadraten am besten beschreibt.</dd>
+    <dt>Ellipsen-Fit</dt><dd>Ellipse, die die Konturpunkte nach kleinsten Fehlerquadraten am besten beschreibt (bis 26.11. für das Loch).</dd>
+    <dt>Kreis-Fit (Kasa)</dt><dd>Kreis nach kleinsten Fehlerquadraten, als lineares Gleichungssystem lösbar. Hier iterativ: Punkte deutlich innerhalb des Kreises werden verworfen.</dd>
     <dt>Canny</dt><dd>Kantendetektor mit zwei Schwellen (hier 30/90) und Hysterese.</dd>
     <dt>Konfusionsmatrix</dt><dd>Tabelle aus richtig/falsch gut/schlecht eingestuften Teilen, um die Prüfgüte zu bewerten.</dd>
   </dl>
 </section>
 
-<footer>Erstellt aus dem Code-Stand vom 20.10.2026 (<code>code/m3_inspection/</code>, <code>config/system.yaml</code>) und der Thesis, Kapitel 7. Bilder: echte Pipeline-Zwischenschritte auf den Testbildern.</footer>
+<footer>Aktualisiert auf den Code-Stand vom 27.11.2026 (<code>code/m3_inspection/</code>, <code>config/system.yaml</code>), die Labortage 12.11. und 26.11. und die Thesis, Kapitel 7 und 10. Bilder: echte Pipeline-Zwischenschritte auf Laborbildern der Seitenkamera und den Testbildern; Fit-Vergleich und Diagramm aus der Thesis-Auswertung.</footer>
 </main>
 </div>
 </body>

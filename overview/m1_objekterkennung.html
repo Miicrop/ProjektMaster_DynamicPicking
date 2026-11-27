@@ -43,10 +43,10 @@
     seine Lage <b>(x, y)</b> und Drehung <b>θ</b>. Der Roboter bekommt diese Pose direkt in seinem
     eigenen Koordinatensystem.</p>
   <div class="facts">
-    <div class="fact"><div class="v">5 / 5</div><div class="l">Testfotos korrekt erkannt</div></div>
-    <div class="fact"><div class="v">&lt; 1 mm</div><div class="l">Streuung derselben Szene aus 3 Höhen</div></div>
+    <div class="fact"><div class="v">32 / 32</div><div class="l">Zyklen an beiden Labortagen gegriffen</div></div>
+    <div class="fact"><div class="v">≤ 2 mm</div><div class="l">Versatz im Zeigetest nach Positionskorrektur</div></div>
+    <div class="fact"><div class="v">0 / 48</div><div class="l">Fehlstarts bei Abfragen ohne Bauteil</div></div>
     <div class="fact"><div class="v">0–360°</div><div class="l">eindeutiger Winkel dank Fase</div></div>
-    <div class="fact"><div class="v">0,5 mm</div><div class="l">pro Pixel in der Draufsicht</div></div>
   </div>
 </header>
 
@@ -56,16 +56,19 @@
   <div class="grid2">
     <div class="card">
       <h3>Eingabe</h3>
-      <p>Ein Farbbild der Top-down-Kamera (geplant 1920 × 1080 px). Auf dem Tisch liegen die vier
-        ArUco-Marker (IDs 0–3, <code>DICT_4X4_50</code>) und genau ein Bauteil, ein violetter
-        3D-Druck-Quader mit einer abgeschrägten Ecke (Fase).</p>
+      <p>Ein Farbbild der Top-down-Kamera, einer Daheng VEN-161 (1440 × 1080 px), die etwa einen
+        Meter über der Platte hängt. Die Belichtung ist fest eingestellt (15 ms, 0 dB). Auf dem Tisch
+        liegen die vier ArUco-Marker (IDs 0–3, <code>DICT_4X4_50</code>) und genau ein Bauteil, ein
+        violetter 3D-Druck-Quader (60 × 40 × 15 mm) mit einer abgeschrägten Ecke (Fase).</p>
     </div>
     <div class="card">
       <h3>Ausgabe</h3>
       <p>Eine <code>ObjectPose</code> im <b>Roboter-Basis-KS</b>: <code>x_mm</code>, <code>y_mm</code>,
         <code>z_mm</code> (Tischhöhe), <code>theta_deg</code> und <code>confidence</code>
-        (1,0 mit Fase, 0,5 ohne). Liegt kein Bauteil im Bild, kommt <code>None</code> zurück. Der
-        Orchestrator wertet das nicht als Fehler, sondern geht wieder in <code>IDLE</code>.</p>
+        (1,0 mit Fase, 0,5 ohne). Liegt kein Bauteil im Bild oder bewegt sich noch etwas im
+        Arbeitsbereich, kommt <code>None</code> zurück. Der Orchestrator wertet das nicht als Fehler,
+        sondern geht wieder in <code>IDLE</code>. Im Dauerbetrieb fragt er so lange weiter, bis ein
+        Bauteil ruhig daliegt.</p>
     </div>
   </div>
   <p>Die Verarbeitung besteht aus sechs Stufen. Jede ist eine eigene, kleine Funktion:</p>
@@ -87,10 +90,25 @@
       <text x="450" y="110" text-anchor="middle" class="f-muted" font-size="11.5">Pixel (u, v)  →  Arbeitsbereich-mm (x, y)  →  Roboter-mm (x, y, θ)</text>
     </svg>
   </div>
+  <p>Seit den Labortagen am 12.11. und 26.11. kommen vier Ergänzungen dazu, die im Dauerbetrieb nötig wurden:</p>
+  <div class="grid2">
+    <div class="card"><h3>Formprüfung</h3><p style="font-size:.92rem">Nur eine Kontur mit den Maßen des Bauteils
+      (60 × 40 mm ± 20 %) und einem Füllgrad ≥ 0,8 zählt. Auslöser war eine Hand, die als Bauteil erkannt wurde
+      (<a href="#segmentierung">Abschnitt 06</a>).</p></div>
+    <div class="card"><h3>Ruheprüfung</h3><p style="font-size:.92rem">Drei Bilder im Abstand von 0,3 s müssen dieselbe
+      Pose zeigen (± 2 mm / 2°), und der übrige Arbeitsbereich darf sich nicht verändern. Erst dann startet ein Zyklus.</p></div>
+    <div class="card"><h3>Lageprüfung (gewendet)</h3><p style="font-size:.92rem">Die Seite der Längsachse, auf der die Fase
+      liegt, verrät ein kopfüber liegendes Bauteil. Abbruch vor dem Greifen mit dem Hinweis, es umzudrehen
+      (<a href="#pose">Abschnitt 07</a>).</p></div>
+    <div class="card"><h3>Positionskorrektur</h3><p style="font-size:.92rem">Ein lineares Modell aus 21 Zeigetests gleicht
+      die Parallaxe der 15 mm hohen Oberseite aus. Danach höchstens 2 mm Versatz
+      (<a href="#transformation">Abschnitt 08</a>).</p></div>
+  </div>
   <div class="say"><p>„Wir verwenden klassische Bildverarbeitung ohne trainiertes Modell. Die Marker legen
     den Arbeitsbereich fest, daraus rechnen wir eine maßstabsgetreue Draufsicht. Darin trennen wir das
     Bauteil über Helligkeit und Buntheit vom Tisch. Die abgeschrägte Ecke macht die Orientierung
-    eindeutig, und eine einmal eingemessene Transformation liefert die Pose im Roboterkoordinatensystem.“</p></div>
+    eindeutig, und eine einmal eingemessene Transformation liefert die Pose im Roboterkoordinatensystem.
+    Im Labor kamen Prüfungen dazu, damit eine Hand oder ein gewendetes Teil keinen Zyklus auslöst.“</p></div>
 </section>
 
 <!-- ============================================================== -->
@@ -112,8 +130,10 @@
     x_mm: float; y_mm: float; z_mm: float
     theta_deg: float
     confidence: float = 1.0</code></pre>
-  <p>Die <code>ObjectPose</code> geht an den Greifer: standardmäßig M2, alternativ M4 (KI-Greifen mit der
-    Handgelenkkamera), der sie als Startpunkt nutzt.</p>
+  <p>Die <code>ObjectPose</code> geht an den Greifer (<code>Grasper</code>, Zustand <code>PICK</code>): standardmäßig
+    M2, alternativ M4. Bei M4 greift eine gelernte Policy mit eigenen Kamerabildern (Handgelenkkamera und dieselbe
+    Daheng-Kamera als Szenenkamera), die Pose von M1 ist dann nur der Startpunkt. Umgeschaltet wird im Reiter
+    <i>Ablauf</i> unter <i>Greifen</i>.</p>
 </section>
 
 <!-- ============================================================== -->
@@ -140,7 +160,7 @@
 
         <rect x="20" y="196" width="150" height="50" rx="8" class="f-surface2"/>
         <text x="95" y="217" text-anchor="middle" font-weight="700" class="f-text">open_camera()</text>
-        <text x="95" y="234" text-anchor="middle" class="f-muted" font-size="10.5">Live (int) oder Bild-Glob</text>
+        <text x="95" y="234" text-anchor="middle" class="f-muted" font-size="10.5">Daheng, OpenCV oder Bild-Glob</text>
         <rect x="200" y="196" width="190" height="50" rx="8" class="f-accsoft" stroke="var(--accent)"/>
         <text x="295" y="217" text-anchor="middle" font-weight="700" class="f-text">TopDownPipeline</text>
         <text x="295" y="234" text-anchor="middle" class="f-muted" font-size="10.5">process(img, trace) → Ergebnis</text>
@@ -163,13 +183,14 @@
   </div>
   <h3>Dateien</h3>
   <div class="files">
-    <div class="file"><div class="name">detector.py</div><div class="desc"><code>TopDownPipeline</code> (Ablauf der Verarbeitung), <code>TopDownDetector</code> (Kamera + Pipeline, implementiert <code>ObjectDetector</code>), <code>MockDetector</code>, <code>TopDownResult</code> mit Debug-Bildern.</div></div>
+    <div class="file"><div class="name">detector.py</div><div class="desc"><code>TopDownPipeline</code> (Ablauf der Verarbeitung, Lageprüfung, <code>correct_position()</code>), <code>TopDownDetector</code> (Kamera + Pipeline + Ruheprüfung über mehrere Bilder, implementiert <code>ObjectDetector</code>), <code>MockDetector</code>, <code>TopDownResult</code> mit Debug-Bildern.</div></div>
     <div class="file"><div class="name">workspace.py</div><div class="desc">Klasse <code>Workspace</code> (Homographie, Maßstab, Umrechnung px ↔ mm). <code>find_workspace_aruco()</code> und die Rückfallebene <code>find_workspace_white_frame()</code>.</div></div>
-    <div class="file"><div class="name">part.py</div><div class="desc"><code>segment_part()</code> (Maske, Morphologie, Kandidatenwahl), <code>part_pose()</code> (Schwerpunkt, Längsachse, Fase), <code>draw_part_pose()</code>.</div></div>
+    <div class="file"><div class="name">part.py</div><div class="desc"><code>segment_part()</code> (Maske, Morphologie, Kandidatenwahl), <code>shape_mismatch()</code> (Formprüfung), <code>part_pose()</code> (Schwerpunkt, Längsachse, Fase und Fasenseite), <code>draw_part_pose()</code>.</div></div>
+    <div class="file"><div class="name">common/camera.py</div><div class="desc"><code>DahengCamera</code> über das Galaxy-SDK (nutzt die Kameraklasse von M4), leert vor jedem Bild den Puffer. Gibt die Kamera frei, wenn M4 sie als Szenenkamera braucht.</div></div>
     <div class="file"><div class="name">run.py</div><div class="desc">Kommandozeile: Pipeline auf Bilddateien oder ein Kamerabild anwenden, Debug-Bilder nach <code>logs/m1</code>.</div></div>
     <div class="file"><div class="name">make_markers.py</div><div class="desc">Erzeugt druckbare ArUco-Marker <b>mit weißem Rand</b> auf A4. Ohne diese „Quiet Zone“ wurden die ersten Marker nicht erkannt.</div></div>
     <div class="file"><div class="name">check_markers.py</div><div class="desc">Diagnose: Welche Marker-IDs findet der Detektor in einem Bild?</div></div>
-    <div class="file"><div class="name">tests/</div><div class="desc">Synthetische Szenen mit bekannter Pose (Fehler &lt; 2 mm / 2°) und die 5 echten Fotos vom 05.10. als Regressionstest.</div></div>
+    <div class="file"><div class="name">tests/</div><div class="desc">Synthetische Szenen mit bekannter Pose (Fehler &lt; 2 mm / 2°), die 5 echten Fotos vom 05.10. als Regressionstest, dazu Tests für Form-, Ruhe- und Lageprüfung und die Positionskorrektur.</div></div>
   </div>
   <p style="margin-top:14px">Im Gesamtsystem baut <code>orchestrator/factory.py</code> den Detektor je nach Variante:
     <span class="pill">mock</span> <span class="pill">replay</span> (Testfotos als Kamera)
@@ -179,15 +200,17 @@
 <!-- ============================================================== -->
 <section id="kette">
   <h2><span class="num">04</span>Verarbeitung Schritt für Schritt</h2>
-  <p>Die Bilder unten hat die echte Pipeline erzeugt (<code>TopDownPipeline.process(img, trace)</code>).
-    Es sind die Testfotos vom 05.10.2026 aus dem Labor. Oben lässt sich das Foto wechseln.</p>
+  <p>Die Bilder unten hat die echte Pipeline erzeugt (<code>TopDownPipeline.process(img, trace)</code>, Code-Stand
+    27.11.). <b>Labor 1–3</b> sind Bilder der fest montierten Daheng-Kamera aus drei Zyklen vom 26.11., <b>Foto 1–5</b>
+    die Handyfotos vom 05.10., mit denen die Pipeline entwickelt wurde. Oben lässt sich das Bild wechseln.</p>
   <div class="stepper" id="steps"></div>
   <script>
   makeStepper(document.getElementById("steps"),
-    [1,2,3,4,5].map(k => ({label: "Foto " + k, dir: "img/m1/bild" + k})),
+    [1,2,3].map(k => ({label: "Labor " + k, dir: "img/m1/labor" + k}))
+      .concat([1,2,3,4,5].map(k => ({label: "Foto " + k, dir: "img/m1/bild" + k}))),
     [
       {file: "m1_01_original.jpg", title: "Originalbild", fn: "trace.add('original')",
-       text: "Das Kamerabild von schräg oben. Die Perspektive verzerrt den Tisch zu einem Trapez, deshalb lassen sich Abstände im Bild noch nicht direkt in Millimeter umrechnen."},
+       text: "Das Kamerabild von oben. Hängt die Kamera nicht exakt senkrecht (bei den Handyfotos deutlich schräg), verzerrt die Perspektive den Tisch zu einem Trapez. Abstände im Bild lassen sich deshalb noch nicht direkt in Millimeter umrechnen."},
       {file: "m1_02_aruco_markers.jpg", title: "ArUco-Marker gefunden", fn: "find_workspace_aruco()",
        text: "<code>cv2.aruco.ArucoDetector</code> sucht im Graustufenbild die vier Marker. Ihre Ecken werden subpixelgenau verfeinert, der Mittelpunkt jedes Markers ist der Mittelwert seiner vier Ecken. Fehlt einer der vier, bricht M1 mit <code>VisionError</code> ab."},
       {file: "m1_03_rectified.jpg", title: "Entzerrte Draufsicht", fn: "Workspace.rectify() · cv2.warpPerspective",
@@ -201,11 +224,11 @@
       {file: "m1_07_part_closed.png", title: "Morphologisches Schließen", pix: true, fn: "cv2.MORPH_CLOSE, 7×7",
        text: "Schließen (erst Dilatation, dann Erosion) füllt kleine Lücken im Bauteil, damit eine geschlossene Kontur entsteht."},
       {file: "m1_08_part_candidates.jpg", title: "Kandidaten", fn: "cv2.findContours + Flächenfilter",
-       text: "Alle zusammenhängenden Flächen werden zu Konturen. Von den Konturen mit plausibler Fläche (300 bis 20 000 mm²) gewinnt die größte (rot). Die anderen sind grau mit ihrer Fläche beschriftet."},
+       text: "Alle zusammenhängenden Flächen werden zu Konturen. Übrig bleiben die mit plausibler Fläche (300 bis 20 000 mm²), die auch die <b>Formprüfung</b> bestehen: kleinstes Rechteck 60 × 40 mm ± 20 %, Füllgrad ≥ 0,8. Davon gewinnt die größte (rot), die anderen sind grau mit ihrer Fläche beschriftet."},
       {file: "m1_09_part_pose.jpg", title: "Pose und Fase", fn: "part_pose()",
-       text: "Grün ist das kleinste umschließende Rechteck (<code>minAreaRect</code>), das Kreuz der Flächenschwerpunkt. Gelb markiert ist die Rechteckecke mit dem größten Abstand zur Kontur, also die Fase. Der Pfeil zeigt die Längsachse in Richtung Fase und legt damit θ fest."},
+       text: "Grün ist das kleinste umschließende Rechteck (<code>minAreaRect</code>), das Kreuz der Flächenschwerpunkt. Gelb markiert ist die Rechteckecke mit dem größten Abstand zur Kontur, also die Fase. Der Pfeil zeigt die Längsachse in Richtung Fase und legt damit θ fest. Liegt die Fase rechts vom Pfeil, liegt das Teil richtig herum."},
       {file: "m1_10_result.jpg", title: "Ergebnis", fn: "TopDownResult.debug_image()",
-       text: "Position und Winkel im Arbeitsbereich-KS. Danach rechnet <code>workspace_to_robot()</code> beides ins Roboter-KS um (Abschnitt „Ins Roboter-KS“)."},
+       text: "Position und Winkel im Arbeitsbereich-KS, bereits mit Positionskorrektur. Danach rechnet <code>workspace_to_robot()</code> beides ins Roboter-KS um (Abschnitt „Ins Roboter-KS“). Im laufenden Betrieb wiederholt der Detektor das Ganze für drei Bilder (Ruheprüfung), bevor er die Pose meldet."},
     ]);
   </script>
 </section>
@@ -281,8 +304,9 @@ H, _ = cv2.findHomography(src, dst)</code></pre>
   <div class="note"><p><b>Vorteil:</b> Die Kamera muss weder exakt senkrecht noch mittig hängen, und sie
     darf sich sogar verschieben. Da die Marker in <i>jedem</i> Bild neu gesucht werden, gleicht die
     Homographie eine bewegte Kamera automatisch aus.</p></div>
-  <div class="warn"><p><b>Gilt nur für die Tischebene.</b> Die Oberseite des Bauteils liegt einige
-    Millimeter höher und erscheint dadurch leicht verschoben (Parallaxe). Siehe „Grenzen“.</p></div>
+  <div class="warn"><p><b>Gilt nur für die Tischebene.</b> Die Oberseite des Bauteils liegt 15 mm höher und
+    erscheint dadurch nach außen verschoben (Parallaxe). Am Aufbau waren das bis zu 8 mm. Ausgeglichen wird das
+    mit der Positionskorrektur in <a href="#transformation">Abschnitt 08</a>.</p></div>
   <h3>Rückfallebene: weißer Rahmen</h3>
   <p><code>find_workspace_white_frame()</code> sucht alternativ die Innenkante eines hellen, ungesättigten
     Rahmens (größte viereckige, innen liegende Kontur) und nimmt ihre vier Ecken als Korrespondenzen. Mit
@@ -350,6 +374,22 @@ mask   = (v &gt; median(v) + 50) | (chroma &gt; median(chroma) + 20)</code></pre
     Kandidaten mit plausibler Fläche zwischen <code>min_area_mm2</code> und <code>max_area_mm2</code>
     bleiben übrig, und die größte davon ist das Bauteil. Gibt es keinen Kandidaten, meldet M1 „kein
     Bauteil“.</p>
+  <h3>Formprüfung und Ruheprüfung (seit 26.11.)</h3>
+  <p>Im Dauerbetrieb legt der Bediener das nächste Bauteil von Hand in den Arbeitsbereich, während das System
+    schon fragt, ob eines da ist. Einmal war die Hand hell genug und lag im zulässigen Flächenbereich: Sie wurde als
+    Bauteil erkannt, und der Roboter fuhr los, bis er per Software-Stopp angehalten wurde. Seitdem gibt es zwei
+    zusätzliche Prüfungen:</p>
+  <ul>
+    <li><b>Form</b> (<code>shape_mismatch()</code>): Das kleinste umschließende Rechteck der Kontur muss 60 × 40 mm
+      ± 20 % groß sein, und die Kontur muss es zu mindestens 80 % füllen. Am Aufbau messen die Bauteile 59–61 ×
+      38,5–41 mm bei einem Füllgrad von 0,90–0,95. Eine Hand mit Fingern und Arm fällt hier durch, und die Meldung
+      nennt den Grund („wrong shape: … mm instead of 60 x 40 mm“).</li>
+    <li><b>Ruhe</b> (<code>TopDownDetector.detect()</code>): Drei Aufnahmen im Abstand von 0,3 s müssen dasselbe
+      Bauteil an derselben Pose zeigen (± 2 mm, ± 2°). Zusätzlich werden die entzerrten Bilder voneinander
+      abgezogen: Ändert sich mehr als 0,5 % des Arbeitsbereichs (etwa 23 × 23 mm), bewegt sich dort noch etwas,
+      zum Beispiel die Hand neben dem Bauteil. Dann kommt <code>None</code>, und der nächste Versuch folgt. Beim
+      Abspielen von Bilddateien ist die Ruheprüfung aus, weil aufeinanderfolgende Bilder verschiedene Dateien sind.</li>
+  </ul>
 </section>
 
 <!-- ============================================================== -->
@@ -364,7 +404,17 @@ mask   = (v &gt; median(v) + 50) | (chroma &gt; median(chroma) + 20)</code></pre
       (<code>chamfer_min_frac</code>), zeigt die Achse zu dieser Ecke, und θ ist im Bereich 0–360°
       eindeutig.</li>
     <li><b>Ohne Fase:</b> θ wird auf 0–180° begrenzt und <code>confidence = 0,5</code> gesetzt.</li>
+    <li><b>Fasenseite</b> (seit 26.11.): Von oben gesehen liegt die Fase eines richtig herum liegenden Bauteils
+      immer auf derselben Seite der Längsachse. Liegt es kopfüber, erscheint sie gespiegelt auf der anderen Seite.
+      Das Vorzeichen des Kreuzprodukts aus Achse und Richtung zur Fasenecke ergibt <code>chamfer_side</code> = +1
+      oder −1. Weicht es vom erwarteten Wert ab, bricht M1 vor dem Greifen ab: „Part is upside down – turn it
+      over“.</li>
   </ul>
+  <figure><img class="photo" src="img/m1/fase_seite.jpg" alt="Fase rechts bzw. links vom Pfeil">
+    <figcaption>Labor 26.11.: links ein richtig liegendes Bauteil (Fase rechts vom Pfeil, <code>chamfer_side</code> +1),
+      rechts ein kopfüber eingelegtes (Fase links, −1). Vor der Prüfung griff der Roboter ein solches Teil, und M3
+      sortierte es aus, weil es die Rückseite ohne Etikett sah. In 15 richtig eingelegten Zyklen lag die Fase immer
+      rechts, beim nächsten gewendeten Teil brach M1 vor dem Greifen ab.</figcaption></figure>
   <div class="demo">
     <div class="dh"><h4>Fasenerkennung ausprobieren</h4></div>
     <div class="controls">
@@ -439,25 +489,41 @@ z_r = table_z_mm                       <span class="c"># Bauteil liegt flach auf
     Roboter fährt mit der Greiferspitze die vier Markermitten an. <code>fit_workspace_to_robot()</code>
     berechnet daraus per Least Squares (Kabsch-Verfahren über SVD) die beste Drehung und Verschiebung
     und gibt den Restfehler je Marker aus. Mehr dazu auf der <a href="m2_robotersteuerung.html#kalibrierung">M2-Seite</a>.</p>
+  <h3>Positionskorrektur aus den Zeigetests (seit 12.11.)</h3>
+  <p>Beim Zeigetest fährt der Roboter mit offenem Greifer über das erkannte Bauteil und bleibt darüber stehen.
+    21 Zeigetests ohne Korrektur zeigten keinen festen, sondern einen <b>positionsabhängigen Versatz</b>: Die erkannte
+    Mitte wanderte zum Rand des Arbeitsbereichs hin nach außen, in x um bis zu 8 mm, in y um bis zu 4 mm. An einigen
+    Stellen hätten die Backen das 40 mm breite Bauteil seitlich getroffen. Ursache ist vermutlich die Parallaxe der
+    15 mm hohen Oberseite zusammen mit dem unkalibrierten Objektiv. Ein lineares Modell je Achse beschreibt den
+    Versatz gut:</p>
+<pre><code><span class="c"># detector.py, correct_position()  (part_topdown.position_correction)</span>
+x' = x − 0,037 · (x − 227 mm)        <span class="c"># Restfehler rms 0,5 mm</span>
+y' = y − 0,020 · (y − 164 mm)        <span class="c"># Restfehler rms 1,2 mm</span></code></pre>
+  <p>Mit Korrektur war in 9 von 11 Kontrollmessungen kein Versatz sichtbar, in den übrigen beiden 1 bzw. 2 mm. In
+    allen Kontrollmessungen, auch in den vier Ecken, hätte der Greifer das Bauteil gefasst, teils knapp. Sauberer wäre
+    eine intrinsische Kalibrierung mit Höhenkorrektur. Sie steht im Ausblick, die empirische Korrektur reicht für das
+    Greifen aus.</p>
   <div class="demo">
     <div class="dh"><h4>Klick in die Draufsicht → Koordinaten</h4></div>
-    <p style="font-size:.9rem">Klicke auf einen Punkt der entzerrten Draufsicht (Foto 1). Die Umrechnung
-      verwendet dieselben Formeln und Kalibrierwerte wie der Code (<code>workspace_to_robot</code>:
-      φ = 0,35°, t = (205,1 | −319,7) mm, z = 2,1 mm).</p>
+    <p style="font-size:.9rem">Klicke auf einen Punkt der entzerrten Draufsicht (Labor 1, 26.11.). Die Umrechnung
+      verwendet dieselben Formeln und Werte wie der Code: erst die Positionskorrektur, dann
+      <code>workspace_to_robot</code> (φ = 0,35°, t = (205,1 | −319,7) mm, z = 2,1 mm).</p>
     <div class="grid2" style="align-items:start">
       <div style="position:relative">
-        <img src="img/m1/bild1/m1_03_rectified.jpg" alt="Draufsicht" style="width:100%;border-radius:8px;display:block">
+        <img src="img/m1/labor1/m1_03_rectified.jpg" alt="Draufsicht" style="width:100%;border-radius:8px;display:block">
         <svg id="clickSvg" viewBox="0 0 660 660" style="position:absolute;inset:0;width:100%;height:100%;cursor:crosshair"></svg>
       </div>
       <div><div class="readout" id="clickOut">Noch kein Punkt gewählt.</div>
         <p style="font-size:.86rem;margin-top:10px">Das Gitter hat 50 mm Abstand. Das Kreuz markiert den
-          Schwerpunkt, den M1 auf diesem Foto erkannt hat: (137,2 | 214,8) mm im Arbeitsbereich =
-          (340,9 | −104,1) mm im Roboter-KS.</p></div>
+          Schwerpunkt im Bild, der gelbe Punkt die korrigierte Greifposition. M1 meldete in diesem Zyklus
+          (177,2 | 243,7) mm im Arbeitsbereich = (380,8 | −74,9) mm im Roboter-KS. Klicke an den Rand: Dort wird
+          die Korrektur größer.</p></div>
     </div>
   </div>
   <script>
   (function () {
-    const PPM = 2, SIZE = 330, PHI = 0.35, T = [205.1, -319.7], Z = 2.1;
+    const PPM = 2, SIZE = 330, PHI = 0.35, T = [205.1, -319.7], Z = 2.1, C = [227, 164], K = [0.037, 0.020];
+    const corr = (v, a) => v - K[a] * (v - C[a]), uncorr = (v, a) => (v - K[a] * C[a]) / (1 - K[a]);
     const svg = document.getElementById("clickSvg");
     let grid = "";
     for (let mm = 0; mm <= SIZE; mm += 50) {
@@ -465,20 +531,27 @@ z_r = table_z_mm                       <span class="c"># Bauteil liegt flach auf
                <line x1="0" y1="${660 - mm * PPM}" x2="660" y2="${660 - mm * PPM}" stroke="#fff" stroke-opacity=".18"/>`;
       if (mm > 0 && mm < SIZE) grid += `<text x="${mm * PPM + 3}" y="654" font-size="13" fill="#fff" fill-opacity=".6">${mm}</text><text x="4" y="${660 - mm * PPM - 4}" font-size="13" fill="#fff" fill-opacity=".6">${mm}</text>`;
     }
-    const cu = 137.157 * PPM, cv = (SIZE - 214.811) * PPM;
-    grid += `<path d="M${cu - 10},${cv} h20 M${cu},${cv - 10} v20" stroke="#22d3ee" stroke-width="3"/>`;
+    const RES = [177.175, 243.702];   // korrigierte Position aus dem Zyklus
+    const cu = uncorr(RES[0], 0) * PPM, cv = (SIZE - uncorr(RES[1], 1)) * PPM;
+    grid += `<path d="M${cu - 10},${cv} h20 M${cu},${cv - 10} v20" stroke="#22d3ee" stroke-width="3"/>
+             <circle cx="${RES[0] * PPM}" cy="${(SIZE - RES[1]) * PPM}" r="4" fill="#facc15"/>
+             <circle cx="${C[0] * PPM}" cy="${(SIZE - C[1]) * PPM}" r="6" fill="none" stroke="#fff" stroke-opacity=".5" stroke-dasharray="3 3"/>
+             <text x="${C[0] * PPM + 10}" y="${(SIZE - C[1]) * PPM + 18}" font-size="12" fill="#fff" fill-opacity=".55">Korrekturzentrum</text>`;
     grid += `<text x="8" y="22" font-size="15" fill="#fff" fill-opacity=".8">y ↑</text><text x="630" y="640" font-size="15" fill="#fff" fill-opacity=".8">x →</text>`;
     svg.innerHTML = grid + `<g id="clickMark"></g>`;
     svg.addEventListener("click", e => {
       const r = svg.getBoundingClientRect();
       const u = (e.clientX - r.left) / r.width * 660, v = (e.clientY - r.top) / r.height * 660;
-      const x = u / PPM, y = SIZE - v / PPM;
+      const x0 = u / PPM, y0 = SIZE - v / PPM, x = corr(x0, 0), y = corr(y0, 1);
       const p = PHI * Math.PI / 180;
       const xr = Math.cos(p) * x - Math.sin(p) * y + T[0], yr = Math.sin(p) * x + Math.cos(p) * y + T[1];
-      document.getElementById("clickMark").innerHTML = `<circle cx="${u}" cy="${v}" r="9" fill="none" stroke="#facc15" stroke-width="3"/>`;
+      document.getElementById("clickMark").innerHTML = `<circle cx="${u}" cy="${v}" r="9" fill="none" stroke="#facc15" stroke-width="3"/>
+        <line x1="${u}" y1="${v}" x2="${x * PPM}" y2="${(SIZE - y) * PPM}" stroke="#facc15" stroke-width="2"/>
+        <circle cx="${x * PPM}" cy="${(SIZE - y) * PPM}" r="3.5" fill="#facc15"/>`;
       document.getElementById("clickOut").innerHTML =
         `Draufsicht-Pixel  u = ${fmt(u, 0)}, v = ${fmt(v, 0)}<br>` +
-        `Arbeitsbereich    x = <b>${fmt(x)}</b>, y = <b>${fmt(y)}</b> mm<br>` +
+        `Arbeitsbereich    x = ${fmt(x0)}, y = ${fmt(y0)} mm<br>` +
+        `korrigiert        x = <b>${fmt(x)}</b>, y = <b>${fmt(y)}</b> mm  (Δ ${fmt(x - x0)} | ${fmt(y - y0)})<br>` +
         `Roboter-Basis     x = <b>${fmt(xr)}</b>, y = <b>${fmt(yr)}</b>, z = ${fmt(Z)} mm<br>` +
         `<span style="color:var(--muted)">(θ im Roboter-KS = θ im Arbeitsbereich + 0,35°)</span>`;
     });
@@ -488,9 +561,41 @@ z_r = table_z_mm                       <span class="c"># Bauteil liegt flach auf
 
 <!-- ============================================================== -->
 <section id="ergebnisse">
-  <h2><span class="num">09</span>Ergebnisse auf den Laborfotos</h2>
-  <p>Fünf Handyfotos vom Aufbau (05.10.2026). Foto 1–3 zeigen dieselbe Szene aus drei verschiedenen Höhen,
-    Foto 4 und 5 andere Lagen. Die Werte stammen direkt aus der Pipeline.</p>
+  <h2><span class="num">09</span>Ergebnisse</h2>
+  <h3>Labortag 26.11. mit der fest montierten Kamera</h3>
+  <p>80 Einträge im Zyklusprotokoll (<code>logs/cycles_20261126.csv</code>), zum Teil im Dauerbetrieb: Das Bauteil
+    wurde vor jedem Zyklus von Hand an eine neue Stelle und in neuer Orientierung gelegt.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Eintrag</th><th class="n">Anzahl</th><th>Ergebnis</th></tr></thead>
+    <tbody>
+      <tr><td>Abfrage ohne Bauteil (Dauerbetrieb)</td><td class="n">48</td><td>kein Zyklus ausgelöst</td></tr>
+      <tr><td>Zyklus mit Prüfung</td><td class="n">25</td><td><span class="pill good">alle erkannt und gegriffen</span></td></tr>
+      <tr><td>Abbruch: Marker 2 beim Nachlegen verdeckt</td><td class="n">5</td><td>vor dem Greifen</td></tr>
+      <tr><td>Abbruch: Bauteil gewendet erkannt</td><td class="n">1</td><td>vor dem Greifen (neue Lageprüfung)</td></tr>
+      <tr><td>Hand als Bauteil erkannt</td><td class="n">1</td><td><span class="pill bad">Roboter im Anflug per Software-Stopp angehalten</span> → Form- und Ruheprüfung</td></tr>
+    </tbody>
+  </table></div>
+  <p>Drei der Zyklen sind oben im Stepper als <b>Labor 1–3</b> zu sehen, nachgerechnet mit dem aktuellen Code:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Bild</th><th class="n">x_ws</th><th class="n">y_ws</th><th class="n">θ_ws</th><th class="n">x_robot</th><th class="n">y_robot</th><th class="n">θ_robot</th><th class="n">Größe [mm]</th><th>Fase</th></tr></thead>
+    <tbody>
+      <tr><td>Labor 1</td><td class="n">177,2</td><td class="n">243,7</td><td class="n">44,5°</td><td class="n">380,8</td><td class="n">−74,9</td><td class="n">44,8°</td><td class="n">60,9 × 39,7</td><td><span class="pill good">ja, richtig herum</span></td></tr>
+      <tr><td>Labor 2</td><td class="n">109,3</td><td class="n">236,6</td><td class="n">82,1°</td><td class="n">313,0</td><td class="n">−82,4</td><td class="n">82,5°</td><td class="n">59,7 × 39,6</td><td><span class="pill good">ja, richtig herum</span></td></tr>
+      <tr><td>Labor 3</td><td class="n">179,5</td><td class="n">154,0</td><td class="n">142,1°</td><td class="n">383,6</td><td class="n">−164,6</td><td class="n">142,5°</td><td class="n">60,7 × 40,6</td><td><span class="pill good">ja, richtig herum</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="tip"><p><b>Gemessene Größe stimmt jetzt:</b> Mit der Kamera rund einen Meter senkrecht über der Platte
+    misst M1 das Bauteil mit 59,7–60,9 × 39,6–40,6 mm, also fast genau 60 × 40 mm. Auf den Handyfotos aus geringerer
+    Höhe waren es 64–69 × 43–46 mm, weil die Seitenflächen mitsegmentiert wurden.</p></div>
+  <figure><img class="photo" src="img/m1/fehlerfaelle.jpg" alt="Fehlerfälle im Dauerbetrieb">
+    <figcaption>Fehlerfälle am 26.11. a) Beim Nachlegen verdeckt die Hand Marker 2, die Erkennung bricht ab, bevor
+      der Roboter fährt. b) Ein gewendet eingelegtes Bauteil zeigt der Seitenkamera die Rückseite ohne Etikett und
+      Kerbe. Seit der Lageprüfung bricht M1 in diesem Fall schon vor dem Greifen ab.</figcaption></figure>
+
+  <h3>Handyfotos vom 05.10. (Entwicklung)</h3>
+  <p>Fünf Handyfotos vom Aufbau, bevor die Kamera montiert war. Foto 1–3 zeigen dieselbe Szene aus drei
+    verschiedenen Höhen, Foto 4 und 5 andere Lagen. Die Werte stammen direkt aus der Pipeline (ohne
+    Positionskorrektur, die erst für die feste Kamera bestimmt wurde).</p>
   <div class="tablewrap"><table>
     <thead><tr><th>Foto</th><th class="n">x_ws</th><th class="n">y_ws</th><th class="n">θ_ws</th><th class="n">x_robot</th><th class="n">y_robot</th><th class="n">θ_robot</th><th class="n">Größe [mm]</th><th>Fase</th></tr></thead>
     <tbody>
@@ -506,8 +611,8 @@ z_r = table_z_mm                       <span class="c"># Bauteil liegt flach auf
       schwankt die Position um weniger als 1 mm und der Winkel um 0,1°. Das zeigt, dass die Homographie
       die Perspektive zuverlässig herausrechnet.</p></div>
     <div class="warn"><p><b>Gemessene Größe schwankt</b> zwischen 64–69 × 43–46 mm. Die Ursache ist die
-      Parallaxe: Je nach Blickwinkel sind Seitenflächen sichtbar und werden mitsegmentiert. Auf den
-      Schwerpunkt wirkt sich das weniger aus als auf die Kantenlängen.</p></div>
+      Parallaxe: Je nach Blickwinkel sind Seitenflächen sichtbar und werden mitsegmentiert. Deshalb hat die
+      Formprüfung ± 20 % Toleranz, damit diese Fotos als Regressionstest weiter bestehen.</p></div>
   </div>
 </section>
 
@@ -519,7 +624,8 @@ z_r = table_z_mm                       <span class="c"># Bauteil liegt flach auf
   <div class="tablewrap"><table>
     <thead><tr><th>Schlüssel</th><th>Wert</th><th>Bedeutung</th></tr></thead>
     <tbody>
-      <tr><td><code>topdown_camera.source</code></td><td>0</td><td>Kameranummer oder Bild-Glob (Replay der Testfotos)</td></tr>
+      <tr><td><code>topdown_camera.source</code></td><td>daheng:EBK24100634</td><td>Daheng-Kamera über Seriennummer, sonst Kameranummer oder Bild-Glob (Replay). Kameras finden: <code>python -m common.camera</code></td></tr>
+      <tr><td><code>topdown_camera.exposure_us</code>, <code>gain_db</code></td><td>15000, 0.0</td><td>Feste Belichtung. Die Automatik belichtete auf der dunklen Platte zu lang, das Teil war weiß übersteuert, und Kratzer landeten in der Maske.</td></tr>
       <tr><td><code>workspace.method</code></td><td>aruco</td><td><code>aruco</code> | <code>white_frame</code> | <code>auto</code></td></tr>
       <tr><td><code>workspace.size_mm</code></td><td>[330, 330]</td><td>Größe des Arbeitsbereichs: Markermitten 400 mm auseinander, je 35 mm nach innen versetzt, damit das Markerpapier draußen bleibt</td></tr>
       <tr><td><code>workspace.markers_mm</code></td><td>0: (−35, −35) …</td><td>Markermitten im Arbeitsbereich-KS. Die Zuordnung ID → Ecke muss stimmen.</td></tr>
@@ -528,7 +634,11 @@ z_r = table_z_mm                       <span class="c"># Bauteil liegt flach auf
       <tr><td><code>part_topdown.brightness_delta</code></td><td>50</td><td>V über dem Tisch-Median</td></tr>
       <tr><td><code>part_topdown.chroma_delta</code></td><td>20</td><td>Lab-Chroma über dem Tisch-Median</td></tr>
       <tr><td><code>part_topdown.min/max_area_mm2</code></td><td>300 / 20 000</td><td>plausible Bauteilfläche</td></tr>
+      <tr><td><code>part_topdown.part_size_mm</code>, <code>part_size_tolerance</code>, <code>part_fill_min</code></td><td>[60, 40], 0.2, 0.8</td><td>Formprüfung (<code>null</code> = aus)</td></tr>
+      <tr><td><code>part_topdown.stability</code></td><td>3 Bilder, 0,3 s, 2 mm / 2°, 0,5 %</td><td>Ruheprüfung vor dem Start eines Zyklus</td></tr>
       <tr><td><code>part_topdown.chamfer_min_frac</code></td><td>0.08</td><td>Mindestabstand der Fasen-Ecke relativ zur Breite</td></tr>
+      <tr><td><code>part_topdown.chamfer_side</code></td><td>1</td><td>Erwartete Fasenseite, Abweichung = Teil liegt kopfüber (<code>null</code> = keine Prüfung)</td></tr>
+      <tr><td><code>part_topdown.position_correction</code></td><td>Zentrum (227, 164), Faktor (0,037, 0,020)</td><td>Lineare Korrektur aus den Zeigetests vom 12.11. (<code>null</code> = aus)</td></tr>
       <tr><td><code>workspace_to_robot</code></td><td>0,35° · (205,1 | −319,7) · z 2,1</td><td>Kalibrierung Arbeitsbereich → Roboter</td></tr>
     </tbody>
   </table></div>
@@ -550,8 +660,10 @@ pytest m1_vision_topdown</code></pre></div>
     <div class="card"><h3>GUI (<code>python -m gui</code>)</h3>
       <p><b>Tab M1 Erkennung:</b> Quelle wählen (Testbilder, Kamera, Datei), <i>Bild holen + analysieren</i>,
         optional <i>Live</i>. Angezeigt werden das Kamerabild mit Overlay und die Draufsicht mit Pose.</p>
-      <p><b>Tab Ablauf:</b> Erkennung <i>mock / replay / camera / KI</i>. Mit <i>+ Zwischenschritte</i>
-        werden alle Bilder dieser Seite unter <code>logs/&lt;datum&gt;/…/steps/</code> gespeichert.</p>
+      <p><b>Tab Ablauf:</b> Erkennung <i>Mock / Testbilder / Kamera</i>, Greifen <i>M2 Roboter / M4 Behavior
+        Cloning</i>. Mit <i>+ Zwischenschritte</i> werden alle Bilder dieser Seite unter
+        <code>logs/&lt;datum&gt;/…/steps/</code> gespeichert. Im Dauerbetrieb zeigt die GUI, warum gerade kein
+        Zyklus startet (z. B. „scene not still“).</p>
       <p><b>Tab M2 → Zeigetest:</b> M1 erkennt das Bauteil, der Roboter zeigt darauf. Das ist der
         Praxistest für M1 und die Kalibrierung zusammen.</p></div>
   </div>
@@ -563,6 +675,8 @@ pytest m1_vision_topdown</code></pre></div>
     <li><b>Echte Fotos</b> als Regressionstest: Die bekannten Ergebnisse dürfen sich durch Codeänderungen
       nicht verschlechtern.</li>
     <li><b>MockDetector</b>: liefert Zufallsposen, damit Orchestrator und M2 ohne Kamera laufen.</li>
+    <li><b>Labor</b>: Zeigetests (<code>logs/point_tests.csv</code>, 12.11.) und das Zyklusprotokoll vom 26.11. mit allen
+      Zwischenbildern (<code>logs/20261126/</code>).</li>
   </ul>
 </section>
 
@@ -573,12 +687,15 @@ pytest m1_vision_topdown</code></pre></div>
     <thead><tr><th>Thema</th><th>Stand / Begründung</th></tr></thead>
     <tbody>
       <tr><td>Klassische BV statt KI</td><td>Ein einzelnes, bekanntes Bauteil auf einem kontrastreichen Tisch. Dafür reicht klassische BV, die ohne Trainingsdaten auskommt, jeden Schritt nachvollziehbar macht und schnell läuft. KI-Greifen wird in M4 untersucht (für das Greifen selbst, die Erkennung bleibt bei M1).</td></tr>
-      <tr><td>Parallaxe</td><td>Die Homographie gilt nur für die Tischebene. Die Oberseite des Bauteils liegt höher und erscheint verschoben, außerdem werden sichtbare Seitenflächen mitsegmentiert. Abhilfe: Kamera hoch und senkrecht über der Mitte montieren; optional eine Korrektur über die Bauteilhöhe.</td></tr>
-      <tr><td>Linsenverzeichnung</td><td>Eine intrinsische Kalibrierung nach Zhang ist vorgesehen (<code>calibration_file</code>), wird aber noch nicht verwendet.</td></tr>
+      <tr><td>Parallaxe</td><td>Die Homographie gilt nur für die Tischebene. Die Oberseite des Bauteils liegt 15 mm höher und erscheint nach außen verschoben (bis 8 mm). Gelöst über eine empirische lineare Positionskorrektur aus 21 Zeigetests, danach ≤ 2 mm. Die Kamera hängt rund einen Meter hoch und senkrecht, deshalb werden kaum noch Seitenflächen mitsegmentiert.</td></tr>
+      <tr><td>Linsenverzeichnung</td><td>Eine intrinsische Kalibrierung nach Zhang ist vorgesehen (<code>calibration_file</code>), wurde aber nicht mehr umgesetzt. Sie würde zusammen mit einer Höhenkorrektur die empirische Positionskorrektur ablösen (Ausblick).</td></tr>
+      <tr><td>Verdeckte Marker</td><td>Fünf Abbrüche am 26.11., weil der Arm beim Nachlegen Marker 2 verdeckte. Gewolltes Verhalten (lieber abbrechen als eine ungenaue Pose liefern), für den Bediener aber lästig. Ob die Ruheprüfung das inzwischen abfängt, wurde nicht mehr erprobt.</td></tr>
+      <tr><td>Hand im Arbeitsbereich</td><td>Einmal als Bauteil erkannt, Roboter per Software-Stopp angehalten. Seitdem Form- und Ruheprüfung.</td></tr>
+      <tr><td>Gewendetes Bauteil</td><td>Wurde zuerst gegriffen und von M3 aussortiert. Seitdem erkennt M1 es über die Fasenseite und bricht vor dem Greifen ab.</td></tr>
       <tr><td>Marker-Quiet-Zone</td><td>Die ersten 3D-gedruckten Marker hatten keinen hellen Rand und verschmolzen mit der dunklen Platte. Lösung: Marker mit weißem Rand (<code>make_markers.py</code>).</td></tr>
       <tr><td>Fase nicht erkannt</td><td>Dann gilt confidence 0,5, und θ ist nur bis auf 180° eindeutig. Das Teil könnte gedreht an der Prüfstation landen.</td></tr>
       <tr><td>Ein Bauteil</td><td>Projektabgrenzung: Es liegt genau ein Teil im Arbeitsbereich, gewählt wird die größte Kontur.</td></tr>
-      <tr><td>Offen</td><td>Feste Top-down-Kamera montieren und Belichtung fixieren, Genauigkeitsmessung über N Zeigetests (<code>logs/point_tests.csv</code>).</td></tr>
+      <tr><td>Erledigt seit 20.10.</td><td>Daheng-Kamera fest montiert, Belichtung fixiert, Zeigetests gemessen (<code>logs/point_tests.csv</code>), Versuchsreihe am 26.11.</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -592,8 +709,8 @@ pytest m1_vision_topdown</code></pre></div>
       <li>Vier ArUco-Marker definieren den Arbeitsbereich, eine Homographie macht daraus eine maßstabsgetreue Draufsicht (2 px/mm).</li>
       <li>Das Bauteil ist „deutlich heller oder bunter als der Tisch“, mit Schwellen relativ zum Median, also robust gegen Lichtänderungen.</li>
       <li>Wir verwenden Lab-Chroma statt HSV-Sättigung, weil die Sättigung auf dunklem Untergrund Reflexe aufbläht. Das war ein echter Fehler auf den Laborfotos.</li>
-      <li>Schwerpunkt aus den Bildmomenten, Längsachse aus dem minAreaRect, und die Fase macht θ über 0–360° eindeutig.</li>
-      <li>Eine eingemessene 2D-Starrkörpertransformation liefert die Pose direkt im Roboter-KS. Gleiche Szene aus drei Höhen ergibt &lt; 1 mm Abweichung.</li>
+      <li>Schwerpunkt aus den Bildmomenten, Längsachse aus dem minAreaRect, und die Fase macht θ über 0–360° eindeutig. Auf welcher Seite sie liegt, verrät zusätzlich ein gewendetes Teil.</li>
+      <li>Eine eingemessene 2D-Starrkörpertransformation plus eine Positionskorrektur aus 21 Zeigetests liefert die Pose im Roboter-KS, mit höchstens 2 mm Versatz. Am 26.11. wurde das Teil in allen 25 Zyklen gegriffen.</li>
     </ol>
   </div>
   <h3>Mögliche Fragen</h3>
@@ -604,14 +721,26 @@ pytest m1_vision_topdown</code></pre></div>
       Freiheitsgrade hat.</p></div></details>
   <details class="qa"><summary>Was passiert, wenn ein Marker verdeckt ist?</summary><div class="a">
     <p>Dann wirft <code>find_workspace_aruco</code> einen <code>VisionError</code>, und der Orchestrator geht
-      in den Fehlerzustand. Mit nur drei Punkten wäre die Homographie nicht eindeutig bestimmt. Eine
-      Rückfallebene ist der weiße Rahmen (<code>method: auto</code>). Denkbar wäre auch, die letzte
+      in den Fehlerzustand. Mit nur drei Punkten wäre die Homographie nicht eindeutig bestimmt. Am 26.11. ist das
+      fünfmal passiert, immer beim Nachlegen, wenn der Arm Marker 2 verdeckte. Der Roboter fuhr dabei nie los.
+      Eine Rückfallebene wäre der weiße Rahmen (<code>method: auto</code>). Denkbar wäre auch, die letzte
       gültige Homographie wiederzuverwenden, solange die Kamera fest montiert ist.</p></div></details>
   <details class="qa"><summary>Wie genau ist die Erkennung?</summary><div class="a">
-    <p>Auf den Fotos ist sie bei gleicher Szene auf &lt; 1 mm und 0,1° wiederholbar. Die synthetischen
-      Tests prüfen &lt; 2 mm / 2°. Die absolute Genauigkeit im Roboter-KS hängt zusätzlich von der
-      Kalibrierung ab und wird mit dem Zeigetest gemessen: Der Roboter zeigt auf das erkannte Bauteil, der
-      Versatz wird protokolliert. Zielwert ±2 mm / ±2°.</p></div></details>
+    <p>Gemessen mit Zeigetests: Der Roboter fährt über das erkannte Bauteil, der Versatz wird abgelesen. Ohne
+      Korrektur wuchs er zum Rand hin auf bis zu 8 mm, mit der linearen Positionskorrektur war in 9 von 11
+      Kontrollmessungen kein Versatz sichtbar, sonst 1 bzw. 2 mm. Das reicht zum Greifen: In allen 32 Zyklen beider
+      Labortage wurde das Teil gegriffen. Der Spielraum der Backen zum 40 mm breiten Teil ist allerdings gering.</p></div></details>
+  <details class="qa"><summary>Woher kommt der Versatz, und warum eine empirische Korrektur?</summary><div class="a">
+    <p>Die Homographie bildet die Tischebene ab, die Oberseite des Teils liegt aber 15 mm höher und erscheint nach außen
+      verschoben, je weiter sie von der Bildmitte entfernt ist. Dazu kommt das unkalibrierte Objektiv. Beides wächst
+      etwa linear mit dem Abstand von der Mitte, deshalb passt ein lineares Modell je Achse (Restfehler 0,5 mm in x,
+      1,2 mm in y). Korrekter wäre eine intrinsische Kalibrierung mit Höhenkorrektur. Dafür fehlte die Zeit, und für
+      das Greifen reicht die Korrektur.</p></div></details>
+  <details class="qa"><summary>Was passiert, wenn jemand ins Bild greift?</summary><div class="a">
+    <p>Seit dem 26.11. startet kein Zyklus, solange sich im Arbeitsbereich etwas bewegt: Drei Aufnahmen im Abstand von
+      0,3 s müssen dieselbe Pose zeigen, und höchstens 0,5 % des Arbeitsbereichs dürfen sich ändern. Außerdem muss die
+      Kontur die Form des Bauteils haben. Vorher wurde einmal eine Hand als Bauteil erkannt, der Bediener hielt den
+      Roboter mit dem Software-Stopp an.</p></div></details>
   <details class="qa"><summary>Warum nicht einfach Otsu-Schwellwert oder Hintergrundsubtraktion?</summary><div class="a">
     <p>Otsu braucht ein zweigipfliges Histogramm. Bei einem kleinen Teil auf einer großen Platte ist der
       Bauteil-Gipfel aber winzig. Hintergrundsubtraktion bräuchte ein aktuelles Leerbild und reagiert auf
@@ -632,10 +761,10 @@ pytest m1_vision_topdown</code></pre></div>
       sowie den Restfehler je Marker. Ein RMS über 3 mm deutet auf vertauschte IDs oder schlecht
       angefahrene Punkte hin.</p></div></details>
   <details class="qa"><summary>Was ist mit der Bauteilhöhe, wenn die Kamera nur die Oberseite sieht?</summary><div class="a">
-    <p>Das ist die Parallaxe, eine bekannte Grenze. Die Homographie gilt für die Tischebene, die Oberseite
-      liegt höher und wird deshalb leicht nach außen verschoben abgebildet. Der Effekt ist klein, wenn die
-      Kamera hoch und senkrecht über der Mitte hängt. Eine Korrektur über die bekannte Bauteilhöhe wäre
-      möglich.</p></div></details>
+    <p>Das ist die Parallaxe. Die Homographie gilt für die Tischebene, die Oberseite liegt höher und wird deshalb
+      nach außen verschoben abgebildet. Die Kamera hängt rund einen Meter hoch und senkrecht über der Mitte, der
+      verbleibende Versatz wird mit der Positionskorrektur ausgeglichen. Ein kopfüber liegendes Teil sieht von oben
+      gespiegelt aus, das erkennt M1 an der Fasenseite.</p></div></details>
   <details class="qa"><summary>Wie lässt sich das ohne Hardware testen?</summary><div class="a">
     <p>Die Pipeline ist kamerafrei. Die Variante <code>replay</code> spielt Fotos als Kamera ab, Unit-Tests
       erzeugen synthetische Bilder mit bekannter Pose, und der MockDetector entkoppelt M2/M3 komplett.
@@ -660,7 +789,7 @@ pytest m1_vision_topdown</code></pre></div>
   </dl>
 </section>
 
-<footer>Erstellt aus dem Code-Stand vom 20.10.2026 (<code>code/m1_vision_topdown/</code>, <code>config/system.yaml</code>) und der Thesis, Kapitel 5. Bilder: echte Pipeline-Zwischenschritte auf den Testfotos.</footer>
+<footer>Aktualisiert auf den Code-Stand vom 27.11.2026 (<code>code/m1_vision_topdown/</code>, <code>config/system.yaml</code>), die Labortage 12.11. und 26.11. und die Thesis, Kapitel 5 und 10. Bilder: echte Pipeline-Zwischenschritte auf Laborbildern der Daheng-Kamera und den Handyfotos vom 05.10.</footer>
 </main>
 </div>
 </body>

@@ -45,8 +45,8 @@
   <div class="facts">
     <div class="fact"><div class="v">6 Achsen</div><div class="l">Neura LARA, Software v5.0.8</div></div>
     <div class="fact"><div class="v">4 Varianten</div><div class="l">mock · sim · vm · real</div></div>
-    <div class="fact"><div class="v">20 %</div><div class="l">Geschwindigkeit im Testbetrieb</div></div>
-    <div class="fact"><div class="v">06.10.</div><div class="l">erster vollständiger Laborlauf</div></div>
+    <div class="fact"><div class="v">32 / 32</div><div class="l">Zyklen an beiden Labortagen gegriffen und sortiert</div></div>
+    <div class="fact"><div class="v">≈ 36 s</div><div class="l">Zykluszeit im Dauerbetrieb (Median, 26.11.)</div></div>
   </div>
 </header>
 
@@ -84,10 +84,14 @@
     anhand von <code>InspectionResult.is_good</code>.</p>
   <div class="svgwrap" id="cycle"></div>
   <script>drawCycle(document.getElementById("cycle"), "M2");</script>
+  <p>Seit Ende Oktober laufen <code>PICK</code> und <code>PLACE_INSPECT</code> über einen <code>Grasper</code>. Standard ist
+    <code>RobotGrasper</code>, also M2 selbst. Alternativ greift M4 (<code>BcGrasper</code>, Behavior-Cloning-Policy) und
+    fährt bis zu seinem Übergabepunkt über der Prüfvorrichtung, dort übernimmt M2 das Ablegen. Abholen an der
+    Prüfvorrichtung und Sortieren macht immer M2.</p>
 <pre><code><span class="c"># orchestrator/state_machine.py, run_cycle() (gekürzt)</span>
 pose = detector.detect()                       <span class="c"># M1</span>
-robot.pick(pose)                               <span class="c"># PICK</span>
-robot.place(target("inspection"))              <span class="c"># PLACE_INSPECT: wartet danach über der Vorrichtung</span>
+grasper.pick(pose)                             <span class="c"># PICK: M2 (Standard) oder M4</span>
+grasper.place(target("inspection"))            <span class="c"># PLACE_INSPECT: M2 legt ab, wartet über der Vorrichtung</span>
 result = inspector.inspect()                   <span class="c"># M3</span>
 robot.pick(target("inspection"))               <span class="c"># PICK_INSPECT</span>
 robot.place(target("bin_good" <span class="k">if</span> result.is_good <span class="k">else</span> "bin_bad"))   <span class="c"># SORT</span>
@@ -102,7 +106,8 @@ robot.home()</code></pre>
   <h2><span class="num">03</span>Aufbau des Codes</h2>
   <div class="files">
     <div class="file"><div class="name">robot.py</div><div class="desc"><code>NeuraRobot</code> (echte Implementierung über NeuraPy), <code>MockRobot</code> (protokolliert nur, prüft aber Grenzen),
-      Hilfsfunktionen <code>to_neura</code>/<code>from_neura</code> (mm/° ↔ m/rad), <code>as_target</code> (ObjectPose → Greiferpose), <code>check_limits</code>, <code>offset_z</code>.</div></div>
+      Hilfsfunktionen <code>to_neura</code>/<code>from_neura</code> (mm/° ↔ m/rad), <code>as_target</code> (ObjectPose → Greiferpose), <code>place_target</code> (Öffnungshöhe beim Ablegen), <code>check_limits</code>, <code>offset_z</code>. Greifer über Digitalausgänge der Steuerung (<code>gripper_io</code>).</div></div>
+    <div class="file"><div class="name">gui/robot_access.py</div><div class="desc">Nur eine Seite spricht mit der Steuerung: M2 (inkl. Ablauf) oder M4. Wer den Roboter will, übernimmt ihn, die andere Seite wird getrennt, solange sie nicht gerade fährt. Gibt auch die Daheng-Kamera an M4 frei.</div></div>
     <div class="file"><div class="name">steps.py</div><div class="desc">Inbetriebnahme-Schritte ohne Qt, gemeinsam für CLI und GUI: Info, Achsentest, Kalibrierung (<code>calibrate</code>), Zeigetest-Protokoll.</div></div>
     <div class="file"><div class="name">robot_check.py</div><div class="desc">Kommandozeilenwerkzeug: <code>info · pose · home · gripper · axes · jog · calib · point · teach · pick-test</code>, jeweils mit <code>--sim</code> oder <code>--vm</code>.</div></div>
     <div class="file"><div class="name">fake_neura_server.py</div><div class="desc">Nachbildung der Neura-Steuerung: spricht dasselbe JSON-Protokoll auf Port 65432 und speichert die Aufrufe. Damit lässt sich der <b>unveränderte</b> Herstellerclient testen.</div></div>
@@ -152,6 +157,9 @@ robot.home()</code></pre>
     <li><code>init_program()</code>: startet das Bewegungsprogramm auf der Steuerung. Ohne diesen Schritt nimmt
       die Steuerung keine Bewegungsbefehle an. Bis zu 3 Versuche, weil die VM den Wechsel in den
       Play-Modus manchmal kurz verweigert.</li>
+    <li><code>_enable_gripper()</code> (seit 12.11.): Digitalausgang <code>DO_3</code> (Enable) setzen, dann ein 1-s-Impuls
+      auf <code>DO_2</code> (Reset), der einen Fehlerzustand des Greifers löscht. Im Labor musste der Greifer trotzdem
+      einmal am Roboter selbst freigeschaltet werden.</li>
   </ol>
   <div class="grid2">
     <div class="card"><h3>Stopp → gesperrt → Quittieren</h3>
@@ -188,34 +196,41 @@ robot.home()</code></pre>
 x, y = pose.x_mm, pose.y_mm
 z    = pose.z_mm + grasp_height_mm                   <span class="c"># Tischhöhe + 5 mm</span>
 rx, ry = home.rx, home.ry                            <span class="c"># Werkzeug zeigt senkrecht nach unten (roll = 180°)</span>
-rz   = wrap(home.rz + pose.theta_deg + gripper_angle_offset_deg)   <span class="c"># 180 + θ + 113 → (−180, 180]</span></code></pre>
-  <p>Der Greifer dreht sich also nur um die senkrechte Achse. Der Offset von <b>113°</b> setzt sich aus zwei Teilen zusammen:</p>
+rz   = wrap(home.rz + pose.theta_deg + gripper_angle_offset_deg)   <span class="c"># 180 + θ − 67 → (−180, 180]</span></code></pre>
+  <p>Der Greifer dreht sich also nur um die senkrechte Achse. Der Offset von <b>−67°</b> setzt sich aus drei Teilen zusammen:</p>
   <ul>
     <li><b>90°</b>: Die Backen sollen <i>quer</i> zur Längsachse schließen, also an den langen Seiten anliegen.</li>
     <li><b>23°</b>: Der Zimmer-Greifer ist mechanisch um 23° verdreht auf dem Flansch montiert. Das wurde
       im Labor am 06.10. festgestellt (bei Home + 23° schließen die Backen entlang Basis-x).</li>
+    <li><b>−180°</b> (seit 12.11.): Mit 113° kam das Teil an der Prüfstation mit der Fasen- und Etikettseite <i>von</i>
+      der Seitenkamera weg an. Man hätte die Ablageposen um 180° drehen können, aber mit rz = 23° stünde Achse 6
+      dort bei 178°, also am Anschlag, und die IK fände keine Lösung zu den Ablagen. Stattdessen greift der Roboter
+      das Teil um 180° gedreht. Für die Backen ist das gleichwertig, sie schließen in derselben Richtung.</li>
   </ul>
   <div class="demo">
     <div class="dh"><h4>Greiferwinkel: Draufsicht im Roboter-Basis-KS</h4></div>
     <div class="controls">
       <label>Bauteilwinkel θ <input type="range" id="gTh" min="0" max="359" value="37"> <span id="gThV"></span></label>
-      <label><input type="checkbox" id="gOld"> alter Offset 90° (ohne Einbauwinkel)</label>
+      <label><input type="radio" name="gOff" value="-67" checked> −67° (aktuell)</label>
+      <label><input type="radio" name="gOff" value="113"> 113° (bis 11.11.)</label>
+      <label><input type="radio" name="gOff" value="90"> 90° (ohne Einbauwinkel)</label>
     </div>
     <div class="grid2" style="align-items:center">
       <div class="svgwrap" style="padding:6px"><svg id="gSvg" viewBox="-70 -70 140 140"></svg></div>
       <div><div class="readout" id="gOut"></div>
         <p style="font-size:.86rem;margin-top:10px">Violett ist das Bauteil, grau sind die zwei Greiferbacken mit
-          ihrer Schließrichtung (gestrichelt). Mit dem richtigen Offset schließen die Backen immer senkrecht
-          zur Längsachse. Mit dem alten Offset von 90° stehen sie um 23° schief und würden auf die Ecken
+          ihrer Schließrichtung (gestrichelt), die orange Backe ist Backe A. Mit −67° und 113° schließen die Backen
+          senkrecht zur Längsachse, nur liegt Backe A einmal auf der einen und einmal auf der anderen Seite: Das Teil
+          hängt um 180° gedreht im Greifer. Mit 90° stehen die Backen um 23° schief und würden auf die Ecken
           treffen.</p></div>
     </div>
   </div>
   <script>
   (function () {
     const HOME_RZ = 180, MOUNT = 23, L = 66, W = 44;
-    const th = document.getElementById("gTh"), old = document.getElementById("gOld");
+    const th = document.getElementById("gTh"), offs = [...document.querySelectorAll("input[name=gOff]")];
     function draw() {
-      const t = +th.value, off = old.checked ? 90 : 113;
+      const t = +th.value, off = +offs.find(r => r.checked).value;
       const rz = wrapDeg(HOME_RZ + t + off);
       const phi = rz - HOME_RZ - MOUNT;                    // Schließrichtung der Backen im Basis-KS
       const R = a => { const r = a * Math.PI / 180; return ([x, y]) => [x * Math.cos(r) - y * Math.sin(r), -(x * Math.sin(r) + y * Math.cos(r))]; };
@@ -231,14 +246,14 @@ rz   = wrap(home.rz + pose.theta_deg + gripper_angle_offset_deg)   <span class="
         <polygon points="${P(part)}" fill="#a78bfa" fill-opacity=".8" stroke="#6d28d9" stroke-width=".6"/>
         <line x1="0" y1="0" x2="${ax[0]}" y2="${ax[1]}" stroke="#6d28d9" stroke-width=".8" stroke-dasharray="2 1"/>
         <line x1="${e1[0]}" y1="${e1[1]}" x2="${e2[0]}" y2="${e2[1]}" stroke="${misalign > 1 ? "var(--bad)" : "var(--accent)"}" stroke-width=".8" stroke-dasharray="3 2"/>
-        <polygon points="${P(jaw(1))}" fill="currentColor" fill-opacity=".55"/><polygon points="${P(jaw(-1))}" fill="currentColor" fill-opacity=".55"/>`;
+        <polygon points="${P(jaw(1))}" fill="#ea580c" fill-opacity=".8"/><polygon points="${P(jaw(-1))}" fill="currentColor" fill-opacity=".55"/>`;
       document.getElementById("gThV").textContent = t + "°";
       document.getElementById("gOut").innerHTML =
-        `rz = wrap(180° + ${t}° + ${off}°) = <b>${fmt(rz)}°</b><br>` +
+        `rz = wrap(180° + ${t}° ${off < 0 ? "−" : "+"} ${Math.abs(off)}°) = <b>${fmt(rz)}°</b><br>` +
         `Schließrichtung der Backen = rz − 180° − 23° = ${fmt(wrapDeg(phi))}°<br>` +
         `Abweichung von „quer zur Längsachse“: <b style="color:${misalign > 1 ? "var(--bad)" : "var(--good)"}">${fmt(misalign)}°</b>`;
     }
-    th.oninput = old.onchange = draw; draw();
+    th.oninput = draw; offs.forEach(r => r.onchange = draw); draw();
   })();
   </script>
   <div class="note"><p><b>Warum wird rz auf (−180°, 180°] normiert?</b> Damit dieselbe Orientierung immer
@@ -246,8 +261,8 @@ rz   = wrap(home.rz + pose.theta_deg + gripper_angle_offset_deg)   <span class="
     würde sonst −175°, und die Steuerung würde den Winkel „den langen Weg“ über −355° interpolieren und
     dabei in eine Gelenkgrenze laufen.</p></div>
   <p>Die Drehrichtung (+rz = gegen den Uhrzeigersinn von oben bei roll = 180°) wurde in der Neura-VM
-    bestätigt. Am echten Roboter ist sie laut M2-README noch zu prüfen (Achsentest: +rz einzeln fahren und
-    beobachten).</p>
+    bestätigt. Am echten Roboter bestätigen sie die Zeigetests und die Zyklen beider Labortage: Das Teil wurde
+    in allen Orientierungen quer gegriffen.</p>
 </section>
 
 <!-- ============================================================== -->
@@ -285,8 +300,8 @@ rz   = wrap(home.rz + pose.theta_deg + gripper_angle_offset_deg)   <span class="
     const svg = document.getElementById("sqSvg"), list = document.getElementById("sqList"), out = document.getElementById("sqOut");
     let mode = "pick", phases = [], cur = -1, anim = null;
     function build() {
-      const g0 = mode === "pick" ? "Greifer öffnen (release)" : null;
-      const act = mode === "pick" ? ["Greifer schließen (grasp), 1 s warten", true] : ["Greifer öffnen (release), 1 s warten", false];
+      const g0 = mode === "pick" ? "Greifer öffnen (DO_1 aus, DO_0 an)" : null;
+      const act = mode === "pick" ? ["Greifer schließen (DO_0 aus, DO_1 an), 1 s warten", true] : ["Greifer öffnen (DO_1 aus, DO_0 an), 1 s warten", false];
       const start = mode === "pick" ? false : true;          // place: Teil ist im Greifer
       phases = [];
       if (g0) phases.push({t: g0, z0: ZSTART, z1: ZSTART, x0: X0, x1: X0, dur: 0.3, closed: false, hold: false, kind: "Greifer"});
@@ -358,7 +373,9 @@ rz   = wrap(home.rz + pose.theta_deg + gripper_angle_offset_deg)   <span class="
   })();
   </script>
   <p>Vor jeder Bewegung wird <b>Ziel und Vorposition</b> gegen die Arbeitsraumgrenzen geprüft (<code>check_limits</code>).
-    <code>place()</code> nutzt dasselbe Schema, nur öffnet der Greifer unten, statt zu schließen. Das Greifen an der
+    <code>place()</code> nutzt dasselbe Schema, nur öffnet der Greifer unten, statt zu schließen, und zwar
+    <code>place_height_mm</code> über der geteachten Pose (<code>place_target()</code>, aktuell 1 mm). Der Greifer hängt an
+    zwei Digitalausgängen der Steuerung, es ist nie mehr als einer gleichzeitig an. Das Greifen an der
     Prüfposition ist dasselbe <code>pick()</code>, nur mit der festen Pose <code>inspection</code> statt einer erkannten
     Pose. Optimierung: Steht der Roboter schon an den Zielgelenkwinkeln (&lt; 0,001 rad), wird
     <code>move_joint</code> gar nicht erst gesendet.</p>
@@ -368,20 +385,24 @@ rz   = wrap(home.rz + pose.theta_deg + gripper_angle_offset_deg)   <span class="
 <section id="posen">
   <h2><span class="num">07</span>Feste Posen</h2>
   <p>Vier Posen sind im Labor geteacht und in <code>robot.poses</code> eingetragen, jeweils als TCP-Pose
-    <code>[x, y, z, rx, ry, rz]</code> in mm/° im Basis-KS. Jede Ablagepose ist die exakte Pose, an der der
-    Greifer öffnet, inklusive eigener Höhe.</p>
+    <code>[x, y, z, rx, ry, rz]</code> in mm/° im Basis-KS. Stand nach dem Labortag am 12.11.:</p>
   <div class="tablewrap"><table>
     <thead><tr><th>Pose</th><th class="n">x</th><th class="n">y</th><th class="n">z</th><th class="n">rz</th><th>Zweck</th></tr></thead>
     <tbody>
       <tr><td><code>home</code></td><td class="n">420,0</td><td class="n">0,0</td><td class="n">237,0</td><td class="n">180°</td><td>Ruheposition außerhalb der Kamerabilder; wird als benannter Punkt „Home“ in Gelenkkoordinaten angefahren</td></tr>
-      <tr><td><code>inspection</code></td><td class="n">520,8</td><td class="n">199,6</td><td class="n">42,0</td><td class="n">−157°</td><td>Prüfvorrichtung vor der Seitenkamera (gedruckt, Oberfläche 38 mm über der Platte)</td></tr>
-      <tr><td><code>bin_good</code></td><td class="n">299,7</td><td class="n">185,4</td><td class="n">4,0</td><td class="n">−157°</td><td>Ablage für Gutteile</td></tr>
-      <tr><td><code>bin_bad</code></td><td class="n">297,7</td><td class="n">319,4</td><td class="n">3,0</td><td class="n">−157°</td><td>Ablage für Schlechtteile</td></tr>
+      <tr><td><code>inspection</code></td><td class="n">517,9</td><td class="n">200,5</td><td class="n">48,1</td><td class="n">−157°</td><td>Prüfvorrichtung vor der Seitenkamera (gedruckt, Oberfläche 38 mm über der Platte)</td></tr>
+      <tr><td><code>bin_good</code></td><td class="n">299,7</td><td class="n">185,4</td><td class="n">9,0</td><td class="n">−157°</td><td>Ablage für Gutteile (nur mit Klebeband markiert, keine Box)</td></tr>
+      <tr><td><code>bin_bad</code></td><td class="n">297,7</td><td class="n">319,4</td><td class="n">10,0</td><td class="n">−157°</td><td>Ablage für Schlechtteile (Klebeband)</td></tr>
     </tbody>
   </table></div>
   <p>rz = −157° entspricht 180° + 23°: An den Stationen liegt das Teil entlang Basis-y, die Backen schließen entlang
-    Basis-x. Teachen geht über die GUI (<i>Posen teachen</i>) oder <code>robot_check teach</code>: hinfahren,
-    feinjoggen, übernehmen, speichern.</p>
+    Basis-x. Achse 6 steht dabei nahe 0°. Teachen geht über die GUI (<i>Posen teachen</i>) oder
+    <code>robot_check teach</code>: hinfahren, feinjoggen, übernehmen, speichern.</p>
+  <div class="warn"><p><b>Ablegehöhe:</b> Beim Greifen hängt das Teil 5 mm (<code>grasp_height_mm</code>) unter dem TCP.
+    Werden die Posen <i>ohne</i> Teil mit den Fingerspitzen auf der Fläche geteacht, muss <code>place()</code> um 5 mm plus
+    Luft höher öffnen (<code>place_height_mm</code> ≈ 8), sonst wird das Teil in die Fläche gedrückt. Unsere Posen sind
+    <i>mit</i> gegriffenem Teil geteacht, deshalb steht der Wert auf 1 mm. Mit 8 mm fiel das Teil hörbar auf die
+    Prüfstation.</p></div>
 </section>
 
 <!-- ============================================================== -->
@@ -467,6 +488,11 @@ rz   = wrap(home.rz + pose.theta_deg + gripper_angle_offset_deg)   <span class="
     bleibt aber 30 mm darüber stehen und greift <b>nicht</b>. Der Bediener misst den Versatz zwischen Bauteilmitte und
     Greifermitte und trägt ihn ein. Jede Messung landet in <code>logs/point_tests.csv</code>. Das ist die
     Datengrundlage für die Positionsgenauigkeit des Gesamtsystems (M1 + Kalibrierung + Roboter) in der Evaluation.</p>
+  <div class="tip"><p><b>Ergebnis 12.11.:</b> Ohne Korrektur wuchs der Versatz zum Rand hin auf bis zu 8 mm (x) bzw.
+    4 mm (y), nicht als fester Offset, sondern positionsabhängig. Die Kalibrierung selbst war also nicht das Problem,
+    sondern die Parallaxe der Bauteiloberseite. Daraus entstand die lineare Positionskorrektur in M1
+    (<a href="m1_objekterkennung.html#transformation">M1, Abschnitt 08</a>). Danach in 9 von 11 Kontrollmessungen kein
+    sichtbarer Versatz, sonst 1 bzw. 2 mm, auch in den vier Ecken greifbar.</p></div>
 </section>
 
 <!-- ============================================================== -->
@@ -477,13 +503,15 @@ rz   = wrap(home.rz + pose.theta_deg + gripper_angle_offset_deg)   <span class="
   <div class="tablewrap"><table>
     <thead><tr><th>Maßnahme</th><th>Umsetzung</th></tr></thead>
     <tbody>
-      <tr><td>Reduzierte Geschwindigkeit</td><td><code>override 0.2</code>, <code>joint_speed_percent 20</code>, letzte 20 mm mit 0,03 m/s</td></tr>
+      <tr><td>Reduzierte Geschwindigkeit</td><td><code>override 0.2</code>, <code>joint_speed_percent 20</code>, letzte 20 mm mit 0,03 m/s. Am 26.11. wurde die Geschwindigkeit im Lauf des Tages verändert: langsam 136–160 s pro Zyklus, im Dauerbetrieb 35–43 s (Median 36 s), am schnellsten 19 s.</td></tr>
       <tr><td>Arbeitsraumgrenzen</td><td>Jedes Ziel <i>und</i> jede Vorposition muss im Quader x 100…900, y −500…500, z −10…600 mm liegen, sonst <code>RobotError</code> ohne Bewegung. Auch eine fehlerhafte Pose von M1 kann den Roboter so nicht aus dem Bereich führen.</td></tr>
       <tr><td>Werkzeugprüfung</td><td>Weicht der TCP-Versatz auf der Steuerung um mehr als 1 mm von 197,5 mm ab, wird nicht gefahren. Ein falscher Versatz würde jede Greifhöhe verschieben, der Greifer könnte in den Tisch fahren.</td></tr>
       <tr><td>Stopp mit Quittierung</td><td>Nach <code>stop()</code> wird jede Bewegung abgelehnt, bis der Bediener quittiert. Es gibt bewusst keinen automatischen Wiederanlauf.</td></tr>
       <tr><td>STOPP-Knopf in der GUI</td><td>Läuft in einem <b>eigenen Thread</b> und wird deshalb nie von einer laufenden Bewegung blockiert. Roboterbefehle laufen strikt nacheinander in einem separaten Thread.</td></tr>
       <tr><td>Joggen begrenzt</td><td>Max. 100 mm bzw. 15° je Schritt, langsam. Standardmäßig mit Rückfrage („Hand am Not-Halt?“); <i>Ohne Rückfrage joggen</i> muss bewusst eingeschaltet werden und wird beim Trennen zurückgesetzt.</td></tr>
-      <tr><td>Greifer abschaltbar</td><td><code>gripper_enabled: false</code> für erste Tests: Es wird nur gefahren, nicht gegriffen (in der VM immer aus).</td></tr>
+      <tr><td>Greifer abschaltbar</td><td><code>gripper_enabled: false</code> für erste Tests: Es wird nur gefahren, nicht gegriffen (in der VM immer aus). Im Labor seit 12.11. an.</td></tr>
+      <tr><td>Ein Zugriff auf die Steuerung</td><td>M2 und M4 verbinden sich getrennt. <code>gui/robot_access.py</code> lässt nur eine Seite gleichzeitig zu und verweigert die Übernahme, solange die andere fährt. Für den Ablauf mit echtem Roboter und M4 gibt es eine eigene Rückfrage.</td></tr>
+      <tr><td>Software-Stopp erprobt</td><td>Am 26.11. hielt der Bediener den Roboter im Anflug an, als eine Hand als Bauteil erkannt worden war. Das Greifen schlug danach mit „Robot stopped – acknowledge first“ fehl, nach dem Quittieren lief der nächste Zyklus normal.</td></tr>
       <tr><td>Hardware-Not-Halt</td><td>Immer in Reichweite. Die Software-Stopps ersetzen ihn nicht.</td></tr>
     </tbody>
   </table></div>
@@ -501,8 +529,10 @@ rz   = wrap(home.rz + pose.theta_deg + gripper_angle_offset_deg)   <span class="
       <tr><td><code>linear_speed_mps</code>, <code>approach_speed_mps</code></td><td>0.10, 0.03</td><td>LIN schnell / langsam</td></tr>
       <tr><td><code>approach_height_mm</code>, <code>approach_slow_mm</code></td><td>80, 20</td><td>Vorposition über dem Ziel, Umschaltpunkt schnell → langsam</td></tr>
       <tr><td><code>grasp_height_mm</code></td><td>5</td><td>TCP-Höhe über dem Tisch beim Greifen</td></tr>
-      <tr><td><code>gripper_angle_offset_deg</code></td><td>113</td><td>90° quer + 23° Einbauwinkel</td></tr>
-      <tr><td><code>grip_wait_s</code>, <code>gripper_enabled</code></td><td>1.0, false</td><td>Wartezeit nach Greifen/Öffnen; Greifer an/aus</td></tr>
+      <tr><td><code>place_height_mm</code></td><td>1</td><td>Öffnungshöhe über der Ablagepose (Posen mit Teil geteacht)</td></tr>
+      <tr><td><code>gripper_angle_offset_deg</code></td><td>−67</td><td>90° quer + 23° Einbauwinkel − 180° (Fase/Etikett zur M3-Kamera)</td></tr>
+      <tr><td><code>grip_wait_s</code>, <code>gripper_enabled</code></td><td>1.0, true</td><td>Wartezeit nach Greifen/Öffnen; Greifer an/aus</td></tr>
+      <tr><td><code>gripper_io</code>, <code>gripper_reset_pulse_s</code></td><td>auf DO_0, zu DO_1, Enable DO_3, Reset DO_2; 1.0</td><td>Zimmer LWR50 an den Digitalausgängen der Steuerung (Belegung von M4 gefunden). <code>null</code> = NeuraPy <code>grasp()</code>/<code>release()</code></td></tr>
       <tr><td><code>limits_mm</code></td><td>x/y/z-Quader</td><td>Software-Arbeitsraumgrenzen</td></tr>
       <tr><td><code>poses</code></td><td>home, inspection, bin_good, bin_bad</td><td>Feste Posen (siehe oben)</td></tr>
     </tbody>
@@ -561,7 +591,11 @@ pytest m2_robot_control</code></pre></div>
     <li><b>MockRobot</b>: Orchestrator und GUI laufen ohne Netzwerk. Grenzen und Zustände (hält Teil, gestoppt) prüft er trotzdem.</li>
     <li><b>FakeNeuraServer</b>: Tests über den <i>echten</i> NeuraPy-Client. Geprüft werden z. B. die Reihenfolge der Aufrufe, die Einheitenumrechnung, Stopp/Reset und die Ablehnung falscher Werkzeuge.</li>
     <li><b>Neura-VM</b>: Kinematik und Erreichbarkeit mit der Originalsoftware des Herstellers (Reichweite mit Werkzeug nach unten ca. 740 mm bei z = 130).</li>
-    <li><b>Labor</b> (06.10.2026): Punkte vermessen, vollständiger Ablauf im Automatikbetrieb, vorerst noch ohne Greiferansteuerung.</li>
+    <li><b>Labor 06.10.</b>: Punkte vermessen, vollständiger Ablauf im Automatikbetrieb, noch ohne Greiferansteuerung.</li>
+    <li><b>Labor 12.11.</b>: Greifer über Digitalausgänge, 21 Zeigetests + 11 Kontrollmessungen, Offset −67°, Posen neu
+      geteacht, 7 Zyklen (alle gegriffen und abgelegt, 5 vollständig).</li>
+    <li><b>Labor 26.11.</b>: 25 Zyklen mit Prüfung, alle gegriffen, geprüft und einsortiert, zum Teil im Dauerbetrieb.
+      Software-Stopp und Quittieren am realen System erprobt.</li>
   </ul>
 </section>
 
@@ -571,11 +605,12 @@ pytest m2_robot_control</code></pre></div>
   <div class="tablewrap"><table>
     <thead><tr><th>Thema</th><th>Stand</th></tr></thead>
     <tbody>
-      <tr><td>Greiferansteuerung</td><td>Der Zimmer-Greifer (IO-Link) ist noch nicht angebunden, <code>gripper_enabled: false</code>. <code>grasp()</code>/<code>release()</code> sind im Code vorgesehen.</td></tr>
-      <tr><td>Greifer-Rückmeldung</td><td>Ob wirklich ein Teil gegriffen wurde, wird noch nicht ausgewertet (möglich über Tool-Eingänge).</td></tr>
-      <tr><td>Kalibrierung &amp; Genauigkeit</td><td>Das Werkzeug ist fertig. Eine Zeigetest-Serie mit 5–10 Lagen für die Evaluation steht noch aus.</td></tr>
-      <tr><td>Wiederholgenauigkeit Prüfposition</td><td>Wichtig für M3, weil die ROIs eine reproduzierbare Lage voraussetzen. Noch zu messen.</td></tr>
-      <tr><td>Werkzeuglast</td><td>Masse, Schwerpunkt und Trägheit des Werkzeugs am Pendant mit den Datenblättern abgleichen (Kollisionserkennung).</td></tr>
+      <tr><td>Greiferansteuerung</td><td><b>Gelöst (12.11.):</b> über die Digitalausgänge der Steuerung statt IO-Link (Belegung von M4). Beim Verbinden Enable + Reset-Impuls.</td></tr>
+      <tr><td>Greifer-Rückmeldung</td><td>Ob wirklich ein Teil gegriffen wurde, wird nicht ausgewertet (IO-Link-Rückmeldung). Nicht mehr umgesetzt, steht im Ausblick.</td></tr>
+      <tr><td>Kalibrierung &amp; Genauigkeit</td><td><b>Gemessen (12.11.):</b> 21 Zeigetests, danach Positionskorrektur in M1 und 11 Kontrollmessungen mit ≤ 2 mm. Der Spielraum der Backen zum 40 mm breiten Teil ist gering.</td></tr>
+      <tr><td>Wiederholgenauigkeit Prüfposition</td><td>Nicht eigens gemessen. In der Praxis reichte sie: Am 26.11. lagen alle Merkmale in allen 24 richtig eingelegten Zyklen in ihren ROIs.</td></tr>
+      <tr><td>Werkzeuglast</td><td>Masse, Schwerpunkt und Trägheit des Werkzeugs am Pendant mit den Datenblättern abgleichen (Kollisionserkennung). Nur Anlagensicherheit, nicht mehr umgesetzt.</td></tr>
+      <tr><td>Kollision an der Prüfvorrichtung</td><td>Der dunkle Hintergrund hinter der Prüfvorrichtung wurde entfernt, weil der Greifer mit ihm kollidierte (26.11.).</td></tr>
       <tr><td>Kollisionsvermeidung</td><td>Es gibt keine Bahnplanung um Hindernisse. Die Sicherheit kommt aus hohen Vorpositionen, PTP nur in der Höhe und dem Grenzen-Quader.</td></tr>
     </tbody>
   </table></div>
@@ -589,7 +624,7 @@ pytest m2_robot_control</code></pre></div>
     <ol>
       <li>Der Roboter wird über NeuraPy angesteuert. Unsere Klasse <code>NeuraRobot</code> kapselt Vorbereitung, Einheiten und Sicherheit hinter der Schnittstelle <code>RobotController</code>.</li>
       <li>Greifen: PTP zur Vorposition 80 mm über dem Ziel, dann LIN absenken (die letzten 20 mm langsam), greifen und auf demselben Weg zurück.</li>
-      <li>Die Greiferdrehung ist rz = Home + θ + 113°: 90° quer zur Längsachse plus 23° schräger Greifereinbau, im Labor festgestellt.</li>
+      <li>Die Greiferdrehung ist rz = Home + θ − 67°: 90° quer zur Längsachse, 23° schräger Greifereinbau und 180° gedreht, damit Fase und Etikett an der Prüfstation zur Kamera zeigen.</li>
       <li>Kamera und Roboter werden über die vier Marker kalibriert: Spitze antasten, Least-Squares-Fit, RMS-Kontrolle. Der Zeigetest prüft das Ergebnis.</li>
       <li>Sicherheit in Schichten: reduzierte Geschwindigkeit, Arbeitsraum-Quader, Werkzeugprüfung, Stopp mit Quittierung, STOPP in eigenem Thread und der Hardware-Not-Halt.</li>
     </ol>
@@ -603,11 +638,18 @@ pytest m2_robot_control</code></pre></div>
     <p>Jedes Ziel und jede Vorposition wird vor der Bewegung gegen einen Quader im Basis-KS geprüft. Liegt eine Pose
       außerhalb, gibt es einen <code>RobotError</code>, und es wird nichts bewegt. Außerdem liefert M1 bei fehlender Fase
       eine reduzierte Konfidenz, und alle Tests laufen mit 20 % Geschwindigkeit unter Aufsicht.</p></div></details>
-  <details class="qa"><summary>Woher kommt der Greifer-Offset von 113°?</summary><div class="a">
+  <details class="qa"><summary>Woher kommt der Greifer-Offset von −67°?</summary><div class="a">
     <p>90° ergeben sich aus der Geometrie: θ beschreibt die Längsachse, die Backen sollen aber quer dazu schließen. Die
       zusätzlichen 23° kommen vom Aufbau: Der Greifer ist auf dem Flansch verdreht montiert. Das haben wir im Labor
-      gemessen. Bei Home + 23° schließen die Backen genau entlang Basis-x. Ein Test stellt sicher, dass Greif- und
-      Ablage-rz zusammenpassen.</p></div></details>
+      gemessen. Bei Home + 23° schließen die Backen genau entlang Basis-x. Das ergab zunächst 113°. Damit kam das Teil
+      aber mit dem Etikett von der Seitenkamera weg an der Prüfstation an. Die Ablageposen um 180° zu drehen ging nicht,
+      weil Achse 6 dann bei 178° am Anschlag stünde und es keine IK-Lösung gab. Deshalb greifen wir das Teil 180°
+      gedreht: 113° − 180° = −67°. Ein Test stellt sicher, dass Greif- und Ablage-rz zusammenpassen.</p></div></details>
+  <details class="qa"><summary>Wie wird der Greifer angesteuert?</summary><div class="a">
+    <p>Über zwei Digitalausgänge der Robotersteuerung: <code>DO_0</code> öffnet, <code>DO_1</code> schließt, nie beide
+      gleichzeitig. <code>DO_3</code> muss als Enable dauerhaft an sein, ein Impuls auf <code>DO_2</code> setzt einen
+      Greiferfehler zurück. Die Belegung hat M4 herausgefunden. Eine Rückmeldung, ob ein Teil gegriffen wurde, gibt es
+      nicht.</p></div></details>
   <details class="qa"><summary>Wie habt ihr ohne Roboter entwickelt?</summary><div class="a">
     <p>Auf drei Stufen. MockRobot für Orchestrator und GUI. Ein eigener Simulator der Steuerung, der dasselbe JSON-Protokoll
       spricht, sodass der unveränderte Herstellerclient getestet wird. Und die offizielle Neura-VM mit echter Kinematik.
@@ -620,7 +662,8 @@ pytest m2_robot_control</code></pre></div>
   <details class="qa"><summary>Wie genau ist die Kalibrierung, und wie prüft ihr sie?</summary><div class="a">
     <p>Der Fit liefert den Restfehler je Marker und einen RMS, die Schwelle liegt bei 3 mm. Ein großer Einzelfehler deutet
       auf einen schlecht angetasteten Punkt oder vertauschte Marker-IDs hin. Praktisch geprüft wird mit dem Zeigetest: Der
-      Roboter zeigt auf das erkannte Teil, der Versatz wird gemessen und protokolliert. Die Serie geht in die Evaluation ein.</p></div></details>
+      Roboter zeigt auf das erkannte Teil, der Versatz wird gemessen und protokolliert. 21 Zeigetests zeigten einen
+      positionsabhängigen Versatz bis 8 mm (Parallaxe), nach der Positionskorrektur in M1 höchstens 2 mm.</p></div></details>
   <details class="qa"><summary>Warum eine 2D-Transformation und keine volle Hand-Auge-Kalibrierung?</summary><div class="a">
     <p>Das Bauteil liegt immer flach auf dem Tisch, die Pose hat also nur x, y und θ. Die Kamera liefert über die Homographie
       schon metrische Tischkoordinaten. Übrig bleibt eine Drehung und Verschiebung in der Ebene plus die Tischhöhe. Das ist
@@ -649,7 +692,7 @@ pytest m2_robot_control</code></pre></div>
   </dl>
 </section>
 
-<footer>Erstellt aus dem Code-Stand vom 20.10.2026 (<code>code/m2_robot_control/</code>, <code>config/system.yaml</code>, <code>ANLEITUNG_NEURA.md</code>) und der Thesis, Kapitel 6.</footer>
+<footer>Aktualisiert auf den Code-Stand vom 27.11.2026 (<code>code/m2_robot_control/</code>, <code>config/system.yaml</code>, <code>ANLEITUNG_NEURA.md</code>), die Labortage 12.11. und 26.11. und die Thesis, Kapitel 6 und 10.</footer>
 </main>
 </div>
 </body>
