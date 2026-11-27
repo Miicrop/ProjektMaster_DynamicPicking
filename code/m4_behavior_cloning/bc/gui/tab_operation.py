@@ -216,6 +216,44 @@ class OperationTab(ModeTab):
         self.glaettung.valueChanged.connect(self._update_command)
         form.addRow("Glättung (alpha)", self.glaettung)
 
+        # Vortests zu Real-Time Chunking (Auswertung 26.11.): Wechsel zwischen Chunks
+        self.decay = block_wheel(QDoubleSpinBox())
+        self.decay.setRange(-1.05, 2.0)
+        self.decay.setSingleStep(0.05)
+        self.decay.setDecimals(2)
+        self.decay.setSpecialValueText("aus dem Modell")
+        self.decay.setValue(-1.05)
+        self.decay.setToolTip(
+            "Gewicht beim Mitteln der Chunks (--decay): exp(−k·Alter). 0 = alle gleich "
+            "(Standard). > 0: neuere Vorhersagen zählen mehr (reaktiver). < 0: ältere zählen "
+            "mehr, die Policy bleibt eher bei ihrer Lösung — der Vortest zu Real-Time Chunking.")
+        self.decay.valueChanged.connect(self._update_command)
+        form.addRow("Abklingen (decay)", self.decay)
+
+        # Geplanter Endabstieg (bc/endabstieg.py, Anwender 2026-11-26)
+        self.endabstieg = block_wheel(QComboBox())
+        self.endabstieg.addItem("aus (Policy greift selbst)", "aus")
+        self.endabstieg.addItem("senkrecht von der Policy", "senkrecht")
+        self.endabstieg.addItem("auf PICK, wenn er passt", "pick")
+        self.endabstieg.setToolTip(
+            "Die Policy führt nur bis zum Abstand über der Objektoberkante (oder bis sie "
+            "schließen will), dann wird geplant abgesenkt, geschlossen und transportiert.\n"
+            "senkrecht: gerade runter, Lage und Drehung allein von der Policy.\n"
+            "PICK: auf den PICK (Steuerung oder M1, Feld PICK unter 4.) — nur wenn er "
+            "höchstens 'max. Abstand' / 'max. Drehung' neben der Policy liegt, sonst senkrecht. "
+            "Ist kein PICK zu bekommen, ebenfalls senkrecht. Nicht mit 'Lage bekannt'.")
+        self.endabstieg.currentIndexChanged.connect(self._on_endabstieg_changed)
+        form.addRow("Endabstieg", self.endabstieg)
+        self.endabstieg_abstand = self._spin_mm(12.0, (0.0, 60.0), " mm",
+                                                "Ab dieser Höhe über der Objektoberkante wird geplant.")
+        form.addRow("  ab über Oberkante", self.endabstieg_abstand)
+        self.endabstieg_max_xy = self._spin_mm(6.0, (0.5, 20.0), " mm",
+                                               "PICK höchstens so weit neben der Policy, sonst senkrecht.")
+        form.addRow("  max. Abstand PICK", self.endabstieg_max_xy)
+        self.endabstieg_max_grad = self._spin_mm(5.0, (0.5, 20.0), " °",
+                                                 "PICK höchstens so viel gegen die Policy gedreht.")
+        form.addRow("  max. Drehung PICK", self.endabstieg_max_grad)
+
         self.device = block_wheel(QComboBox())
         self.device.currentIndexChanged.connect(self._update_command)
         form.addRow("Gerät", self.device)
@@ -246,6 +284,10 @@ class OperationTab(ModeTab):
         layout.addWidget(self.realtime)
 
         self.no_ensemble = QCheckBox("Chunks nicht mitteln (Vergleichslauf)")
+        self.no_ensemble.setToolTip(
+            "Je Vorhersage 'Neu vorhersagen' Takte eines Chunks abarbeiten, ohne Mitteln. "
+            "Läuft mit Vorhersage im Takt (--sync-predict): ~110 ms > 67 ms Takt, also "
+            "Überläufe — für den Vortest zu Real-Time Chunking mit größerem 'Neu vorhersagen'.")
         self.no_ensemble.toggled.connect(self._update_command)
         layout.addWidget(self.no_ensemble)
 
@@ -356,6 +398,28 @@ class OperationTab(ModeTab):
             "Export: tools/export_variante.py --data <Demos> <Ordner> --dagger-gewicht 5.")
         self.dagger_dir.textChanged.connect(self._update_command)
         form.addRow("DAgger-Ordner", self.dagger_dir)
+        # Stoss waehrend der Policy-Fahrt (bc/stoerung.py, Anwender 2026-11-26)
+        self.stoss_anteil = block_wheel(QSpinBox())
+        self.stoss_anteil.setRange(0, 100)
+        self.stoss_anteil.setSingleStep(10)
+        self.stoss_anteil.setSuffix(" %")
+        self.stoss_anteil.setValue(0)
+        self.stoss_anteil.setToolTip(
+            "Anteil der Fahrten, in denen die Policy einmal gestoßen wird (0 = aus): "
+            "unterhalb der Höhe hält sie kurz an, der Arm wird weich seitlich versetzt und "
+            "gedreht (Höhe bleibt), danach fährt die Policy von dort weiter und muss sich "
+            "fangen. Den Rest korrigiert wie sonst der Experte. Nur mit Lage bekannt.")
+        self.stoss_anteil.valueChanged.connect(self._on_probe_changed)
+        form.addRow("Stoß-Anteil", self.stoss_anteil)
+        self.stoss_versatz = self._range_row(form, "Stoß-Versatz", (0.0, 20.0), (4.0, 8.0), " mm",
+                                             "Waagrechter Versatz, Richtung zufällig.")
+        self.stoss_drehung = self._range_row(form, "Stoß-Drehung", (0.0, 15.0), (0.0, 4.0), " °",
+                                             "Drehung um die Senkrechte, Vorzeichen zufällig.")
+        self.stoss_hoehe = self._range_row(
+            form, "Stoß-Höhe über PICK", (30.0, 300.0), (70.0, 110.0), " mm",
+            "TCP-Höhe über PICK, bei der gestoßen wird (zufällig im Bereich). Ab etwa "
+            "60 mm sinkt die Policy langsam -- darüber bleibt ihr die ganze langsame Phase "
+            "zum Korrigieren. Die Objektoberkante liegt etwa 7 mm über PICK.")
         layout.addLayout(form)
 
         row = QHBoxLayout()
@@ -396,11 +460,79 @@ class OperationTab(ModeTab):
         layout.addWidget(self.camera_ref_info)
         for widget in self._known_widgets():           # erst mit "Lage bekannt"
             widget.setEnabled(False)
+        # Endabstieg 'pick' braucht die PICK-Quelle auch ohne "Lage bekannt"
+        self.endabstieg_abstand.setEnabled(False)
+        self.endabstieg_max_xy.setEnabled(False)
+        self.endabstieg_max_grad.setEnabled(False)
         return box
+
+    def _spin_mm(self, value, limits, suffix, tip):
+        box = block_wheel(QDoubleSpinBox())
+        box.setRange(*limits)
+        box.setDecimals(1)
+        box.setSingleStep(1.0)
+        box.setSuffix(suffix)
+        box.setValue(value)
+        box.setToolTip(tip)
+        box.valueChanged.connect(self._update_command)
+        return box
+
+    def _endabstieg(self):
+        mode = self.endabstieg.currentData()
+        if mode == "aus":
+            return None
+        return {"modus": mode, "abstand_mm": self.endabstieg_abstand.value(),
+                "max_xy_mm": self.endabstieg_max_xy.value(),
+                "max_grad": self.endabstieg_max_grad.value()}
+
+    def _on_endabstieg_changed(self, *_):
+        mode = self.endabstieg.currentData()
+        self.endabstieg_abstand.setEnabled(mode != "aus")
+        for box in (self.endabstieg_max_xy, self.endabstieg_max_grad):
+            box.setEnabled(mode == "pick")
+        if hasattr(self, "pick_source"):
+            known = self.known.isChecked()
+            self.pick_source.setEnabled(known or mode == "pick")
+            self._on_pick_source_changed()
+        self._update_command()
+
+    def _range_row(self, form, label, limits, values, suffix, tip):
+        """Zwei Felder MIN / MAX in einer Zeile; Rueckgabe (min, max)."""
+        row = QHBoxLayout()
+        boxes = []
+        for value in values:
+            box = block_wheel(QDoubleSpinBox())
+            box.setRange(*limits)
+            box.setDecimals(1)
+            box.setSingleStep(1.0)
+            box.setSuffix(suffix)
+            box.setValue(value)
+            box.setToolTip(tip)
+            box.valueChanged.connect(self._update_command)
+            boxes.append(box)
+        row.addWidget(boxes[0])
+        row.addWidget(QLabel("bis"))
+        row.addWidget(boxes[1])
+        form.addRow(label, row)
+        return tuple(boxes)
+
+    def _stoss_widgets(self):
+        return (self.stoss_versatz + self.stoss_drehung + self.stoss_hoehe)
+
+    def _stoerung(self):
+        """Einstellungen des Stosses fuer operation.infer_argv (None = aus)."""
+        if not self.stoss_anteil.value():
+            return None
+        pair = lambda boxes: (min(b.value() for b in boxes), max(b.value() for b in boxes))
+        return {"anteil": self.stoss_anteil.value() / 100.0,
+                "versatz_mm": pair(self.stoss_versatz),
+                "drehung_grad": pair(self.stoss_drehung),
+                "hoehe_mm": pair(self.stoss_hoehe)}
 
     def _known_widgets(self):
         return (self.probe, self.probe_gap, self.expert, self.sequence, self.pick_source,
-                self.photo_point, self.dagger_dir, self.regrasp)
+                self.photo_point, self.dagger_dir, self.regrasp,
+                self.stoss_anteil) + self._stoss_widgets()
 
     def _on_probe_changed(self, *_):
         objekt = self.known.isChecked() and self.probe.currentData() == "objekt"
@@ -408,11 +540,15 @@ class OperationTab(ModeTab):
         self.expert.setEnabled(objekt)
         self.dagger_dir.setEnabled(objekt and self.expert.isChecked())
         self.regrasp.setEnabled(objekt and self.expert.isChecked())
+        known = self.known.isChecked()
+        self.stoss_anteil.setEnabled(known)
+        for box in self._stoss_widgets():
+            box.setEnabled(known and self.stoss_anteil.value() > 0)
         self._update_command()
 
     def _on_pick_source_changed(self, *_):
-        self.photo_point.setEnabled(self.known.isChecked()
-                                    and self.pick_source.currentData() == "m1")
+        pick_needed = self.known.isChecked() or self.endabstieg.currentData() == "pick"
+        self.photo_point.setEnabled(pick_needed and self.pick_source.currentData() == "m1")
         self._update_command()
 
     def _build_action_bar(self):
@@ -822,7 +958,10 @@ class OperationTab(ModeTab):
             camera_check=camera_check or self.camera_check.currentData(),
             pick_source=self.pick_source.currentData(),
             photo_point=self.photo_point.text().strip() or None,
-            dagger_dir=self.dagger_dir.text().strip() or None)
+            dagger_dir=self.dagger_dir.text().strip() or None,
+            stoerung=self._stoerung(),
+            endabstieg=self._endabstieg(),
+            decay=None if self.decay.value() <= self.decay.minimum() else self.decay.value())
 
     def _update_command(self):
         status = self.session.status()
@@ -1138,6 +1277,7 @@ class OperationTab(ModeTab):
             widget.setEnabled(checked)
         self._on_pick_source_changed()
         self._on_probe_changed()
+        self._on_endabstieg_changed()
 
     def _sequence_path(self):
         text = self.sequence.text().strip() or (self._described or {}).get("sequence_file")

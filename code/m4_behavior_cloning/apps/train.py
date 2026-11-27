@@ -97,6 +97,12 @@ def parse_args(argv=None):
                     help="Ziehgewicht je Episode (tools/drehung_ausgleich.py): Episoden werden "
                          "mit Zuruecklegen proportional zum Gewicht gezogen, 0 = nie. Datensatz, "
                          "Split und Normierung bleiben unveraendert (Vergleich zu var_C2)")
+    tr.add_argument("--val-wie", dest="val_wie", default=None, metavar="CHECKPOINT",
+                    help="Train/Val-Aufteilung eines Startmodells uebernehmen (Ordner mit "
+                         "train_config.json oder dessen policy/): alte Episoden bleiben auf ihrer "
+                         "Seite (Zuordnung ueber Aufzeichnungsordner + Episodenordner), nur neue "
+                         "Episoden werden mit --val-fraction/--seed aufgeteilt. Fuer DAgger mit "
+                         "--init-from, sonst ist die Validierung geschoent")
     tr.add_argument("--licht-augment", action="store_true",
                     help="Helligkeit/Kontrast/Saettigung/Farbton der Trainingsbilder zufaellig "
                          "variieren (LICHT_AUGMENT); Geometrie und Validierung unveraendert")
@@ -213,6 +219,44 @@ def split_episodes(n_episodes, fraction, seed, groups=None):
     return train, val
 
 
+def episode_key(ep):
+    """Kennung einer exportierten Episode unabhaengig von Rechner und Export-Reihenfolge."""
+    return "%s/%s" % (Path(str(ep.get("source", ""))).name, ep.get("source_dir", ""))
+
+
+def split_like(val_wie, export_info, fraction, seed, groups=None):
+    """Aufteilung wie beim Startmodell ``val_wie``; nur neue Episoden neu aufteilen."""
+    base = Path(val_wie)
+    cfg_path = base / "train_config.json"
+    if not cfg_path.is_file() and (base.parent / "train_config.json").is_file():
+        cfg_path = base.parent / "train_config.json"
+    if not cfg_path.is_file():
+        raise SystemExit("--val-wie: keine train_config.json unter %s" % base)
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    if cfg.get("val_keys") is not None:
+        old_val, old_train = set(cfg["val_keys"]), set(cfg["train_keys"])
+    else:  # aeltere Modelle: Kennungen aus dem damaligen Datensatz ableiten
+        old_root = Path(cfg["dataset"])
+        if not (old_root / "meta" / lerobot_io.EXPORT_INFO).is_file():
+            raise SystemExit("--val-wie: %s hat keine val_keys und der Datensatz %s fehlt"
+                             % (cfg_path, old_root))
+        old_eps = lerobot_io.read_export_info(old_root)["episodes"]
+        old_val = {episode_key(old_eps[k]) for k in cfg["val_episodes"]}
+        old_train = {episode_key(old_eps[k]) for k in cfg["train_episodes"]}
+    keys = [episode_key(ep) for ep in export_info["episodes"]]
+    new = [k for k, key in enumerate(keys) if key not in old_val and key not in old_train]
+    sub_groups = [groups[k] for k in new] if groups else None
+    t, v = split_episodes(len(new), fraction, seed, groups=sub_groups) if new else ([], [])
+    val = sorted([k for k, key in enumerate(keys) if key in old_val] + [new[i] for i in v])
+    train = sorted([k for k, key in enumerate(keys) if key in old_train] + [new[i] for i in t])
+    n_old_val = sum(key in old_val for key in keys)
+    print("--val-wie %s: alte Val %d, alte Train %d, neu %d Train / %d Val "
+          "(alte Val fehlen im Datensatz: %d)"
+          % (cfg_path.parent, n_old_val, len(keys) - len(new) - n_old_val, len(t), len(v),
+             len(old_val) - n_old_val))
+    return train, val
+
+
 def single_value(consistency, key):
     values = consistency.get(key) or {}
     if len(values) == 1:
@@ -303,8 +347,12 @@ def main(argv=None):
                      for ep in export_info["episodes"]]
     if len(repeat_groups) != meta.total_episodes:
         repeat_groups = None
-    train_eps, val_eps = split_episodes(meta.total_episodes, args.val_fraction, args.seed,
+    if args.val_wie:
+        train_eps, val_eps = split_like(args.val_wie, export_info, args.val_fraction, args.seed,
                                         groups=repeat_groups)
+    else:
+        train_eps, val_eps = split_episodes(meta.total_episodes, args.val_fraction, args.seed,
+                                            groups=repeat_groups)
     deltas = diffusion.delta_timestamps(policy_cfg, cameras)
     train_ds = LeRobotDataset(repo_id, root=dataset_root, episodes=train_eps, delta_timestamps=deltas,
                               image_transforms=licht_transforms() if args.licht_augment else None)
@@ -404,6 +452,8 @@ def main(argv=None):
         "dataset": str(dataset_root),
         "train_episodes": train_eps,
         "val_episodes": val_eps,
+        "train_keys": [episode_key(export_info["episodes"][k]) for k in train_eps],
+        "val_keys": [episode_key(export_info["episodes"][k]) for k in val_eps],
         "cameras": cameras,
         "parameters": sum(p.numel() for p in policy.parameters()),
         "episoden_gewichte": gewichte_info,

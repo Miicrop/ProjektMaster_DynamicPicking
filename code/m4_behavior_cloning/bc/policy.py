@@ -207,6 +207,14 @@ class ChunkExecutor(object):
         self.history = []
         self._steps = 0
 
+    @property
+    def step(self):
+        return self._steps
+
+    def discard_before(self, step):
+        """Aktuellen Chunk verwerfen -- der naechste Takt sagt neu voraus."""
+        self._chunk = None
+
     def next_action(self, observation):
         """Liefert die naechste Einzel-Action (ACTION_DIM,)."""
         self.policy.observe(observation)
@@ -367,6 +375,25 @@ class ChunkEnsembler(object):
         self.last_spread = float(np.max(np.ptp(actions[:, :6], axis=0))) if len(actions) > 1 else 0.0
         self._step += 1
         return action
+
+    @property
+    def step(self):
+        """Takt der naechsten Action (zaehlt je next_action)."""
+        return self._step
+
+    def discard_before(self, step):
+        """Chunks verwerfen, deren Beobachtung vor ``step`` liegt (Stoss, bc/stoerung.py):
+        nach dem Stoss sollen nur Vorhersagen aus der verschobenen Lage zaehlen."""
+        if self.asynchronous:
+            self._collect()
+        keep = [(s, c) for s, c in self._chunks if s >= step]
+        if not any(s <= self._step < s + len(c) for s, c in keep):
+            # sonst wartete der naechste Takt mit stehendem Servostrom auf eine
+            # Vorhersage: die juengste aeltere, die ihn deckt, bleibt
+            older = [(s, c) for s, c in self._chunks if s < step and s <= self._step < s + len(c)]
+            if older:
+                keep.append(max(older, key=lambda x: x[0]))
+        self._chunks = keep
 
     def lookahead(self, k):
         """Gemittelte Action ``k`` Takte nach der zuletzt gelieferten (k = 0:
