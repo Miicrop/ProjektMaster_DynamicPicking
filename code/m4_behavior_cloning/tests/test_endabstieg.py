@@ -143,3 +143,65 @@ def test_infer_ganzer_ablauf_policy_ende_abstieg_griff_transport(tmp_path):
     assert info["quelle"] == "policy" and "passt nicht" in info["grund"], info
     assert info["ergebnis"] == "gegriffen", (info, text[-2000:])
     assert ep["stop_reason"] == "endstellung", (ep["stop_reason"], text[-2000:])
+
+
+def test_ablauf_mit_ablage_an_der_station(tmp_path):
+    """Endabstieg, Griff, 5 cm LIN hoch, PTP PRE_PLACE, Ablage an der Station, zurueck."""
+    import math as _m
+
+    import infer
+    from test_auto_layout import SEQ, _points
+
+    from bc import ablage
+    from bc.adapters.sim_robot import SimRobot
+
+    points, probe = _points(size=0.12)
+    seq = tmp_path / "ablauf.json"
+    seq.write_text(json.dumps(SEQ), encoding="utf-8")
+    pre = np.asarray(probe.fk(points["PRE_PLACE"]), dtype=float)
+    rpy = geometry.pose_quat_to_rpy(pre)
+    station = [1e3 * pre[0], 1e3 * pre[1], 1e3 * pre[2] - 90.0] + [_m.degrees(v) for v in rpy[3:]]
+    yml = tmp_path / "system.yaml"
+    yml.write_text("robot:\n  place_height_mm: 1\n  grasp_height_mm: 5\n  approach_height_mm: 80\n"
+                   "  poses:\n    inspection: [%s]\n" % ", ".join("%.4f" % v for v in station),
+                   encoding="utf-8")
+    saved = sys.argv, infer.open_robot, ea.stop_height, ea.MAX_DESCENT_M, ablage.SYSTEM_YAML
+    ea.stop_height = lambda z, a: 10.0
+    ea.MAX_DESCENT_M = 1.0
+    ablage.SYSTEM_YAML = yml
+    sys.argv = ["infer.py", "--sim", "--hold", "--steps", "10", "--episodes", "1", "--ablauf", str(seq),
+                "--endabstieg", "senkrecht", "--ablage", "inspection", "--out", str(tmp_path / "out")]
+    opened = []
+
+    def open_robot(kind, clock=None, **kw):
+        opened.append(SimRobot(clock=clock, points=points))
+        return opened[-1]
+
+    infer.open_robot = open_robot
+    log, error = io.StringIO(), None
+    try:
+        with contextlib.redirect_stdout(log):
+            infer.main()
+    except SystemExit as exc:
+        error = exc
+    finally:
+        sys.argv, infer.open_robot, ea.stop_height, ea.MAX_DESCENT_M, ablage.SYSTEM_YAML = saved
+    text = log.getvalue()
+    assert error is None, (repr(error), text[-2500:])
+    summary = json.loads((tmp_path / "out" / "summary.json").read_text(encoding="utf-8"))
+    ep = summary["episodes"][0]
+    assert ep["endabstieg"]["ergebnis"] == "gegriffen", text[-2500:]
+    assert ep["ablage"]["ergebnis"] == "endstellung", (ep.get("ablage"), text[-2500:])
+    assert ep["stop_reason"] == "endstellung"
+    z = np.load(tmp_path / "out" / "rollout_000.npz")
+    tcp, g = z["tcp"], z["gripper_cmd"]
+    # tiefster Punkt nach dem Griff = Oeffnungshoehe an der Station (+3 mm Greifhoehe M4-M2 +1)
+    after = np.flatnonzero(g > 0.5)
+    low = 1e3 * tcp[after[-1] + 1:, 2].min()
+    assert abs(low - (station[2] + 1 + 3)) < 1.0, low
+    assert g[-1] == 0.0                                  # offen zurueck
+    # Anheben senkrecht: die ersten 5 cm nach dem Griff ohne Seitenweg
+    grip = int(after[0])
+    lift = tcp[grip: grip + 40, :3]
+    up = lift[lift[:, 2] <= lift[0, 2] + 0.0495]
+    assert np.max(np.linalg.norm(up[:, :2] - lift[0, :2], axis=1)) < 1e-3

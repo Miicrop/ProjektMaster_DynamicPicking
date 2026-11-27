@@ -285,7 +285,7 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
                sequence=None, camera_check="an", pick_source="steuerung",
                photo_point=None, dagger_dir=None, probe_gap_mm=None, expert=True,
                inference_steps=None, glaettung=None, regrasp=False, stoerung=None,
-               endabstieg=None, decay=None, sync_predict=False):
+               endabstieg=None, decay=None, sync_predict=False, ablage=None):
     """Kommandozeile fuer apps/infer.py (ohne das Python-Programm).
 
     ``known_pose``: Policy-Test mit bekannter Lage (``--lage-bekannt``,
@@ -374,6 +374,9 @@ def infer_argv(checkpoint, robot_kind="sim", episodes=1, camera_specs=None,
             argv += ["--pick-quelle", str(pick_source)]
             if photo_point:
                 argv += ["--foto-punkt", str(photo_point)]
+    if ablage and ablage != "aus" and not known_pose and not hold:
+        # nach dem Transport an einer Station von M2 ablegen (bc/ablage.py)
+        argv += ["--ablage", str(ablage)]
     if camera_check and camera_check != "an":
         argv += ["--kamerapruefung", str(camera_check)]
     if out:

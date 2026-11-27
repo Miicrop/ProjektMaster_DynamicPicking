@@ -251,3 +251,61 @@ Auf den Höhen, auf denen DAgger arbeitet, ist G2b schon gut.
 Die Policy führt bis etwa 10–15 mm über die Oberkante, dann wird senkrecht auf die Greifhöhe abgesenkt
 (Tischhöhe + Greifhöhe sind bekannt, PICK wird nicht gebraucht) und geschlossen, wie beim geplanten Transport.
 Nach den DAgger-Stopps von heute (xy ~2 mm, Spiel meist > 0,5 mm) gelänge das in ~36 von 40 Fahrten.
+
+## 12. In welcher Höhe ist G2b am genauesten? (Endabstieg, 27.11.)
+
+Skript `skripte/hoehen_g2b.py`, Werte je Fahrt und Höhe: `hoehen_g2b.csv`. Grundlage sind alle G2b-Fahrten mit bekanntem PICK
+(180 Fahrten: 77 aus Vergleichen, 14 Policy-Tests, 89 DAgger). Echte Griffe ohne PICK fehlen.
+Je Höhe über der Objektoberkante (Oberkante = PICK + 7 mm) wird die Lage des TCP genommen und geprüft,
+ob der Griff gelänge, wenn man von dort **senkrecht** abstiege (geometrische Griffprüfung, Spiel ≥ 0,5 mm = Erfolg,
+0–0,5 mm = Warnung). „mit pick“ heißt: Endabstieg auf PICK, wenn er höchstens 6 mm und 5° neben der Policy liegt, sonst senkrecht.
+
+Die Vergleichsfahrten sind auf 1 mm Probe-Abstand eingestellt. Der TCP stoppt aber schon **~4–5 mm über der Oberkante**,
+weil der Stopp mit Vorausschau ausgelöst wird. Darunter gibt es nur die Vorhersage der Policy, daraus entsteht die offizielle Bewertung.
+Verglichen wird in jeder Zeile **dieselbe Menge an Fahrten**: alle, die bis 5 mm über die Oberkante kamen.
+
+**Vergleiche 24.–26.11.** (53 Fahrten). quer = senkrecht zu den Backen (entscheidend, Spiel je Seite ~2,5 mm),
+längs = in Backenrichtung (unkritischer). Beides als Betrag.
+
+| Höhe über Oberkante | quer Median | quer p90 | längs Median | längs p90 | Drehung | Erfolg | Warnung | Fehlgriff | Erfolg+Warnung | mit pick |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 5 mm | 1,3 mm | 2,9 mm | 2,1 mm | 4,3 mm | 0,52° | 66 % | 15 % | 19 % | 81 % | 92 % |
+| 8 mm | 1,1 mm | 2,9 mm | 2,2 mm | 4,4 mm | 0,44° | 68 % | 17 % | 15 % | 85 % | 94 % |
+| 10 mm | 1,1 mm | 2,6 mm | 2,3 mm | 4,0 mm | 0,49° | 70 % | 17 % | 13 % | 87 % | 96 % |
+| 12 mm | 1,1 mm | 2,8 mm | 2,1 mm | 4,2 mm | 0,46° | 74 % | 13 % | 13 % | 87 % | 96 % |
+| 13 mm | 1,2 mm | 2,9 mm | 2,0 mm | 4,0 mm | 0,40° | 72 % | 13 % | 15 % | 85 % | 94 % |
+| 14 mm | 1,2 mm | 2,7 mm | 2,0 mm | 4,0 mm | 0,33° | 74 % | 9 % | 17 % | 83 % | 96 % |
+| 15 mm | 1,1 mm | 2,4 mm | 1,9 mm | 4,0 mm | 0,36° | 75 % | 13 % | 11 % | 89 % | 96 % |
+| 18 mm | 1,0 mm | 2,9 mm | 2,3 mm | 4,0 mm | 0,39° | 81 % | 6 % | 13 % | 87 % | 96 % |
+| 20 mm | 1,0 mm | 2,3 mm | 2,2 mm | 4,1 mm | 0,41° | 74 % | 17 % | 9 % | 91 % | 98 % |
+| 10–15 mm zusammen | 1,1 mm | 2,7 mm | 2,0 mm | 4,1 mm | 0,43° | 73 % | 13 % | 14 % | 86 % | 96 % |
+| 12–14 mm zusammen | 1,1 mm | 2,8 mm | 2,1 mm | 4,1 mm | 0,41° | 73 % | 12 % | 15 % | 85 % | 96 % |
+| **am Stopp (~4–5 mm)** | 1,3 mm | 2,8 mm | 2,3 mm | 4,4 mm | 0,52° | 68 % | 11 % | 21 % | 79 % | – |
+| **offiziell** (Policy bis zum Griff, 37 bewertet) | – | – | – | – | – | 49 % | 0 % | 51 % | 49 % | – |
+
+**Alle Fahrten** (94, Vergleiche + Policy-Tests + DAgger 25.11.):
+
+| Höhe | quer Median | quer p90 | längs Median | längs p90 | Drehung | Erfolg+Warnung | mit pick |
+|---|---|---|---|---|---|---|---|
+| 5 mm | 1,1 mm | 2,7 mm | 1,3 mm | 4,1 mm | 0,63° | 86 % | 94 % |
+| 10 mm | 1,1 mm | 2,5 mm | 1,5 mm | 3,8 mm | 0,56° | 88 % | 96 % |
+| 12 mm | 1,1 mm | 2,8 mm | 1,3 mm | 3,9 mm | 0,50° | 88 % | 96 % |
+| 15 mm | 1,1 mm | 2,4 mm | 1,4 mm | 3,6 mm | 0,38° | 89 % | 96 % |
+| 20 mm | 1,1 mm | 2,4 mm | 1,2 mm | 3,8 mm | 0,37° | 90 % | 97 % |
+| 10–15 mm zusammen | 1,1 mm | 2,7 mm | 1,4 mm | 3,8 mm | 0,46° | 88 % | 95 % |
+| am Stopp (~4–5 mm) | 1,0 mm | 2,8 mm | 1,5 mm | 4,4 mm | 0,70° | 84 % | – |
+| offiziell (70 bewertet) | – | – | – | – | – | 54 % | – |
+
+DAgger 26.11. (Stopp ~15–18 mm, nur 18–20 mm auswertbar, 33 Fahrten): Senkrecht von 18–20 mm ergäbe 94 % mit Stoß (21) und
+81 % ohne Stoß (12). Mit pick wären es 100 %. Die offizielle Bewertung ist dort fast immer „Warnung“ wegen der Höhe und
+lässt sich hier nicht vergleichen.
+
+**Ergebnis:**
+- Senkrecht abzusteigen statt die Policy bis unten fahren zu lassen, hebt Erfolg+Warnung von **~50 % auf ~85–90 %**, mit pick auf **~95 %**.
+- Zwischen 9 und 20 mm über der Oberkante ändert sich kaum etwas (85–91 %, eine Fahrt = 2 %). Es gibt **keine scharf beste Höhe**.
+  Unter ~8 mm wird es schlechter (5 mm: 81 %, am Stopp: 79 %), vor allem die Drehung wandert dann weg (0,52° statt ~0,4°).
+- Für den Endabstieg passen **10–15 mm** (Standard 12 mm). Wer mehr Abstand zur unruhigen Zone will, nimmt 15 mm.
+- Quer bleibt von 20 mm bis 5 mm praktisch gleich (Median ~1,1 mm, p90 ~2,5–2,9 mm). Was sich nach unten verschlechtert, ist
+  vor allem die **Drehung** (0,36–0,41° oben, 0,52–0,70° am Stopp), und am Stopp auch längs (p90 4,4 mm).
+- Die verbleibenden ~10–15 % Fehlgriffe sind die Fahrten mit großem quer (p90 ~2,7 mm, bei ~2,5 mm Spiel je Seite). Sie liegen
+  schon hoch oben daneben. Senkrecht behebt das nicht, nur pick.

@@ -254,6 +254,19 @@ class OperationTab(ModeTab):
                                                  "PICK höchstens so viel gegen die Policy gedreht.")
         form.addRow("  max. Drehung PICK", self.endabstieg_max_grad)
 
+        # Ablegen nach dem geplanten Transport (bc/ablage.py, Anwender 2026-11-27)
+        self.ablage = block_wheel(QComboBox())
+        self.ablage.addItem("Teststation (M3)", "inspection")
+        self.ablage.addItem("nicht ablegen (Übergabe bei PRE_PLACE)", "aus")
+        self.ablage.addItem("Ablage gut (bin_good)", "bin_good")
+        self.ablage.addItem("Ablage schlecht (bin_bad)", "bin_bad")
+        self.ablage.setToolTip(
+            "Nach dem Griff: 5 cm LIN hoch, PTP zu PRE_PLACE, dann an der Station von M2 "
+            "ablegen (Pose aus code/config/system.yaml, robot.poses, wie M2): PTP darüber, "
+            "LIN runter, öffnen, LIN hoch, zurück zu PRE_PLACE. Nicht mit 'Lage bekannt'.")
+        self.ablage.currentIndexChanged.connect(self._update_command)
+        form.addRow("Ablegen", self.ablage)
+
         self.device = block_wheel(QComboBox())
         self.device.currentIndexChanged.connect(self._update_command)
         form.addRow("Gerät", self.device)
@@ -961,6 +974,7 @@ class OperationTab(ModeTab):
             dagger_dir=self.dagger_dir.text().strip() or None,
             stoerung=self._stoerung(),
             endabstieg=self._endabstieg(),
+            ablage=self.ablage.currentData(),
             decay=None if self.decay.value() <= self.decay.minimum() else self.decay.value())
 
     def _update_command(self):

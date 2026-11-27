@@ -476,7 +476,8 @@ TRANSPORT_LIFT_BLEND_M = 0.04
 
 
 def planned_transport(robot, workspace, station_joints, clock, servo_rate_hz=config.SERVO_RATE_HZ,
-                      planner=None, lift_m=TRANSPORT_LIFT_M, threaded_watchdog=True):
+                      planner=None, lift_m=TRANSPORT_LIFT_M, threaded_watchdog=True,
+                      blend_m=TRANSPORT_LIFT_BLEND_M):
     """Nach dem Griff der Policy: Dwell, senkrecht anheben, PTP zur Station.
 
     Variante C der Versuchsreihe 2026-11-13: die Policy lernt nur Anflug und
@@ -507,7 +508,7 @@ def planned_transport(robot, workspace, station_joints, clock, servo_rate_hz=con
         waypoints = [
             Waypoint(p0, gripper_closed=True, name="GRIFF", joints=q0),
             Waypoint(up, gripper_closed=True, name="ANHEBEN", motion=MOTION_LIN, joints=q_up,
-                     blend_m=TRANSPORT_LIFT_BLEND_M),
+                     blend_m=blend_m),
             Waypoint(np.asarray(robot.fk(station_joints), dtype=float), gripper_closed=True,
                      name="STATION", motion=MOTION_PTP, joints=station_joints),
         ]
@@ -654,6 +655,121 @@ def planned_descent(robot, workspace, target_pose, clock, servo_rate_hz=config.S
     return {**{k: np.asarray(v, dtype=float) for k, v in log.items()}, **out}
 
 
+def planned_place(robot, workspace, station, clock, servo_rate_hz=config.SERVO_RATE_HZ,
+                  planner=None, back_joints=None, threaded_watchdog=True):
+    """Ablegen an einer Station von M2 (bc/ablage.py), Greifer zu: PTP ueber die
+    Station, LIN runter (Anflugtempo), oeffnen, LIN hoch, PTP zurueck nach
+    ``back_joints`` (PRE_PLACE). Von zwei Drehungen (M2-Pose und um 180 Grad
+    gedreht, gleiche Backenachse) gilt die mit weniger Weg an Gelenk 6.
+    Rueckgabe wie :func:`planned_transport`, stop_reason "endstellung" bei Erfolg."""
+    from bc.kinematics import IKFailure, Kinematics
+    from bc.trajectory import MOTION_LIN, MOTION_PTP, Waypoint, build_ideal_trajectory
+
+    planner = planner or {}
+    log = {k: [] for k in ("t", "joints", "tcp", "action", "gripper_cmd")}
+    out = {"stop_reason": None, "pacer_overruns": 0, "steps_planned": 0, "ablage": None}
+    kin = Kinematics(robot)
+    q0 = np.asarray(robot.read_state().joints, dtype=float)
+    approach = planner.get("approach_speed_ms") or config.APPROACH_SPEED_MS
+
+    def plan(points, q_start, closed):
+        ideal = build_ideal_trajectory(
+            points, fk=robot.fk, transit_speed=planner.get("transit_speed_ms") or config.TRANSIT_SPEED_MS,
+            approach_speed=approach,
+            ptp_joint_speed=planner.get("ptp_joint_speed_rads") or config.PTP_JOINT_SPEED_RADS)
+        targets = kin.solve_path(ideal.poses_quat, q_start, fixed_joints=ideal.joints)
+        for q in targets:
+            check_target(workspace, robot, q)
+        return targets
+
+    candidates, errors = [], []
+    for label, pose in (("wie M2", station["pose"]), ("um 180 Grad gedreht", station["pose_alt"])):
+        try:
+            above = np.asarray(pose, dtype=float).copy()
+            above[2] += float(station["above_m"])
+            q_above = kin.ik(above, q0)
+            q_place = kin.ik(pose, q_above)
+            p0 = np.asarray(robot.fk(q0), dtype=float)
+            down = plan([Waypoint(p0, gripper_closed=True, name="START", joints=q0),
+                         Waypoint(above, gripper_closed=True, name="UEBER_STATION", motion=MOTION_PTP,
+                                  joints=q_above),
+                         Waypoint(pose, gripper_closed=True, name="ABLAGE", motion=MOTION_LIN,
+                                  joints=q_place)], q0, True)
+            ups = [Waypoint(pose, gripper_closed=False, name="ABLAGE", joints=q_place),
+                   Waypoint(above, gripper_closed=False, name="UEBER_STATION", motion=MOTION_LIN,
+                            joints=q_above)]
+            if back_joints is not None:
+                bj = np.asarray(back_joints, dtype=float)
+                ups.append(Waypoint(np.asarray(robot.fk(bj), dtype=float), gripper_closed=False,
+                                    name="ZURUECK", motion=MOTION_PTP, joints=bj))
+            up = plan(ups, q_place, False)
+            candidates.append((abs(float(q_place[5] - q0[5])), label, down, up))
+        except (IKFailure, TargetRejected, ValueError) as exc:
+            errors.append("%s: %s" % (label, exc))
+    if not candidates:
+        out["stop_reason"] = "ablage nicht planbar: %s" % "; ".join(errors)
+        return {**{k: np.asarray(v, dtype=float) for k, v in log.items()}, **out}
+    _, label, down, up = min(candidates, key=lambda c: c[0])
+    out["ablage"] = {"station": station["name"], "drehung": label,
+                     "oeffnen_z_mm": station["oeffnen_z_mm"], "verworfen": errors}
+    out["steps_planned"] = len(down) + len(up)
+
+    watchdog = Watchdog(robot, [geofence_check(robot, workspace)], clock)
+    if threaded_watchdog:
+        watchdog.start()
+    interp = ServoInterpolator(servo_rate_hz=servo_rate_hz).reset(q0)
+    stall = StallGuard()
+    robot.activate_servo("position")
+    pacer = Pacer(clock, servo_rate_hz).start()
+
+    def stream(targets, gripper):
+        for q in targets:
+            if not threaded_watchdog and watchdog.run_once() is not None:
+                return "geofence: %s" % watchdog.tripped
+            for qq, v, a in interp.window(q):
+                if robot.stop_requested:
+                    break
+                pacer.tick()
+                robot.servo_j(qq, v, a)
+            if robot.stop_requested:
+                return "stopp: %s" % (watchdog.tripped or "angefordert")
+            state = robot.read_state()
+            log["t"].append(clock.now())
+            log["joints"].append(state.joints)
+            log["tcp"].append(np.asarray(state.tcp_quat, dtype=float))
+            log["action"].append(np.append(q, gripper))
+            log["gripper_cmd"].append(gripper)
+            stall.check(state.joints, q)
+        return None
+
+    def dwell():
+        for _ in range(config.GRIPPER_DWELL_STEPS * interp.substeps):
+            q, v, a = interp.hold()
+            pacer.tick()
+            robot.servo_j(q, v, a)
+
+    try:
+        reason = stream(down, config.GRIPPER_CLOSED)
+        if reason is None:
+            dwell()
+            robot.gripper_command(False)
+            dwell()
+            reason = stream(up, config.GRIPPER_OPEN)
+        out["stop_reason"] = reason or "endstellung"
+    except RobotError as exc:
+        out["stop_reason"] = "abgelehnt bei der ablage: %s" % exc
+        robot.emergency_stop()
+    except ArmStalled as exc:
+        out["stop_reason"] = "bei der ablage: %s" % exc
+        report_stall(robot, "Ablage", exc)
+        robot.emergency_stop()
+    finally:
+        watchdog.stop()
+        robot.deactivate_servo()
+    out["pacer_overruns"] = pacer.overruns
+    return {**{k: np.asarray(v, dtype=float) for k, v in log.items() if k != "ablage"}, **out}
+
+
 def merge_transport(log, transport, robot):
     """Haengt die geplante Fahrt an das Log der Policy-Fahrt an."""
     n = len(transport["t"])
@@ -678,7 +794,7 @@ def merge_transport(log, transport, robot):
 
 
 def add_recorded_workspace(workspace, info, robot, robot_kind, progress=print,
-                           table_clearance=None):
+                           table_clearance=None, envelope=True):
     """Tisch, Sperrzonen und Huelle der Demonstrationen ins Kollisionsmodell.
 
     ``table_clearance``: Mindestabstand der Werkzeugspitze zur Tischebene (m),
@@ -729,7 +845,7 @@ def add_recorded_workspace(workspace, info, robot, robot_kind, progress=print,
         progress("Kollisionsmodell: Tisch %s (%s), Sperrzonen %s, Werkzeugspitze >= %.1f mm"
                  % (source, plane.describe(), ", ".join(z.name for z in keepouts) or "keine",
                     1e3 * clearance_m))
-    env = info.get("tcp_envelope")
+    env = info.get("tcp_envelope") if envelope else None
     if env:
         margin = config.INFER_ENVELOPE_MARGIN_M
         workspace.add_box(Envelope(np.asarray(env["lo"]) - margin, np.asarray(env["hi"]) + margin))
@@ -1355,12 +1471,13 @@ def write_dagger_episode(writer, rec, known, ideal_q, expert, log, lage, meta, e
 
 
 def build_workspace(table_z, info, robot, robot_info, args, known=None, table_clearance=None,
-                    progress=print):
+                    progress=print, envelope=True, ohne_hindernisse=()):
     """Kollisionsmodell der Fahrt: Tischquader, Tisch/Sperrzonen/Huelle aus der
     Aufnahme (live), ohne Tischdaten der Tisch der bekannten Lage, Hindernisse."""
     workspace = default_workspace(table_height_m=table_z)
     table_source = add_recorded_workspace(workspace, info, robot, robot_info["robot"],
-                                          progress=progress, table_clearance=table_clearance)
+                                          progress=progress, table_clearance=table_clearance,
+                                          envelope=envelope)
     if known is not None and table_source is None:
         # Policy ohne Tischdaten: der Tisch der bekannten Lage schuetzt trotzdem
         from bc.table import TableSurface
@@ -1370,6 +1487,8 @@ def build_workspace(table_z, info, robot, robot_info, args, known=None, table_cl
                  % (known.table.describe(), 1e3 * clearance_m))
     if obstacles.applies(robot_info["robot"], robot_info.get("in_simulation"), args.hindernisse):
         zelle = obstacles.load()
+        if zelle is not None and ohne_hindernisse:
+            zelle.surfaces = [x for x in zelle.surfaces if x.name not in set(ohne_hindernisse)]
         if zelle is None:
             progress("Hinweis: %s fehlt -- nur Kugelmodell und Tisch." % obstacles.OBSTACLES_FILE)
         else:
@@ -1538,6 +1657,11 @@ def parse_args():
                              "%(default)s). Fehlt er, gilt die Endstellung des Modells -- bei "
                              "Aufnahmen mit pick_bis_griff ist das UEBER_TISCH (15 cm ueber ID4). "
                              "'modell' = immer die Endstellung des Modells")
+    parser.add_argument("--ablage", choices=("aus", "inspection", "bin_good", "bin_bad"), default="aus",
+                        help="nach dem geplanten Transport an einer Station von M2 ablegen "
+                             "(code/config/system.yaml robot.poses): PTP darueber, LIN runter, "
+                             "oeffnen, LIN hoch, zurueck nach --transport-ziel. inspection = "
+                             "Teststation (M3). Default %(default)s: Uebergabe an M2 bei PRE_PLACE")
     ea = parser.add_argument_group("Endabstieg (bc/endabstieg.py)")
     ea.add_argument("--endabstieg", choices=("aus", "senkrecht", "pick"), default="aus",
                     help="Policy nur bis --endabstieg-abstand ueber der Objektoberkante, dann geplant: "
@@ -1679,6 +1803,8 @@ def parse_args():
             parser.error("--stoerung: hoechstens 20 mm Versatz und 15 Grad Drehung")
         if args.stoerung.hoehe_mm[0] < 30:
             parser.error("--stoerung-hoehe: nicht unter 30 mm ueber PICK (Weg zum Korrigieren)")
+    if args.ablage != "aus" and (args.lage_bekannt or args.transport_geplant is False):
+        parser.error("--ablage braucht den geplanten Transport (ohne --lage-bekannt)")
     if args.endabstieg != "aus":
         if args.lage_bekannt:
             parser.error("--endabstieg nicht mit --lage-bekannt (der Policy-Test endet selbst)")
@@ -1976,6 +2102,25 @@ def main():
 
         print("Endabstieg %s: Policy bis %.0f mm ueber der Oberkante, Greifhoehe aus %s"
               % (args.endabstieg, args.endabstieg_abstand, z_source))
+    # Geplante Fahrten nach dem Griff: Tisch und Hindernisse ja, Huelle der
+    # Demonstrationen nein -- die Aufnahmen (pick_bis_griff) enden ueber dem Tisch und
+    # fahren nie zu PRE_PLACE (Anlage 27.11.: "transport nicht planbar ... Huelle").
+    transport_ws, place_ws, station = workspace, None, None
+    if args.transport_geplant and args.episodes:
+        transport_ws = build_workspace(table_z, info, robot, robot_info, args, known, None,
+                                       progress=lambda *_: None, envelope=False)
+    if args.ablage != "aus" and args.episodes:
+        from bc import ablage as ablage_module
+        m4_grasp = (ziel.pick_above_table_m if ziel is not None else config.PICK_HEIGHT_DEFAULT_M)
+        try:
+            station = ablage_module.load_station(args.ablage, m4_grasp)
+        except Exception as exc:
+            raise SystemExit("--ablage %s: %s" % (args.ablage, exc))
+        # in der Station darf abgelegt werden (wie bei M2): ohne das Hindernis "Teststation"
+        place_ws = build_workspace(table_z, info, robot, robot_info, args, known, None,
+                                   progress=lambda *_: None, envelope=False,
+                                   ohne_hindernisse=("Teststation",))
+        print("Ablage: %s" % ablage_module.describe(station))
     start = np.asarray(info["start_joints"]) if info.get("start_joints") else None
     end = np.asarray(info["end_joints"]) if info.get("end_joints") else None
     start_gripper, end_gripper = info.get("start_gripper"), info.get("end_gripper")
@@ -2285,14 +2430,29 @@ def main():
                     log["stop_reason"] = "griff" if down["stop_reason"] == "gegriffen" else down["stop_reason"]
                     print("Fahrt %d: Endabstieg %d Takte -> %s" % (ep, len(down["t"]), down["stop_reason"]))
             if args.transport_geplant and log["stop_reason"] == "griff":
-                transport = planned_transport(robot, workspace, transport_end, clock,
+                # Anwender 27.11.: erst 5 cm LIN hoch (ohne Ueberschleifen), dann PTP
+                transport = planned_transport(robot, transport_ws, transport_end, clock,
                                               servo_rate_hz=args.servo_rate, planner=rec_planner,
-                                              threaded_watchdog=not isinstance(clock, SimClock))
+                                              threaded_watchdog=not isinstance(clock, SimClock),
+                                              blend_m=0.0)
                 print("Fahrt %d: Griff nach %d Takten, geplanter Transport %d Takte -> %s"
                       % (ep, len(log["t"]), len(transport["t"]), transport["stop_reason"]))
+                pol_steps = log.get("policy_steps", len(log["t"]))
                 log = merge_transport(log, transport, robot)
                 if ea_policy_steps is not None:
                     log["policy_steps"] = ea_policy_steps
+                if station is not None and transport["stop_reason"] == "endstellung":
+                    place = planned_place(robot, place_ws, station, clock,
+                                          servo_rate_hz=args.servo_rate, planner=rec_planner,
+                                          back_joints=transport_end,
+                                          threaded_watchdog=not isinstance(clock, SimClock))
+                    ablage_info = dict(place.get("ablage") or {}, ergebnis=place["stop_reason"])
+                    print("Fahrt %d: Ablage %s %d Takte -> %s" % (ep, station["text"], len(place["t"]),
+                                                                place["stop_reason"]))
+                    keep_steps = log.get("policy_steps")
+                    log = merge_transport(log, place, robot)
+                    log["policy_steps"] = keep_steps if keep_steps is not None else pol_steps
+                    log["ablage"] = ablage_info
             wall = time.perf_counter() - t0
             rollout = {"tcp": np.vstack([log["tcp"], log["final_tcp"][None]]) if len(log["tcp"]) else log["final_tcp"][None],
                        "gripper_cmd": np.append(log["gripper_cmd"], log["gripper_cmd"][-1] if len(log["gripper_cmd"]) else 0.0),
@@ -2358,6 +2518,8 @@ def main():
                 summary["stoerung"] = log["stoerung"]
             if ea_info is not None:
                 summary["endabstieg"] = ea_info
+            if log.get("ablage") is not None:
+                summary["ablage"] = log["ablage"]
             results.append(summary)
             arrays_out = {k: v for k, v in log.items() if isinstance(v, np.ndarray)}
             # jede rohe Vorhersage (Anwender 2026-11-17: springt die Drehung?)
