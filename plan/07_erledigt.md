@@ -4,6 +4,37 @@ Neueste Einträge oben. Offenes steht in [06_offen.md](06_offen.md).
 
 ## Log
 
+### 2026-11-26 – Niklas (Labor, letzter Labortag) + Auswertung
+- **Versuchsreihe im Labor:** 80 Einträge in `code/logs/cycles_20261126.csv`, Zwischenbilder aller
+  70 Läufe in `code/logs/20261126/`, GUI-Screenshot mit erstem GUTTEIL-Zyklus. Teilweise
+  Dauerbetrieb: 48 Abfragen ohne Teil (keine löste einen Zyklus aus), 25 Zyklen mit Prüfung, alle
+  gegriffen, geprüft und einsortiert. Zykluszeit im Dauerbetrieb im Median 36 s; die Geschwindigkeit
+  wurde im Lauf des Tages verändert (Einzelzyklen 136–160 s bzw. 19 s).
+- **Lochmessung gelöst** (`m3_inspection/features.py`): Die Spiegelung des Fensterlichts auf der
+  Bohrungswand schnitt die Lochmaske unten ab, der Ellipsen-Fit ergab 9,42–9,48 mm, also Schlechtteil.
+  Neu ist ein Kreis-Fit, der die nach innen gezogenen Konturpunkte iterativ verwirft. Nachauswertung
+  aller 19 Prüfbilder: Ellipse 0/19 in Toleranz, Kreis 19/19 (9,67–9,81 mm, s = 0,04 mm). Danach
+  wurden 21/21 richtig eingelegte Gutteile als GUT sortiert.
+- **OCR stabiler** (`m3_inspection/ocr.py`): Etikett auf feste 300 px Höhe skaliert; vorher schwankte die
+  Konfidenz an der 4K-Kamera zwischen 0,99 und 0,39.
+- **Fehlerfälle → neue Prüfungen in M1** (`m1_vision_topdown/part.py`, `detector.py`):
+  - Eine Hand wurde als Teil erkannt, und der Roboter fuhr los (per Software-Stopp angehalten). Neu ist
+    eine Formprüfung (60 × 40 mm ± 20 %, Füllgrad ≥ 0,8) und eine Ruheprüfung (3 Bilder im Abstand
+    von 0,3 s, Pose ± 2 mm/2°, höchstens 0,5 % des Arbeitsraums verändert).
+  - Ein Teil kopfüber wurde als SCHLECHT sortiert (Rückseite ohne Etikett). Neu: `chamfer_side`,
+    die Fase verrät die Lage, Abbruch vor dem Greifen (danach einmal erfolgreich ausgelöst).
+  - 5 Abbrüche durch Marker 2, der beim Nachlegen vom Arm verdeckt war: Systemeigenschaft, vernachlässigt.
+- **Auswertung:** `thesis/tools/eval_20261126.py`, Abbildungen in `thesis/figures/eval/`
+  (Lochdurchmesser je Zyklus, Fit-Vergleich, Fehlerfälle, Bildreihen M1/M3).
+- **Thesis:** Kap. 10 neu geschrieben (Protokolltabelle, Nachauswertung, Abschnitt „Robustheit im
+  Dauerbetrieb“); Kreis-Fit in Kap. 03/07, Form-/Ruheprüfung und gewendetes Teil in Kap. 05,
+  Labor-Screenshot in Kap. 09, Zahlen in Kurzfassung, Kap. 06 und 11 nachgezogen. Keine `\todo`
+  mehr außer Jeremys vier in Kap. 08.
+- **Präsentation:** neue Blätter 7.4 „Labortag 26.11.“ und 7.5 „Lochmessung gelöst“, 7.6 „Was noch
+  fehlt“ aktualisiert, Ausblick und Finale jetzt 7.7/7.8; `export_lab3` in `build_data.py`. Der
+  dunkle Hintergrund an der Prüfvorrichtung ist entfernt, weil der Greifer mit ihm kollidierte.
+- Kein weiterer Labortermin: Die Laborpunkte in `06_offen.md` sind erledigt oder entfallen.
+
 ### 2026-11-24 – Niklas (Fotos in der Thesis)
 - Laborfotos in `media/roh/` abgelegt, je Szene mehrere Aufnahmen. Verkleinert (1600 px) nach
   `thesis/figures/` übernommen:

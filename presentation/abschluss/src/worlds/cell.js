@@ -1,6 +1,6 @@
 // Die Roboterzelle: Aufstellungsplan (1.1) → 3D-Zelle (1.2) → Bauteil (1.3) → ein Zyklus (1.4) →
 // LARA im Detail (Akt 4: Gelenke, Bauteil → Greifpose, Greifsequenz, 23°, Grenzen) → Simulator (4.6) → M4 lernt mit Rauschen (6.2)
-// → Übergabe M4 → M2 (6.8) → Ausblick (7.4) → Finale (7.5). Alle Lagen aus system.yaml (über data.json), LARA aus der URDF.
+// → Übergabe M4 → M2 (6.8) → Ausblick (7.5) → Finale (7.6). Alle Lagen aus system.yaml (über data.json), LARA aus der URDF.
 // Roboter-Basis-KS = Papier-KS: x rechts, y oben, z aus dem Papier; 1 m = 10 Papiereinheiten.
 // Bewegungen wie am echten Roboter: PTP in Gelenkkoordinaten, Anfahren/Abheben linear (IK je Bild,
 // immer vom Startwert des Abschnitts aus → Sprünge und Rückwärtsschritte bleiben exakt).
@@ -31,12 +31,12 @@ const DEFAULTS = {
   limits: 0, outside: 0, // 4.5
   ghost: 0, sim: 0, // 4.6
   m4: 0, m4rec: 0, m4chain: 0, // 6.2
-  m4pol: 0, m4hand: 0, m4back: 0, // 6.8 (m4back: Rückfahrt zu Beginn von 7.4)
-  game: 0, game1: 0, game2: 0, unboard: 0, // 7.4 (unboard: Rückbau zu Beginn von 7.5)
-  cycle2: 0, outro: 0, finale: 0, // 7.5
+  m4pol: 0, m4hand: 0, m4back: 0, // 6.8 (m4back: Rückfahrt zu Beginn von 7.5)
+  game: 0, game1: 0, game2: 0, unboard: 0, // 7.5 (unboard: Rückbau zu Beginn von 7.6)
+  cycle2: 0, outro: 0, finale: 0, // 7.6
 };
 
-// 7.5 Finale: Schild „Noch Fragen?“ steht im Halter rechts der Platte (aus Zuschauersicht), Schrift zur Seite. LARA
+// 7.6 Finale: Schild „Noch Fragen?“ steht im Halter rechts der Platte (aus Zuschauersicht), Schrift zur Seite. LARA
 // holt es, hebt es heraus und dreht es in einer Bewegung zur Zuschauerkamera (Kollisionsprüfung unten). Lagen in mm im Roboter-Basis-KS (Bühnenbild, nicht aus system.yaml); Handgelenk erreicht max. 0,80 m ab Schulter (z 0,22 m).
 const SIGN = { stand: [660, -160], show: [380, -470, 330], audience: [420, -1700, 1250] };
 
@@ -202,7 +202,7 @@ export function createCell(ctx) {
     return g;
   }
   const partA = makePart();
-  // Schild „Noch Fragen?“ mit Griffblock und Halter (7.5)
+  // Schild „Noch Fragen?“ mit Griffblock und Halter (7.6)
   const sign = new THREE.Group();
   sign.matrixAutoUpdate = false;
   {
@@ -327,7 +327,7 @@ export function createCell(ctx) {
   const sim = plan(simSteps, demo.q1);
   CELL.TS = sim.total;
 
-  // ---------- 7.5 Schild ----------
+  // ---------- 7.6 Schild ----------
   const SG = { w: 0.28, h: 0.12, t: 0.005, grip: 0.025 };
   const jawL = new THREE.Vector3(Math.cos(gRot), Math.sin(gRot), 0); // Backenachse im TCP-KS
   // Schild-KS: x Breite, z oben, Schrift zeigt nach -y. Gegriffen am Block oben, quer durch die Backen;
@@ -580,7 +580,7 @@ export function createCell(ctx) {
   dimNote.add(dimText);
   dimNote.position.copy(W(shotA.robot.x, shotA.robot.y, -60));
 
-  // ---------- Zustandsanzeige (1.4, 7.5) ----------
+  // ---------- Zustandsanzeige (1.4, 7.6) ----------
   const stateG = bb(new THREE.Group());
   const stateKey = text('ZUSTAND', { font: 'mono', size: 0.16, hex: T.inkSoft, anchorX: 'left', anchorY: 'bottom', letterSpacing: 0.08, opacity: 0 });
   const stateVal = text('IDLE', { font: 'title', size: 0.5, anchorX: 'left', anchorY: 'top', opacity: 0 });
@@ -939,7 +939,7 @@ export function createCell(ctx) {
     g.position.copy(camera.position).addScaledVector(camFwd, dist).addScaledVector(camRight, side * visH).addScaledVector(camUp, 0.02 * visH);
   }
 
-  // ---------- 7.4 Ausblick: „Mensch ärgere Dich nicht“ auf dem Arbeitsraum ----------
+  // ---------- 7.5 Ausblick: „Mensch ärgere Dich nicht“ auf dem Arbeitsraum ----------
   // Spielfeld 11 × 11 Felder à 30 mm liegt genau im Arbeitsraum (330 mm), Lagen in Arbeitsraum-mm → Basis-KS.
   // Spielfarben aus den Modulfarben (kein Rot/Grün/Lila); LARA spielt Ocker (M2), ihr Haus liegt gut in Reichweite.
   const GF = 30;
@@ -1132,7 +1132,7 @@ export function createCell(ctx) {
   // Teil C liegt an PICK aus der Punktedatei der Anlage (data.m4, TCP im Basis-KS). 6.2: LARA fährt zur Startpose,
   // dann eine Aufnahme-Episode mit echtem Rauschen (bc/noise.py, 15 Hz), dahinter der Fächer aller Episoden; danach
   // legt sie das Teil zurück wie put_back. 6.8: Fahrt bis PRE_PLACE (Sollbahn), Übergabe an M2, M2 legt in die Prüfung
-  // und fährt zurück über Teil B – dort beginnt 7.4. Alles blendet mit dem Spielfeld (7.4) aus.
+  // und fährt zurück über Teil B – dort beginnt 7.5. Alles blendet mit dem Spielfeld (7.5) aus.
   const m4 = data.m4;
   const M4P = m4.points;
   const partC = makePart();
@@ -1210,7 +1210,7 @@ export function createCell(ctx) {
   handSteps.startGrip = 1;
   const hand = plan(handSteps, pol.q1);
   const evHand = events(hand);
-  // 7.4 beginnt über Teil B (Ende von 4.6): die Rückfahrt läuft mit dem Aufbau des Spielfelds
+  // 7.5 beginnt über Teil B (Ende von 4.6): die Rückfahrt läuft mit dem Aufbau des Spielfelds
   const m4Back = plan([{ kind: 'ptp', b: up(gPB, AH), seed: demo.q1, dur: 1.8 }], hand.q1);
   CELL.POL = pol.total;
   CELL.HAND = hand.total;
@@ -1376,7 +1376,7 @@ export function createCell(ctx) {
     const restB = tablePose(shotB);
     if (S.cycle2 > 0) partPose(partB.matrix, tcpNow, S.cycle2 * cyc2.total, [{ t: -1, grip: 1 }, ...ev2], relB, [fixB, binB], restB);
     else partPose(partB.matrix, tcpNow, S.demo > 0 ? S.demo * demo.total : -1, evDemo, relB, [], restB);
-    // Akt 6 / 7.4: Teil B verschwindet aus dem Greifer (M4 bzw. Spielfeld), zu Beginn von 7.5 wächst es zurück
+    // Akt 6 / 7.5: Teil B verschwindet aus dem Greifer (M4 bzw. Spielfeld), zu Beginn von 7.6 wächst es zurück
     const kB = clamp01(1 - Math.max(S.m4, S.game) + S.unboard);
     if (kB < 1) partB.matrix.multiply(new THREE.Matrix4().makeScale(Math.max(kB, 0.001), Math.max(kB, 0.001), Math.max(kB, 0.001)));
     partB.matrixWorldNeedsUpdate = true;
@@ -1420,7 +1420,7 @@ export function createCell(ctx) {
     handLabel.forEach((t) => (t.opacity = handV));
     vmLabel.forEach((t) => (t.opacity = clamp01(S.m4hand * 3 - 2) * k6));
 
-    // 7.4 Spielfeld, Figuren, Würfel
+    // 7.5 Spielfeld, Figuren, Würfel
     const kG = S.game * (1 - S.unboard);
     gameBoard.visible = kG > 0.001;
     gameBoard.material.opacity = clamp01(kG * 2);
@@ -1460,7 +1460,7 @@ export function createCell(ctx) {
     lookFrame.progress = ov;
     lookTexts.forEach((t, i) => (t.opacity = clamp01(S.game * 3 - 0.4 - i * 0.12) * (1 - S.unboard)));
     sayT.opacity = roll >= 0 ? clamp01(roll * 2 - 0.8) * (1 - S.unboard) : 0;
-    // 7.5: Schild wächst mit dem ersten Takt aus dem Halter, dann greift LARA es und hält es in die Kamera
+    // 7.6: Schild wächst mit dem ersten Takt aus dem Halter, dann greift LARA es und hält es in die Kamera
     const grow = clamp01(S.finale / 0.05);
     sign.visible = signStand.visible = grow > 0;
     partPose(sign.matrix, tcpNow, S.finale > 0 ? S.finale * fin.total : -1, evFin, signRel, [], signRest);
@@ -1561,7 +1561,7 @@ export function createCell(ctx) {
     angTexts.forEach((t, i) => (t.opacity = clamp01(S.angle * 2 - 1 - i * 0.2) * (1 - S.limits)));
     formula.opacity = clamp01(S.angle * 2 - 1.2) * (1 - S.limits);
 
-    // 4.4 (blendet mit 4.5 bzw. 7.5 aus)
+    // 4.4 (blendet mit 4.5 bzw. 7.6 aus)
     const k44 = 1 - Math.max(S.cycle2, S.ghost);
     limitLines.forEach((l) => (l.progress = S.limits * k44));
     limitText.opacity = clamp01(S.limits * 2 - 1) * k44;
@@ -1569,7 +1569,7 @@ export function createCell(ctx) {
     outText.opacity = clamp01(S.outside * 2 - 0.6) * k44;
     stopText.opacity = clamp01(S.outside * 2 - 1) * k44;
 
-    // 4.5: Schatten springt beim Aufruf ans Ziel des Abschnitts; mit 7.5 wieder weg
+    // 4.5: Schatten springt beim Aufruf ans Ziel des Abschnitts; mit 7.6 wieder weg
     const k45 = S.ghost * (1 - clamp01(S.cycle2 * 20)) * (1 - Math.max(S.m4, S.game));
     ghost.object.visible = k45 > 0.5;
     if (ghost.object.visible) {
@@ -1746,7 +1746,7 @@ export const CELL_SCENES = [
     cams: [C.m4, C.m4top],
   },
   {
-    id: '7.7', world: 'cell',
+    id: '7.5', world: 'cell',
     steps: [
       (tl, S) => {
         tl.to(S, { m4back: 1, duration: CELL.M4BACK, ease: 'none' }, 0);
@@ -1758,7 +1758,7 @@ export const CELL_SCENES = [
     cams: [C.game, C.game, C.game],
   },
   {
-    id: '7.8', world: 'cell',
+    id: '7.6', world: 'cell',
     steps: [
       (tl, S, ctx) => {
         // Rückbau aus dem Ausblick (7.5): Spielfeld weg, Teil B zurück in den Greifer, dann der Schlechtfall

@@ -1,4 +1,5 @@
-// Ruhige Blätter (Baukasten src/kit/sheet.js): 1.5, 1.6, 2.4, 4.7, 6.3–6.7, 7.1, 7.3, A.1–A.4.
+// Ruhige Blätter (Baukasten src/kit/sheet.js): 1.5, 1.6, 2.4, 3.6, 4.7, 5.9, 6.3–6.7, 7.4, A.1–A.8.
+// Die Blätter zum Muster „Aufgabe → Idee → Am Aufbau → Lösung“ stehen in aufbau.js.
 // Inhalte aus thesis/blueprint.md, thesis 02b_vorprojekt.tex, plan/06_offen.md, plan/07_erledigt.md, der M4-Doku und
 // data.json (config, Zwischenbilder, GUI-Screenshot, Zykluslog, Labortag, Tests, M4-Messwerte).
 import * as THREE from 'three';
@@ -475,10 +476,9 @@ function sheetJitter(api) {
   api.text(1, 'Quelle: m4_behavior_cloning/Dokumentation/Zittern-an-der-Anlage.md, Labortag-2026-10-16-Uebergabe.md (13.–19.10.)', { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 1.1 });
 }
 
-// ---------------------------------------------------------------- 7.1 Labortag
+// ---------------------------------------------------------------- A.5 Labortag
 function sheet71(api) {
   const lab = api.ctx.data.lab;
-  const cfg = api.ctx.data.config;
   const w = lab.workspace_to_robot.after;
   const rows = [
     ['Posen geteacht', 'Prüfplatz und Ablagen direkt am Roboter angefahren und übernommen'],
@@ -487,24 +487,7 @@ function sheet71(api) {
     ['Erster vollständiger Ablauf', 'im Automatikbetrieb – ehrlich: noch ohne Greiferansteuerung und ohne Arbeitsraumkamera, M1/M3 mit Testbildern'],
   ];
   rows.forEach(([t, b], i) => api.row(0, i + 1, t, b, 2.3 - i * 1.5, { x: X0 + 0.7, width: 6.4, size: 0.3, delay: 0.1 + i * 0.15 }));
-  // Schritt 1: Schätzung aus der Skizze gegen die geteachten Posen
-  const TXL = 0.9;
-  api.text(1, 'SCHÄTZUNG AUS DER SKIZZE → GETEACHT  (x / y / z in mm)', { font: 'mono', size: 0.15, hex: T.inkSoft, letterSpacing: 0.06 }, [TXL, 2.2]);
-  const names = { inspection: 'Prüfplatz', bin_good: 'Ablage GUT', bin_bad: 'Ablage SCHLECHT' };
-  const xyz = (p) => p.slice(0, 3).map((v) => fmt(v, 0)).join(' / ');
-  const dist = Object.values(lab.poses).map(({ before, after }) => Math.hypot(...[0, 1, 2].map((j) => after[j] - before[j])));
-  Object.entries(lab.poses).forEach(([k, { before, after }], i) => {
-    const y = 1.45 - i * 0.95;
-    const t = { delay: 0.15 + i * 0.15 };
-    api.text(1, names[k], { font: 'sansMedium', size: 0.26 }, [TXL, y], t);
-    api.text(1, `${xyz(before)}  →  ${xyz(after)}`, { font: 'mono', size: 0.2, hex: T.inkSoft }, [TXL, y - 0.36], t);
-    api.text(1, `${fmt(dist[i], 0)} mm`, { font: 'monoMedium', size: 0.3, hex: MODULE_COLOR.M2, anchorX: 'right' }, [TXL + 6.4, y - 0.18], { delay: t.delay + 0.1 });
-  });
-  const rz = lab.poses.inspection;
-  api.text(1, `Greiferdrehung rz ${fmt(rz.before[5], 0)}° → ${fmt(rz.after[5], 0)}°: die 23° stecken in jeder Pose.`, { font: 'sans', size: 0.22, anchorY: 'top', maxWidth: 6.4 }, [TXL, -1.55], { delay: 0.7 });
-  const cm = (v) => Math.round(v / 10);
-  api.stamp(1, 'TEACHEN IST PFLICHT', [TXL + 3.2, -2.75], { size: 0.3, rot: -0.04, hex: MODULE_COLOR.M2, sub: `Schätzungen lagen ${cm(Math.min(...dist))}–${cm(Math.max(...dist))} cm daneben` }, { delay: 0.9 });
-  api.text(1, `Quelle: system.yaml vor/nach Commit ${lab.commit} (${lab.date.split('-').reverse().join('.')})`, { font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, -3.85], { delay: 1.0 });
+  api.text(0, `Quelle: system.yaml vor/nach Commit ${lab.commit} (${lab.date.split('-').reverse().join('.')})`, { font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, -3.85], { delay: 1.0 });
 }
 
 // Pfeil als drei Tuschestriche (Schaft + Spitze)
@@ -568,7 +551,7 @@ function sheet36(api) {
   api.stamp(1, `HÖCHSTENS ${fmt(worst, 0)} mm`, [RX + 3.4, -3.35], { size: 0.32, rot: -0.04, hex: T.good, sub: 'gilt nur für diese Kameraposition' }, { delay: 1.0 });
 }
 
-// ---------------------------------------------------------------- 7.2 Labortag 12.11.
+// ---------------------------------------------------------------- A.6 Labortag 12.11.
 function sheet72(api) {
   const L = api.ctx.data.lab2;
   if (!L) return;
@@ -595,7 +578,7 @@ function sheet72(api) {
   api.stamp(1, 'ERSTER ZYKLUS MIT KAMERAS', [X0 + 3.6, -4.0], { size: 0.26, rot: -0.03, hex: MODULE_COLOR.M2 }, { delay: 0.9 });
 }
 
-// ---------------------------------------------------------------- 7.3 Messwerte
+// ---------------------------------------------------------------- A.7 Messwerte 12.11.
 function sheet73m(api) {
   const L = api.ctx.data.lab2;
   if (!L) return;
@@ -647,7 +630,7 @@ function sheet73m(api) {
     card.opacity = 0;
     api.add(1, card, { delay: 0.4, dur: 0.6 });
   }
-  api.stamp(1, 'SPIEGELUNG IM LOCH', [2.2, -3.95], { size: 0.26, rot: 0.04, hex: T.signal, sub: 'Fensterlicht · gelöst am 26.11. (7.5)' }, { delay: 1.0 });
+  api.stamp(1, 'SPIEGELUNG IM LOCH', [2.2, -3.95], { size: 0.26, rot: 0.04, hex: T.signal, sub: 'Fensterlicht · gelöst am 26.11. (5.9)' }, { delay: 1.0 });
 }
 
 // Fotokarte, die mit dem Schritt einblendet
@@ -660,7 +643,7 @@ function card(api, step, f, [x, y], width, rot = 0, timing = {}) {
   return api.add(step, c, { dur: 0.6, ...timing });
 }
 
-// ---------------------------------------------------------------- 7.4 Labortag 26.11.
+// ---------------------------------------------------------------- A.8 Labortag 26.11.
 function sheet74lab(api) {
   const L = api.ctx.data.lab3;
   if (!L) return;
@@ -673,7 +656,7 @@ function sheet74lab(api) {
     ['Dauerbetrieb', `Das System wartet selbst auf das nächste Teil: ${empty} Abfragen ohne Teil, keine startete einen Zyklus.`],
     [`${full.length} Zyklen mit Prüfung`, 'jedes Mal erkannt, gegriffen, geprüft und einsortiert – mit echten Kameras und Greifer'],
     [`${fmt(median(fast), 0)} s je Zyklus`, `Median im Dauerbetrieb (${fmt(Math.min(...fast), 0)}–${fmt(Math.max(...fast), 0)} s), Geschwindigkeit im Lauf des Tages angepasst`],
-    ['Lochmessung neu', 'Spiegelung im Loch nicht mehr kompensiert per Faktor, sondern im Kreis-Fit (7.5)'],
+    ['Lochmessung neu', 'Spiegelung im Loch nicht mehr kompensiert per Faktor, sondern im Kreis-Fit (5.9)'],
   ];
   rows.forEach(([t, b], i) => api.row(0, i + 1, t, b, 2.75 - i * 1.4, { x: X0 + 0.7, width: 6.2, size: 0.3, delay: 0.1 + i * 0.12 }));
   const gui = card(api, 0, L.photos?.gui, [3.95, 0.55], 7.4, -0.02, { delay: 0.3 });
@@ -693,7 +676,7 @@ function sheet74lab(api) {
   api.text(1, 'Quelle: logs/cycles_20261126.csv, logs/20261126/ (Zwischenbilder aller Läufe)', { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 1.2 });
 }
 
-// ---------------------------------------------------------------- 7.5 Lochmessung gelöst
+// ---------------------------------------------------------------- 5.9 Lochmessung gelöst
 function sheet75(api) {
   const L = api.ctx.data.lab3;
   if (!L) return;
@@ -850,15 +833,15 @@ export function sheetScenes(storyboard) {
     sheetScene(e('6.6'), 2, sheetJitter),
     sheetScene(e('6.7'), 2, sheetTiming),
     sheetScene(e('3.6'), 2, sheet36),
-    sheetScene(e('7.1'), 2, sheet71),
-    sheetScene(e('7.2'), 2, sheet72),
-    sheetScene(e('7.3'), 2, sheet73m),
-    sheetScene(e('7.4'), 2, sheet74lab),
-    sheetScene(e('7.5'), 2, sheet75),
-    sheetScene(e('7.6'), 2, sheet74),
+    sheetScene(e('5.9'), 2, sheet75),
+    sheetScene(e('7.4'), 2, sheet74),
     sheetScene(e('A.1'), 2, sheetA1),
     sheetScene(e('A.2'), 1, stepsSheet('steps_m1', 5, 2.7)),
     sheetScene(e('A.3'), 1, stepsSheet('steps_m3', 5, 2.7)),
     sheetScene(e('A.4'), 1, sheetA4),
+    sheetScene(e('A.5'), 1, sheet71),
+    sheetScene(e('A.6'), 2, sheet72),
+    sheetScene(e('A.7'), 2, sheet73m),
+    sheetScene(e('A.8'), 2, sheet74lab),
   ];
 }

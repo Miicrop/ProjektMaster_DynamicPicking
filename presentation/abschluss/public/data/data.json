@@ -7249,6 +7249,11 @@
     "url": "img/lab3/rueckseite.jpg",
     "w": 1600,
     "h": 500
+   },
+   "kopfueber": {
+    "url": "img/lab3/kopfueber.jpg",
+    "w": 317,
+    "h": 316
    }
   },
   "hole_nominal_mm": 10.0,

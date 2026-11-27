@@ -414,6 +414,12 @@ def export_lab3(cfg: dict) -> dict | None:
         img = cv2.imread(str(back))
         h, w = img.shape[:2]
         photo("rueckseite", img[int(0.40 * h):int(0.90 * h), int(0.06 * w):int(0.96 * w)], 1600)
+    # 3.7: Abbruch „Part is upside down“ (11:38) – Pose mit gespiegelter Fase, Ausschnitt um das Teil
+    flip = runs / "113849_c001" / "steps" / "m1_09_part_pose.jpg"
+    if flip.exists():
+        img = cv2.imread(str(flip))
+        h, w = img.shape[:2]
+        photo("kopfueber", img[int(0.22 * h):int(0.70 * h), int(0.36 * w):int(0.84 * w)], 900)
     print(f"  Labortag 26.11.: {len(cycles)} Einträge, {len(reeval)} Prüfbilder nachausgewertet")
     return {"date": "2026-11-26", "cycles": cycles, "reeval": reeval, "photos": photos,
             "hole_nominal_mm": ic["hole_nominal_mm"], "hole_tolerance_mm": ic["hole_tolerance_mm"]}

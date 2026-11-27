@@ -124,7 +124,27 @@ Jeder Akt = ein Sprecher, die Zelle ist die gemeinsame Bühne (Rückfahrt in die
 - Die Szene „Zwei Python-Welten“ ist verworfen (01.11.), weil sie für die Zuschauer keine Rolle spielt.
 
 **Akt 7 – Ergebnis & Ausblick (alle)**
-> **Stand 26.11.:** Akt 7 hat jetzt acht Szenen, maßgeblich ist `src/storyboard.js`: 7.1 Labortag 06.10., 7.2 Labortag 12.11., 7.3 Messwerte 12.11., **7.4 Labortag 26.11.** (Dauerbetrieb, GUI-Screenshot, Fehlerfälle → neue Prüfungen), **7.5 Lochmessung gelöst** (Fit-Vergleich, alle Prüfbilder mit Ellipse/Kreis nachgerechnet), 7.6 Was noch fehlt, 7.7 Ausblick, 7.8 Finale. Die Liste darunter ist der ältere Entwurf.
+> **Umbau 26.11. – Muster je Modulakt** (maßgeblich ist `src/storyboard.js`, Stand vorher: Commit 055e18b).
+> Vortrag in einer Vorlesung vor Masterstudierenden (Automatisierung/Robotik), danach Live-Vorführung am
+> Roboter. Jeder Modulakt folgt demselben Muster **Aufgabe → Idee → Am Aufbau → Lösung**. 1.7 führt es ein,
+> das Schriftfeld zeigt die aktuelle Phase (Feld `phase` je Szene, als Liste je Schritt). Rotstift = was am
+> Aufbau schiefging, Grün = was daraus wurde.
+>
+> | Akt | Aufgabe | Idee | Am Aufbau | Lösung |
+> |---|---|---|---|---|
+> | 2 | 2.1 | 2.2–2.4 | 2.5 Das alte Bild (Kamerapuffer) | 2.5 Schritt 2 |
+> | 3 M1 | 3.1 | 3.2–3.5 | 3.6 Parallaxe, 3.7 Menschen im Arbeitsraum, 3.8 Belichtung | Schritt 2 in 3.6–3.8 (Bilanz M1) |
+> | 4 M2 | 4.1 | 4.2–4.7 | 4.8 Greifer 23°, Achse 6 bei 178°, Ablegen 8 mm | 4.8 Schritt 2 |
+> | 5 M3 | 5.1 | 5.2–5.6 | 5.7 Die echte Kamera, 5.8 Loch zu klein | 5.9 Kreis-Fit |
+> | 6 M4 | 6.1 | 6.2–6.4 | 6.5, 6.6 | 6.6 Schritt 2, 6.7, 6.8 |
+>
+> Akt 7: 7.1 Drei Labortage (Zeitleiste, nicht maßstäblich), 7.2 Was der Aufbau uns gelehrt hat (alle zehn
+> Fälle als Tabelle), 7.3 Bilanz 26.11., 7.4 Was noch fehlt, 7.5 Ausblick, 7.6 Finale („Noch Fragen?“ bleibt).
+> Die alten Labortagsblätter liegen im Anhang (A.5 06.10. ohne den Vergleich Skizze ↔ geteacht, A.6 12.11.,
+> A.7 Messwerte 12.11., A.8 26.11.). Die neuen Blätter stehen in `src/worlds/aufbau.js`.
+> Kleine Fehler sind je Modul auf einem Blatt zusammengefasst (3.8, 4.8, 5.7); ob sie bleiben, entscheidet das Team.
+
+> **Stand 26.11. (vor dem Umbau, überholt):** Akt 7 hatte acht Szenen, maßgeblich ist `src/storyboard.js`: 7.1 Labortag 06.10., 7.2 Labortag 12.11., 7.3 Messwerte 12.11., **7.4 Labortag 26.11.** (Dauerbetrieb, GUI-Screenshot, Fehlerfälle → neue Prüfungen), **7.5 Lochmessung gelöst** (Fit-Vergleich, alle Prüfbilder mit Ellipse/Kreis nachgerechnet), 7.6 Was noch fehlt, 7.7 Ausblick, 7.8 Finale. Die Liste darunter ist der ältere Entwurf.
 
 - 7.1 Labortag 06.10.: erster vollständiger Ablauf am echten Roboter (ehrlich: noch ohne Greiferansteuerung, M1/M3 mit Testbildern).
 - 7.2 Messwerte (Platzhalter, datengetrieben): Kalibrier-RMS, Zeigetest-Versatz, Zyklusdauer, Erkennungs-/Prüfquote.

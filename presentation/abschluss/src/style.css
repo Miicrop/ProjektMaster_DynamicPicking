@@ -38,6 +38,15 @@ body.ready #gl { opacity: 1; }
 .tick i { position: absolute; inset: 0 auto 0 0; background: var(--ink); }
 .tick.cur { outline: 1px solid var(--ink); outline-offset: 1px; }
 
+/* Muster je Modulakt: Aufgabe → Idee → Am Aufbau → Lösung */
+.hud-phase { display: flex; justify-content: flex-end; gap: 0; margin-bottom: 5px; visibility: hidden; }
+.hud-phase.on { visibility: visible; }
+.hud-phase span { font-size: 10px; letter-spacing: 0.06em; padding: 2px 7px; border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  margin-left: -1px; color: var(--ink-soft); background: color-mix(in srgb, var(--paper) 88%, transparent); transition: all 0.25s; }
+.hud-phase span.cur { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+.hud-phase span[data-phase="aufbau"].cur { background: var(--signal); border-color: var(--signal); }
+.hud-phase span[data-phase="loesung"].cur { background: #3c8a4e; border-color: #3c8a4e; }
+
 /* Sprungeingabe */
 .jump { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); font-family: var(--mono); font-size: 44px; font-weight: 500;
   padding: 6px 22px; border: 2px solid var(--ink); background: var(--paper); opacity: 0; transition: opacity 0.12s; }
