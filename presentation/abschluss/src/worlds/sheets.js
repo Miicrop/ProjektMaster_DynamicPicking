@@ -1,4 +1,4 @@
-// Ruhige Blätter (Baukasten src/kit/sheet.js): 1.5, 1.6, 2.4, 3.6, 4.7, 5.9, 6.3–6.7, 7.4, A.1–A.8.
+// Ruhige Blätter (Baukasten src/kit/sheet.js): 1.5, 1.6, 2.4, 3.6, 4.6, 5.9, 6.3–6.7, 7.4, A.1–A.8.
 // Die Blätter zum Muster „Aufgabe → Idee → Am Aufbau → Lösung“ stehen in aufbau.js.
 // Inhalte aus thesis/blueprint.md, thesis 02b_vorprojekt.tex, plan/06_offen.md, plan/07_erledigt.md, der M4-Doku und
 // data.json (config, Zwischenbilder, GUI-Screenshot, Zykluslog, Labortag, Tests, M4-Messwerte).
@@ -70,47 +70,15 @@ function sheet24(api) {
     ['Zustandskette', 'der laufende Zustand leuchtet, ein Fehler färbt ihn rot', [0.42, 0.14]],
     ['Bild nach jedem Schritt', 'M1 und M3 zeigen Ergebnis und Kurzinfo, sobald der Schritt fertig ist', [0.3, 0.27]],
     ['NOT-STOPP in Software', 'eigener Thread; weiter erst nach „Fehler quittieren“', [0.8, 0.07]],
+    ['Logbuch', 'jeder Zyklus eine Zeile: Zeit, Pose, Seriennummer, Urteil oder Fehler', [0.3, 0.77]],
   ];
-  const pins = [];
-  const shown = rows.map(([t, b, uv], i) => {
-    pins.push(pin(0, i + 1, at(...uv), { delay: 0.6 + i * 0.15 }));
-    return api.row(0, i + 1, t, b, 2.3 - i * 1.5, { x: RX, width: 3.9, size: 0.28, delay: 0.5 + i * 0.15 });
+  rows.forEach(([t, b, uv], i) => {
+    pin(0, i + 1, at(...uv), { delay: 0.6 + i * 0.15 });
+    api.row(0, i + 1, t, b, 2.3 - i * 1.5, { x: RX, width: 3.9, size: 0.28, delay: 0.5 + i * 0.15 });
   });
-  // Schritt 1: Logbuch – echte Zeilen aus code/logs (Simulator + Testbilder, 26.09., mit einem STOPP)
-  pin(1, 4, at(0.3, 0.77), { delay: 0 });
-  api.fade(1, shown.flatMap((r) => [r.t, r.d]), { delay: 0, dur: 0.4 });
-  const balloons = [...pins, ...shown.map((r) => r.b)];
-  api.add(1, (v) => balloons.forEach((b) => (b.appear = Math.min(b.appear, 1 - v))), { delay: 0, dur: 0.4 });
-  const cycles = api.ctx.data.logs.cycles.filter((c) => c.time.startsWith('2026-09-26 22:2'));
-  const SW = 4.6;
-  const SH = 0.95 + cycles.length * 0.36;
-  const top = 2.35;
-  const sx = RX - 0.2;
-  const strip = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), new THREE.MeshBasicMaterial({ color: color('#FBFAF6'), transparent: true, opacity: 0 }));
-  strip.position.set(sx + SW / 2, top - SH / 2, 0.005);
-  api.scene.add(strip);
-  api.add(1, (v) => {
-    strip.material.opacity = v;
-    strip.visible = v > 0;
-  }, { delay: 0.3, dur: 0.4 });
-  api.line(1, [[sx, top], [sx + SW, top], [sx + SW, top - SH], [sx, top - SH]], { closed: true, width: 1.2 }, { delay: 0.3, dur: 0.5 });
-  api.text(1, 'logs/cycles_20260926.csv', { font: 'monoMedium', size: 0.17 }, [sx + 0.2, top - 0.3], { delay: 0.5 });
-  api.text(1, 'Simulator + Testbilder', { font: 'mono', size: 0.14, hex: T.inkSoft }, [sx + 0.2, top - 0.56], { delay: 0.55 });
-  cycles.forEach((c, i) => {
-    const y = top - 0.98 - i * 0.36;
-    const ok = c.ok === 'True';
-    const pose = `${fmt(c.x_mm)} / ${fmt(c.y_mm)} / ${fmt(c.theta_deg)}°`;
-    const body = ok ? `${pose}  ${c.serial}` : c.error.split(' - ')[0];
-    const d = { delay: 0.6 + i * 0.12, dur: 0.3 };
-    const verdict = ok ? (c.good === 'True' ? 'GUT' : 'SCHLECHT') : 'FEHLER';
-    api.text(1, c.time.slice(11), { font: 'mono', size: 0.15, hex: T.inkSoft }, [sx + 0.2, y], d);
-    api.text(1, body, { font: 'mono', size: 0.15, hex: ok ? T.ink : T.signal }, [sx + 1.1, y], d);
-    api.text(1, verdict, { font: 'monoMedium', size: 0.15, hex: verdict === 'GUT' ? T.good : T.signal, anchorX: 'right' }, [sx + SW - 0.2, y], d);
-  });
-  api.text(1, 'Jeder Zyklus eine Zeile: Zeit, Pose x / y / Winkel, Seriennummer, Urteil oder Fehler (Auszug).', { font: 'sans', size: 0.2, hex: T.inkSoft, anchorY: 'top', maxWidth: SW }, [sx, top - SH - 0.25], { delay: 1.4 });
 }
 
-// ---------------------------------------------------------------- 4.7 Roboter einrichten (GUI-Tab M2)
+// ---------------------------------------------------------------- 4.6 Roboter einrichten (GUI-Tab M2)
 function sheet47(api) {
   const cfg = api.ctx.data.config;
   // links: echter Screenshot des Tabs „M2 Roboter“, mit dem Simulator verbunden (tools/gui_shot.py)
@@ -556,7 +524,7 @@ function sheet72(api) {
     ['Kameras live, fest eingestellt', `Kamera oben: Belichtung ${fmt((L.exposure_us ?? 15000) / 1000, 0)} ms statt Automatik (Teil war übersteuert). Seitenkamera: Fokus fest ${L.focus ?? 90}, im Programm gesetzt.`],
     ['Greifer im Ablauf', 'über die Digitalausgänge der Steuerung: auf, zu, Freigabe, Reset'],
     ['Zeigetests', 'Versatz bis 8 mm am Rand → lineare Positionskorrektur (3.6)'],
-    ['Teil gedreht greifen', 'Seriennummer und Fase zeigen zur Seitenkamera; Offset −67° (4.4)'],
+    ['Teil gedreht greifen', 'Seriennummer und Fase zeigen zur Seitenkamera; Offset −67°'],
     ['Veraltete Bilder', 'beide Kameras gaben nach einer Pause ein altes Bild aus dem Puffer – jetzt wird er vor jeder Aufnahme geleert'],
     ['Sanft ablegen', 'Greifer öffnet 1 mm über der geteachten Pose, sonst fällt das Teil auf die Prüfung'],
   ];
@@ -727,30 +695,24 @@ function sheet75(api) {
   api.text(1, 'grau: Teil kopfüber, Rückseite geprüft · gleiche Kontur, nur das Verfahren unterscheidet sich', { font: 'mono', size: 0.12, hex: T.inkSoft }, [CX0 - 0.6, CY0 - 0.42], { delay: 1.2 });
 }
 
-// ---------------------------------------------------------------- 7.4 Was noch fehlt
+// ---------------------------------------------------------------- 7.4 Mögliche Verbesserungen
 function sheet74(api) {
-  const t = api.ctx.data.tests;
-  const done = [
-    ['Ablauf ohne Hardware', `Testfotos + Simulator der Steuerung, ${t.total} automatische Tests, GUI mit Logbuch`],
-    ['Kameras und Greifer am Aufbau', 'feste Belichtung und Fokus, Positionskorrektur, Greifer über Digitalausgänge'],
-    ['Dauerbetrieb', '25 Zyklen am 26.11. erkannt, gegriffen, geprüft und sortiert; Fehlerfälle abgefangen'],
-    ['Lochmessung', 'Kreis-Fit gleicht die Spiegelung aus – alle Prüfbilder in Toleranz'],
-    ['M4 eingebunden', 'eigener Reiter, Policy greift im Ablauf; Übergabe M4 → M2 in der Neura-VM getestet'],
+  const aufbau = [
+    ['Sauggreifer', 'fasst das Teil von oben, unabhängig vom Winkel – kein knappes Backenspiel am 40 mm breiten Teil'],
+    ['Prüfvorrichtung mit Anschlag', 'das Teil liegt formschlüssig und immer gleich vor der Seitenkamera'],
+    ['Licht abschirmen', 'Einhausung und eigene Beleuchtung an der Prüfstation statt Ausgleich im Algorithmus'],
   ];
-  const open = [
-    ['Licht an der Prüfstation', 'abschirmen statt im Algorithmus ausgleichen; Rest ~2,5 % unter Soll kalibrieren'],
+  const software = [
     ['Kalibrierte Kamera', 'intrinsische Kalibrierung und Entzerrung auf Bauteilhöhe statt empirischer Korrektur'],
-    ['M4 an der Anlage', 'Ergebnisse und Vergleich mit dem klassischen Greifen (Jeremy)'],
+    ['M4 mit Daten der Anlage', 'Policy mit Aufnahmen vom echten Aufbau trainieren statt nur in der Simulation'],
     ['Echte Fehlerteile', 'gezielt gefertigte Teile ohne Kerbe, mit falschem Loch, ohne Etikett; wechselndes Licht'],
   ];
-  const col = (step, items, x, n0, label, hex) => {
-    api.stamp(step, label, [x + 1.2, 2.4], { size: 0.26, rot: -0.04, hex }, { delay: 0.05 });
-    const dy = items.length > 4 ? 1.12 : 1.4;
-    items.forEach(([ti, b], i) => api.row(step, n0 + i, ti, b, 1.65 - i * dy, { x, width: 6.0, size: 0.28, delay: 0.15 + i * 0.12 }));
+  const col = (step, items, x, n0, label) => {
+    api.stamp(step, label, [x + 1.2, 2.4], { size: 0.26, rot: -0.04, hex: T.ink }, { delay: 0.05 });
+    items.forEach(([ti, b], i) => api.row(step, n0 + i, ti, b, 1.65 - i * 1.4, { x, width: 6.0, size: 0.28, delay: 0.15 + i * 0.12 }));
   };
-  col(0, done, X0 + 0.7, 1, 'ERLEDIGT', T.good);
-  col(1, open, 0.9, done.length + 1, 'OFFEN', T.signal);
-  api.text(1, 'Stand 26.11. · Quelle: plan/06_offen.md, plan/07_erledigt.md',{ font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, -4.0], { delay: 0.7 });
+  col(0, aufbau, X0 + 0.7, 1, 'AUFBAU');
+  col(1, software, 0.9, aufbau.length + 1, 'SOFTWARE & TEST');
 }
 
 // ---------------------------------------------------------------- A.1 Konfiguration
@@ -822,8 +784,8 @@ export function sheetScenes(storyboard) {
   return [
     sheetScene(e('1.5'), 2, sheet15),
     sheetScene(e('1.6'), 4, sheet16),
-    sheetScene(e('2.4'), 2, sheet24),
-    sheetScene(e('4.7'), 2, sheet47),
+    sheetScene(e('2.4'), 1, sheet24),
+    sheetScene(e('4.6'), 2, sheet47),
     sheetScene(e('6.3'), 2, sheetFunnel),
     sheetScene(e('6.4'), 3, sheetDiffusion, { durations: [1.6, 4.0, 1.6] }),
     sheetScene(e('6.5'), 3, sheetSim),

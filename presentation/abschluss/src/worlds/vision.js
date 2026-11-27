@@ -217,7 +217,7 @@ export function createVision(ctx) {
   const part = ctx.data.part;
   const segNote = note('Bauteil = deutlich heller oder bunter als der Median der Platte', centre.x + 1.0, centre.y + 1.2, 2.1, 0.42, 0.1);
   const parallax = note(
-    `Soll ${part.length_mm} × ${part.width_mm} mm. Die Homographie gilt für die Tischebene – die ${part.height_mm} mm hohe Oberseite und die sichtbaren Seitenflächen erscheinen größer (Parallaxe, offener Punkt).`,
+    `Soll ${part.length_mm} × ${part.width_mm} mm. Die Homographie gilt für die Tischebene – die ${part.height_mm} mm hohe Oberseite und die sichtbaren Seitenflächen erscheinen größer (Parallaxe).`,
     centre.x + 1.0, centre.y + 0.62, 2.1, 0.72, 0.1,
   );
 

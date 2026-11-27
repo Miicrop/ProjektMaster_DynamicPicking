@@ -6,6 +6,8 @@ import * as THREE from 'three';
 import { T, color } from '../theme.js';
 
 export const LAYER_SOLID = 1;
+// Schilder (Komponentenbeschriftungen): Maske, unter der der Kantenpass keine Tuschekanten zeichnet
+export const LAYER_PLATE = 2;
 
 const FULLSCREEN_VS = /* glsl */ `
 varying vec2 vUv;
@@ -15,6 +17,7 @@ const COMPOSITE_FS = /* glsl */ `
 uniform sampler2D tColor;
 uniform sampler2D tNormal;
 uniform sampler2D tDepth;
+uniform sampler2D tMask;
 uniform vec2 resolution;
 uniform vec3 ink;
 uniform float thickness;
@@ -39,9 +42,11 @@ void main() {
   float ne = 0.0;
   float de = 0.0;
   float ae = 0.0;
+  float mk = texture2D(tMask, vUv).r;
   for (int i = 0; i < 8; i++) {
     float ang = float(i) * 0.785398;
     vec2 o = vec2(cos(ang), sin(ang)) * px;
+    mk = max(mk, texture2D(tMask, vUv + o).r);
     vec4 s = texture2D(tNormal, vUv + o);
     ne = max(ne, length(s.xyz - n0));
     float d = linDepth(vUv + o);
@@ -49,7 +54,7 @@ void main() {
     ae = max(ae, abs(s.a - a0));
   }
   float edge = max(max(smoothstep(0.35, 0.75, ne), smoothstep(0.012, 0.03, de)), ae);
-  edge *= edgeStrength;
+  edge *= edgeStrength * (1.0 - mk);
   c.rgb = mix(c.rgb, ink, clamp(edge, 0.0, 1.0) * 0.92);
   float g = hash(floor(vUv * resolution)) - 0.5;
   c.rgb *= 1.0 + g * grain;
@@ -161,6 +166,8 @@ export class Stage {
     this.rtNormal = new THREE.WebGLRenderTarget(1, 1, { ...opts, depthTexture: new THREE.DepthTexture(1, 1) });
     this.rtFrame = new THREE.WebGLRenderTarget(1, 1, opts);
     this.rtSnap = new THREE.WebGLRenderTarget(1, 1, opts);
+    this.rtMask = new THREE.WebGLRenderTarget(1, 1);
+    this.maskMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, depthWrite: false });
     this.normalMaterial = new THREE.MeshNormalMaterial();
 
     this.quadScene = new THREE.Scene();
@@ -173,6 +180,7 @@ export class Stage {
         tColor: { value: this.rtColor.texture },
         tNormal: { value: this.rtNormal.texture },
         tDepth: { value: this.rtNormal.depthTexture },
+        tMask: { value: this.rtMask.texture },
         resolution: { value: new THREE.Vector2() },
         ink: { value: color(T.ink) },
         thickness: { value: 1.4 },
@@ -217,7 +225,7 @@ export class Stage {
     const pr = this.renderer.getPixelRatio();
     const W = Math.floor(w * pr);
     const H = Math.floor(h * pr);
-    for (const rt of [this.rtColor, this.rtNormal, this.rtFrame, this.rtSnap]) rt.setSize(W, H);
+    for (const rt of [this.rtColor, this.rtNormal, this.rtFrame, this.rtSnap, this.rtMask]) rt.setSize(W, H);
     this.composite.uniforms.resolution.value.set(W, H);
     this.present.uniforms.resolution.value.set(W, H);
     for (const m of this.lineMaterials) m.resolution.set(W, H);
@@ -317,6 +325,13 @@ export class Stage {
     scene.overrideMaterial = this.normalMaterial;
     camera.layers.set(LAYER_SOLID);
     renderer.setRenderTarget(this.rtNormal);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear();
+    renderer.render(scene, camera);
+    // Maske der Schilder: dort keine Tuschekanten
+    scene.overrideMaterial = this.maskMaterial;
+    camera.layers.set(LAYER_PLATE);
+    renderer.setRenderTarget(this.rtMask);
     renderer.setClearColor(0x000000, 0);
     renderer.clear();
     renderer.render(scene, camera);

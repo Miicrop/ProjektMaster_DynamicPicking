@@ -1,4 +1,4 @@
-// Blätter für das Muster „Aufgabe → Idee → Am Aufbau → Lösung“ (Konzept 26.11.): 1.7, 2.5, 3.7, 3.8, 4.8, 5.7,
+// Blätter für das Muster „Aufgabe → Idee → Am Aufbau → Lösung“ (Konzept 26.11.): 1.7, 2.5, 3.7, 3.8, 5.7,
 // 5.8, 7.1, 7.2, 7.3. Inhalte aus plan/07_erledigt.md (06.10., 12.11.), thesis Kap. 10 (26.11.) und data.json
 // (lab, lab2, lab3). Rotstift = was am Aufbau schiefging, Grün = was daraus wurde.
 import * as THREE from 'three';
@@ -58,8 +58,6 @@ function note(api, step, [x, y], head, body, { hex = T.ink, width = 4, size = 0.
 
 // ---------------------------------------------------------------- 1.7 Das Muster
 function sheet17(api) {
-  const cfg = api.ctx.data.config.inspection;
-  const L2 = api.ctx.data.lab2;
   const W = 3.3, GAP = 0.45, XS = X0 + 0.75;
   const cx = (i) => XS + i * (W + GAP);
   const cols = [
@@ -68,11 +66,12 @@ function sheet17(api) {
     ['Am Aufbau', 'Was am echten Roboter, mit echtem Licht und echten Menschen anders war.', T.signal],
     ['Lösung', 'Was wir geändert haben – und was es gebracht hat.', T.good],
   ];
-  const IY = 1.75;
+  const OY = -1.0; // ohne Beispiel darunter: Spalten mittig aufs Blatt
+  const IY = 1.75 + OY;
   cols.forEach(([t, b, hex], i) => {
     const d = 0.1 + i * 0.35;
     const x = cx(i), m = x + W / 2;
-    api.line(0, [[x, 2.55], [x + W, 2.55], [x + W, -0.95], [x, -0.95]], { closed: true, width: 1.2, hex: i >= 2 ? hex : T.inkSoft }, { delay: d, dur: 0.6 });
+    api.line(0, [[x, 2.55 + OY], [x + W, 2.55 + OY], [x + W, -0.95 + OY], [x, -0.95 + OY]], { closed: true, width: 1.2, hex: i >= 2 ? hex : T.inkSoft }, { delay: d, dur: 0.6 });
     if (i === 0) {
       api.line(0, circ(m, IY, 0.5), { closed: true, width: 1.8 }, { delay: d + 0.1 });
       api.line(0, circ(m, IY, 0.18), { closed: true, width: 1.8, hex: T.part }, { delay: d + 0.2 });
@@ -96,23 +95,10 @@ function sheet17(api) {
     } else {
       check(api, 0, [m, IY], 0.55, { delay: d + 0.1 });
     }
-    api.text(0, `${i + 1}`, { font: 'mono', size: 0.16, hex: T.inkSoft }, [x + 0.2, 2.3], { delay: d });
-    api.text(0, t, { font: 'title', size: 0.42, hex, anchorX: 'center' }, [m, 0.55], { delay: d + 0.2 });
-    api.text(0, b, { font: 'sans', size: 0.2, hex: T.inkSoft, anchorX: 'center', anchorY: 'top', maxWidth: W - 0.4, align: 'center', lineHeight: 1.3 }, [m, 0.15], { delay: d + 0.25 });
-    if (i < 3) arrow(api, 0, [x + W + 0.06, 0.55], [x + W + GAP - 0.06, 0.55], { width: 1.4 }, { delay: d + 0.3 });
-  });
-  // Schritt 1: das Beispiel Lochmessung (M3) läuft einmal durch
-  const holes = L2 ? L2.cycles.filter((c) => c.ok && c.hole_mm != null).map((c) => c.hole_mm) : [];
-  const ex = [
-    `Loch messen: ${fmt(cfg.hole_nominal_mm, 0)} ± ${fmt(cfg.hole_tolerance_mm, 1)} mm`,
-    'Kontur des Lochs → Ellipse → mm über die Bauteilhöhe',
-    holes.length ? `Spiegelung im Loch: ${fmt(Math.min(...holes), 2)}–${fmt(Math.max(...holes), 2)} mm, zu klein` : 'Spiegelung im Loch: zu klein',
-    'Kreis-Fit ohne die inneren Punkte: alle Prüfbilder in Toleranz',
-  ];
-  api.text(1, 'BEISPIEL · M3 SICHTPRÜFUNG', MONO, [XS, -1.45]);
-  ex.forEach((t, i) => {
-    const hex = i === 2 ? T.signal : i === 3 ? T.good : T.ink;
-    api.text(1, t, { font: 'sansMedium', size: 0.22, hex, anchorY: 'top', maxWidth: W - 0.2, lineHeight: 1.3 }, [cx(i) + 0.1, -1.75], { delay: 0.15 + i * 0.3 });
+    api.text(0, `${i + 1}`, { font: 'mono', size: 0.16, hex: T.inkSoft }, [x + 0.2, 2.3 + OY], { delay: d });
+    api.text(0, t, { font: 'title', size: 0.42, hex, anchorX: 'center' }, [m, 0.55 + OY], { delay: d + 0.2 });
+    api.text(0, b, { font: 'sans', size: 0.2, hex: T.inkSoft, anchorX: 'center', anchorY: 'top', maxWidth: W - 0.4, align: 'center', lineHeight: 1.3 }, [m, 0.15 + OY], { delay: d + 0.25 });
+    if (i < 3) arrow(api, 0, [x + W + 0.06, 0.55 + OY], [x + W + GAP - 0.06, 0.55 + OY], { width: 1.4 }, { delay: d + 0.3 });
   });
 }
 
@@ -301,13 +287,10 @@ function sheet38(api) {
   const cy = L3.cycles;
   const empty = cy.filter((c) => c.ok && !c.part).length;
   const full = cy.filter((c) => c.hole_mm != null).length;
-  const aborts = cy.filter((c) => !c.ok).length;
-  const before = cy.filter((c) => !c.ok && /^DETECT/.test(c.error)).length;
   api.text(1, `BILANZ M1 AM ${day(L3.date)}`, MONO, [0.6, -0.55], { delay: 0.05 });
   const figs = [
     [`${full}`, 'Zyklen: erkannt\nund gegriffen'],
     [`${empty}`, 'Abfragen ohne Teil,\nkein Fehlstart'],
-    [`${before} / ${aborts}`, 'Abbrüche, bevor\nLARA sich bewegt'],
   ];
   figs.forEach(([big, small], i) => {
     const x = 0.6 + i * 2.3;
@@ -315,62 +298,6 @@ function sheet38(api) {
     api.text(1, small, { font: 'sans', size: 0.17, hex: T.inkSoft, anchorY: 'top', lineHeight: 1.3 }, [x, -1.5], { delay: 0.2 + i * 0.15 });
   });
   api.stamp(1, 'KEINE FALSCHE POSE', [3.4, -3.05], { size: 0.32, rot: -0.03, hex: T.good, sub: 'kein Teil daneben gegriffen' }, { delay: 0.8 });
-}
-
-// ---------------------------------------------------------------- 4.8 Am Aufbau (M2)
-function sheet48(api) {
-  const cfg = api.ctx.data.config.robot;
-  const lab = api.ctx.data.lab;
-  // Panel A: Greifer 23° verdreht (Draufsicht auf den Flansch)
-  const AXc = X0 + 2.2, CY = 1.2, R = 0.95;
-  api.text(0, `${lab ? day(lab.date) : '06.10.'}`, { font: 'monoMedium', size: 0.18, hex: T.signal }, [X0 + 0.7, 2.6]);
-  api.line(0, circ(AXc, CY, R), { closed: true, width: 1.6 }, { delay: 0.1 });
-  api.line(0, [[AXc - R - 0.25, CY], [AXc + R + 0.25, CY]], { width: 1, hex: T.inkSoft, dashed: true }, { delay: 0.2 });
-  const jaw = (s, a) => [[-0.18, s * 0.28], [0.18, s * 0.28], [0.18, s * 0.62], [-0.18, s * 0.62]].map((p) => rot(p, a)).map(([x, y]) => [AXc + x, CY + y]);
-  const A23 = (23 * Math.PI) / 180;
-  [1, -1].forEach((s) => api.line(0, jaw(s, Math.PI / 2 + A23 - Math.PI / 2), { closed: true, width: 2.2, hex: MODULE_COLOR.M2 }, { delay: 0.4 }));
-  api.line(0, [rot([0, -R - 0.2], A23).map((v, i) => v + [AXc, CY][i]), rot([0, R + 0.2], A23).map((v, i) => v + [AXc, CY][i])], { width: 1, hex: MODULE_COLOR.M2 }, { delay: 0.45 });
-  api.line(0, arcPts(AXc, CY, 0.75, Math.PI / 2, Math.PI / 2 + A23), { width: 1.4, hex: T.signal }, { delay: 0.6 });
-  api.text(0, '23°', { font: 'monoMedium', size: 0.2, hex: T.signal, anchorX: 'right' }, [AXc - 0.5, CY + 1.05], { delay: 0.65 });
-  note(api, 0, [X0 + 0.7, -0.15], 'Greifer verdreht montiert', 'Die Backen stehen 23° schräg zum Flansch. Offset 90° → 113°, die 23° stecken in jeder Pose.', { hex: T.signal, width: 4.2, size: 0.24, delay: 0.7 });
-  // Panel B/C: Zifferblatt Achse 6
-  const BXc = -0.3;
-  api.text(0, '12.11.', { font: 'monoMedium', size: 0.18, hex: T.signal }, [BXc - 2.0, 2.6], { delay: 0.8 });
-  api.line(0, circ(BXc, CY, R), { closed: true, width: 1.6 }, { delay: 0.9 });
-  [0, 90, 180, 270].forEach((d) => {
-    const a = (d * Math.PI) / 180;
-    api.line(0, [[BXc + Math.cos(a) * (R - 0.12), CY + Math.sin(a) * (R - 0.12)], [BXc + Math.cos(a) * R, CY + Math.sin(a) * R]], { width: 1.4 }, { delay: 0.95 });
-  });
-  api.text(0, '0°', { font: 'mono', size: 0.13, hex: T.inkSoft }, [BXc + R + 0.08, CY], { delay: 1.0 });
-  api.text(0, '180°', { font: 'mono', size: 0.13, hex: T.inkSoft, anchorX: 'right' }, [BXc - R - 0.08, CY], { delay: 1.0 });
-  api.text(0, 'ACHSE 6', MONO, [BXc - 0.4, CY - R - 0.3], { delay: 1.0 });
-  const needle = (deg, hex, step, timing) => {
-    const a = (deg * Math.PI) / 180;
-    return api.line(step, [[BXc, CY], [BXc + Math.cos(a) * (R - 0.18), CY + Math.sin(a) * (R - 0.18)]], { width: 3, hex }, timing);
-  };
-  const n178 = needle(178, T.signal, 0, { delay: 1.1 });
-  const l178 = api.text(0, '178°', { font: 'monoMedium', size: 0.2, hex: T.signal, anchorX: 'right' }, [BXc - 0.35, CY + 0.25], { delay: 1.2 });
-  note(api, 0, [BXc - 2.0, -0.15], 'Achse 6 bei 178°', 'Mit Seriennummer zur Kamera stand Achse 6 bei 178°: von dort keine IK-Lösung zu den Ablagen – oder die Steuerung klappte um.', { hex: T.signal, width: 4.2, size: 0.24, delay: 1.2 });
-  // Schritt 1: Teil um 180° gedreht greifen
-  api.fade(1, [n178, l178], { dur: 0.4 });
-  api.line(1, arcPts(BXc, CY, R - 0.32, Math.PI * (178 / 180), Math.PI * (-2 / 180) + 0.0001, 40), { width: 1.4, hex: T.good, dashed: true }, { delay: 0.2, dur: 0.8 });
-  needle(-2, T.good, 1, { delay: 0.9 });
-  const off = cfg.gripper_angle_offset_deg;
-  note(api, 1, [3.1, 2.65], 'Um 180° gedreht greifen', `Offset ${fmt(off, 0)}° = 90° + 23° − 180°. Achse 6 steht jetzt nahe 0°, alle Ablagen sind erreichbar – und Fase und Seriennummer zeigen trotzdem zur Seitenkamera.`, { hex: T.good, width: 4.3, size: 0.24, delay: 0.6 });
-  // Ablegen: 8 mm → 1 mm
-  const DX = 0.2, DY = -3.0;
-  api.line(0, [[DX, DY], [DX + 2.2, DY]], { width: 2.6 }, { delay: 1.4 });
-  api.text(0, 'Prüfstation', { font: 'mono', size: 0.13, hex: T.inkSoft }, [DX, DY - 0.2], { delay: 1.4 });
-  const partOld = fill(api, 0, [DX + 1.1, DY + 0.8 + 0.25], 1.2, 0.5, T.part, { delay: 1.5 });
-  const dimOld = api.line(0, [[DX + 2.0, DY], [DX + 2.0, DY + 0.8]], { width: 1.4, hex: T.signal }, { delay: 1.6 });
-  const tOld = api.text(0, '8 mm: fällt hörbar', { font: 'monoMedium', size: 0.16, hex: T.signal }, [DX + 2.1, DY + 0.4], { delay: 1.6 });
-  note(api, 0, [X0 + 0.7, -1.6], 'Sanft ablegen', 'Der Greifer öffnet place_height_mm über der Pose. Der Startwert 8 mm war für ohne Teil geteachte Posen gedacht – unsere sind mit aufsitzendem Teil geteacht, also fiel es hörbar auf die Prüfstation.', { hex: T.signal, width: 6.4, size: 0.24, delay: 1.5 });
-  api.fade(1, [dimOld, tOld], { dur: 0.4 });
-  api.add(1, (v) => { partOld.material.opacity *= 1 - v; partOld.visible = partOld.material.opacity > 0.001; }, { dur: 0.4 });
-  fill(api, 1, [DX + 1.1, DY + 0.1 + 0.25], 1.2, 0.5, T.part, { delay: 1.1 });
-  api.text(1, `${cfg.place_height_mm ?? 1} mm: liegt exakt auf`, { font: 'monoMedium', size: 0.16, hex: T.good }, [DX + 2.1, DY + 0.12], { delay: 1.2 });
-  api.text(1, `place_height_mm = ${cfg.place_height_mm ?? 1}`, { font: 'mono', size: 0.15, hex: T.good }, [X0 + 0.7, -3.3], { delay: 1.2 });
-  api.stamp(1, 'ALLES IN DER KONFIGURATION', [5.0, -1.9], { size: 0.26, rot: -0.03, hex: T.good, sub: 'gripper_angle_offset_deg · place_height_mm' }, { delay: 1.5 });
 }
 
 // ---------------------------------------------------------------- 5.7 Die echte Kamera
@@ -501,8 +428,8 @@ function sheet72t(api) {
     ['M1', 'Teil weiß übersteuert', 'Belichtungsautomatik auf dunkler Platte', 'Belichtung fest eingestellt', '3.8'],
     ['M1', 'Mitte bis 8 mm zu weit außen', 'Parallaxe der Oberseite, Objektiv unkalibriert', 'Lineare Korrektur: höchstens 2 mm', '3.6'],
     ['M1', 'Hand, verdeckter Marker, Teil kopfüber', 'Ein Mensch legt im Dauerbetrieb nach', 'Ruhe-, Form- und Fasenprüfung', '3.7'],
-    ['M2', 'Keine IK-Lösung zu den Ablagen', 'Achse 6 bei 178°', 'Teil um 180° gedreht greifen', '4.8'],
-    ['M2', 'Teil fällt auf die Prüfstation', 'Posen mit aufsitzendem Teil geteacht', 'Greifer öffnet 1 mm darüber', '4.8'],
+    ['M2', 'Keine IK-Lösung zu den Ablagen', 'Achse 6 bei 178°', 'Teil um 180° gedreht greifen', '–'],
+    ['M2', 'Teil fällt auf die Prüfstation', 'Posen mit aufsitzendem Teil geteacht', 'Greifer öffnet 1 mm darüber', '–'],
     ['M3', 'Unscharf, Loch 6,7 statt 9,5 mm', 'Autofokus; Maske am Bildrand geschlossen', 'Fokus fest; Rand vor dem Schließen auffüllen', '5.7'],
     ['M3', 'Loch knapp zu klein', 'Spiegelung in der Bohrung', 'Kreis-Fit ohne die inneren Punkte', '5.9'],
     ['M4', 'Arm zittert', '60 Sollwerte je Sekunde werden zur Treppe', 'servo_j mit Override 0,5', '6.6'],
@@ -557,11 +484,10 @@ function sheet73b(api) {
 export function aufbauScenes(storyboard) {
   const e = (id) => storyboard.find((s) => s.id === id);
   return [
-    sheetScene(e('1.7'), 2, sheet17, { durations: [2.2, 2.0] }),
+    sheetScene(e('1.7'), 1, sheet17, { durations: [2.2] }),
     sheetScene(e('2.5'), 2, sheet25, { durations: [3.6, 2.6] }),
     sheetScene(e('3.7'), 2, sheet37, { durations: [2.4, 1.8] }),
     sheetScene(e('3.8'), 2, sheet38),
-    sheetScene(e('4.8'), 2, sheet48, { durations: [2.2, 2.0] }),
     sheetScene(e('5.7'), 2, sheet57, { durations: [2.0, 1.8] }),
     sheetScene(e('5.8'), 2, sheet58),
     sheetScene(e('7.1'), 3, sheet71t),

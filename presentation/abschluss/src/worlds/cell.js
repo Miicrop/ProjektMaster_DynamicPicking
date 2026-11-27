@@ -6,7 +6,7 @@
 // immer vom Startwert des Abschnitts aus → Sprünge und Rückwärtsschritte bleiben exakt).
 import * as THREE from 'three';
 import { T, EASE, MODULE_COLOR, color } from '../theme.js';
-import { makeWorldScene, LAYER_SOLID } from '../engine/stage.js';
+import { makeWorldScene, LAYER_SOLID, LAYER_PLATE } from '../engine/stage.js';
 import { InkLine, Balloon, text, solid, v3 } from '../kit/ink.js';
 import { clamp01 } from '../kit/tiles.js';
 import { arrowPts, arc, circle, setPts } from '../kit/geom.js';
@@ -502,22 +502,66 @@ export function createCell(ctx) {
     obj.traverse((o) => {
       if (o.material) {
         o.material.depthTest = false;
-        o.renderOrder = o.userData.plate ? 8 : Math.max(o.renderOrder, 10);
+        o.renderOrder = o.userData.rim ? 7 : o.userData.plate ? 8 : Math.max(o.renderOrder, 10);
       }
     });
     return obj;
+  }
+  /**
+   * Schild für Komponentenbeschriftungen mit Hinweislinie (1.2, 1.3, 6.2): deckendes Rechteck mit dünnem Rand.
+   * Liegt auf LAYER_PLATE: dort zeichnet der Kantenpass keine Tuschekanten (Maske in stage.js), das Schild bleibt
+   * also immer ein sauberes Rechteck vor allem, was dahinter oder davor steht.
+   */
+  const signs = [];
+  function signPlate(tt, pad = 0.06, border = 0.008) {
+    const ts = Array.isArray(tt) ? tt : [tt];
+    const t = ts[0];
+    const mat = (hex) => new THREE.MeshBasicMaterial({ color: color(hex), transparent: true, depthWrite: false, depthTest: false });
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat(T.paper));
+    const rim = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat(T.inkSoft));
+    plate.userData.plate = true;
+    rim.userData.rim = true;
+    plate.renderOrder = 8;
+    rim.renderOrder = 7;
+    for (const m of [plate, rim]) {
+      m.layers.enable(LAYER_PLATE);
+      m.visible = false;
+      m.scale.set(0.0001, 0.0001, 1);
+      t.parent.add(m);
+    }
+    // ein Rechteck um alle Texte des Schilds
+    const fit = () => {
+      if (!ts.every((q) => q.textRenderInfo)) return;
+      let X0 = Infinity, Y0 = Infinity, X1 = -Infinity, Y1 = -Infinity;
+      ts.forEach((q) => {
+        const [x0, y0, x1, y1] = q.textRenderInfo.blockBounds;
+        X0 = Math.min(X0, q.position.x + x0); Y0 = Math.min(Y0, q.position.y + y0);
+        X1 = Math.max(X1, q.position.x + x1); Y1 = Math.max(Y1, q.position.y + y1);
+      });
+      const w = X1 - X0 + pad * 2, h = Y1 - Y0 + pad * 2;
+      const x = (X0 + X1) / 2, y = (Y0 + Y1) / 2;
+      plate.scale.set(w, h, 1);
+      plate.position.set(x, y, t.position.z - 0.002);
+      rim.scale.set(w + border * 2, h + border * 2, 1);
+      rim.position.set(x, y, t.position.z - 0.003);
+    };
+    ts.forEach((q) => q.addEventListener('synccomplete', fit));
+    fit();
+    signs.push({ t, plate, rim });
+    return t;
   }
   const worldOf = (o) => () => o.getWorldPosition(new THREE.Vector3());
   function callout(n, label, at, off) {
     const getAt = typeof at === 'function' ? at : () => at;
     const g = new THREE.Group();
     const b = new Balloon(String(n), { r: 0.24, size: 0.18 });
+    b.disc.layers.enable(LAYER_PLATE); // keine Tuschekanten durch die Positionsnummer
     const left = off.x < 0;
     const t = text(label, { font: 'sansMedium', size: 0.24, anchorX: left ? 'right' : 'left', anchorY: 'middle', opacity: 0 });
-    t.position.set(left ? -0.34 : 0.34, 0, 0.002);
+    t.position.set(left ? -0.42 : 0.42, 0, 0.002);
     g.add(b.object, t);
     bb(g);
-    plated(t);
+    signPlate(t, 0.08, 0.01);
     onTop(g);
     const leader = new InkLine([v3(0, 0, 0), v3(0, 0, 1)], { width: 1.1, progress: 0 });
     scene.add(leader.object);
@@ -569,7 +613,7 @@ export function createCell(ctx) {
     g.add(t);
     g.position.copy(at.clone().add(off));
     bb(g);
-    plated(t, 0.035);
+    signPlate(t, 0.045, 0.005);
     onTop(g);
     const leader = new InkLine([at, at.clone().add(off.clone().multiplyScalar(0.97))], { width: 1.1, progress: 0 });
     scene.add(leader.object);
@@ -600,6 +644,7 @@ export function createCell(ctx) {
   // ---------- 4.1 Gelenke und TCP-Maß ----------
   const jointBalloons = lara.pivots.map((_, i) => {
     const b = new Balloon(String(i + 1), { r: 0.22, size: 0.17, hex: MODULE_COLOR.M2 });
+    b.disc.layers.enable(LAYER_PLATE); // wie 1.2: keine Tuschekanten durch die Nummer
     bb(b.object);
     onTop(b.object);
     return b;
@@ -611,8 +656,7 @@ export function createCell(ctx) {
   const tcpDimSub = text('LWR50F 28 mm + LWR50L 169,5 mm', { font: 'mono', size: 0.18, hex: T.inkSoft, anchorX: 'left', anchorY: 'top', opacity: 0 });
   tcpDimSub.position.y = -0.22;
   tcpDimG.add(tcpDimText, tcpDimSub);
-  plated(tcpDimText);
-  plated(tcpDimSub);
+  signPlate([tcpDimText, tcpDimSub], 0.07, 0.01); // Schild wie die Komponentenbeschriftungen in 1.2
   onTop(tcpDimG);
 
   // ---------- 4.2 Geschwindigkeitsprofil als eigene Karte (Höhe über der Greifpose, überhöht) ----------
@@ -1591,6 +1635,11 @@ export function createCell(ctx) {
       plate.material.opacity = t.opacity * 0.9;
       plate.visible = t.visible && t.opacity > 0.01 && plate.scale.x > 0.001;
     });
+    signs.forEach(({ t, plate, rim }) => {
+      plate.material.opacity = t.opacity;
+      rim.material.opacity = t.opacity;
+      plate.visible = rim.visible = t.visible && t.opacity > 0.01 && plate.scale.x > 0.001;
+    });
   }
   return { scene, S, defaults: DEFAULTS, update };
 }
@@ -1707,21 +1756,14 @@ export const CELL_SCENES = [
     steps: [
       (tl, S) => {
         to(tl, S, { ruler: 0, duration: 0.4, ease: 'power1.in' }, 0);
-        to(tl, S, { angle: 1, duration: 2.4, ease: 'power1.inOut' }, 0.4);
+        to(tl, S, { limits: 1, duration: 2.0, ease: 'power1.inOut' }, 0.4);
       },
-    ],
-    cams: [C.angle],
-  },
-  {
-    id: '4.5', world: 'cell',
-    steps: [
-      (tl, S) => to(tl, S, { limits: 1, duration: 2.0, ease: 'power1.inOut' }, 0.4),
       (tl, S) => to(tl, S, { outside: 1, duration: 1.2, ease: 'power1.out' }, 0),
     ],
     cams: [C.limits, C.limits],
   },
   {
-    id: '4.6', world: 'cell',
+    id: '4.5', world: 'cell',
     steps: [
       (tl, S) => to(tl, S, { ghost: 1, duration: 1.8, ease: 'power1.out' }, 0.6),
       (tl, S) => tl.to(S, { sim: 1, duration: CELL.TS, ease: 'none' }, 0),
