@@ -1,6 +1,6 @@
 // Die Roboterzelle: Aufstellungsplan (1.1) → 3D-Zelle (1.2) → Bauteil (1.3) → ein Zyklus (1.4) →
-// LARA im Detail (Akt 4: Gelenke, Bauteil → Greifpose, Greifsequenz, 23°, Grenzen) → Simulator (4.6) → M4 lernt mit Rauschen (6.2)
-// → Übergabe M4 → M2 (6.8) → Ausblick (7.5) → Finale (7.6). Alle Lagen aus system.yaml (über data.json), LARA aus der URDF.
+// LARA im Detail (Akt 4: Gelenke, Bauteil → Greifpose, Greifsequenz, 23°, Grenzen) → Simulator (4.6) → M4: Demonstrationen per Planer (6.5)
+// → Ausblick (7.5) → Finale (7.6). Alle Lagen aus system.yaml (über data.json), LARA aus der URDF.
 // Roboter-Basis-KS = Papier-KS: x rechts, y oben, z aus dem Papier; 1 m = 10 Papiereinheiten.
 // Bewegungen wie am echten Roboter: PTP in Gelenkkoordinaten, Anfahren/Abheben linear (IK je Bild,
 // immer vom Startwert des Abschnitts aus → Sprünge und Rückwärtsschritte bleiben exakt).
@@ -31,7 +31,10 @@ const DEFAULTS = {
   limits: 0, outside: 0, // 4.5
   ghost: 0, sim: 0, // 4.6
   m4: 0, m4rec: 0, m4chain: 0, // 6.2
-  m4pol: 0, m4hand: 0, m4back: 0, // 6.8 (m4back: Rückfahrt zu Beginn von 7.5)
+  act6: 0, // ab 6.5: Schattenroboter aus 4.5 weg
+  m6: 0, m6drift: 0, m6noise: 0, // 6.6 Noise Injection
+  m10: 0, // 6.10 DAgger
+  m4back: 0, // Rückfahrt zu Beginn von 7.5
   game: 0, game1: 0, game2: 0, unboard: 0, // 7.5 (unboard: Rückbau zu Beginn von 7.6)
   cycle2: 0, outro: 0, finale: 0, // 7.6
 };
@@ -551,10 +554,10 @@ export function createCell(ctx) {
     return t;
   }
   const worldOf = (o) => () => o.getWorldPosition(new THREE.Vector3());
-  function callout(n, label, at, off) {
+  function callout(n, label, at, off, hex = T.ink) {
     const getAt = typeof at === 'function' ? at : () => at;
     const g = new THREE.Group();
-    const b = new Balloon(String(n), { r: 0.24, size: 0.18 });
+    const b = new Balloon(String(n), { r: 0.24, size: 0.18, hex });
     b.disc.layers.enable(LAYER_PLATE); // keine Tuschekanten durch die Positionsnummer
     const left = off.x < 0;
     const t = text(label, { font: 'sansMedium', size: 0.24, anchorX: left ? 'right' : 'left', anchorY: 'middle', opacity: 0 });
@@ -563,7 +566,7 @@ export function createCell(ctx) {
     bb(g);
     signPlate(t, 0.08, 0.01);
     onTop(g);
-    const leader = new InkLine([v3(0, 0, 0), v3(0, 0, 1)], { width: 1.1, progress: 0 });
+    const leader = new InkLine([v3(0, 0, 0), v3(0, 0, 1)], { width: hex === T.ink ? 1.1 : 2.2, hex, progress: 0 });
     scene.add(leader.object);
     return {
       set(v) {
@@ -972,7 +975,7 @@ export function createCell(ctx) {
   });
 
   /** Bildfeste Karte vor allem anderen: Höhe = frac der Bildhöhe, Mitte um side · Bildhöhe nach rechts versetzt. */
-  function screenCard(g, h, frac, side) {
+  function screenCard(g, h, frac, side, up = 0.02) {
     const camera = ctx.stage.camera;
     camRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
     camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
@@ -980,7 +983,7 @@ export function createCell(ctx) {
     const dist = Math.min(3, 0.5 * speedAnchor.distanceTo(camera.position));
     const visH = 2 * dist * Math.tan((camera.fov * Math.PI) / 360);
     g.scale.setScalar((frac * visH) / h);
-    g.position.copy(camera.position).addScaledVector(camFwd, dist).addScaledVector(camRight, side * visH).addScaledVector(camUp, 0.02 * visH);
+    g.position.copy(camera.position).addScaledVector(camFwd, dist).addScaledVector(camRight, side * visH).addScaledVector(camUp, up * visH);
   }
 
   // ---------- 7.5 Ausblick: „Mensch ärgere Dich nicht“ auf dem Arbeitsraum ----------
@@ -1173,18 +1176,17 @@ export function createCell(ctx) {
   let sayLast = ' ';
 
   // ---------- Akt 6: M4 Behavior Cloning ----------
-  // Teil C liegt an PICK aus der Punktedatei der Anlage (data.m4, TCP im Basis-KS). 6.2: LARA fährt zur Startpose,
-  // dann eine Aufnahme-Episode mit echtem Rauschen (bc/noise.py, 15 Hz), dahinter der Fächer aller Episoden; danach
-  // legt sie das Teil zurück wie put_back. 6.8: Fahrt bis PRE_PLACE (Sollbahn), Übergabe an M2, M2 legt in die Prüfung
-  // und fährt zurück über Teil B – dort beginnt 7.5. Alles blendet mit dem Spielfeld (7.5) aus.
+  // Teil C liegt an PICK aus der Punktedatei der Anlage (data.m4, TCP im Basis-KS). 6.5: LARA fährt zur Startpose,
+  // dann die Sollbahn des Planers wie pick_bis_griff (ANFLUG 150 mm, PRE_PICK 50 mm über PICK, Endanflug, greifen,
+  // zurück auf PRE_PICK) ohne Rauschen; danach legt sie das Teil zurück wie put_back. Die Rückfahrt über Teil B läuft
+  // zu Beginn von 7.5. Alles blendet mit dem Spielfeld (7.5) aus.
   const m4 = data.m4;
   const M4P = m4.points;
   const partC = makePart();
   const thetaC = wrap(M4P.PICK[5] - P.home[5] - rc.gripper_angle_offset_deg); // Umkehrung von graspPose
   const restC = rpyMatrix(0, 0, thetaC * DEG).setPosition(M4P.PICK[0] / 1000, M4P.PICK[1] / 1000, (TZ + data.part.height_mm / 2) / 1000);
   const relC = new THREE.Matrix4().copy(tcp(M4P.PICK)).invert().multiply(restC);
-  const fixC = placed(insp, relC);
-  // Orientierung entlang der Bahn: Start → PICK bis 150 mm über PICK, dann fest, ab 50 mm über PICK → PRE_PLACE
+  // Orientierung entlang der Bahn: die von PICK (wie an der Anlage ab dem Anflug)
   const ideal = m4.ideal.map(([x, y, z]) => new THREE.Vector3(x, y, z));
   const pi = m4.pick_index;
   let dwellN = 1;
@@ -1195,31 +1197,28 @@ export function createCell(ctx) {
     return best;
   };
   const i150 = nearest(ideal[pi].clone().setZ(ideal[pi].z + 150), 0, pi);
-  const i50 = nearest(ideal[pi].clone().setZ(ideal[pi].z + 50), pi + dwellN, ideal.length);
-  const [rP, rE] = [M4P.PICK, M4P.PRE_PLACE].map((p) => new THREE.Quaternion().setFromRotationMatrix(poseMatrix(p)));
-  const sstep = (f) => f * f * (3 - 2 * f);
-  const rotAt = (i) => (i <= i50 ? rP : rP.clone().slerp(rE, sstep((i - i50) / (ideal.length - 1 - i50))));
+  const rP = new THREE.Quaternion().setFromRotationMatrix(poseMatrix(M4P.PICK));
+  const rotAt = () => rP;
   // Startwerte aus den echten Gelenkwinkeln der Anlage; J6 der URDF ist gegenüber der Steuerung um 90° gedreht (wie Home)
   const seedOf = (k) => m4.joints[k].map((v, i) => (v + (i === 5 ? 90 : 0)) * DEG);
-  // Startwert je Takt: bis PICK dessen Gelenkwinkel, danach nach Bahnlänge zu PRE_PLACE interpoliert
-  const arcI = [0];
-  for (let i = 1; i < ideal.length; i++) arcI[i] = arcI[i - 1] + ideal[i].distanceTo(ideal[i - 1]);
-  const lerpQ = (a, b, f) => a.map((v, k) => v + (b[k] - v) * f);
-  const seedAt = (i) => (i <= pi ? seedOf('PICK') : lerpQ(seedOf('PICK'), seedOf('PRE_PLACE'), (arcI[i] - arcI[pi]) / (arcI[arcI.length - 1] - arcI[pi])));
+  // Startwert je Takt: die Gelenkwinkel von PICK
+  const seedAt = () => seedOf('PICK');
   const toClear = plan([{ kind: 'ptp', b: M4P.CLEAR_FOV, seed: seedOf('CLEAR_FOV'), dur: 2.2 }], sim.q1);
   /** Eine Fahrt wie pick_to_station: von CLEAR_FOV per PTP zum Anflug 150 mm über PICK (CLEAR_FOV liegt nahe der
    *  J1-Singularität, kartesisch schleudert J1), ab dort die 15-Hz-Bahn. IK je Takt vom Gelenkwinkel der Anlage aus
    *  (beim Laden), dazwischen linear in den Gelenken; t0 = Beginn der 15-Hz-Bahn. */
-  function track(path, qFrom) {
+  const M4_SPEED = 1; // Abspieltempo der 15-Hz-Bahn (1 = echt), langsam genug, um die Bahn zu verfolgen
+  function track(path, qFrom, iS = i150) {
     const one = new THREE.Vector3(1, 1, 1);
     const at = (i) => new THREE.Matrix4().compose(v3(path[i][0] / 1000, path[i][1] / 1000, path[i][2] / 1000), rotAt(i), one);
-    const qs = path.slice(i150).map((_, j) => lara.ik(at(i150 + j), seedAt(i150 + j), { iterations: 120 }));
+    const qs = [];
+    for (let i = iS; i < path.length; i++) qs.push(lara.ik(at(i), seedAt(i), { iterations: 120 }));
     const jump = Math.max(...qs.slice(1).map((q, i) => Math.max(...q.map((v, k) => Math.abs(v - qs[i][k]))))) / DEG;
     if (jump > 10) console.warn(`IK M4: Gelenksprung ${jump.toFixed(0)}° zwischen zwei Takten`);
-    const pre = plan([{ kind: 'ptp', b: [...path[i150], ...M4P.PICK.slice(3)], seed: qs[0], dur: 2.0 }], qFrom);
-    const dt = 1 / m4.rate_hz;
+    const pre = plan([{ kind: 'ptp', b: [...path[iS], ...M4P.PICK.slice(3)], seed: qs[0], dur: 1.2 }], qFrom);
+    const dt = 1 / (m4.rate_hz * M4_SPEED);
     const t0 = pre.total;
-    const tPick = t0 + (pi - i150) * dt;
+    const tPick = t0 + (pi - iS) * dt;
     return {
       t0, total: t0 + (qs.length - 1) * dt, q1: qs[qs.length - 1], tGrip: tPick + (dwellN / 2) * dt,
       at(t) {
@@ -1231,60 +1230,92 @@ export function createCell(ctx) {
       },
     };
   }
-  const recEp = m4.episodes.reduce((a, e) => (e.scale > a.scale ? e : a));
-  const rec = track(recEp.path, toClear.q1);
+  const rec = track(m4.ideal, toClear.q1);
   const putSteps = [
-    { kind: 'ptp', b: up(M4P.PICK, 50), seed: seedOf('PICK'), dur: 1.8 },
-    { kind: 'lin', a: up(M4P.PICK, 50), b: M4P.PICK, dur: 0.9 },
-    { kind: 'wait', dur: 0.45, grip: 0 },
-    { kind: 'lin', a: M4P.PICK, b: up(M4P.PICK, 50), dur: 0.7 },
-    { kind: 'ptp', b: M4P.CLEAR_FOV, seed: seedOf('CLEAR_FOV'), dur: 1.8 },
+    { kind: 'ptp', b: up(M4P.PICK, 50), seed: seedOf('PICK'), dur: 1.0 },
+    { kind: 'lin', a: up(M4P.PICK, 50), b: M4P.PICK, dur: 0.6 },
+    { kind: 'wait', dur: 0.3, grip: 0 },
+    { kind: 'lin', a: M4P.PICK, b: up(M4P.PICK, 50), dur: 0.5 },
+    { kind: 'ptp', b: M4P.CLEAR_FOV, seed: seedOf('CLEAR_FOV'), dur: 1.2 },
   ];
   putSteps.startGrip = 1;
   const putBack = plan(putSteps, rec.q1);
   const evPut = events(putBack);
   CELL.REC = rec.total + putBack.total;
-  const pol = track(m4.ideal, putBack.q1);
-  const handSteps = [
-    { kind: 'wait', dur: 0.8 }, // M2: reset() – Werkzeug, Override, init_program
-    { kind: 'ptp', b: up(insp, AH), dur: 1.4 },
-    ...down(insp, null, 0),
-    ...lift(insp, null),
-  ];
-  handSteps.startGrip = 1;
-  const hand = plan(handSteps, pol.q1);
-  const evHand = events(hand);
+  // 6.6 Noise Injection: der Ghost-Arm fährt die Sollbahn, LARA eine verrauschte Episode – beobachtet wird die ganze
+  // Bahn ab dem Transfer (300 mm über PICK; davor liegt CLEAR_FOV nahe der J1-Singularität). Die Abweichung ist die einer
+  // echten Episode der Anlage (data.m4.side.demo, x/y/z je Höhe über PICK), im Bild EXAG-fach überzeichnet.
+  const EXAG = 4;
+  const demoS = m4.side.demo;
+  const zPick = ideal[pi].z;
+  const offAt = (h) => {
+    let best = 0;
+    for (let i = 0; i < demoS.h.length; i++) if (Math.abs(demoS.h[i] - h) < Math.abs(demoS.h[best] - h)) best = i;
+    return [demoS.dx[best], demoS.dy[best], demoS.dz[best]];
+  };
+  let iS6 = 0;
+  while (iS6 < pi && ideal[iS6].z - zPick > 300) iS6++;
+  const noisyPath = m4.ideal.map((p, i) => {
+    if (i > pi) return p;
+    const o = offAt(p[2] - zPick);
+    return [p[0] + EXAG * o[0], p[1] + EXAG * o[1], p[2] + Math.max(-2, EXAG * o[2])];
+  });
+  const noisyT = track(noisyPath, toClear.q1, iS6); // 6.5 endet an CLEAR_FOV (ohne Fahrt)
+  const ghostNoisy = track(m4.ideal, toClear.q1, iS6);
+  CELL.NOISY = noisyT.total;
+  const taktAt = (tr, t) => (t < tr.t0 ? -1 : iS6 + Math.floor((t - tr.t0) * m4.rate_hz * M4_SPEED));
+  // 6.10 DAgger: die Policy fährt versetzt an (im Bild überzeichnet) und bleibt H_TAKE über PICK stehen; der Experte
+  // (Planer) übernimmt, fährt waagrecht zurück über PICK, senkrecht hinunter und greift (wie DAgger-Ablauf 23.11.).
+  const H_TAKE = 20; // mm über PICK
+  const DAG_OFF = 45; // mm seitlich, im Bild überzeichnet (echte Korrekturen 2–5 mm)
+  let iTake = iS6;
+  while (iTake < pi && ideal[iTake].z - zPick > H_TAKE) iTake++;
+  const sstep = (f) => f * f * (3 - 2 * f);
+  const dagPath = m4.ideal.slice(0, iTake + 1).map((p, i) => [p[0], p[1] + DAG_OFF * sstep(clamp01(((i - iS6) / (iTake - iS6)) * 1.5)), p[2]]);
+  const dagPol = track(dagPath, toClear.q1, iS6);
+  const takeP = [...dagPath[iTake], ...M4P.PICK.slice(3)];
+  const dagExp = plan([
+    { kind: 'wait', dur: 1.2 },
+    { kind: 'lin', a: takeP, b: up(M4P.PICK, H_TAKE), dur: 1.0 },
+    { kind: 'lin', a: up(M4P.PICK, H_TAKE), b: M4P.PICK, dur: 1.0 },
+    { kind: 'wait', dur: 0.5, grip: 1 },
+    { kind: 'lin', a: M4P.PICK, b: up(M4P.PICK, 50), dur: 0.8 },
+  ], dagPol.q1);
+  const evDag = events(dagExp).map((e) => ({ ...e, t: e.t + dagPol.total }));
+  CELL.DAG = dagPol.total + dagExp.total;
+  const tTake = dagPol.total; // Übernahme
+  const tExp = dagPol.total + 1.2; // Experte fährt
   // 7.5 beginnt über Teil B (Ende von 4.6): die Rückfahrt läuft mit dem Aufbau des Spielfelds
-  const m4Back = plan([{ kind: 'ptp', b: up(gPB, AH), seed: demo.q1, dur: 1.8 }], hand.q1);
-  CELL.POL = pol.total;
-  CELL.HAND = hand.total;
+  const m4Back = plan([{ kind: 'ptp', b: up(gPB, AH), seed: demo.q1, dur: 1.8 }], dagExp.q1);
   CELL.M4BACK = m4Back.total;
   {
     const wp = (q, pose) => new THREE.Vector3().setFromMatrixPosition(lara.fk(q)).distanceTo(new THREE.Vector3().setFromMatrixPosition(tcp(pose)));
     if (wp(rec.at(rec.tGrip).q, M4P.PICK) > 0.001) console.warn('IK M4: PICK nicht erreicht');
-    if (wp(pol.q1, M4P.PRE_PLACE) > 0.001) console.warn('IK M4: PRE_PLACE nicht erreicht');
     // Zweig wie an der Anlage: gelöste Gelenke nahe an den gespeicherten (J1–J5, J6 hat den URDF-Versatz)
-    for (const [k, q] of [['CLEAR_FOV', toClear.q1], ['PICK', rec.at(rec.tGrip).q], ['PRE_PLACE', rec.q1], ['PRE_PLACE (Policy)', pol.q1]]) {
+    for (const [k, q] of [['CLEAR_FOV', toClear.q1], ['PICK', rec.at(rec.tGrip).q]]) {
       const d = Math.max(...q.slice(0, 5).map((v, i) => Math.abs(v - seedOf(k.split(' ')[0])[i]))) / DEG;
       if (d > 15) console.warn(`IK M4: ${k} ${d.toFixed(0)}° neben der Stellung der Anlage`);
     }
-    for (const [name, pl] of [['toClear', toClear], ['putBack', putBack], ['hand', hand], ['m4Back', m4Back]]) {
+    for (const [name, pl] of [['toClear', toClear], ['putBack', putBack], ['m4Back', m4Back]]) {
       pl.segs.forEach((sg, i) => {
         if (sg.b && wp(sg.q1, sg.b) > 0.001) console.warn(`IK ${name}[${i}]: ${(wp(sg.q1, sg.b) * 1000).toFixed(1)} mm Restfehler`);
       });
     }
   }
   const M4_FRONT = W(60, -500, 0); // Beschriftungen links vor dem Tisch, frei von Arm und Tischkante
-  // 6.2 Wegpunkte, Sollbahn, Fächer der Episoden
-  const wpCallouts = [
-    [1, 'CLEAR_FOV · Start, Kamera frei, dann PTP', M4P.CLEAR_FOV, v3(-2.2, -0.6, 0.8)],
-    [2, 'PICK · Greifer zu', M4P.PICK, v3(-1.6, -1.4, 0.2)],
-    [3, 'PRE_PLACE · Übergabe an M2', M4P.PRE_PLACE, v3(2.0, -0.8, 0.8)],
-  ].map(([n, label, p, off]) => callout(n, label, W(p[0], p[1], p[2]), off));
-  const wpCross = [M4P.CLEAR_FOV, M4P.PICK, M4P.PRE_PLACE].flatMap((p) => [[-1, 0, 0], [0, -1, 0], [0, 0, -1]].map((d) => {
+  // 6.5 Wegpunkte (ANFLUG, PRE_PICK, PICK gelb), Sollbahn bis zum Griff
+  const upZ = (p, dz) => [p[0], p[1], p[2] + dz];
+  const WPS = [
+    [1, 'CLEAR_FOV · Start, Kamera frei', M4P.CLEAR_FOV, v3(-2.2, -0.6, 0.8), T.ink],
+    [2, `ANFLUG · ${m4.anflug_mm} mm über PICK`, upZ(M4P.PICK, m4.anflug_mm), v3(0.1, 1.5, 0.45), T.waypoint],
+    [3, `PRE_PICK · ${m4.pre_pick_mm} mm über PICK`, upZ(M4P.PICK, m4.pre_pick_mm), v3(0.1, 1.5, 0.4), T.waypoint],
+    [4, 'PICK · Greifer zu', M4P.PICK, v3(0.1, 1.5, 0.35), T.waypoint],
+  ];
+  const wpCallouts = WPS.map(([n, label, p, off, hex]) => callout(n, label, W(p[0], p[1], p[2]), off, hex));
+  const wpCross = WPS.flatMap(([, , p, , hex]) => [[-1, 0, 0], [0, -1, 0], [0, 0, -1]].map((d) => {
     const c = W(p[0], p[1], p[2]);
     const a = c.clone().add(v3(...d).multiplyScalar(0.18));
-    const l = new InkLine([a, c.clone().multiplyScalar(2).sub(a)], { width: 1.6, hex: MODULE_COLOR.M4, progress: 0 });
+    const l = new InkLine([a, c.clone().multiplyScalar(2).sub(a)], { width: 2, hex: hex === T.ink ? MODULE_COLOR.M4 : hex, progress: 0 });
     scene.add(l.object);
     return l;
   }));
@@ -1293,28 +1324,23 @@ export function createCell(ctx) {
     scene.add(l.object);
     return l;
   };
-  // ab dem Anflug 150 mm über PICK; davor fährt die Anlage PTP
-  const idealLine = pathLine(m4.ideal.slice(i150), { width: 1.4, dashed: true, dash: 0.1, gap: 0.07, hex: T.inkSoft });
-  const fan = m4.episodes.map((e) => pathLine(e.path.slice(i150), { width: e === recEp ? 2.4 : 1.1, hex: MODULE_COLOR.M4 }));
-  const noiseLabel = label3d(
-    `${m4.episodes.length} Episoden, jede mit Rauschen`,
-    `Streuung ${f1(m4.noise.sigma_mm, 0)} mm · Trichter: 0 an Start, PICK und Übergabe · bis ${f1(m4.max_dev_mm, 0)} mm neben der Sollbahn`,
-    M4_FRONT, MODULE_COLOR.M4,
-  );
-  // 6.2 Karte rechts: vom Vorführen zur Policy
+  // ab dem Anflug 150 mm über PICK bis zum Griff; davor fährt die Zelle PTP (CLEAR_FOV nahe der J1-Singularität)
+  const idealLine = pathLine(m4.ideal.slice(i150, pi + 1), { width: 1.6, dashed: true, dash: 0.1, gap: 0.07, hex: T.inkSoft });
+  const planLabel = label3d('Sollbahn des Planers, ohne Rauschen', 'wie pick_bis_griff: ANFLUG → PRE_PICK → PICK, greifen, zurück auf PRE_PICK · 15 Hz', M4_FRONT, MODULE_COLOR.M4);
+  // 6.5 Karte rechts: vom Vorführen zur Policy
   const CW = 4.9;
   const chainG = bb(new THREE.Group());
   const CHAIN = [
     ['Vom Vorführen zur Policy', 'title', 0.24, T.ink, 0],
-    ['1  3 Punkte teachen, der Rest wird berechnet', 'mono', 0.13, T.ink, 0.5],
-    ['2  Planer fährt Bahn + Rauschen, 15 Hz,', 'mono', 0.13, MODULE_COLOR.M4, 0.3],
-    ['   beide Kameras, Teil wird umgelegt', 'mono', 0.13, MODULE_COLOR.M4, 0.22],
+    ['1  PICK aus der Lage, ANFLUG und PRE_PICK darüber', 'mono', 0.13, T.ink, 0.5],
+    ['2  Planer fährt die Bahn + Rauschen, 15 Hz,', 'mono', 0.13, T.ink, 0.3],
+    ['   beide Kameras, Teil wird umgelegt', 'mono', 0.13, T.ink, 0.22],
     ['3  Export: LeRobotDataset (lerobot 0.6.1)', 'mono', 0.13, T.ink, 0.3],
     ['4  Training: Diffusion Policy, 89,5 M Param.', 'mono', 0.13, T.ink, 0.3],
-    ['5  Inferenz: die Policy fährt selbst, 15 Hz', 'mono', 0.13, MODULE_COLOR.M4, 0.3],
-    ['Über 900 Demonstrationen an der Anlage.', 'sans', 0.15, T.inkSoft, 0.5],
-    ['Das Rauschen bringt Abweichungen samt', 'sans', 0.15, T.inkSoft, 0.25],
-    ['Korrektur in die Daten.', 'sans', 0.15, T.inkSoft, 0.25],
+    ['5  Inferenz: die Policy fährt selbst, 15 Hz', 'mono', 0.13, T.ink, 0.3],
+    ['Datensatz G2b: 619 Episoden an der Anlage,', 'sans', 0.15, T.inkSoft, 0.5],
+    ['davon 40 DAgger-Fahrten vom 23.11.', 'sans', 0.15, T.inkSoft, 0.25],
+    ['Wozu das Rauschen dient: nächste Szene.', 'sans', 0.15, T.inkSoft, 0.25],
   ];
   let cy0 = -0.22;
   const chainTexts = CHAIN.map(([str, font, size, hex, dy]) => {
@@ -1331,15 +1357,83 @@ export function createCell(ctx) {
   const chainFrame = new InkLine([v3(-CW / 2, -CHH / 2), v3(CW / 2, -CHH / 2), v3(CW / 2, CHH / 2), v3(-CW / 2, CHH / 2)], { closed: true, width: 1.4, progress: 0 });
   chainG.add(chainPlate, chainFrame.object, ...chainTexts);
   onTop(chainG);
-  // 6.8 Policy an der Handgelenkkamera, Übergabe, Stand
-  const polG = bb(new THREE.Group());
-  const polT = text('M4 · Policy, 15 Hz', { font: 'monoMedium', size: 0.2, hex: MODULE_COLOR.M4, anchorX: 'left', anchorY: 'middle', opacity: 0 });
-  polT.position.x = 0.35;
-  polG.add(polT);
-  plated(polT);
-  onTop(polG);
-  const handLabel = label3d('ÜBERGABE an M2', 'PRE_PLACE über der Prüfung · M2: reset(), dann ablegen', M4_FRONT, MODULE_COLOR.M4);
-  const vmLabel = label3d('Übergabe in der Neura-VM getestet', 'Policy an der Anlage erprobt (Probegriffe, 8,7 mm) · nächster Schritt: Policy greift, Planer transportiert · Bahn hier: Sollbahn', M4_FRONT, T.inkSoft);
+
+  // 6.6 Ghost-Arm, Spuren, Maßpfeil, Schieberegler
+  const ghost6 = new Lara(ctx.lara, { tool: lara.tool });
+  // über LARA sichtbar: ohne Tiefentest, nur ein Hauch Fläche
+  const ghost6Look = (o) => {
+    ghostLook(o);
+    if (!o.material) return;
+    o.material.depthTest = false;
+    o.material.depthWrite = false;
+    o.material.opacity = 0.4;
+    o.renderOrder = 9;
+  };
+  ghost6.meshes.forEach(ghost6Look);
+  const ghost6Grip = gBody.clone(true);
+  ghost6Grip.traverse(ghost6Look);
+  ghost6.flange.add(ghost6Grip);
+  cell.add(ghost6.object);
+  const idealLine6 = pathLine(m4.ideal.slice(iS6, pi + 1), { width: 1.8, dashed: true, dash: 0.1, gap: 0.07, hex: T.ink });
+  const noisyTrail = pathLine(noisyPath.slice(iS6, pi + 1), { width: 2.4, hex: MODULE_COLOR.M4 });
+  // Label: grüner Pfeil von LARA zurück zur Sollbahn (Ghost)
+  const gapLine = new InkLine([v3(0, 0, 0), v3(0, 0, 1)], { width: 3, hex: T.good, progress: 0 });
+  const gapHead = new InkLine([v3(0, 0, 0), v3(0, 0, 1), v3(0, 0, 2)], { width: 3, hex: T.good, progress: 0 });
+  scene.add(gapLine.object, gapHead.object);
+  // Karte unten links (Bildschirm): Erklärung je Schritt, Takt und Abstand; gezogen wird am Regler der Navigation
+  const SW = 6;
+  const slG = bb(new THREE.Group());
+  const slT = text(' ', { font: 'mono', size: 0.17, hex: T.inkSoft, anchorX: 'center', anchorY: 'top', opacity: 0 });
+  slT.position.set(0, 0.1, 0.01);
+  const gapT = text(' ', { font: 'monoMedium', size: 0.21, hex: T.good, anchorX: 'center', anchorY: 'top', opacity: 0 });
+  gapT.position.set(0, -0.3, 0.01);
+  let gapLast = ' ';
+  const m6Info = [
+    ['Noise Injection', `Ghost = Sollbahn, LARA = echte verrauschte Episode (19.11.), Abweichung im Bild ${EXAG}-fach überzeichnet. Das Label zeigt immer zurück zur Sollbahn.`, MODULE_COLOR.M4],
+  ].map(([title, sub, hex]) => {
+    const t = text(title, { font: 'sansMedium', size: 0.3, hex, anchorX: 'center', anchorY: 'bottom', opacity: 0 });
+    t.position.set(0, 1.05, 0.01);
+    const d = text(sub, { font: 'sans', size: 0.17, hex: T.inkSoft, anchorX: 'center', anchorY: 'top', opacity: 0, maxWidth: SW + 1 });
+    d.position.set(0, 0.95, 0.01);
+    return [t, d];
+  });
+  const slPlate = new THREE.Mesh(new THREE.PlaneGeometry(SW + 1.6, 2.45), new THREE.MeshBasicMaterial({ color: color(T.paper), transparent: true, depthWrite: false }));
+  slPlate.position.set(0, 0.43, -0.01);
+  slPlate.userData.plate = true;
+  slPlate.layers.enable(LAYER_SOLID);
+  const slFrame = new InkLine([v3(-SW / 2 - 0.8, -0.8), v3(SW / 2 + 0.8, -0.8), v3(SW / 2 + 0.8, 1.65), v3(-SW / 2 - 0.8, 1.65)], { closed: true, width: 1.4, progress: 0 });
+  slG.add(slPlate, slFrame.object, slT, gapT, ...m6Info.flat());
+  onTop(slG);
+  let slLast = ' ';
+  // 6.10 DAgger: Spuren (Policy braun, Experte grün) und Karte links
+  const dagTrail = pathLine(dagPath.slice(iS6), { width: 2.4, hex: MODULE_COLOR.M4 });
+  const expTrail = pathLine([dagPath[iTake], [M4P.PICK[0], M4P.PICK[1], M4P.PICK[2] + H_TAKE], M4P.PICK.slice(0, 3)], { width: 3, hex: T.good });
+  const dagIdeal = pathLine(m4.ideal.slice(iS6, pi + 1), { width: 1.8, dashed: true, dash: 0.1, gap: 0.07, hex: T.ink });
+  const dgG = bb(new THREE.Group());
+  const DGW = 7.6;
+  const DAG_LINES = [
+    ['DAgger', 'sansMedium', 0.3, MODULE_COLOR.M4],
+    [`1  Die Policy fährt selbst (Versatz im Bild überzeichnet)`, 'mono', 0.16, T.ink],
+    [`2  ${H_TAKE} mm über PICK: der Experte (Planer) übernimmt`, 'mono', 0.16, T.ink],
+    ['3  zurück über PICK, senkrecht hinunter, greifen', 'mono', 0.16, T.good],
+    ['4  die Fahrt geht ins Training, Labels zeigen auf die', 'mono', 0.16, T.ink],
+    ['   Sollbahn – dann wird nachtrainiert', 'mono', 0.16, T.ink],
+  ];
+  const dgTexts = DAG_LINES.map(([str, font, size, hex], i) => {
+    const t = text(str, { font, size, hex, anchorX: 'left', anchorY: 'top', opacity: 0 });
+    t.position.set(-DGW / 2 + 0.3, 1.45 - (i ? 0.55 + (i - 1) * 0.34 : 0), 0.01);
+    return t;
+  });
+  const dgPlate = new THREE.Mesh(new THREE.PlaneGeometry(DGW, 2.6), new THREE.MeshBasicMaterial({ color: color(T.paper), transparent: true, depthWrite: false }));
+  dgPlate.position.set(0, 0.45, -0.01);
+  dgPlate.userData.plate = true;
+  dgPlate.layers.enable(LAYER_SOLID);
+  const dgFrame = new InkLine([v3(-DGW / 2, -0.85), v3(DGW / 2, -0.85), v3(DGW / 2, 1.75), v3(-DGW / 2, 1.75), v3(-DGW / 2, -0.85)], { width: 1.4, progress: 0 });
+  dgG.add(dgPlate, dgFrame.object, ...dgTexts);
+  onTop(dgG);
+  const tcpG = new THREE.Matrix4();
+  const pR = new THREE.Vector3();
+  const pG = new THREE.Vector3();
 
   // ---------- update ----------
   const tmp = new THREE.Vector3();
@@ -1351,8 +1445,11 @@ export function createCell(ctx) {
     if (S.game2 > 0) return game2.at(S.game2 * game2.total);
     if (S.game1 > 0) return game1.at(S.game1 * game1.total);
     if (S.m4back > 0) return m4Back.at(S.m4back * m4Back.total);
-    if (S.m4hand > 0) return hand.at(S.m4hand * hand.total);
-    if (S.m4pol > 0) return pol.at(S.m4pol * pol.total);
+    if (S.m10 > 0) {
+      const t = S.m10 * CELL.DAG;
+      return t < dagPol.total ? dagPol.at(t) : dagExp.at(t - dagPol.total);
+    }
+    if (S.m6noise > 0) return noisyT.at(S.m6noise * noisyT.total);
     if (S.m4rec > 0) {
       const t = S.m4rec * CELL.REC;
       return t < rec.total ? rec.at(t) : putBack.at(t - rec.total);
@@ -1430,39 +1527,96 @@ export function createCell(ctx) {
     const k6 = 1 - S.game;
     const kC = clamp01(S.m4 * 2) * k6;
     partC.visible = kC > 0.001;
-    if (S.m4pol > 0) {
-      const ev = [{ t: pol.tGrip, grip: 1 }, ...evHand.map((e) => ({ ...e, t: e.t + pol.total }))];
-      partPose(partC.matrix, tcpNow, S.m4pol * pol.total + S.m4hand * hand.total, ev, relC, [fixC], restC);
-    } else {
+    if (S.m10 > 0) partPose(partC.matrix, tcpNow, S.m10 * CELL.DAG, evDag, relC, [], restC);
+    else if (S.m6noise > 0) partPose(partC.matrix, tcpNow, S.m6noise * noisyT.total, [{ t: noisyT.tGrip, grip: 1 }], relC, [], restC);
+    else {
       const ev = [{ t: rec.tGrip, grip: 1 }, ...evPut.map((e) => ({ ...e, t: e.t + rec.total }))];
       partPose(partC.matrix, tcpNow, S.m4rec > 0 ? S.m4rec * CELL.REC : -1, ev, relC, [restC], restC);
     }
     if (kC < 1) partC.matrix.multiply(new THREE.Matrix4().makeScale(Math.max(kC, 0.001), Math.max(kC, 0.001), Math.max(kC, 0.001)));
     partC.matrixWorldNeedsUpdate = true;
-    const k62 = k6 * (1 - clamp01(S.m4pol * 4)); // 6.2-Zeichnung weicht der Policy-Fahrt
+    const k62 = k6;
     const wpV = clamp01(S.m4 * 2 - 0.6) * k62;
-    wpCallouts.forEach((c, i) => c.set(clamp01(wpV * 1.6 - i * 0.15) * (1 - S.m4chain))); // Karte rechts braucht den Platz
+    wpCallouts.forEach((c, i) => c.set(clamp01(wpV * 1.6 - i * 0.15) * (1 - S.m6)));
     wpCross.forEach((l) => (l.progress = wpV));
     idealLine.progress = clamp01(S.m4 * 2 - 1) * k6;
     idealLine.opacity = 0.8;
     const recT = clamp01((S.m4rec * CELL.REC - rec.t0) / (rec.total - rec.t0));
-    fan.forEach((l, i) => {
-      l.progress = l === fan[m4.episodes.indexOf(recEp)] ? recT : clamp01(recT * 1.15 - i * 0.015);
-      l.opacity = (l === fan[m4.episodes.indexOf(recEp)] ? 1 : 0.45) * k62;
-    });
-    noiseLabel.forEach((t) => (t.opacity = clamp01(recT * 3 - 1.5) * k62));
-    const chV = clamp01(S.m4chain * 3) * k62;
+    planLabel.forEach((t) => (t.opacity = clamp01(recT * 3 - 0.5) * (1 - S.m4chain) * k62));
+    const chV = clamp01(S.m4chain * 3) * k62 * (1 - S.m6);
     chainG.visible = chV > 0.001;
-    if (chainG.visible) screenCard(chainG, CHH, 0.5, 0.87 - (0.5 * CW) / CHH / 2);
+    if (chainG.visible) screenCard(chainG, CHH, 0.42, -(0.87 - (0.42 * CW) / CHH / 2)); // links, wo in 6.6 die Karte steht
     chainPlate.material.opacity = chV;
     chainFrame.progress = chV;
-    chainTexts.forEach((t, i) => (t.opacity = clamp01(S.m4chain * 3 - 0.4 - i * 0.12) * k62));
-    const polOn = S.m4pol > 0 && S.m4pol < 1 ? 1 : 0;
-    polG.position.copy(wristCam.getWorldPosition(tmp));
-    polT.opacity = polOn * k6;
-    const handV = clamp01((S.m4pol - 0.97) * 40) * (1 - clamp01((S.m4hand - 0.4) * 4)) * k6;
-    handLabel.forEach((t) => (t.opacity = handV));
-    vmLabel.forEach((t) => (t.opacity = clamp01(S.m4hand * 3 - 2) * k6));
+    chainTexts.forEach((t, i) => (t.opacity = clamp01(S.m4chain * 3 - 0.4 - i * 0.12) * k62 * (1 - S.m6)));
+
+    // 6.6 Noise Injection
+    const k66 = S.m6 * k6 * (S.m10 > 0 ? 0 : 1);
+    ghost6.object.visible = k66 > 0.5;
+    const tr = noisyT;
+    const gtr = ghostNoisy;
+    const t66 = S.m6noise * noisyT.total;
+    if (ghost6.object.visible) {
+      const g = gtr.at(t66);
+      ghost6.setJoints(g.q);
+      ghost6.fk(g.q, tcpG);
+    }
+    const trailP = (trk, t) => clamp01((t - trk.t0) / ((pi - iS6) / (m4.rate_hz * M4_SPEED)));
+    idealLine6.progress = k66;
+    idealLine6.opacity = 0.7;
+    noisyTrail.progress = S.m6noise > 0 ? trailP(noisyT, t66) : 0;
+    noisyTrail.opacity = k66;
+    const idx = taktAt(tr, t66);
+    pR.setFromMatrixPosition(tcpNow).applyMatrix4(lara.object.matrixWorld);
+    pG.setFromMatrixPosition(tcpG).applyMatrix4(lara.object.matrixWorld);
+    const gapMm = new THREE.Vector3().setFromMatrixPosition(tcpNow).distanceTo(new THREE.Vector3().setFromMatrixPosition(tcpG)) * 1000;
+    const showGap = ghost6.object.visible && S.m6noise > 0 && idx >= iS6 && idx <= pi && gapMm > 2;
+    if (showGap) {
+      setPts(gapLine, [pR.clone(), pG.clone()]);
+      const dir = pG.clone().sub(pR).normalize();
+      const side = new THREE.Vector3(0, 0, 1).cross(dir).normalize().multiplyScalar(0.06);
+      const back = pG.clone().addScaledVector(dir, -0.12);
+      setPts(gapHead, [back.clone().add(side), pG.clone(), back.clone().sub(side)]);
+    }
+    gapLine.progress = gapHead.progress = showGap ? 1 : 0;
+    gapLine.object.visible = gapHead.object.visible = showGap;
+    let gap = ' ';
+    if (showGap) gap = `Label: zurück zur Sollbahn · echt ${Math.round(gapMm / EXAG)} mm`;
+    if (gap !== gapLast) {
+      gapT.text = gap;
+      gapLast = gap;
+    }
+    gapT.opacity = showGap ? k66 : 0;
+    m6Info[0].forEach((t) => (t.opacity = k66));
+    slG.visible = k66 > 0.01;
+    if (slG.visible) screenCard(slG, 2.2, 0.18, -0.55, -0.33);
+    slPlate.material.opacity = 0.94 * k66;
+    slFrame.progress = k66;
+    const sl = idx < iS6 ? 'Anfahrt' : `Takt ${Math.min(idx, pi) - iS6} von ${pi - iS6} · ${idx >= pi ? 'PICK' : `${Math.round(ideal[Math.min(idx, pi)].z - zPick)} mm über PICK`}`;
+    if (sl !== slLast) {
+      slT.text = sl;
+      slLast = sl;
+    }
+    slT.opacity = k66;
+
+    // 6.10 DAgger
+    const k10 = (S.m10 > 0 ? 1 : 0) * k6;
+    const t10 = S.m10 * CELL.DAG;
+    dagIdeal.progress = k10;
+    dagIdeal.opacity = 0.7;
+    dagTrail.progress = k10 * clamp01((t10 - dagPol.t0) / Math.max(0.01, dagPol.total - dagPol.t0));
+    dagTrail.opacity = k10;
+    expTrail.progress = k10 * clamp01((t10 - tExp) / 2.0);
+    expTrail.opacity = k10;
+    dgG.visible = k10 > 0;
+    if (dgG.visible) screenCard(dgG, 2.6, 0.2, -0.52, -0.3);
+    dgPlate.material.opacity = 0.94 * k10;
+    dgFrame.progress = k10;
+    const phase = t10 < tTake ? 1 : t10 < tExp ? 2 : t10 < CELL.DAG - 0.3 ? 3 : 4;
+    dgTexts.forEach((t, i) => {
+      const line = i === 0 ? 0 : i <= 3 ? i : 4;
+      t.opacity = k10 * (line === 0 || line === phase ? 1 : line < phase ? 0.55 : 0.3);
+    });
 
     // 7.5 Spielfeld, Figuren, Würfel
     const kG = S.game * (1 - S.unboard);
@@ -1614,7 +1768,7 @@ export function createCell(ctx) {
     stopText.opacity = clamp01(S.outside * 2 - 1) * k44;
 
     // 4.5: Schatten springt beim Aufruf ans Ziel des Abschnitts; mit 7.6 wieder weg
-    const k45 = S.ghost * (1 - clamp01(S.cycle2 * 20)) * (1 - Math.max(S.m4, S.game));
+    const k45 = S.ghost * (1 - clamp01(S.cycle2 * 20)) * (1 - Math.max(S.m4, S.game)) * (1 - S.act6);
     ghost.object.visible = k45 > 0.5;
     if (ghost.object.visible) {
       const ts = S.sim * sim.total;
@@ -1672,6 +1826,16 @@ const C = {
   game: cam(2.75, -1.25, 0.4, 3.3, -8.0, 10.5),
   m4: cam(3.2, -0.4, 1.7, 1.9, -18.5, 11.5),
   m4card: cam(5.0, -0.4, 1.7, 3.7, -18.5, 11.5), // Zelle nach links, Karte rechts
+  m6: (ctx) => { // 6.6 von vorn über den Tisch auf LARA, leicht von oben: ganze Bahn, Ghost und LARA
+    const p = ctx.data.m4.points.PICK;
+    const [x, y] = [p[0] / 100, p[1] / 100];
+    const a = Math.atan2(y, x) + 0.8; // gegenüber LARA, seitlich gedreht: Stange links, Bahn frei
+    const d = 19;
+    const [lx, ly] = [x * 0.5 + Math.sin(a) * 1.6, y * 0.5 - Math.cos(a) * 1.6]; // Bild nach rechts: links die Karte
+    return cam(lx, ly, 2.0, lx + Math.cos(a) * d, ly + Math.sin(a) * d, d * 0.45, 30);
+  },
+
+
   m4top: cam(2.9, -1.5, 0.8, 1.9, -14.5, 16.5), // steiler: Teil C auf der Prüfung nicht hinter dem Arm
 
   audience: (() => {
@@ -1771,21 +1935,32 @@ export const CELL_SCENES = [
     cams: [C.sim, C.sim],
   },
   {
-    id: '6.2', world: 'cell',
+    id: '6.5', world: 'cell',
+    pre: (tl, S) => tl.set(S, { act6: 1 }, 0), // Schattenroboter aus 4.5 sofort weg
     steps: [
-      (tl, S) => to(tl, S, { m4: 1, duration: 2.4, ease: 'power1.inOut' }, 0.4),
-      (tl, S) => tl.to(S, { m4rec: 1, duration: CELL.REC, ease: 'none' }, 0.2),
-      (tl, S) => to(tl, S, { m4chain: 1, duration: 1.6, ease: 'power1.out' }, 0.3),
+      (tl, S) => {
+        to(tl, S, { m4: 1, duration: 2.4, ease: 'power1.inOut' }, 0.4);
+        to(tl, S, { m4chain: 1, duration: 1.6, ease: 'power1.out' }, 1.6);
+      },
     ],
-    cams: [C.m4, C.m4, C.m4card],
+    cams: [C.m6],
   },
   {
-    id: '6.8', world: 'cell',
+    id: '6.6', world: 'cell',
+    scrub: { 1: 'm6noise' }, // Regler der Navigation: Fahrt von Hand abfahren
     steps: [
-      (tl, S) => tl.to(S, { m4pol: 1, duration: CELL.POL, ease: 'none' }, 0.6),
-      (tl, S) => tl.to(S, { m4hand: 1, duration: CELL.HAND, ease: 'none' }, 0.2),
+      (tl, S) => {
+        to(tl, S, { m6: 1, duration: 0.8, ease: 'power1.out' }, 0);
+        tl.to(S, { m6noise: 1, duration: CELL.NOISY, ease: 'none' }, 1.0);
+      },
     ],
-    cams: [C.m4, C.m4top],
+    cams: [C.m6],
+  },
+  {
+    id: '6.10', world: 'cell',
+    pre: (tl, S) => tl.set(S, { m10: 0.0001 }, 0), // LARA an CLEAR_FOV, Teil C auf dem Tisch
+    steps: [(tl, S) => tl.to(S, { m10: 1, duration: CELL.DAG, ease: 'none' }, 0.8)],
+    cams: [C.m6],
   },
   {
     id: '7.5', world: 'cell',

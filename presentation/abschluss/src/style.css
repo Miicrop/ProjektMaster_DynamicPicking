@@ -74,3 +74,9 @@ body.ready #gl { opacity: 1; }
 .card-title { font-family: var(--title); font-weight: 600; font-size: 14px; }
 .card-text { color: var(--ink-soft); }
 .card-meta { font-family: var(--mono); font-size: 10px; color: var(--ink-soft); margin-top: auto; }
+
+/* Regler für Szenen mit scrub (6.6): Fahrt von Hand abfahren */
+.scrub { position: fixed; left: 40vw; bottom: 12vh; width: 34vw; display: none;
+  flex-direction: column; align-items: center; gap: 0.3em; z-index: 20; font: 500 0.75rem 'IBM Plex Mono', monospace; color: #6B6F73; }
+.scrub.on { display: flex; }
+.scrub input { width: 100%; accent-color: #9A5A2E; cursor: ew-resize; }

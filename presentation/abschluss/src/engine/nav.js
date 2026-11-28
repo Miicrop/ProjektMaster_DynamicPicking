@@ -1,6 +1,8 @@
 // Schritt-Navigation mit deterministischem Endzustand.
 // Szenen derselben Welt sind Kapitel einer durchgehenden Folge: Zustand (Szene i, Schritt k) =
 // Welt zurücksetzen + alle Schritte der früheren Szenen dieser Welt + die ersten k Schritte von i.
+// Optional je Szene: pre (läuft sofort beim Betreten, vor Schritt 1) und scrub ({ k: Zustandsschlüssel }): nach k
+// Schritten zeigt die Navigation einen Regler, der diesen Schlüssel von Hand zwischen 0 und 1 fährt.
 import gsap from 'gsap';
 import { EASE } from '../theme.js';
 
@@ -47,9 +49,11 @@ export class Nav {
     for (let j = 0; j < i; j++) {
       const other = this.scenes[j];
       if (other.world !== sc.world) continue;
+      if (other.pre) this.runInstant(other.pre, W);
       for (const st of other.steps) this.runInstant(st, W);
       cam = this.cam(other, other.cams.length - 1);
     }
+    if (sc.pre) this.runInstant(sc.pre, W);
     for (let s = 0; s < k; s++) this.runInstant(sc.steps[s], W);
     if (k > 0) cam = this.cam(sc, k - 1);
     this.stage.flash.v = 0;
@@ -121,6 +125,7 @@ export class Nav {
     if (prev.world === sc.world) {
       this.i = j;
       this.k = 0;
+      if (sc.pre) this.runInstant(sc.pre, this.world);
       this.playStep(j, 0);
       this.k = 1;
       this.changed();
@@ -195,9 +200,43 @@ export class Nav {
     const hash = `#${sc.id}.${this.k}`;
     if (location.hash !== hash) history.replaceState(null, '', hash);
     this.hud?.update(this);
+    this.scrubKey = sc.scrub?.[this.k] ?? null;
+    const sc2 = this.scrubber();
+    sc2.el.classList.toggle('on', !!this.scrubKey);
+    sc2.el.querySelector('span').textContent = sc.scrubLabel ?? 'ziehen: Fahrt Takt für Takt';
+  }
+
+  /** Regler unten in der Mitte: fährt den Zustandsschlüssel der Szene von Hand (scrub). */
+  scrubber() {
+    if (this._scrub) return this._scrub;
+    const el = document.createElement('div');
+    el.className = 'scrub';
+    el.innerHTML = '<input type="range" min="0" max="1000" step="1" value="0" aria-label="Fahrt abfahren"><span>ziehen: Fahrt Takt für Takt</span>';
+    document.body.appendChild(el);
+    const input = el.querySelector('input');
+    const sc = { el, input, dragging: false };
+    input.addEventListener('pointerdown', (e) => e.stopPropagation());
+    input.addEventListener('input', () => {
+      if (!this.scrubKey || !this.world) return;
+      if (this.active) {
+        this.active.kill();
+        this.active = null;
+      }
+      sc.dragging = true;
+      this.world.S[this.scrubKey] = Math.max(0.0005, input.value / 1000);
+    });
+    input.addEventListener('change', () => {
+      sc.dragging = false;
+      input.blur(); // Pfeiltasten wieder für die Navigation
+    });
+    this._scrub = sc;
+    return sc;
   }
 
   frame() {
+    if (this.scrubKey && this._scrub && !this._scrub.dragging && this.world) {
+      this._scrub.input.value = Math.round((this.world.S[this.scrubKey] ?? 0) * 1000);
+    }
     this.world?.update();
   }
 }

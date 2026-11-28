@@ -287,7 +287,9 @@ def export_lab() -> dict:
 
 M4_DIR = CODE / "m4_behavior_cloning"
 M4_POINTS = "points_anlage_2026-10-26.json"  # Export aus der Steuerung (Anlage, Werkzeug ZimmerLWR50)
-M4_EPISODES = 10
+M4_SIDE_DIR = "data_vm/2026-11-19"  # echte Episoden der Anlage vom 19.11. (Teil des Datensatzes von G2b)
+M4_DEMO_EP = "ep_00014"  # 6.6: Episode mit deutlichem Rauschen im Anflug (bis 26 mm)
+M4_OBS_TAKT = 40  # 6.3: Takt der Episode für das Beobachtungspaar (im Anflug)
 # Zittern an der Anlage, RMS über 5 Hz am Unterarm (Achse 5), m/s² – Labortag 16.10./19.10.
 # Quelle: m4_behavior_cloning/Dokumentation/Labortag-2026-10-16-Uebergabe.md §1, Zittern-an-der-Anlage.md §0
 M4_JITTER = [
@@ -304,7 +306,11 @@ M4_SIM = {"date": "2026-09-17", "success": [10, 10], "grip_mm": [1.3, 2.2], "pat
           "predict_ms": 77, "predict_ms_load": 120, "sync_success": [8, 10], "vm_episodes": 30}
 # Ergebnisse mit echten Bildern (Jeremys Doku, Kap. 10, Stand 19.11.; Thesis Kap. 8.10):
 # VM-Test mit 151 Episoden eines unbekannten Tags, Anlagentest mit Modell C2 (Probegriff, 5 Lagen, 8 Griffe)
-M4_PLANT = {"demos": 920, "lagen": 164, "vm_runs": 151, "vm_median_mm": 10.7, "vm_le10_pct": 49,
+# C2: Datensatz var_C2 mit 602 Episoden, ohne Tiefpass (Berichte/2026-11-16_Anlagentest_var_C2/Testprotokoll.md)
+# G2b mit Glättung 0,5 am 26.11.: 10/15 Griffe, xy Median 2,2 mm (Berichte/2026-11-26_Vergleich_DAgger/Auswertung.md §1)
+M4_PLANT_G2B = {"date": "2026-11-26", "runs": 15, "success": 10, "xy_median_mm": 2.2, "xy_p90_mm": 4.8,
+                "lowpass": 0.5, "source": "vergleiche/2026-11-26_12-06-00"}
+M4_PLANT = {"demos": 602, "lagen": 164, "vm_runs": 151, "vm_median_mm": 10.7, "vm_le10_pct": 49,
             "plant_median_mm": 8.7, "plant_range_mm": [1.0, 18.0], "plant_le10": [5, 8], "rot_err_deg": 5,
             "follow_mm": [1, 7], "drift_mm": [10, 29], "offset_mm": [5, 10], "offset_deg": [10, 20]}
 # Takt an der Anlage (Labortag 16.10.): servo_j-RPC median ~10 ms, p95 ~21 ms, 1–2 Hänger à ~210 ms je Lauf
@@ -425,13 +431,141 @@ def export_lab3(cfg: dict) -> dict | None:
             "hole_nominal_mm": ic["hole_nominal_mm"], "hole_tolerance_mm": ic["hole_tolerance_mm"]}
 
 
-def export_m4() -> dict:
-    """M4: geteachte Punkte der Anlage (TCP im Basis-KS, mm/°) und echte Rauschbahnen aus bc/noise.py.
+def export_smooth() -> dict:
+    """6.12 Glättung: dieselbe Policy (G2) am 23.11. mit Tiefpass aus / 0,75 / 0,5 / 0,25, Probegriffe mit bekannter Lage.
+    Je Fahrt der waagrechte Abstand zu PICK über der Höhe (wie die Versatz-Abbildungen) und der seitliche Weg unter 60 mm."""
+    from collections import defaultdict
+    root = M4_DIR / "checkpoints" / "G2_licht_langsam_nur_griff" / "policy" / "rollouts"
+    groups = defaultdict(list)
+    for d in sorted(root.glob("2026-11-23_1[56]-*")):
+        if not (d / "summary.json").exists():
+            continue
+        sm = json.loads((d / "summary.json").read_text(encoding="utf-8"))
+        a = sm["args"].get("glaettung")
+        if a is None or sm["args"].get("probegriff") != "objekt":
+            continue
+        for f in sorted(d.glob("rollout_*.npz")):
+            z = np.load(f)
+            tcp = np.vstack([z["tcp"], z["final_tcp"][None]])
+            dz = 1e3 * z["lage_dz_pick"]
+            n = min(len(dz), len(tcp))
+            dz, p = dz[:n], 1e3 * (tcp[:n, :2] - z["lage_pick"][:2])
+            if dz.min() > 100:  # abgebrochen, bevor die Policy absenkte
+                continue
+            m = dz < 60
+            way = float(np.sum(np.hypot(*np.diff(p[m], axis=0).T))) if m.sum() > 1 else None
+            if way is None or way > 200:  # Ausreißer: Fahrt mit Not-Aus/Wegfahren
+                continue
+            k = dz <= 120
+            groups[a].append({"h": np.round(dz[k], 1).tolist(), "xy": np.round(np.hypot(*p[k].T), 1).tolist(), "way": round(way, 1)})
+    out = []
+    for a in sorted(groups, reverse=True):
+        runs = groups[a]
+        out.append({"alpha": a, "runs": runs, "n": len(runs), "way_median_mm": round(float(np.median([r["way"] for r in runs])), 1)})
+        print(f"  M4: Glättung {a}: {len(runs)} Fahrten, seitlicher Weg unter 60 mm Median {out[-1]['way_median_mm']} mm")
+    return {"date": "2026-11-23", "model": "G2", "groups": out}
 
-    Die Bahn folgt sequences/pick_to_station.json (CLEAR_FOV → 150 mm über PICK → 50 mm über PICK → PICK →
-    50 mm über PICK → PRE_PLACE), abgetastet mit 15 Hz bei Transit 0,15 m/s und Anflug 0,05 m/s. Das Rauschen
-    kommt aus Jeremys SmoothedOUProcess mit Trichter (0 an Start, PICK und PRE_PLACE) und Tischgrenze;
-    je Episode ein zufälliger Rauschfaktor wie bei der Aufnahme. Ohne IK, nur die TCP-Lage.
+
+def export_grasps() -> dict:
+    """6.13 Die letzten Millimeter: echte Griffe von G2b mit bekannter Lage (Probegriff „tisch“, 25./26.11.) –
+    je Takt x/y-Abstand zu PICK über der Höhe über PICK. Nur Fahrten mit bekannter Lage, nichts gemischt."""
+    root = M4_DIR / "checkpoints" / "G2b_580_dagger_nur_griff" / "policy" / "rollouts"
+    runs = []
+    for d in sorted(root.glob("2026-11-2*")):
+        if not (d / "summary.json").exists():
+            continue
+        a = json.loads((d / "summary.json").read_text(encoding="utf-8"))["args"]
+        if a.get("probegriff") != "tisch" or not a.get("lage_bekannt"):
+            continue
+        for f in sorted(d.glob("rollout_*.npz")):
+            z = np.load(f)
+            if "lage_dz_pick" not in z.files or not (z["gripper_cmd"] > 0.5).any():
+                continue
+            tcp = np.vstack([z["tcp"], z["final_tcp"][None]])
+            dz = 1e3 * z["lage_dz_pick"]
+            n = min(len(dz), len(tcp), int(np.flatnonzero(z["gripper_cmd"] > 0.5)[0]) + 1)  # bis der Greifer schließt
+            p = 1e3 * (tcp[:n, :2] - z["lage_pick"][:2])
+            k = dz[:n] <= 160
+            if np.hypot(*p[-1]) > 30:  # Lage passt nicht zur Fahrt (z. B. PICK der vorigen Lage) – nicht verwenden
+                print(f"  M4: {d.name} ausgelassen: beim Schließen {np.hypot(*p[-1]):.0f} mm neben PICK")
+                continue
+            runs.append({"run": d.name[5:], "h": np.round(dz[:n][k], 1).tolist(), "dx": np.round(p[k, 0], 1).tolist(),
+                         "dy": np.round(p[k, 1], 1).tolist()})
+    print(f"  M4: echte Griffe G2b mit bekannter Lage: {len(runs)} Fahrten")
+    return {"model": "G2b", "ref": "PICK", "runs": runs}
+
+
+def export_heat() -> dict:
+    """6.15 Wo greift die Policy gut? Alle Vergleichsfahrten von G2b (24.–26.11.) mit Lage, Drehung und Ergebnis
+    (geometrische Griffprüfung, Spiel >= 0,5 mm) aus Berichte/2026-11-26_Vergleich_DAgger/fahrten.csv; dazu als
+    Trainingslagen die PICK-Lagen der Episoden vom 19.11. (Ausschnitt des Datensatzes)."""
+    import csv
+    rows = list(csv.DictReader((M4_DIR / "Berichte" / "2026-11-26_Vergleich_DAgger" / "fahrten.csv").open(encoding="utf-8"), delimiter=";"))
+    runs = []
+    for r in rows:
+        if not r["pick_x_mm"]:
+            continue
+        runs.append({"model": r["kurz"], "x": round(float(r["pick_x_mm"]), 1), "y": round(float(r["pick_y_mm"]), 1), "rot": round(float(r["pick_drehung_grad"]), 1),
+                     "ok": r["erfolg"] == "True", "quer": round(abs(float(r["quer_mm"])), 1) if r["quer_mm"] else None,
+                     "train_mm": round(float(r["trainingsabstand_mm"]), 1) if r["trainingsabstand_mm"] else None})
+    train = []
+    for ep in sorted((M4_DIR / M4_SIDE_DIR).glob("ep_*")):
+        if not (ep / "arrays.npz").exists():
+            continue
+        z = np.load(ep / "arrays.npz")
+        g = np.flatnonzero(z["action"][:, 6] > 0.5)
+        if len(g):
+            p = z["aux__pose_ideal"][g[0], :2] * 1000
+            train.append([round(float(p[0]), 1), round(float(p[1]), 1)])
+    print(f"  M4: Heatmap aus {len(runs)} Vergleichsfahrten (alle Modelle), {len(train)} Trainingslagen (19.11.)")
+    return {"runs": runs, "train": train, "train_source": M4_SIDE_DIR}
+
+
+def plot_g2b_versatz() -> dict:
+    """6.9: dieselbe Abbildung wie im Anlagentest C2 (waagrechter Versatz zu PICK über der Höhe), für G2b mit Glättung
+    0,5 am 26.11. – aus den Rohdaten rollout_000.npz der Vergleichsfahrten, wie Berichte/…_var_C2/skripte/auswertung.py."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    root = M4_DIR / M4_PLANT_G2B["source"]
+    runs = []
+    for f in sorted(root.glob("lage_*/G2b_*/rollout_000.npz")):
+        z = np.load(f)
+        tcp = np.vstack([z["tcp"], z["final_tcp"][None]])
+        runs.append((1e3 * z["lage_dz_pick"], 1e3 * np.hypot(*(tcp[:, :2] - z["lage_pick"][:2]).T)))
+    fig, ax = plt.subplots(figsize=(7.2, 3.6))
+    for dz, xy in runs:
+        n = min(len(dz), len(xy))
+        dz, xy = dz[:n], xy[:n]
+        m = dz <= 120
+        ax.plot(dz[m], xy[m], color="#9A5A2E", lw=1.4, alpha=0.75, solid_capstyle="round")
+        ax.plot(dz[m][-1], xy[m][-1], "o", ms=4.5, color="#9A5A2E", mec="white", mew=1.0)
+    ax.axhline(10, color="#6B6F73", lw=0.9, ls="--")
+    ax.text(119, 10.6, "10 mm (Erfolgskriterium)", color="#6B6F73", fontsize=8, ha="left")
+    ax.axvspan(0, 30, color="#E6E1D6", alpha=0.6, lw=0)
+    ax.text(15, 27, "letzte 30 mm", color="#6B6F73", fontsize=8, ha="center")
+    ax.set_xlim(120, 0)
+    ax.set_ylim(0, 30)
+    ax.set_xlabel("Höhe des TCP über PICK [mm]  (Abstieg →)")
+    ax.set_ylabel("waagrechter Versatz zu PICK [mm]")
+    ax.text(118, 28, f"G2b, Glättung 0,5 · {len(runs)} Lagen, je 1 Fahrt", fontsize=8, color="#1E2328", va="top")
+    fig.tight_layout()
+    out = OUT_IMG / "m4" / "g2b_versatz_hoehe.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=170)
+    plt.close(fig)
+    img = cv2.imread(str(out))
+    print(f"  M4: Versatz über der Höhe für G2b aus {len(runs)} Fahrten")
+    return {"url": "img/m4/g2b_versatz_hoehe.png", "w": img.shape[1], "h": img.shape[0]}
+
+
+def export_m4() -> dict:
+    """M4: geteachte Punkte der Anlage (TCP im Basis-KS, mm/°), Sollbahn bis zum Griff und echte Abweichungen.
+
+    Die Sollbahn folgt sequences/pick_bis_griff.json (seit 19.11.): CLEAR_FOV → ANFLUG 150 mm über PICK →
+    PRE_PICK 50 mm über PICK → PICK (Endanflug) → Greifer zu → zurück auf PRE_PICK, abgetastet mit 15 Hz.
+    Der Weg danach zu PRE_PLACE ist nicht mehr Teil der Aufnahme. Die Seitenansicht des Trichters (6.7) kommt aus
+    echten Episoden der Anlage (M4_SIDE_DIR): Abweichung der gefahrenen von der idealen TCP-Lage über der Höhe.
     """
     import math
     sys.path.insert(0, str(M4_DIR))
@@ -441,17 +575,16 @@ def export_m4() -> dict:
     pts = json.loads((M4_DIR / "sequences" / M4_POINTS).read_text(encoding="utf-8"))["punkte"]
     pose = lambda k: [round(v * 1000, 1) for v in pts[k]["cartesian"][:3]] + \
         [round(math.degrees(a), 1) for a in pts[k]["cartesian"][3:]]
-    P = {k: pose(k) for k in ("CLEAR_FOV", "PICK", "PRE_PLACE")}
+    P = {k: pose(k) for k in ("CLEAR_FOV", "PICK")}
     joints = {k: [round(math.degrees(a), 2) for a in pts[k]["joint"]] for k in P}  # Startwerte für die IK in der Zelle
 
     pick = np.array(P["PICK"][:3]) / 1000
     above = lambda dz: pick + [0, 0, dz]
-    legs = [(np.array(P["CLEAR_FOV"][:3]) / 1000, above(0.15), bcc.TRANSIT_SPEED_MS),
-            (above(0.15), above(0.05), bcc.TRANSIT_SPEED_MS),
-            (above(0.05), pick, bcc.APPROACH_SPEED_MS),
+    legs = [(np.array(P["CLEAR_FOV"][:3]) / 1000, above(0.15), bcc.TRANSIT_SPEED_MS),  # → ANFLUG
+            (above(0.15), above(0.05), bcc.TRANSIT_SPEED_MS),  # → PRE_PICK
+            (above(0.05), pick, bcc.APPROACH_SPEED_MS),  # Endanflug
             (pick, pick, None),  # Greifer schließt
-            (pick, above(0.05), bcc.APPROACH_SPEED_MS),
-            (above(0.05), np.array(P["PRE_PLACE"][:3]) / 1000, bcc.TRANSIT_SPEED_MS)]
+            (pick, above(0.05), bcc.APPROACH_SPEED_MS)]  # zurück auf PRE_PICK
     rate = bcc.CONTROL_RATE_HZ
     path, dwell = [], []
     for a, b, v in legs:
@@ -462,35 +595,62 @@ def export_m4() -> dict:
     path.append(legs[-1][1])
     dwell.append(False)
     path = np.array(path)
-    arc = np.r_[0, np.cumsum(np.linalg.norm(np.diff(path, axis=0), axis=1))]
-    anchors = [0.0, arc[int(np.argmax(dwell))], arc[-1]]
-    dist = np.min([np.abs(arc - s) for s in anchors], axis=0)
-    scale = np.where(dwell, 0.0, noise.funnel_scale(dist))
+    print(f"  M4: Sollbahn {len(path)} Takte bis zum Griff und zurück auf PRE_PICK")
 
-    rng = np.random.default_rng(4)
+    # 6.7 Seitenansicht: echte Episoden der Anlage, bis der Greifer schließt
+    side = {"source": M4_SIDE_DIR, "episodes": []}
+    for ep in sorted((M4_DIR / M4_SIDE_DIR).glob("ep_*")):
+        if not (ep / "arrays.npz").exists() or json.loads((ep / "meta.json").read_text(encoding="utf-8")).get("discarded"):
+            continue  # abgebrochene oder verworfene Episode
+        z = np.load(ep / "arrays.npz")
+        ideal, noisy, grip = z["aux__pose_ideal"][:, :3], z["aux__pose_noisy"][:, :3], z["action"][:, 6]
+        k = int(np.argmax(grip > 0.5)) if (grip > 0.5).any() else len(grip)
+        h = (ideal[:k, 2] - ideal[k - 1, 2]) * 1000
+        d = (noisy[:k, :2] - ideal[:k, :2]) * 1000
+        side["episodes"].append({"h": np.round(h, 1).tolist(), "dx": np.round(d[:, 0], 1).tolist(),
+                                 "dy": np.round(d[:, 1], 1).tolist()})
+    # 6.6 eine echte verrauschte Episode für die Zelle (Abweichung je Höhe über PICK, auch z)
+    z = np.load(M4_DIR / M4_SIDE_DIR / M4_DEMO_EP / "arrays.npz")
+    ideal, noisy, grip = z["aux__pose_ideal"][:, :3], z["aux__pose_noisy"][:, :3], z["action"][:, 6]
+    k = int(np.argmax(grip > 0.5))
+    off = (noisy[:k] - ideal[:k]) * 1000
+    side["demo"] = {"episode": M4_DEMO_EP, "h": np.round((ideal[:k, 2] - ideal[k - 1, 2]) * 1000, 1).tolist(),
+                    "dx": np.round(off[:, 0], 1).tolist(), "dy": np.round(off[:, 1], 1).tolist(),
+                    "dz": np.round(off[:, 2], 1).tolist()}
+    # 6.3 ein echtes Beobachtungspaar: beide Kamerabilder, 14 Zustandswerte und die nächsten 16 Sollposen (Labels)
+    t = M4_OBS_TAKT
+    (OUT_IMG / "m4").mkdir(parents=True, exist_ok=True)
+    for cam_name in ("wrist", "scene"):
+        img = z[f"observation__images__{cam_name}"][t]
+        cv2.imwrite(str(OUT_IMG / "m4" / f"obs_{cam_name}.jpg"), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    horizon = bcc.POLICY_HORIZON
+    nxt = ideal[t + 1:t + 1 + horizon] - ideal[t]
+    side["obs"] = {"takt": t, "episode": M4_DEMO_EP, "h_mm": round(float((ideal[t, 2] - ideal[k - 1, 2]) * 1000), 1),
+                   "state": np.round(z["observation__state"][t], 4).tolist(),
+                   "chunk_mm": np.round(nxt * 1000, 1).tolist(),
+                   # Labels der nächsten 16 Takte: absolute Gelenk-Sollwinkel (hier relativ zur Stellung jetzt, in °) + Greifer
+                   "chunk_joints_deg": np.round(np.degrees(z["action"][t:t + horizon, :6] - z["observation__state"][t, :6]), 2).tolist(),
+                   "chunk_grip": np.round(z["action"][t:t + horizon, 6], 2).tolist(),
+                   # TCP-Höhe der Labels (ideale Pose t+1 … t+16 = FK der Gelenk-Sollwinkel), relativ zum TCP jetzt (gefahren)
+                   "chunk_tcp_z_mm": np.round((ideal[t + 1:t + 1 + horizon, 2] - noisy[t, 2]) * 1000, 1).tolist(),
+                   "images": {c: {"url": f"img/m4/obs_{c}.jpg", "w": 320, "h": 240} for c in ("wrist", "scene")}}
+    devs = [max(np.hypot(e["dx"], e["dy"])) for e in side["episodes"]]
+    side["max_dev_mm"] = round(float(max(devs)), 1)
+    print(f"  M4: Seitenansicht aus {len(devs)} echten Episoden ({M4_SIDE_DIR}), größte Abweichung {side['max_dev_mm']} mm")
     lim = noise.NoiseLimits()
-    episodes = []
-    for _ in range(M4_EPISODES):
-        k = rng.uniform(*bcc.NOISE_EPISODE_SCALE_RANGE)
-        ou = noise.SmoothedOUProcess(bcc.NOISE_TRANS_AMPLITUDE_M * k, bcc.NOISE_OU_TAU_S, bcc.NOISE_SMOOTH_TAU_S,
-                                     1 / rate, dims=3, rng=rng, lo=lim.lo, hi=lim.hi)
-        off = np.array([ou.step() * s for s in scale])
-        episodes.append({"scale": round(float(k), 2), "path": np.round((path + off) * 1000, 1).tolist()})
-    dev = max(float(np.max(np.linalg.norm(np.array(e["path"]) - path * 1000, axis=1))) for e in episodes)
-    print(f"  M4: {len(path)} Takte je Episode, {M4_EPISODES} Episoden, größte Abweichung {dev:.1f} mm")
-    # 6.3 Trichter: Abweichung je Episode in x und z über der Bahnlänge, Hülle = Grenze des Rauschprozesses × Trichter
-    offs = [np.array(e["path"]) - path * 1000 for e in episodes]
-    funnel = {"arc_mm": np.round(arc * 1000, 1).tolist(), "anchors_mm": [round(a * 1000, 1) for a in anchors],
-              "dx": [np.round(o[:, 0], 1).tolist() for o in offs], "dz": [np.round(o[:, 2], 1).tolist() for o in offs],
-              "hull_hi": np.round(scale * lim.hi[0] * 1000, 1).tolist(),
-              "hull_z_lo": np.round(scale * lim.lo[2] * 1000, 1).tolist(),
-              "limit_mm": {"xy": round(lim.hi[0] * 1000, 1), "z_down": round(lim.lo[2] * 1000, 1)},
-              "max_rejects": bcc.NOISE_MAX_REJECTS}
+    side["limit_mm"] = {"xy": round(lim.hi[0] * 1000, 1), "z_down": round(lim.lo[2] * 1000, 1)}
+    side["max_rejects"] = bcc.NOISE_MAX_REJECTS
+    seq = json.loads((M4_DIR / "sequences" / "pick_bis_griff.json").read_text(encoding="utf-8"))
+    side["pick_above_table_mm"] = round(seq["table"]["pick_height"] * 1000, 1)  # TCP an PICK über dem Tisch
+    side["rest_max_mm"] = round(bcc.APPROACH_REST_MAX_M * 1000, 1)
+    side["free_mm"] = round(bcc.APPROACH_OFFSET_FREE_M * 1000, 1)
     # 6.4 Policy-Aufbau aus Jeremys Config
     policy = {"n_obs": bcc.POLICY_N_OBS_STEPS, "horizon": bcc.POLICY_HORIZON, "n_action": bcc.POLICY_N_ACTION_STEPS,
-              "inference_steps": bcc.POLICY_INFERENCE_STEPS, "image": [bcc.IMAGE_HEIGHT, bcc.IMAGE_WIDTH]}
+              "inference_steps": bcc.POLICY_INFERENCE_STEPS, "image": [bcc.IMAGE_HEIGHT, bcc.IMAGE_WIDTH],
+              "replan": bcc.POLICY_REPLAN_STEPS, "lowpass": bcc.POLICY_COMMAND_LOWPASS_ALPHA, "decay": bcc.POLICY_ENSEMBLE_DECAY}
     # 6.5 Rollout-Abbildung aus dem Durchstich (unten abgeschnitten: dort beginnt im Original die Tabelle)
     fig = cv2.imread(str(ROOT / "thesis" / "figures" / "m4" / "durchstich_sim_rollouts.png"))[:396]
+    fig = fig[:, fig.shape[1] // 2:]  # nur rechts: Höhe des TCP über der Zeit (die Draufsicht sagt wenig)
     (OUT_IMG / "m4").mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(OUT_IMG / "m4" / "durchstich_sim_rollouts.png"), fig)
     sim = {**M4_SIM, "figure": {"url": "img/m4/durchstich_sim_rollouts.png", "w": fig.shape[1], "h": fig.shape[0]}}
@@ -498,11 +658,16 @@ def export_m4() -> dict:
     fig = cv2.imread(str(ROOT / "thesis" / "figures" / "m4" / "c2_versatz_hoehe.png"))
     cv2.imwrite(str(OUT_IMG / "m4" / "c2_versatz_hoehe.png"), fig)
     plant = {**M4_PLANT, "figure": {"url": "img/m4/c2_versatz_hoehe.png", "w": fig.shape[1], "h": fig.shape[0]}}
+    plant["g2b"] = {**M4_PLANT_G2B, "figure": plot_g2b_versatz()}
+    smooth = export_smooth()
+    grasps = export_grasps()
+    heat = export_heat()
     return {"points": P, "joints": joints, "points_file": M4_POINTS, "rate_hz": rate, "ideal": np.round(path * 1000, 1).tolist(),
-            "pick_index": int(np.argmax(dwell)), "episodes": episodes, "max_dev_mm": round(dev, 1),
+            "pick_index": int(np.argmax(dwell)), "anflug_mm": 150, "pre_pick_mm": 50, "side": side,
             "noise": {"sigma_mm": bcc.NOISE_TRANS_AMPLITUDE_M * 1000, "tau_s": bcc.NOISE_OU_TAU_S,
                       "funnel_mm": [bcc.FUNNEL_ZERO_DIST_M * 1000, bcc.FUNNEL_START_DIST_M * 1000]},
-            "funnel": funnel, "policy": policy, "sim": sim, "plant": plant, "timing": M4_TIMING, "jitter": M4_JITTER}
+            "policy": policy, "sim": sim, "plant": plant, "timing": M4_TIMING, "jitter": M4_JITTER,
+            "smooth": smooth, "grasps": grasps, "heat": heat}
 
 
 def export_tests() -> dict:

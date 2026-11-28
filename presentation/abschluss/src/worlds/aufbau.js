@@ -432,8 +432,8 @@ function sheet72t(api) {
     ['M2', 'Teil fällt auf die Prüfstation', 'Posen mit aufsitzendem Teil geteacht', 'Greifer öffnet 1 mm darüber', '–'],
     ['M3', 'Unscharf, Loch 6,7 statt 9,5 mm', 'Autofokus; Maske am Bildrand geschlossen', 'Fokus fest; Rand vor dem Schließen auffüllen', '5.7'],
     ['M3', 'Loch knapp zu klein', 'Spiegelung in der Bohrung', 'Kreis-Fit ohne die inneren Punkte', '5.9'],
-    ['M4', 'Arm zittert', '60 Sollwerte je Sekunde werden zur Treppe', 'servo_j mit Override 0,5', '6.6'],
-    ['M4', 'Greifpunkt im Median 8,7 mm daneben', 'Policy aus der Simulation, nur aus dem Zustand gelernt', 'offen: Training mit Daten der Anlage', '6.5'],
+    ['M4', 'Arm zittert', '60 Sollwerte je Sekunde werden zur Treppe', 'servo_j mit Override 0,5', '6.8'],
+    ['M4', 'Griff unten ungenau', 'Policy unterhalb der Oberkante unsicher, 2,45 mm Spiel je Backe', 'geplanter Endabstieg: ~50 % → 86–88 %', '6.14'],
   ];
   const C = [X0 + 0.7, X0 + 1.7, X0 + 5.6, X0 + 10.0, X0 + 14.1];
   const Y0 = 2.35, DY = 0.6;

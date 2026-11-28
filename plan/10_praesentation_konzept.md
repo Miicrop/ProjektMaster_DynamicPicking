@@ -1,6 +1,6 @@
 # 10 – Abschlusspräsentation: Konzept
 
-**Stand:** 2026-11-01 – Akt 6 auf M4 Behavior Cloning umgestellt und erweitert (6.1–6.8), Gerüst in [`presentation/abschluss/`](../presentation/abschluss/README.md).
+**Stand:** 2026-11-28 – Akt 6 (M4) neu gegliedert (6.1–6.15, Entwurf 3 mit Jeremy), Gerüst in [`presentation/abschluss/`](../presentation/abschluss/README.md).
 **Vorlage:** Masterarbeits-Präsentation „Das Zerlegeschema wird lebendig“ (`Masterarbeit_Neu/presentation/abschluss`, Konzept dort in `plan/11-praesentation-konzept.md`). Engine, Bausteine und Werkzeuge sind von dort übernommen.
 
 > **Wiedereinstieg** (Aufgaben: [06_offen.md](06_offen.md) Abschnitt 9, Verlauf: [07_erledigt.md](07_erledigt.md))
@@ -10,11 +10,11 @@
 > - Die Szenenliste in `src/storyboard.js` ist die maßgebliche Fassung. Änderungen an der Dramaturgie
 >   dort **und** hier eintragen.
 > - **Welten:**
->   - `cell.js` + `kit/lara.js`: Zelle, Zyklus, Greifsequenz, Grenzen, M4 (6.2, 6.8), Finale mit Schild „Noch Fragen?“ (7.5) und Ausblick-Spielfeld (7.4).
+>   - `cell.js` + `kit/lara.js`: Zelle, Zyklus, Greifsequenz, Grenzen, M4 (6.5, 6.15), Finale mit Schild „Noch Fragen?“ (7.5) und Ausblick-Spielfeld (7.4).
 >   - `arch.js`: Akt 2 und 6.1.
 >   - `vision.js`: Akt 3.
 >   - `inspect.js`: Akt 5, mit Detailblättern unter dem Foto.
->   - `sheets.js`: 1.5, 1.6, 2.4, 4.7, 6.3–6.7, 7.1, 7.3 und der Anhang.
+>   - `sheets.js`: 1.5, 1.6, 2.4, 4.7, 6.4, 6.7, 6.9, 6.10, 7.1, 7.3 und der Anhang (Takt & Sicherheit jetzt A.9).
 > - **Daten:** `build_data.py` exportiert Config, M1/M3-Ergebnisse auf den Testbildern, Zwischenbilder
 >   (`m3.trace`, `m3.notches`), `robot_check` gegen den Simulator (`m2.check`) und die Posen vom
 >   Labortag aus Commit 1f5cdc1 (`data.lab`). Der GUI-Screenshot entsteht mit `tools/gui_shot.py`
@@ -34,9 +34,9 @@
 >   CLEAR_FOV liegt nahe der J1-Singularität, deshalb fährt die Zelle wie `pick_to_station` per PTP zum Anflug
 >   150 mm über PICK. Erst ab dort folgt die 15-Hz-Bahn. Die Ladekontrolle warnt bei Gelenksprüngen über 10°
 >   und bei mehr als 15° Abstand zur Stellung der Anlage.
-> - **Akt 6 in der Zelle:** Teil B verschwindet beim Betreten von 6.2 und kommt erst in 7.5 zurück. Der
+> - **Akt 6 in der Zelle:** Teil B verschwindet beim Betreten von 6.5 und kommt erst in 7.5 zurück. Der
 >   Schattenroboter aus 4.6 blendet aus. Die Rückfahrt über Teil B läuft zu Beginn von 7.4 (`m4back`), damit
->   der Arm in 6.8 die Prüfung nicht verdeckt.
+>   der Arm in 6.15 die Prüfung nicht verdeckt.
 > - **LARA** stammt aus der URDF (`public/urdf/lara5.urdf`, Kinematik aus den Gelenken). Die Home-Pose
 >   ergibt Flansch-z 434,5 mm wie im Roboter-Backup. Alle Stationsposen sind erreichbar, und der
 >   Greifwinkel folgt derselben Formel wie `m2_robot_control.robot.as_target`.
@@ -112,15 +112,104 @@ Jeder Akt = ein Sprecher, die Zelle ist die gemeinsame Bühne (Rückfahrt in die
 - 5.5 Kerbe (Detailblatt, 4 Klicks): ROI + Region → Kanten → Kandidat mit Rechteckigkeit; dann alle vier Testbilder als Raster (ROI, Region, Kanten, Kandidaten), der gewinnende Weg umrahmt.
 - 5.6 ★ **Drei Prüfungen, ein Urteil**: OCR „69420“ ✓ (Regex), Loch als Maßlinie ✓, Kerbe ✓ → Stempel GUT. Dann übermalte Kerbe → Rotstift, Stempel SCHLECHT mit `reasons`.
 
-**Akt 6 – M4 Behavior Cloning (Jeremy Zid)** – Entwurf aus seiner Doku, Jeremy prüft
-- 6.1 M4 übernimmt das Greifen: Im Zustandsring klappt nur PICK auf M4 („Diffusion Policy“) um. Die Policy greift bis PRE_PLACE (~9 cm über der Prüfung), danach legt M2 ab, M3 prüft und M2 sortiert.
-- 6.2 ★ Lernen mit Rauschen (Zelle): Teil C an PICK, Wegpunkte CLEAR_FOV, PICK und PRE_PLACE samt Sollbahn. LARA fährt eine Episode mit echtem Rauschen, dahinter zeichnet sich der Fächer aller 10 Episoden. Danach legt sie das Teil zurück, wie `put_back`. Eine Karte zeigt die Kette Teachen → Aufnahme → LeRobotDataset → Diffusion Policy (89,5 M Param.) → Inferenz 15 Hz.
-- 6.3 (k) Der Rauschtrichter (Blatt): seitliche Abweichung und Höhe der 10 Episoden über der Bahn, mit Hülle und Ankerpunkten Start, PICK und Übergabe. Nach unten erlaubt das Rauschen höchstens 2 mm (Tisch). Rechts Trichter, Rauschfaktor, Asymmetrie und Rejection Sampling. Daten: `data.m4.funnel` aus `bc/noise.py`.
-- 6.4 ★ Diffusion Policy (Blatt, animiert): zwei Kamerabilder 240 × 320 und 14 Zustandswerte gehen ins Netz (U-Net, 89,5 M, ResNet18 je Kamera). Ein Aktionsblock über 16 Takte entrauscht sich in 10 Schritten. Die ersten 8 Takte werden gefahren, dann folgt eine neue Vorhersage (~77 ms, asynchron). Werte aus `bc/config.py`, die Kurve ist ein Schema (ein Gelenk).
-- 6.5 Die Policy fährt selbst (Blatt): Rollout-Abbildung aus dem Durchstich vom 17.09. mit 10/10, Greifpunkt 1,3–2,2 mm, Bahn 3,3–4,4 mm und 32 min Training. Stempel SIMULATION. Ehrlich dazu: Die Policy hat nur aus dem Zustand gelernt (Platzhalterbilder), in der VM blieb sie an PRE_GRASP stehen.
-- 6.6 (k) Das Zittern (Blatt): Treppe aus 60-Hz-Sollwerten gegen den 1-kHz-Takt der Steuerung, Eigenfrequenz 5,6–6,2 Hz. Rechts die RMS-Werte je Ausführungsart, Stempel ENTSCHIEDEN: servo_j mit Override 0,5.
-- 6.7 (k) Takt und Sicherheit (Blatt): Zeitachse mit 15-Hz-Takt, servo_j 60 Hz (Aufruf ~10 ms, selten 21 ms), Vorhersage ~77 ms und Hängern ~210 ms. Dazu ServoGuard, TargetLimiter, Zielabstand, Geofence und Software-Stopp, Stempel IN DER VM AUSGELÖST.
-- 6.8 Übergabe M4 → M2 (Zelle): Fahrt bis PRE_PLACE als Sollbahn, Schild ÜBERGABE, dann `reset()` und Ablegen durch M2. Schild „In der Neura-VM getestet · mit trainiertem Modell an der Anlage noch offen“.
+**Akt 6 – M4 Behavior Cloning (Jeremy Zid)** – Entwurf 3 vom 28.11., mit Jeremy abgestimmt (ersetzt den Entwurf vom 01.11.)
+
+Ablauf nach Jeremys Brainstorming: erst die Idee (anderer Ansatz, Vor- und Nachteile, Pipeline fürs IKR), dann was die Policy
+macht und wie die Daten entstehen, dann alle Probleme (Jeremy entscheidet, welche kurz und welche lang werden), dann
+Greifgenauigkeit vorher/nachher transparent, Stand und Ausblick. Zahlen aus `code/m4_behavior_cloning/Berichte`
+(v. a. `2026-11-26_Vergleich_DAgger/Auswertung.md`, `Testprotokoll.md`) und `Dokumentation/Zittern-an-der-Anlage.md`.
+
+- **Aufgabe**
+  - 6.1 M4 übernimmt das Greifen (bleibt, Zustandsring).
+  - 6.2 Warum Imitation Learning? Aufwände aus Akt 3 werden durchgestrichen; Vor- und Nachteile zur Auswahl durch Jeremy.
+    Wichtiger Nachteil: Licht, Weißabgleich (Abgleich mit M1 beachten) und Kameralage müssen bleiben, wie sie gelernt wurden.
+    Imitation Learning als Oberbegriff, VLA nur als Beispiel; Ziel ist eine Pipeline für weitere IKR-Projekte.
+- **Idee**
+  - 6.3 Was rein, was raus: zwei Kamerabilder 240 × 320 + 14 Zustandswerte → Aktionsblock über 16 Takte, 8 gefahren.
+    Visualisierung: Kacheln aus den Kameras, Ghost-Spur der Vorhersage vor dem Arm. (k: mit 6.4 zusammenlegen)
+  - 6.4 ★ Diffusion Policy: die vorhandene Entrausch-Animation bleibt.
+  - 6.5 Demonstrationen per Planer: Fächer in der Zelle (bisher 6.2), Datensatz **G2b** (nur der aktuelle; Episodenzahl bestätigen).
+  - 6.6 ★ Warum Rauschen? Ohne Rauschen 1 mm/Takt → 10 mm nach 10 Takten; mit Rauschen Ghost-Arm auf der Idealbahn,
+    echter Arm versetzt, Pfeil = Korrektur-Label, Schieberegler fährt die Bahn ab.
+  - 6.7 Rauschtrichter – **nicht kürzen**, aber neu als Seitenansicht (wo Rauschen ist und wo nicht, Vor-/Nachteil).
+  - 6.8 DAgger als Erweiterung: trainieren → fahren → Experte übernimmt → Labels auf Idealbahn → nachtrainieren. (k: Klick in 6.13)
+- **Am Aufbau**
+  - 6.9 Simulation → VM → Anlage, nur kurz, MuJoCo weglassen.
+  - 6.10 ★ Zittern oder Nachlauf: Ghost-Arm (Sollwert) gegen echten Arm, Regler Override 1 / 0,5 / 0,2
+    (Verzug ~0,02 s / ~0,09 s konstant / VM wachsend bis 2,3 s). Labels passen bei Nachlauf nicht mehr zu den Bildern.
+  - 6.11 Pendeln: schon **innerhalb** eines Chunks ruckig (2,9 mm), dazu 4,3 mm zwischen Chunks; Tiefpass aus / 0,5 / 0,25 →
+    Ruckeln 3,22 / ~1,45 / ~1,0–1,2 mm, Preis ist Nachlauf. Wert 0,75: Daten noch suchen. (k: mit 6.10 zusammenlegen)
+  - 6.12 Die letzten Millimeter: Trichter-Seitenansicht mit echten Griffen, Policy unter der Oberkante unsicher,
+    2,45 mm Spiel je Backe (44,8 mm Öffnung, 39,9 mm Objekt).
+- **Lösung / Ergebnis**
+  - 6.13 Greifgenauigkeit vorher → nachher: DAgger hoch (23.11.) G2 4/15 → G2b 10/15; DAgger spät (25.11.) ohne Gewinn;
+    geplanter Endabstieg ab 10–15 mm: 49–54 % → 86–88 % (auf PICK ~95 %, Erfolg + Warnung). Bericht zum Anfang ohne DAgger fehlt noch.
+  - 6.14 Heatmap (Jeremys Idee): Erfolg/quer über x/y aus `fahrten.csv` (237 Fahrten), Trainingslagen als Punkte,
+    Schieberegler für die Drehung (Testfahrten nur 58–145°, grobe Klassen). Effekt der Drehung erst prüfen.
+  - 6.15 Stand, offen, weiter: Übergabe M4 → M2 (bisher 6.8) nur noch als geplant, im Gesamtablauf offen; Weiter: Greifer, RTC,
+    Licht-Augmentierung, Arm, Objekte → 7.4.
+- Takt und Sicherheit (bisher 6.7) liegt jetzt im Anhang als **A.9**.
+- Umgehängt: cell 6.2 → 6.5, 6.8 → 6.15; Blätter Trichter 6.3 → 6.7, Simulation 6.5 → 6.9, Zittern 6.6 → 6.10, Takt 6.7 → A.9.
+  6.7, 6.9, 6.10 und 6.15 zeigen bis zum Neubau den alten Inhalt, 6.2, 6.3, 6.6, 6.8, 6.11–6.14 sind Platzhalter.
+- **Korrekturen 28.11. (Jeremy):** 6.2 als Tabelle Vor-/Nachteile gegenüber dem klassischen Ansatz plus IKR-Text; Platzhalter ohne „Spricht“.
+  6.3 Überschrift neu („Von Bild und Zustand zur Bahn“, noch offen). 6.5 gebaut: Sollbahn ohne Rauschen nur bis zum Griff,
+  ANFLUG/PRE_PICK/PICK gelb (`T.waypoint`), Karte mit G2b (619 Episoden statt „über 900“, das war die Summe aller Aufnahmen).
+  6.6 heißt „Noise Injection“, Ghost-Arm und Schieberegler gehören dorthin, das 1-mm-Beispiel als Bild. 6.7 gebaut: Seitenansicht
+  von oben nach unten aus 46 echten Episoden vom 19.11. (`data.m4.side`, `build_data.py` liest `data_vm/2026-11-19`), Punkt 5 prüft
+  Jeremy. 6.8 DAgger mit Experte-übernimmt-Szene. 6.10/6.11 mit Erklärung, was Nachlauf ist und warum er schadet. 6.12 in der
+  Ansicht von 6.7. 6.13: G2b 62 % (Policy bis 1 mm über dem Objekt) → 86 % (Endabstieg ab 20 mm), Quelle von Jeremy nachtragen.
+  6.15 nicht mehr in der Zelle, sondern Blatt Stand/Offen/Weiter (Platzhalter); die alte Übergabefahrt ist entfernt,
+  `m4back` (7.5) startet jetzt am Ende von 6.5.
+- **6.6 gebaut (28.11.):** Zelle, Kamera `C.m6` nah über Teil C, Ghost-Arm (`ghost6`, ohne Tiefentest über LARA) auf der
+  Sollbahn. Schritt 1: ab PRE_PICK 1 mm je Takt seitlich, nach 10 Takten 10 mm (rote Spur, Bild). Schritt 2: echte Abweichung
+  von `data_vm/2026-11-19/ep_00014` (bis 25 mm im Anflug, `data.m4.side.demo`) auf die Sollbahn gelegt, roter Pfeil LARA → Ghost =
+  Label. Karte unten links mit Erklärung, Schieberegler (Takt i von 48) und Abstand in mm. `m4back` (7.5) startet am Ende von 6.6.
+  6.13: Zahlen aus dem Bericht (49–54 % → 86–91 %), Stempel OFFEN, Bewertung mit Jeremy prüfen.
+- **Runde 3 (28.11.):** Schattenroboter aus 4.5 ist ab 6.5 weg (neuer Szenen-Hook `pre` in `engine/nav.js`, Zustand `act6`).
+  6.6 zeigt die ganze Bahn ab 300 mm über PICK aus weiterer Entfernung; Drift schräg in xy ab Beginn, echte Abweichung
+  x/y/z aus ep_00014. Neuer ziehbarer Regler der Navigation (`scrub: { k: Zustandsschlüssel }`, CSS `.scrub`), in 6.6 nach
+  Schritt 1 und 2. 6.7: Achse = TCP-Höhe über dem Tisch (PICK 8 mm laut `pick_bis_griff.json`), Punkte 3–5 nacheinander,
+  Rejection-Beispiel (grün echte Episode, rot konstruierter Rest 6 mm, durchgestrichen).
+- **Runde 4 (28.11.):** 6.6 nur noch eine Fahrt (ohne Drift): Blick von vorn über den Tisch auf LARA (Stange links),
+  Abweichung von ep_00014 im Bild 4-fach überzeichnet, grüner Label-Pfeil, Regler nach dem Schritt. Akt 6 spielt die
+  Bahn doppelt so schnell ab (`M4_SPEED`), IK je Takt wieder vom PICK-Gelenkwinkel aus (Ghost und LARA im selben Zweig).
+  6.2 als Tabelle (sheetIL), 6.3 mit echtem Beobachtungspaar aus ep_00014, Takt 40 (sheetObs, `data.m4.side.obs`,
+  Bilder `public/img/m4/obs_*.jpg`).
+- **Runde 5 (28.11.):** 6.3 und 6.4 getauscht: erst Diffusion Policy (Schema), dann „Von Bild und Zustand zur Bahn“
+  (4 Schritte, beginnt mit den Kästchen aus 6.3 an derselben Stelle, dann echte Daten, Aktionsblock mit beschrifteten
+  Achsen: Höhe der TCP-Sollpose relativ zu jetzt über die Zeit). 6.5 nur noch ein Schritt ohne Fahrt (Punkte und Karte links,
+  Kamera wie 6.6). 6.6 wieder in Echtzeit (`M4_SPEED = 1`), Fahrt startet nach der Kamerafahrt.
+- **Runde 6 (28.11.):** 6.3 endet mit „Was steckt in den Kästchen?“; 6.4 morpht die Kästchen aus 6.3 (gleiche Lage) um die
+  echten Daten, Pfeile berühren die Kästen, Aktionsblock in eigenem Kasten. Ausführung korrigiert (6.3 und 6.4): 8 von 16
+  Takten nutzbar, alle 2 Takte ein neuer Block (`POLICY_REPLAN_STEPS`), je Takt Mittel der 4 überlappenden Blöcke
+  (`ChunkEnsembler`, decay 0), danach Tiefpass 0,5. 6.5: Beschriftungen rechts der Punkte.
+- **Runde 7 (28.11.):** 6.4 Aktionsblock zeigt jetzt die echten Labels: 6 absolute Gelenk-Sollwinkel über 16 Takte
+  (relativ zur Stellung jetzt; Takt 1 schon versetzt = Korrektur zur Sollbahn), `data.m4.side.obs.chunk_joints_deg`.
+  Ausführung in eigenem Kasten unter Netz und Aktionsblock. Morph-Rahmen geschlossen, Farben wie 6.3, Bilder blenden
+  während der Bewegung ein. 6.5: Linien zu den Wegpunkten gelb, Kartentext einheitlich.
+- **Runde 8 (28.11.):** 6.4 wieder eine Kurve: gesendet werden je Takt 6 Gelenk-Sollwinkel + Greifer, gezeigt wird die
+  daraus folgende TCP-Höhe (`chunk_tcp_z_mm`, ideale Pose t+1 … t+16 relativ zum gefahrenen TCP jetzt). Bilder ohne eigene
+  Karte, nur ein farbiger Rahmen. 6.5: Beschriftungen höher, Linien zu den Punkten gut sichtbar.
+- **Runde 9 (28.11.) – neue Reihenfolge am Aufbau** (Jeremys Ablauf): 6.8 Zittern oder Nachlauf (erstes Problem, betraf die
+  Aufnahme) → 6.9 Simulation → VM → Anlage (Policy folgt an der Anlage schlechter, vor allem kurz vor dem Griff) →
+  6.10 DAgger (gebaut, Zelle: Policy versetzt bis 20 mm über PICK, Experte übernimmt; Versatz 45 mm überzeichnet) →
+  6.11 Pendeln/Glättung. 6.9: Sim-Abbildung nur „Höhe über der Zeit“; Anlage C2 16.11. (602 Episoden, nicht 920; ohne
+  Glättung) gegen G2b 26.11. (nach DAgger, Glättung 0,5, gleiche Grafik aus den Rohdaten, `plot_g2b_versatz`).
+- **Runde 10 (28.11.):** DAgger-Fahrt zwischen 6.9 Schritt 2 und dem Ergebnis: 6.9 (Sim, C2) → 6.10 DAgger → neu 6.11
+  „Nach DAgger an der Anlage“ (C2 gegen G2b, Stempel OFFEN: rechts C2 mit DAgger oder G2-Fahrten). Dadurch rutschen die
+  folgenden Szenen um eins: 6.12 Pendeln (gebaut: G2 am 23.11. mit Glättung aus/0,5/0,25 aus den Rollouts, `data.m4.smooth`),
+  6.13 Die letzten Millimeter (gebaut: 3 echte Griffe G2b 26.11., Bezug Greifstelle, `data.m4.grasps`), 6.14 Greifgenauigkeit,
+  6.15 Heatmap, 6.16 Stand. G2b lief immer mit 0,5; G2 auch ohne Glättung (23.11.).
+- **Runde 11 (28.11.):** 6.13 nur noch echte Griffe von G2b **mit bekannter Lage** (Probegriff „tisch“, 25./26.11.; eine
+  dritte Fahrt passte nicht zur Lage und ist ausgelassen), Maßskizze gleich mit. Gebaut: 6.14 Greifgenauigkeit (Balken DAgger
+  und Endabstieg, OFFEN), 6.15 Heatmap (65 G2b-Fahrten, Trainingslagen 19.11., Regler für die Drehklasse, `data.m4.heat`),
+  6.16 Stand/offen/weiter. Herkunft geprüft: 6.12 echte Anlagenfahrten G2 (`in_simulation: False`); C2 lief 16.–19.11.
+  ohne Glättung, am 23.11. nur 2 Fahrten mit 0,5. Navigation: `scrubLabel` je Szene.
+- **Runde 12 (28.11.):** 6.13 Teil und Backen maßstäblich statt grünem Band. 6.14 überall Prozent; Balken „auf PICK“ entfernt
+  (korrigiert mit PICK); Endabstieg streng 73 % / mit Warnung 86 %, bis zum Griff 49 % (Bericht §12, hoehen_g2b.csv);
+  Jeremys 62 % nicht in den Daten gefunden (nächste Werte: 66 % streng bei 5 mm, 60 % offiziell mit Warnung über alle
+  G2b-Fahrten). 6.15 mit allen 237 Vergleichsfahrten aller Modelle, je Lage zusammengefasst.
+- Mit 15 Szenen zu lang: Kürzungskandidaten 6.3+6.4, 6.8 in 6.13, 6.10+6.11 → etwa 12.
 - Die Szene „Zwei Python-Welten“ ist verworfen (01.11.), weil sie für die Zuschauer keine Rolle spielt.
 
 **Akt 7 – Ergebnis & Ausblick (alle)**
@@ -136,7 +225,7 @@ Jeder Akt = ein Sprecher, die Zelle ist die gemeinsame Bühne (Rückfahrt in die
 > | 3 M1 | 3.1 | 3.2–3.5 | 3.6 Parallaxe, 3.7 Probleme im Arbeitsraum, 3.8 Belichtung | Schritt 2 in 3.6–3.8 (Bilanz M1) |
 > | 4 M2 | 4.1 | 4.2–4.6 | – (4.4 Greifwinkel und 4.8 Am Aufbau am 27.11. gestrichen) | – |
 > | 5 M3 | 5.1 | 5.2–5.6 | 5.7 Die echte Kamera, 5.8 Loch zu klein | 5.9 Kreis-Fit |
-> | 6 M4 | 6.1 | 6.2–6.4 | 6.5, 6.6 | 6.6 Schritt 2, 6.7, 6.8 |
+> | 6 M4 | 6.1, 6.2 | 6.3–6.8 | 6.9–6.12 | 6.10/6.11 Schritt 2, 6.13–6.15 |
 >
 > Akt 7: 7.1 Drei Labortage (Zeitleiste, nicht maßstäblich), 7.2 Was der Aufbau uns gelehrt hat (alle zehn
 > Fälle als Tabelle), 7.3 Bilanz 26.11., 7.4 Mögliche Verbesserungen (Sauggreifer u. a.), 7.5 Ausblick, 7.6 Finale („Noch Fragen?“ bleibt).

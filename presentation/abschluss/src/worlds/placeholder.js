@@ -44,11 +44,7 @@ export function createPlaceholder(entry) {
       const d = add(text(entry.data, { font: 'mono', size: 0.22, anchorY: 'top', maxWidth: FW - 6.5, opacity: 0 }), 0.45);
       d.position.set(x0 + 2.0, -3.05, 0.01);
     }
-    // Sprecher oben rechts
-    if (entry.speaker) {
-      const sp = add(text(`SPRICHT: ${entry.speaker.toUpperCase()}`, { font: 'mono', size: 0.18, hex: T.inkSoft, anchorX: 'right', anchorY: 'top', letterSpacing: 0.08, opacity: 0 }), 0.2);
-      sp.position.set(-x0 - 0.5, y0 - 0.75, 0.01);
-    }
+    // (Sprecher steht im Schriftfeld unten rechts, nicht doppelt auf der Karte)
     // Entwurfsstempel (Rotstift)
     const stamp = new THREE.Group();
     const sw = 2.9;

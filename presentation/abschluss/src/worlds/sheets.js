@@ -1,4 +1,4 @@
-// Ruhige Blätter (Baukasten src/kit/sheet.js): 1.5, 1.6, 2.4, 3.6, 4.6, 5.9, 6.3–6.7, 7.4, A.1–A.8.
+// Ruhige Blätter (Baukasten src/kit/sheet.js): 1.5, 1.6, 2.4, 3.6, 4.6, 5.9, 6.4, 6.7, 6.9, 6.10, 7.4, A.1–A.9.
 // Die Blätter zum Muster „Aufgabe → Idee → Am Aufbau → Lösung“ stehen in aufbau.js.
 // Inhalte aus thesis/blueprint.md, thesis 02b_vorprojekt.tex, plan/06_offen.md, plan/07_erledigt.md, der M4-Doku und
 // data.json (config, Zwischenbilder, GUI-Screenshot, Zykluslog, Labortag, Tests, M4-Messwerte).
@@ -134,58 +134,550 @@ function sheet47(api) {
   api.text(1, 'Alle Schritte auch per Kommandozeile: robot_check', { font: 'mono', size: 0.14, hex: T.inkSoft, anchorY: 'top', maxWidth: W + 0.3 }, [RX - 0.05, -3.2], { delay: 1.5 });
 }
 
-// ---------------------------------------------------------------- 6.3 Rauschtrichter (echte Episoden aus bc/noise.py)
+// ---------------------------------------------------------------- 6.7 Rauschtrichter (Seitenansicht, echte Episoden der Anlage)
 function sheetFunnel(api) {
-  const f = api.ctx.data.m4.funnel;
-  const n = api.ctx.data.m4.noise;
-  const L = f.arc_mm[f.arc_mm.length - 1];
-  const PX0 = X0 + 1.2;
-  const PX1 = 1.5;
-  const S = 1 / 52; // mm → Blatt
-  const Xf = (a) => PX0 + (a / L) * (PX1 - PX0);
-  const plotDev = (step, y0, devs, hullHi, hullLo, label) => {
-    const d = (k) => ({ delay: k, dur: 0.6 });
-    api.line(step, [[PX0, y0], [PX1, y0]], { width: 1, hex: T.inkSoft }, d(0));
-    api.text(step, label, { font: 'mono', size: 0.14, hex: T.inkSoft, anchorX: 'right', anchorY: 'middle' }, [PX0 - 0.15, y0], d(0));
-    [f.limit_mm.xy, -f.limit_mm.xy].forEach((v) => api.text(step, `${v > 0 ? '+' : '−'}${fmt(Math.abs(v), 0)}`, { font: 'mono', size: 0.12, hex: T.inkSoft, anchorX: 'right', anchorY: 'middle' }, [PX0 - 0.15, y0 + v * S], d(0.1)));
-    const hull = (vals) => vals.map((v, i) => [Xf(f.arc_mm[i]), y0 + v * S]);
-    api.line(step, hull(hullHi), { width: 1.2, dashed: true, dash: 0.07, gap: 0.05, hex: T.inkSoft }, d(0.2));
-    api.line(step, hull(hullLo), { width: 1.2, dashed: true, dash: 0.07, gap: 0.05, hex: hullLo === f.hull_z_lo ? T.signal : T.inkSoft }, d(0.2));
-    devs.forEach((dv, e) => {
-      const l = api.line(step, dv.map((v, i) => [Xf(f.arc_mm[i]), y0 + v * S]), { width: 1.2, hex: MODULE_COLOR.M4 }, { delay: 0.4 + e * 0.05, dur: 1.0 });
-      l.opacity = 0.7;
-    });
-  };
-  const YT = 1.35;
-  const YB = -1.75;
-  // Ankerpunkte: dort ist das Rauschen null
-  const ANCH = ['Start', 'PICK', 'Übergabe'];
-  f.anchors_mm.forEach((a, i) => {
-    api.line(0, [[Xf(a), YT + 1.15], [Xf(a), YB - 1.0]], { width: 1, dashed: true, dash: 0.05, gap: 0.06, hex: T.inkSoft }, { delay: 0.1 });
-    api.text(0, ANCH[i], { font: 'monoMedium', size: 0.15, anchorX: i === 0 ? 'left' : i === 2 ? 'right' : 'center', anchorY: 'bottom' }, [Xf(a), YT + 1.2], { delay: 0.15 });
+  const m4 = api.ctx.data.m4;
+  const sd = m4.side;
+  const n = m4.noise;
+  const eps = sd.episodes;
+  const HMAX = 420; // mm über PICK
+  const PT = sd.pick_above_table_mm; // TCP an PICK steht so hoch über dem Tisch
+  const DMAX = 45; // mm seitlich
+  const YB = -2.75; // PICK
+  const YT = 2.55;
+  const XC = X0 + 4.6; // Sollbahn
+  const SX = 3.4 / DMAX;
+  const Y = (h) => YB + (h / HMAX) * (YT - YB);
+  const X = (d) => XC + d * SX;
+  const d = (k, dur = 0.6) => ({ delay: k, dur });
+  const lab = { font: 'mono', size: 0.12, hex: T.inkSoft };
+  // Achsen: Höhe über PICK senkrecht, seitliche Abweichung waagrecht
+  api.line(0, [[XC, YB], [XC, YT]], { width: 1.2, dashed: true, dash: 0.08, gap: 0.06, hex: T.ink }, d(0));
+  api.text(0, 'Sollbahn', { font: 'monoMedium', size: 0.14, anchorX: 'center', anchorY: 'bottom' }, [XC, YT + 0.08], d(0.05));
+  [-DMAX, -20, 20, DMAX].forEach((v) => {
+    api.text(0, `${v > 0 ? '+' : '−'}${Math.abs(v)}`, { ...lab, anchorX: 'center', anchorY: 'top' }, [X(v), YB - 0.5], d(0.05));
   });
-  plotDev(0, YT, f.dx, f.hull_hi, f.hull_hi.map((v) => -v), 'x');
-  api.text(0, 'Abweichung von der Sollbahn in mm, 10 Episoden über der Bahn', { font: 'mono', size: 0.14, hex: T.inkSoft }, [PX0, YB - 1.35], { delay: 0.2 });
-  // Schritt 1: die Höhe – nach unten (Tisch) fast nichts
-  plotDev(1, YB, f.dz, f.hull_hi, f.hull_z_lo, 'z');
-  const hatch = [];
-  for (let x = PX0; x < PX1 - 0.1; x += 0.22) hatch.push([[x, YB - 0.08], [x + 0.18, YB - 0.4]]);
-  hatch.forEach((h, i) => api.line(1, h, { width: 1, hex: T.signal }, { delay: 0.6 + i * 0.01, dur: 0.3 }));
-  api.text(1, 'Tisch', { font: 'monoMedium', size: 0.15, hex: T.signal, anchorY: 'top' }, [PX1 + 0.1, YB - 0.1], { delay: 0.9 });
-  // rechts: was der Trichter tut
+  api.text(0, 'seitliche Abweichung von der Sollbahn in mm (x und y)', { ...lab, anchorX: 'center', anchorY: 'top' }, [XC, YB - 0.72], d(0.1));
+  [100, 200, 300, 400].forEach((ht) => {
+    api.line(0, [[X(-DMAX) - 0.25, Y(ht - PT)], [X(-DMAX) - 0.15, Y(ht - PT)]], { width: 1, hex: T.inkSoft }, d(0.05));
+    api.text(0, String(ht), { ...lab, anchorX: 'right', anchorY: 'middle' }, [X(-DMAX) - 0.3, Y(ht - PT)], d(0.05));
+  });
+  api.text(0, 'TCP-Höhe über dem Tisch in mm', { ...lab, anchorX: 'left', anchorY: 'bottom' }, [X(-DMAX) - 0.85, YT + 0.08], d(0.1));
+  // Tisch unter dem Greifpunkt
+  const yT = Y(-PT);
+  api.line(0, [[X(-DMAX), yT], [X(DMAX), yT]], { width: 1.2, hex: T.ink }, d(0.1));
+  for (let x = X(-DMAX); x < X(DMAX) - 0.1; x += 0.22) api.line(0, [[x, yT - 0.02], [x + 0.14, yT - 0.24]], { width: 1, hex: T.inkSoft }, d(0.15, 0.3));
+  api.text(0, 'Tisch', { font: 'monoMedium', size: 0.14, hex: T.inkSoft, anchorX: 'right', anchorY: 'top' }, [X(-DMAX) - 0.15, yT - 0.02], d(0.2));
+  // Wegpunkte gelb: ANFLUG, PRE_PICK, PICK
+  [[m4.anflug_mm, 'ANFLUG'], [m4.pre_pick_mm, 'PRE_PICK'], [0, 'PICK']].forEach(([h, name], i) => {
+    api.line(0, [[X(-DMAX), Y(h)], [X(DMAX), Y(h)]], { width: 1.4, dashed: true, dash: 0.06, gap: 0.06, hex: T.waypoint }, d(0.2 + i * 0.1));
+    api.text(0, `${name} · ${fmt(h + PT, 0)} mm`, { font: 'monoMedium', size: 0.14, hex: T.waypoint, anchorY: 'middle' }, [X(DMAX) + 0.1, Y(h) + (h === 0 ? 0.12 : 0)], d(0.25 + i * 0.1));
+  });
+  // echte Episoden: von oben nach unten, x und y je eine Linie
+  eps.forEach((e, k) => {
+    ['dx', 'dy'].forEach((c) => {
+      const pts = e.h.map((h, i) => [X(e[c][i]), Y(Math.min(h, HMAX))]);
+      const l = api.line(0, pts, { width: 1, hex: MODULE_COLOR.M4 }, { delay: 0.5 + k * 0.02, dur: 1.2 });
+      l.opacity = 0.45;
+    });
+  });
+  // Schritt 1: Hülle je Höhenband – unten schmal
+  const BAND = 10;
+  const hull = [[0, 0]];
+  for (let h = 0; h <= HMAX; h += BAND) {
+    let m = 0;
+    eps.forEach((e) => e.h.forEach((hh, i) => {
+      if (hh >= h && hh < h + BAND) m = Math.max(m, Math.abs(e.dx[i]), Math.abs(e.dy[i]));
+    }));
+    if (m > 0) hull.push([h + BAND / 2, m]);
+  }
+  [1, -1].forEach((sg) => api.line(1, hull.map(([h, m]) => [X(sg * m), Y(h)]), { width: 1.6, dashed: true, dash: 0.07, gap: 0.05, hex: T.ink }, d(0.1, 1.0)));
+  // Schritt 1: Rejection Sampling an einem Beispiel – grün eine echte, angenommene Episode; rot dieselbe Bahn mit einem
+  // konstruierten Rest von 6 mm auf den letzten Zentimetern: verworfen und neu gezogen
+  const dev = (e) => Math.max(...e.dx.map(Math.abs));
+  const good = eps.reduce((a, e) => (Math.abs(dev(e) - 15) < Math.abs(dev(a) - 15) ? e : a));
+  const REST = 6;
+  const ramp = (h) => (h < 45 ? REST * (1 - Math.max(0, h - 5) / 40) : 0);
+  const okPts = good.h.map((h, i) => [X(good.dx[i]), Y(Math.min(h, HMAX))]);
+  const badPts = good.h.map((h, i) => [X(good.dx[i] + ramp(h)), Y(Math.min(h, HMAX))]);
+  const dOk = { delay: 1.0, dur: 1.0 };
+  const dBad = { delay: 1.4, dur: 1.0 };
+  api.line(1, badPts, { width: 2.4, hex: T.signal }, dBad);
+  api.line(1, okPts, { width: 2.4, hex: T.good }, dOk);
+  const bx = X(good.dx[good.dx.length - 1] + REST);
+  const by = Y(0);
+  api.line(1, [[bx - 0.16, by - 0.16], [bx + 0.16, by + 0.16]], { width: 2.6, hex: T.signal }, { delay: 2.3, dur: 0.2 });
+  api.line(1, [[bx - 0.16, by + 0.16], [bx + 0.16, by - 0.16]], { width: 2.6, hex: T.signal }, { delay: 2.4, dur: 0.2 });
+  api.text(1, `verworfen: ${REST} mm daneben (erlaubt ${fmt(sd.rest_max_mm, 1)})`, { font: 'monoMedium', size: 0.13, hex: T.signal, anchorX: 'left', anchorY: 'middle' }, [X(-DMAX) + 0.05, Y(22)], { delay: 2.4 });
+  api.text(1, 'angenommen (echte Episode)', { font: 'monoMedium', size: 0.13, hex: T.good, anchorX: 'left', anchorY: 'middle' }, [X(-DMAX) + 0.05, Y(38)], { delay: 1.8 });
+  // rechts: was der Trichter tut (Punkt 5 noch offen, Jeremy prüft)
   const RX = 2.5;
   const rows = [
-    [0, 'Trichter', `null an Start, PICK und Übergabe, ab ${fmt(n.funnel_mm[1], 0)} mm Abstand volle Streuung – genau greifen, im Transit schlingern`],
+    [0, 'Trichter', `volles Rauschen im Transit, ab ${fmt(n.funnel_mm[1], 0)} mm vor dem Greifpunkt abklingend, auf den letzten ${fmt(n.funnel_mm[0], 0)} mm null – genau greifen, im Transit schlingern`],
     [0, 'Rauschfaktor je Episode', 'zufällig 0 bis 1 – von fast ideal bis volle Streuung'],
-    [1, 'Asymmetrisch', `seitlich und nach oben bis ${fmt(f.limit_mm.xy, 0)} mm (dreifache Streuung), Richtung Tisch höchstens ${fmt(-f.limit_mm.z_down, 0)} mm`],
-    [1, 'Rejection Sampling', `jede Bahn per IK und Kollisionsmodell geprüft, sonst neu gezogen (bis ${f.max_rejects}×)`],
+    [1, 'Asymmetrische Grenzen', `seitlich und nach oben darf das Rauschen bis ${fmt(sd.limit_mm.xy, 0)} mm ausschlagen, nach unten nur ${fmt(-sd.limit_mm.z_down, 0)} mm – es drückt den Greifer nie Richtung Tisch`],
+    [1, 'Rejection Sampling', `jede Bahn wird vorab geprüft (IK, Kollision, auf den letzten ${fmt(sd.free_mm, 0)} mm höchstens ${fmt(sd.rest_max_mm, 1)} mm neben der Sollbahn), sonst neu gezogen (bis ${sd.max_rejects}×)`],
     [1, 'Neu: gezielter Versatz', 'im senkrechten Abstieg ist das Rauschen null – jede 2. Episode kommt 5–10 mm und 10–20° versetzt an, die Aktion zeigt zur Mitte'],
   ];
-  rows.forEach(([step, t, b], i) => api.row(step, i + 1, t, b, 2.45 - i * 1.22, { x: RX, width: 4.9, size: 0.25, delay: 0.3 + (i % 3) * 0.15 }));
-  api.text(1, 'Quelle: Bahn und Rauschen aus m4_behavior_cloning/bc/noise.py (SmoothedOUProcess, funnel_scale, NoiseLimits)', { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 1.0 });
+  // je Schritt von oben nach unten: 1, 2 – dann 3, 4, 5
+  rows.forEach(([step, t, b], i) => api.row(step, i + 1, t, b, 2.45 - i * 1.22, { x: RX, width: 4.9, size: 0.25, delay: 0.3 + (step ? i - 2 : i) * 0.25 }));
+  api.text(0, `${eps.length} echte Episoden der Anlage vom 19.11. bis zum Griff · Quelle: ${sd.source} (pose_ideal, pose_noisy), bc/config.py`, { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 1.0 });
 }
 
-// ---------------------------------------------------------------- 6.4 Diffusion Policy erklärt
+// ---------------------------------------------------------------- 6.2 Warum Imitation Learning? (Tabelle)
+function sheetIL(api) {
+  const LX = X0 + 0.7;
+  const MX = 0.35; // Trennlinie
+  const RX = MX + 0.5;
+  const YH = 2.45;
+  const d = (k) => ({ delay: k });
+  api.text(0, 'gegenüber dem klassischen Ansatz (M1 erkennt und kalibriert, M2 plant die Bahn)', { font: 'mono', size: 0.15, hex: T.inkSoft, anchorY: 'top' }, [LX, YH + 0.25], d(0));
+  api.text(0, 'VORTEILE', { font: 'monoMedium', size: 0.2, hex: T.good, letterSpacing: 0.08, anchorY: 'top' }, [LX, YH - 0.25], d(0.1));
+  api.text(0, 'NACHTEILE', { font: 'monoMedium', size: 0.2, hex: T.signal, letterSpacing: 0.08, anchorY: 'top' }, [RX, YH - 0.25], d(0.1));
+  api.line(0, [[LX, YH - 0.65], [7.0, YH - 0.65]], { width: 1.4 }, { delay: 0.1, dur: 0.5 });
+  api.line(0, [[MX, YH - 0.2], [MX, -2.25]], { width: 1, hex: T.inkSoft }, { delay: 0.2, dur: 0.5 });
+  const pros = [
+    ['Keine Kalibrierung', 'keine Koordinatensysteme, keine Homographie, keine Positionskorrektur'],
+    ['Keine Bildverarbeitung je Merkmal', 'kein Weißabgleich und keine Belichtung fürs Erkennen, Objektgröße egal'],
+    ['Kein Bahnprogramm je Teil', 'ein neues Teil braucht neue Daten, keinen neuen Code'],
+    ['Korrigiert in jedem Takt', 'schaut 15-mal je Sekunde hin und fährt nach'],
+    ['Lernt den Aufbau mit', 'Anlage, Kameras und Greifer gehen implizit ein'],
+  ];
+  const cons = [
+    ['Mehr Hardware', 'GPU für Training und Inferenz, zusätzliche Handkamera'],
+    ['Daten und Training', 'Aufnahme an der Anlage und Training kosten Tage'],
+    ['Nicht deterministisch', 'gleiche Lage, nicht immer gleiche Bahn – schwer nachzuweisen'],
+    ['Nur so gut wie die Daten', 'fern vom Training wird es schlechter'],
+    ['Aufbau muss bleiben', 'Licht, Weißabgleich und Kameralage wie bei der Aufnahme'],
+    ['Schwer zu erklären', 'man sieht nicht hinein, warum sie etwas tut'],
+  ];
+  const ROW = 0.66;
+  const item = (x, i, [t, b], hex, sign) => {
+    const y = YH - 0.95 - i * ROW;
+    const k = 0.35 + i * 0.12;
+    api.text(0, sign, { font: 'title', size: 0.3, hex, anchorY: 'top' }, [x, y + 0.02], d(k));
+    api.text(0, t, { font: 'sansMedium', size: 0.24, anchorY: 'top' }, [x + 0.35, y], d(k));
+    api.text(0, b, { font: 'sans', size: 0.16, hex: T.inkSoft, anchorY: 'top', maxWidth: 6.4 }, [x + 0.35, y - 0.32], d(k + 0.05));
+  };
+  pros.forEach((r, i) => item(LX, i, r, T.good, '+'));
+  cons.forEach((r, i) => item(RX, i, r, T.signal, '−'));
+  // Schritt 1: Nutzen für das IKR
+  api.line(1, [[LX, -2.7], [7.0, -2.7]], { width: 1.4, hex: MODULE_COLOR.M4 }, { delay: 0, dur: 0.5 });
+  api.text(1, 'Für das IKR', { font: 'title', size: 0.34, hex: MODULE_COLOR.M4, anchorY: 'top' }, [LX, -2.9], d(0.2));
+  api.text(1, 'Erfahrung mit Imitation Learning sammeln: die Pipeline aus Aufnahme, Training, Ausführung und DAgger lässt sich auf andere Roboter, Greifer und Aufgaben übertragen. Behavior Cloning ist der Einstieg, VLA-Modelle bauen auf demselben Prinzip auf.',
+    { font: 'sans', size: 0.2, hex: T.ink, anchorY: 'top', maxWidth: 10.6, lineHeight: 1.3 }, [LX + 3.2, -2.9], d(0.35));
+}
+
+// ---------------------------------------------------------------- 6.4 Von Bild und Zustand zur Bahn (echtes Beobachtungspaar)
+// Die Kästchen aus 6.3 stehen beim Betreten an derselben Stelle und wandern dann um die echten Daten eines Takts
+// (Schritt 0). Schritt 1: Netz und Aktionsblock. Schritt 2: wie der Block gefahren wird (8 nutzbar, alle 2 Takte neu,
+// überlappende Blöcke gemittelt, Tiefpass).
+function sheetObs(api) {
+  const m4 = api.ctx.data.m4;
+  const o = m4.side.obs;
+  const pc = m4.policy;
+  const d = (k) => ({ delay: k });
+  const ease = (v) => v * v * (3 - 2 * v);
+  const lab = { font: 'mono', size: 0.16, hex: T.inkSoft, anchorY: 'bottom' };
+  // Rechtecke [x0, y0 (oben), x1, y1 (unten)]
+  const rectPts = ([x0, y0, x1, y1]) => [v3(x0, y0), v3(x1, y0), v3(x1, y1), v3(x0, y1), v3(x0, y0)]; // geschlossen, auch nach setPts
+  const lerpR = (a, b, v) => a.map((p, i) => p + (b[i] - p) * v);
+  // Endlage
+  const IW = 3.0;
+  const IH = (IW * o.images.wrist.h) / o.images.wrist.w;
+  const IX = X0 + 2.1;
+  const IY = [1.1, -1.95];
+  const SX = IX + IW / 2 + 0.6;
+  const RS = 0.32; // Zeilenabstand Zustand
+  const BW = 1.9;
+  const BX = SX + 5.1;
+  const CB = [BX + BW / 2 + 0.55, 2.6, 7.35, -1.95];
+  const morph = [
+    // [Schema wie 6.3, Ziel, Farbe]
+    [[X0 + 0.6, 2.2, X0 + 3.9, 1.25], [IX - IW / 2 - 0.07, IY[0] + IH / 2 + 0.07, IX + IW / 2 + 0.07, IY[0] - IH / 2 - 0.07], MODULE_COLOR.M1],
+    [[X0 + 0.6, 1.05, X0 + 3.9, 0.1], [IX - IW / 2 - 0.07, IY[1] + IH / 2 + 0.07, IX + IW / 2 + 0.07, IY[1] - IH / 2 - 0.07], MODULE_COLOR.M4],
+    [[X0 + 0.6, -0.1, X0 + 3.9, -1.05], [SX - 0.2, 2.5, SX + 3.75, 2.4 - 13 * RS - 0.4], T.inkSoft],
+    [[X0 + 4.6, 2.2, X0 + 7.0, -1.05], [BX - BW / 2, 1.0, BX + BW / 2, -0.4], MODULE_COLOR.M4],
+  ].map(([a, b, hex]) => ({ a, b, line: new InkLine(rectPts(a), { width: 1.6, hex, progress: 1 }) }));
+  morph.forEach((m) => api.scene.add(m.line.object));
+  // Beschriftungen des Schemas weichen, die Kästchen wandern
+  const old = [
+    api.text(0, 'Kamera oben', { font: 'sansMedium', size: 0.22, anchorY: 'top' }, [X0 + 0.75, 2.06]),
+    api.text(0, 'Handgelenkkamera', { font: 'sansMedium', size: 0.22, anchorY: 'top' }, [X0 + 0.75, 0.91]),
+    api.text(0, 'Zustand', { font: 'sansMedium', size: 0.22, anchorY: 'top' }, [X0 + 0.75, -0.24]),
+    api.text(0, 'Diffusion Policy', { font: 'sansMedium', size: 0.22, anchorY: 'top' }, [X0 + 4.75, 2.06]),
+  ];
+  old.forEach((t) => (t.opacity = 1));
+  api.add(0, (v) => old.forEach((t) => (t.opacity = 1 - clamp01(v * 4))), { delay: 0, dur: 0.6 });
+  api.add(0, (v) => morph.forEach((m) => setPts(m.line, rectPts(lerpR(m.a, m.b, ease(v))))), { delay: 0.3, dur: 1.3 });
+  // Inhalt erscheint in den Kästchen
+  [['scene', 'Kamera oben (Szene)'], ['wrist', 'Handgelenkkamera']].forEach(([k, name], i) => {
+    const pcd = new PhotoCard(o.images[k].url, { width: IW, aspect: o.images[k].h / o.images[k].w, border: 0, bottom: 0 });
+    pcd.card.visible = false; // nur das Foto – den Rahmen gibt das gewanderte Kästchen
+    pcd.object.position.set(IX, IY[i], 0.05);
+    pcd.opacity = 0;
+    api.add(0, pcd, { delay: 0.9 + i * 0.1, dur: 1.1 }); // blendet ein, während der Rahmen ankommt
+    api.text(0, `${name} · ${pc.image[0]} × ${pc.image[1]}`, lab, [IX - IW / 2 - 0.07, IY[i] + IH / 2 + 0.15], { delay: 1.1 + i * 0.1, dur: 0.9 });
+  });
+  const names = ['J1', 'J2', 'J3', 'J4', 'J5', 'J6', 'x', 'y', 'z', 'qw', 'qx', 'qy', 'qz', 'Greifer'];
+  const units = ['rad', 'rad', 'rad', 'rad', 'rad', 'rad', 'm', 'm', 'm', '', '', '', '', ''];
+  api.text(0, 'Zustand · 14 Werte', lab, [SX - 0.2, 2.58], d(1.6));
+  o.state.forEach((v, i) => {
+    const y = 2.3 - i * RS;
+    api.text(0, names[i], { font: 'mono', size: 0.17, hex: T.inkSoft, anchorY: 'top' }, [SX, y], { delay: 1.0 + i * 0.05, dur: 0.8 });
+    api.text(0, `${v < 0 ? '−' : ''}${fmt(Math.abs(v), 3)} ${units[i]}`, { font: 'monoMedium', size: 0.17, anchorX: 'right', anchorY: 'top' }, [SX + 2.4, y], { delay: 1.0 + i * 0.05, dur: 0.8 });
+  });
+  [['Gelenke', 0, 5], ['TCP-Pose', 6, 12], ['Greifer', 13, 13]].forEach(([g, a, b], i) => {
+    const y0 = 2.3 - a * RS + 0.02;
+    const y1 = 2.3 - b * RS - 0.22;
+    api.line(0, [[SX + 2.55, y0], [SX + 2.65, y0], [SX + 2.65, y1], [SX + 2.55, y1]], { width: 1, hex: T.inkSoft }, { delay: 1.9 + i * 0.1, dur: 0.3 });
+    api.text(0, g, { font: 'mono', size: 0.14, hex: T.inkSoft, anchorY: 'middle' }, [SX + 2.75, (y0 + y1) / 2], d(2.0 + i * 0.1));
+  });
+  api.text(0, 'Diffusion', { font: 'sansMedium', size: 0.26, hex: MODULE_COLOR.M4, anchorX: 'center', anchorY: 'middle' }, [BX, 0.55], d(1.6));
+  api.text(0, 'Policy', { font: 'sansMedium', size: 0.26, hex: MODULE_COLOR.M4, anchorX: 'center', anchorY: 'middle' }, [BX, 0.2], d(1.6));
+  api.text(0, `${pc.inference_steps} Schritte`, { font: 'mono', size: 0.15, hex: T.inkSoft, anchorX: 'center', anchorY: 'middle' }, [BX, -0.15], d(1.7));
+  // Pfeile berühren die Kästen: Bilder → Zustand, Zustand → Netz
+  const arrow = (step, x0, x1, y, hex, k) => {
+    api.line(step, [[x0, y], [x1, y]], { width: 1.4, hex }, { delay: k, dur: 0.4 });
+    api.line(step, [[x1 - 0.14, y + 0.08], [x1, y], [x1 - 0.14, y - 0.08]], { width: 1.4, hex }, { delay: k + 0.3, dur: 0.2 });
+  };
+  const xImg = IX + IW / 2 + 0.07;
+  IY.forEach((y, i) => arrow(0, xImg, SX - 0.2, y, T.inkSoft, 2.1 + i * 0.1));
+  arrow(0, SX + 3.75, BX - BW / 2, 0.3, T.inkSoft, 2.3);
+  // Schritt 1: Aktionsblock in eigenem Kasten. Vorhergesagt (und gesendet) werden je Takt 6 Gelenk-Sollwinkel + Greifer;
+  // gezeigt wird zur Anschauung die TCP-Höhe, die sich aus diesen Sollwinkeln ergibt (ideale Pose = FK der Labels).
+  arrow(1, BX + BW / 2, CB[0], 0.3, MODULE_COLOR.M4, 0);
+  api.line(1, rectPts(CB), { width: 1.4, hex: MODULE_COLOR.M4 }, { delay: 0.1, dur: 0.6 });
+  const CX0 = CB[0] + 0.55;
+  const CX1 = CB[2] - 0.3;
+  const zs = o.chunk_tcp_z_mm;
+  const H = zs.length;
+  const zMin = Math.min(...zs, -1);
+  const CY0 = -0.85;
+  const CY1 = 0.95;
+  const Yz = (z) => CY1 + (z / zMin) * (CY0 - CY1);
+  const Xk = (k) => CX0 + 0.15 + (k / (H - 1)) * (CX1 - CX0 - 0.25);
+  api.text(1, 'Aktionsblock', { font: 'sansMedium', size: 0.3, anchorY: 'top' }, [CB[0] + 0.2, CB[1] - 0.12], d(0.3));
+  api.text(1, `${H} Takte · je Takt 6 Gelenk-Sollwinkel + Greifer – das geht an den Roboter`, { font: 'mono', size: 0.15, hex: T.inkSoft, anchorY: 'top', maxWidth: CB[2] - CB[0] - 0.4 }, [CB[0] + 0.2, CB[1] - 0.55], d(0.35));
+  api.line(1, [[CX0, CY1 + 0.1], [CX0, CY0 - 0.1], [CX1, CY0 - 0.1]], { width: 1.1, hex: T.inkSoft }, { delay: 0.4, dur: 0.5 });
+  [[0, '0'], [zMin, fmt(zMin, 0)]].forEach(([z, t]) => api.text(1, t.replace('-', '−'), { font: 'mono', size: 0.14, hex: T.inkSoft, anchorX: 'right', anchorY: 'middle' }, [CX0 - 0.08, Yz(z)], d(0.5)));
+  api.text(1, 'daraus: TCP-Höhe in mm, relativ zu jetzt', { font: 'mono', size: 0.14, hex: T.inkSoft, anchorY: 'bottom' }, [CX0 - 0.4, CY1 + 0.42], d(0.5));
+  [[0, '1'], [7, '8'], [H - 1, String(H)]].forEach(([k, t]) => api.text(1, t, { font: 'mono', size: 0.14, hex: T.inkSoft, anchorX: 'center', anchorY: 'top' }, [Xk(k), CY0 - 0.17], d(0.5)));
+  api.text(1, 'Takt (15 Hz)', { font: 'mono', size: 0.14, hex: T.inkSoft, anchorX: 'right', anchorY: 'top' }, [CX1, CY0 - 0.42], d(0.6));
+  const dot = (x, y, r) => Array.from({ length: 11 }, (_, j) => [x + r * Math.cos((j / 10) * 2 * Math.PI), y + r * Math.sin((j / 10) * 2 * Math.PI)]);
+  api.line(1, zs.map((z, k) => [Xk(k), Yz(z)]), { width: 1, hex: T.inkSoft }, { delay: 0.6, dur: 0.8 });
+  zs.forEach((z, k) => api.line(1, dot(Xk(k), Yz(z), 0.06), { width: 2, hex: T.inkSoft }, { delay: 0.6 + k * 0.04, dur: 0.2 }));
+  api.text(1, 'absenken', { font: 'mono', size: 0.15, hex: T.inkSoft, anchorY: 'middle' }, [Xk(1) + 0.25, Yz(zs[0])], d(1.2));
+  api.text(1, 'Endanflug', { font: 'mono', size: 0.14, hex: T.inkSoft, anchorX: 'right', anchorY: 'bottom' }, [Xk(H - 1), Yz(zMin) + 0.42], d(1.2));
+  api.text(1, 'gezeigt ist die TCP-Höhe, die sich aus den Sollwinkeln ergibt', { font: 'mono', size: 0.13, hex: T.inkSoft, anchorY: 'top', maxWidth: CB[2] - CB[0] - 0.4 }, [CB[0] + 0.2, CY0 - 0.68], d(1.3));
+  // Schritt 2: Ausführung in eigenem Kasten unter Netz und Aktionsblock
+  const xm = (Xk(pc.n_action - 1) + Xk(pc.n_action)) / 2;
+  zs.slice(0, pc.n_action).forEach((z, k) => api.line(2, dot(Xk(k), Yz(z), 0.09), { width: 3.2, hex: MODULE_COLOR.M4 }, { delay: 0.1 + k * 0.06, dur: 0.2 }));
+  api.line(2, [[xm, CY1 + 0.05], [xm, CY0 - 0.1]], { width: 1.2, hex: MODULE_COLOR.M4, dashed: true, dash: 0.07, gap: 0.05 }, { delay: 0.5, dur: 0.4 });
+  api.text(2, `${pc.n_action} nutzbar`, { font: 'monoMedium', size: 0.15, hex: MODULE_COLOR.M4, anchorX: 'right', anchorY: 'bottom' }, [xm - 0.08, CY1 + 0.05], d(0.6));
+  api.text(2, 'Rest ungenutzt', { font: 'mono', size: 0.14, hex: T.inkSoft, anchorX: 'left', anchorY: 'bottom' }, [xm + 0.08, CY1 + 0.05], d(0.7));
+  const EP = [BX - BW / 2, -2.12, CB[2], -3.2];
+  api.line(2, rectPts(EP), { width: 1.4, hex: MODULE_COLOR.M4 }, { delay: 0.6, dur: 0.6 });
+  api.text(2, 'Ausführung', { font: 'sansMedium', size: 0.24, anchorY: 'top' }, [EP[0] + 0.15, EP[1] - 0.12], d(0.8));
+  const n = Math.ceil(pc.n_action / pc.replan);
+  api.text(2, `neuer Block alle ${pc.replan} Takte · je Takt Mittel aus ${n} · Tiefpass ${fmt(pc.lowpass, 1)}`, { font: 'mono', size: 0.13, hex: T.inkSoft, anchorY: 'top', maxWidth: CX0 - EP[0] - 0.55, lineHeight: 1.2 }, [EP[0] + 0.15, EP[1] - 0.45], d(0.9));
+  const TY = EP[1] - 0.3;
+  const k0 = (n - 1) * pc.replan;
+  for (let r = 0; r < n; r++) {
+    const a = r * pc.replan;
+    const y = TY - r * 0.2;
+    api.line(2, [[Xk(a), y], [Xk(a + pc.n_action - 1), y]], { width: 4, hex: MODULE_COLOR.M4 }, { delay: 1.0 + r * 0.2, dur: 0.3 });
+    api.text(2, r ? `t+${a}` : 't', { font: 'mono', size: 0.13, hex: T.inkSoft, anchorX: 'right', anchorY: 'middle' }, [Xk(0) - 0.1, y], d(1.0 + r * 0.2));
+  }
+  api.line(2, rectPts([Xk(k0) - 0.08, TY + 0.15, Xk(k0) + 0.08, TY - (n - 1) * 0.2 - 0.15]), { width: 1.2, hex: T.signal }, { delay: 1.8, dur: 0.4 });
+  api.text(2, `Mittel aus ${n}`, { font: 'monoMedium', size: 0.13, hex: T.signal, anchorX: 'left', anchorY: 'middle' }, [Xk(pc.n_action - 1) + 0.2, TY], d(1.9));
+  api.text(2, `Beispiel: Episode ${o.episode.replace('ep_', '')} vom 19.11., Takt ${o.takt}, TCP ${fmt(o.h_mm, 0)} mm über PICK · Bilder wie aufgenommen (Rotstich)`, { font: 'mono', size: 0.14, hex: T.inkSoft, anchorY: 'top' }, [X0 + 0.7, -3.85], d(2.0));
+}
+
+// ---------------------------------------------------------------- 6.11 Nach DAgger an der Anlage (vorher C2, nachher vorläufig G2b)
+function sheetAfterDagger(api) {
+  const p = api.ctx.data.m4.plant;
+  const g = p.g2b;
+  const PW = 6.9;
+  const LX = X0 + 0.6 + PW / 2;
+  const GX = LX + PW + 0.5;
+  const fy = 0.85;
+  const photo = (step, f, x, w, timing) => {
+    const c = new PhotoCard(f.url, { width: w, aspect: f.h / f.w, border: 0.05, bottom: 0.05 });
+    c.object.position.set(x, fy, 0.02);
+    c.opacity = 0;
+    return api.add(step, c, timing);
+  };
+  photo(0, p.figure, LX, PW, { delay: 0.1, dur: 0.6 });
+  photo(0, g.figure, GX, PW, { delay: 0.5, dur: 0.6 });
+  const fh = (PW * p.figure.h) / p.figure.w;
+  const yb = fy - fh / 2 - 0.25;
+  const block = (x, title, big, lines, hex, k) => {
+    api.text(0, title, { font: 'monoMedium', size: 0.16, hex: T.inkSoft, anchorY: 'top' }, [x, yb], { delay: k });
+    api.text(0, big, { font: 'title', size: 0.42, hex, anchorY: 'top' }, [x, yb - 0.32], { delay: k + 0.1 });
+    api.text(0, lines, { font: 'sans', size: 0.17, hex: T.inkSoft, anchorY: 'top', maxWidth: PW - 0.2, lineHeight: 1.3 }, [x, yb - 0.9], { delay: k + 0.2 });
+  };
+  block(LX - PW / 2, `VORHER · 16.11. · C2 · ${p.demos} EPISODEN · OHNE GLÄTTUNG`, `${fmt(p.plant_median_mm)} mm`,
+    `Greifpunkt im Median daneben (vorhergesagt), ${p.plant_le10[0]} von ${p.plant_le10[1]} Probegriffen ≤ 10 mm.`, T.signal, 0.3);
+  block(GX - PW / 2, `NACHHER · 26.11. · G2b · NACH DAGGER · GLÄTTUNG ${fmt(g.lowpass, 1)}`, `${fmt(g.xy_median_mm)} mm`,
+    `waagrecht im Median daneben (p90 ${fmt(g.xy_p90_mm)} mm), ${g.success} von ${g.runs} Griffen mit Spiel – anderes Modell, andere Aufnahmen.`, T.good, 0.7);
+  api.stamp(0, 'OFFEN', [5.2, 3.5], { size: 0.24, rot: -0.04, hex: T.signal, sub: 'rechts: C2 mit DAgger oder G2-Fahrten' }, { delay: 1.2 });
+  api.text(0, 'Quelle: Berichte/2026-11-16_Anlagentest_var_C2, Berichte/2026-11-26_Vergleich_DAgger (Rohdaten der Vergleichsfahrten)', { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 0.9 });
+}
+
+// ---------------------------------------------------------------- 6.12 Pendeln: dieselbe Policy (G2) mit und ohne Glättung
+function sheetSmooth(api) {
+  const sm = api.ctx.data.m4.smooth;
+  const by = (a) => sm.groups.find((g) => g.alpha === a);
+  const panels = [by(1), by(0.5), by(0.25)].filter(Boolean);
+  const PW = 4.35;
+  const PH = 2.3;
+  const PY = 0.15; // Unterkante der Felder
+  const lab = { font: 'mono', size: 0.13, hex: T.inkSoft };
+  const panel = (step, gr, i, k) => {
+    const x0 = X0 + 0.9 + i * (PW + 0.45);
+    const X = (h) => x0 + ((120 - Math.min(h, 120)) / 120) * PW;
+    const Y = (v) => PY + (Math.min(v, 30) / 30) * PH;
+    const d = (dd) => ({ delay: k + dd, dur: 0.5 });
+    api.line(step, [[x0, PY + PH], [x0, PY], [x0 + PW, PY]], { width: 1.1, hex: T.inkSoft }, d(0));
+    api.line(step, [[x0, Y(10)], [x0 + PW, Y(10)]], { width: 0.9, hex: T.inkFaint, dashed: true, dash: 0.06, gap: 0.05 }, d(0.1));
+    if (i === 0) {
+      [0, 10, 20, 30].forEach((v) => api.text(step, String(v), { ...lab, anchorX: 'right', anchorY: 'middle' }, [x0 - 0.08, Y(v)], d(0.1)));
+    }
+    [120, 60, 0].forEach((h) => api.text(step, String(h), { ...lab, anchorX: 'center', anchorY: 'top' }, [X(h), PY - 0.08], d(0.1)));
+    const hex = gr.alpha === 1 ? T.signal : MODULE_COLOR.M4;
+    gr.runs.forEach((r, j) => {
+      const l = api.line(step, r.h.map((h, n) => [X(h), Y(r.xy[n])]), { width: 1.1, hex }, { delay: k + 0.2 + j * 0.02, dur: 0.8 });
+      l.opacity = 0.55;
+    });
+    const name = gr.alpha === 1 ? 'aus (1,0)' : fmt(gr.alpha, 2).replace(/0$/, '');
+    api.text(step, `Glättung ${name}`, { font: 'sansMedium', size: 0.24, hex: gr.alpha === 1 ? T.signal : T.ink, anchorY: 'bottom' }, [x0, PY + PH + 0.12], d(0.2));
+    api.text(step, `${gr.n} Fahrten · seitlicher Weg unter 60 mm: ${fmt(gr.way_median_mm, 0)} mm`, { ...lab, size: 0.14, anchorY: 'top' }, [x0, PY - 0.35], d(0.4));
+  };
+  panel(0, panels[0], 0, 0.1);
+  api.text(0, 'senkrecht: waagrechter Abstand zu PICK in mm · waagrecht: Höhe des TCP über PICK in mm (Abstieg nach rechts)', { ...lab, anchorY: 'top' }, [X0 + 0.9, PY - 0.72], { delay: 0.5 });
+  api.text(0, 'echte Probegriffe an der Anlage, dieselbe Policy G2, 23.11., Stopp ~20 mm über PICK', { ...lab, anchorY: 'top' }, [X0 + 0.9, PY - 0.95], { delay: 0.5 });
+  const rows0 = [
+    ['Schon ein Block ist ruckig', 'innerhalb eines Aktionsblocks 2,9 mm Ruck (Median), zwei Blöcke liegen für denselben Takt 4,3 mm auseinander'],
+    ['Real-Time Chunking hilft nur halb', 'es glättet die Sprünge zwischen den Blöcken, nicht das Zittern innerhalb'],
+  ];
+  rows0.forEach(([t, b], i) => api.row(0, i + 1, t, b, -1.75, { x: X0 + 0.7 + i * 7.3, width: 6.3, size: 0.25, delay: 0.6 + i * 0.15 }));
+  // Schritt 1: Tiefpass auf die Ziele – derselbe Regler, drei Stellungen
+  panels.slice(1).forEach((gr, i) => panel(1, gr, i + 1, 0.1 + i * 0.4));
+  const o = by(0.75);
+  if (o) api.text(1, `0,75: nur ${o.n} Fahrt, nicht gezeigt`, { ...lab, anchorX: 'right', anchorY: 'top' }, [7.3, PY - 0.95], { delay: 1.0 });
+  api.stamp(1, 'ENTSCHIEDEN: 0,5', [5.0, 3.5], { size: 0.24, rot: -0.04, hex: T.good, sub: 'Kompromiss Pendeln gegen Nachlauf' }, { delay: 1.4 });
+  api.text(1, 'z = a · Ziel + (1 − a) · z vorher   ·   0,5: kein Pendeln mehr, ~1 Takt Nachlauf   ·   0,25: noch ruhiger, ~3 Takte Nachlauf, Transfer ~1/3 langsamer',
+    { font: 'mono', size: 0.15, hex: T.ink, anchorY: 'top', maxWidth: 14.4 }, [X0 + 0.7, -2.9], { delay: 1.1 });
+  api.text(1, 'Quelle: Rollouts G2 23.11. (checkpoints/G2_…/rollouts, args.glaettung), bc/config.py POLICY_COMMAND_LOWPASS_ALPHA, Berichte/Testprotokoll.md', { ...lab }, [X0 + 0.7, -3.95], { delay: 1.2 });
+}
+
+// ---------------------------------------------------------------- 6.13 Die letzten Millimeter: echte Griffe G2b mit bekannter Lage
+function sheetLastMm(api) {
+  const gs = api.ctx.data.m4.grasps;
+  const HMAX = 160;
+  const DMAX = 25;
+  const YB = -2.6;
+  const YT = 2.45;
+  const XC = X0 + 4.4;
+  const SX = 3.3 / DMAX;
+  const Y = (h) => YB + ((h + 8) / (HMAX + 8)) * (YT - YB); // Tisch 8 mm unter PICK
+  const X = (dv) => XC + dv * SX;
+  const lab = { font: 'mono', size: 0.13, hex: T.inkSoft };
+  const d = (k, dur = 0.5) => ({ delay: k, dur });
+  api.line(0, [[XC, Y(0)], [XC, YT]], { width: 1.2, dashed: true, dash: 0.08, gap: 0.06, hex: T.ink }, d(0));
+  api.text(0, 'PICK', { font: 'monoMedium', size: 0.14, anchorX: 'center', anchorY: 'bottom' }, [XC, YT + 0.08], d(0.05));
+  [-20, -10, 10, 20].forEach((v) => api.text(0, `${v > 0 ? '+' : '−'}${Math.abs(v)}`, { ...lab, anchorX: 'center', anchorY: 'top' }, [X(v), YB - 0.35], d(0.05)));
+  api.text(0, 'seitlicher Abstand zu PICK in mm (x und y)', { ...lab, anchorX: 'center', anchorY: 'top' }, [XC, YB - 0.58], d(0.1));
+  [0, 50, 100, 150].forEach((h) => api.text(0, String(h), { ...lab, anchorX: 'right', anchorY: 'middle' }, [X(-DMAX) - 0.12, Y(h)], d(0.05)));
+  api.text(0, 'Höhe des TCP über PICK in mm', { ...lab, anchorY: 'bottom' }, [X(-DMAX) - 0.5, YT + 0.08], d(0.1));
+  // Tisch 8 mm unter PICK, Oberkante 7 mm über PICK
+  api.line(0, [[X(-DMAX), YB], [X(DMAX), YB]], { width: 1.2, hex: T.ink }, d(0.1));
+  for (let x = X(-DMAX); x < X(DMAX) - 0.1; x += 0.22) api.line(0, [[x, YB - 0.02], [x + 0.14, YB - 0.22]], { width: 1, hex: T.inkSoft }, d(0.15, 0.3));
+  api.text(0, 'Tisch', { font: 'monoMedium', size: 0.13, hex: T.inkSoft, anchorX: 'right', anchorY: 'middle' }, [X(-DMAX) - 0.12, YB], d(0.2));
+  api.line(0, [[X(-DMAX), Y(7)], [X(DMAX), Y(7)]], { width: 1.2, hex: MODULE_COLOR.M4, dashed: true, dash: 0.06, gap: 0.05 }, d(0.2));
+  api.text(0, 'Oberkante Teil', { font: 'monoMedium', size: 0.13, hex: MODULE_COLOR.M4, anchorY: 'middle' }, [X(DMAX) + 0.1, Y(7)], d(0.25));
+  // Teil (39,9 mm breit, 15 mm hoch) und die Backen, wenn der TCP genau auf PICK steht (innen 44,8 mm)
+  const hw = 39.9 / 2;
+  const jw = 44.8 / 2;
+  api.line(0, [[X(-hw), Y(-8)], [X(-hw), Y(7)], [X(hw), Y(7)], [X(hw), Y(-8)]], { width: 1.8, hex: T.part }, d(0.3));
+  api.text(0, '39,9', { font: 'monoMedium', size: 0.13, hex: T.part, anchorX: 'center', anchorY: 'middle' }, [X(-hw / 2), Y(-1)], d(0.35));
+  [-1, 1].forEach((sg) => api.line(0, [[X(sg * jw), Y(-5)], [X(sg * jw), Y(32)], [X(sg * (jw + 4)), Y(32)], [X(sg * (jw + 4)), Y(-5)]], { width: 1.6, hex: T.ink }, d(0.4)));
+  api.text(0, 'Backen · innen 44,8', { font: 'monoMedium', size: 0.13, anchorX: 'left', anchorY: 'bottom' }, [X(jw), Y(33)], d(0.45));
+  api.text(0, '2,45 je Seite', { font: 'monoMedium', size: 0.13, hex: T.signal, anchorX: 'right', anchorY: 'middle' }, [X(-jw) - 0.1, Y(15)], d(0.5));
+  api.text(0, 'der TCP darf seitlich höchstens 2,45 mm daneben liegen', { font: 'mono', size: 0.13, hex: T.signal, anchorX: 'center', anchorY: 'top' }, [XC, YB - 0.85], d(0.55));
+  gs.runs.forEach((r, k) => ['dx', 'dy'].forEach((c) => {
+    const l = api.line(0, r.h.map((h, i) => [X(Math.max(-DMAX, Math.min(DMAX, r[c][i]))), Y(Math.min(h, HMAX))]), { width: 1.6, hex: T.signal }, { delay: 0.5 + k * 0.2, dur: 1.2 });
+    l.opacity = c === 'dx' ? 0.9 : 0.5;
+  }));
+  api.text(0, `${gs.runs.length} echte Griffe von G2b mit bekannter Lage (25./26.11.), bis der Greifer schließt`, { ...lab }, [X0 + 0.7, -3.95], d(1.0));
+  const RX = 1.9;
+  const rows = [
+    ['Oben ruhig, unten Sprünge', 'unterhalb der Oberkante 4–10 mm seitlich in 3–5 Takten, die Höhe springt um ±3 mm'],
+    ['Die Policy wird unsicher', 'Streuung der Vorhersagen steigt von ~0,005 auf 0,02–0,1 rad – sie springt zwischen Lösungen'],
+    ['Diesen Bereich sieht kein Training', 'Probegriff und DAgger stoppen über der Oberkante, das Rauschen ist dort null'],
+    ['Und kaum Spiel', 'Backen öffnen 44,8 mm, das Teil ist 39,9 mm breit: 2,45 mm je Seite'],
+  ];
+  rows.forEach(([t, b], i) => api.row(0, i + 1, t, b, 2.45 - i * 1.25, { x: RX, width: 5.3, size: 0.25, delay: 0.4 + i * 0.2 }));
+  // Maßskizze Backen und Teil, gleich mit den Punkten
+  const BX = 4.6;
+  const BY = -3.0;
+  const s = 0.045;
+  const jaw = (x) => api.line(0, [[x, BY + 0.9], [x, BY], [x + 15 * s * (x < BX ? -1 : 1), BY], [x + 15 * s * (x < BX ? -1 : 1), BY + 0.9]], { width: 1.6, hex: T.ink }, { delay: 1.2, dur: 0.4 });
+  jaw(BX - (44.8 / 2) * s);
+  jaw(BX + (44.8 / 2) * s);
+  api.line(0, [[BX - (39.9 / 2) * s, BY + 0.05], [BX + (39.9 / 2) * s, BY + 0.05], [BX + (39.9 / 2) * s, BY + 0.6], [BX - (39.9 / 2) * s, BY + 0.6], [BX - (39.9 / 2) * s, BY + 0.05]], { width: 1.6, hex: T.part }, { delay: 1.3, dur: 0.4 });
+  api.text(0, '44,8', { font: 'mono', size: 0.13, anchorX: 'center', anchorY: 'bottom' }, [BX, BY + 0.95], d(1.4));
+  api.text(0, '39,9', { font: 'mono', size: 0.13, hex: T.part, anchorX: 'center', anchorY: 'middle' }, [BX, BY + 0.32], d(1.4));
+  api.text(0, '2,45 je Seite', { font: 'monoMedium', size: 0.13, hex: T.signal, anchorX: 'right', anchorY: 'middle' }, [BX - (44.8 / 2) * s - 0.75, BY + 0.32], d(1.5));
+}
+
+// ---------------------------------------------------------------- 6.14 Greifgenauigkeit vorher → nachher
+function sheetAccuracy(api) {
+  const lab = { font: 'mono', size: 0.14, hex: T.inkSoft };
+  const W = 6.0;
+  // items: [Name, streng 0..1, mit Warnung 0..1 | null, Text, Farbe, Notiz]
+  const bars = (step, x0, title, sub, items, k) => {
+    api.text(step, title, { font: 'sansMedium', size: 0.3, anchorY: 'top' }, [x0, 2.55], { delay: k });
+    api.text(step, sub, { ...lab, anchorY: 'top', maxWidth: W + 0.6 }, [x0, 2.12], { delay: k + 0.1 });
+    items.forEach(([name, v, vw, txt, hex, note], i) => {
+      const y = 1.2 - i * 1.15;
+      const kk = k + 0.2 + i * 0.15;
+      api.text(step, name, { font: 'monoMedium', size: 0.16, anchorY: 'bottom' }, [x0, y + 0.27], { delay: kk });
+      if (vw) {
+        const lw = api.line(step, [[x0, y], [x0 + W * vw, y]], { width: 14, hex }, { delay: kk + 0.1, dur: 0.6 });
+        lw.opacity = 0.35;
+      }
+      api.line(step, [[x0, y], [x0 + W * v, y]], { width: 14, hex }, { delay: kk + 0.1, dur: 0.6 });
+      api.text(step, txt, { font: 'monoMedium', size: 0.16, hex, anchorX: 'left', anchorY: 'middle' }, [x0 + W * (vw ?? v) + 0.12, y], { delay: kk + 0.4 });
+      if (note) api.text(step, note, { ...lab, size: 0.13, anchorY: 'top' }, [x0, y - 0.26], { delay: kk + 0.4 });
+    });
+  };
+  bars(0, X0 + 0.7, 'DAgger', 'Griffe mit Spiel (streng), 15 Lagen, je 1 Fahrt, 26.11.', [
+    ['G2 · ohne DAgger', 4 / 15, null, '27 % (4 von 15) · quer 2,3 mm', T.signal],
+    ['G2b · DAgger, Übernahme hoch (23.11.)', 10 / 15, null, '67 % (10 von 15) · quer 0,8 mm', T.good, 'in keiner Lage schlechter als G2'],
+    ['G2b-D · DAgger, Übernahme spät (25.11.)', 7 / 15, null, '47 % (7 von 15) · quer 1,8 mm', MODULE_COLOR.M4, 'kein Gewinn: späte Korrekturen lehren Nachsetzen'],
+  ], 0.1);
+  bars(1, 0.6, 'Geplanter Endabstieg', 'G2b, Vergleichsfahrten 24.–26.11. · voll: streng · hell: mit Warnung', [
+    ['Policy bis zum Griff', 0.49, null, '49 % streng', T.signal, 'offizielle Bewertung, 37 Fahrten; unten springt die Policy (6.13)'],
+    ['Policy bis 10–15 mm, dann senkrecht', 0.73, 0.86, '73 % streng · 86 % mit Warnung', T.good, '53 Fahrten; quer bleibt ~1,1 mm, nur die Drehung wandert unten'],
+  ], 0.1);
+  api.stamp(1, 'OFFEN', [5.6, 3.5], { size: 0.24, rot: -0.04, hex: T.signal, sub: 'Bewertung prüfen (62 % aus Jeremys Notizen?)' }, { delay: 1.2 });
+  api.text(1, 'Zwischenlösung, offen benannt: dauerhaft hilft ein Greifer mit mehr Hub oder ein Sauggreifer. Mit einem Training je Variante und einer Fahrt je Lage liegen ±3 Erfolge von 15 (±20 %) im Rauschen.',
+    { font: 'sans', size: 0.2, hex: T.ink, anchorY: 'top', maxWidth: 14.4, lineHeight: 1.3 }, [X0 + 0.7, -2.55], { delay: 1.0 });
+  api.text(1, 'Quelle: Berichte/2026-11-26_Vergleich_DAgger/Auswertung.md §1, §3, §4, §12 (hoehen_g2b.csv)', { ...lab, size: 0.13 }, [X0 + 0.7, -3.95], { delay: 1.1 });
+}
+
+// ---------------------------------------------------------------- 6.15 Wo greift die Policy gut? (Lagen, Drehung per Regler)
+function sheetHeat(api) {
+  const h = api.ctx.data.m4.heat;
+  const runs = h.runs;
+  const xs = [...runs.map((r) => r.x), ...h.train.map((t) => t[0])];
+  const ys = [...runs.map((r) => r.y), ...h.train.map((t) => t[1])];
+  const [x0, x1, y0, y1] = [Math.min(...xs) - 25, Math.max(...xs) + 25, Math.min(...ys) - 25, Math.max(...ys) + 25];
+  const PX0 = X0 + 0.9;
+  const PY0 = -2.9;
+  const SC = Math.min(8.2 / (x1 - x0), 5.4 / (y1 - y0));
+  const P = (x, y) => [PX0 + (x - x0) * SC, PY0 + (y - y0) * SC];
+  const lab = { font: 'mono', size: 0.13, hex: T.inkSoft };
+  const [a0, a1] = [P(x0, y0), P(x1, y1)];
+  api.line(0, [[a0[0], a0[1]], [a1[0], a0[1]], [a1[0], a1[1]], [a0[0], a1[1]], [a0[0], a0[1]]], { width: 1.2, hex: T.inkSoft }, { delay: 0, dur: 0.5 });
+  api.text(0, 'Tisch von oben · x/y im Basis-KS des Roboters in mm', { ...lab, anchorY: 'bottom' }, [a0[0], a1[1] + 0.12], { delay: 0.1 });
+  const ring = (x, y, r) => Array.from({ length: 17 }, (_, j) => v3(x + r * Math.cos((j / 16) * 2 * Math.PI), y + r * Math.sin((j / 16) * 2 * Math.PI), 0.02));
+  h.train.forEach(([x, y], i) => {
+    const [px, py] = P(x, y);
+    api.line(0, ring(px, py, 0.05).map((p) => [p.x, p.y]), { width: 1.4, hex: T.inkFaint }, { delay: 0.2 + i * 0.005, dur: 0.2 });
+  });
+  // je Lage (auf 20 mm gerundet) alle Fahrten aller Modelle zusammen; Farbe = Anteil Griffe mit Spiel
+  const CL = [['alle Drehungen', -1e9, 1e9], ['bis 90°', -1e9, 90], ['90–110°', 90, 110], ['über 110°', 110, 1e9]];
+  const rateHex = (q) => (q >= 0.67 ? T.good : q >= 0.34 ? T.waypoint : T.signal);
+  const layers = CL.map(([, lo, hi]) => {
+    const g = new Map();
+    runs.filter((r) => r.rot >= lo && r.rot < hi).forEach((r) => {
+      const key = `${Math.round(r.x / 20)}|${Math.round(r.y / 20)}`;
+      const e = g.get(key) ?? { x: 0, y: 0, n: 0, ok: 0 };
+      e.x += r.x; e.y += r.y; e.n += 1; e.ok += r.ok ? 1 : 0;
+      g.set(key, e);
+    });
+    const objs = [];
+    let n = 0;
+    let ok = 0;
+    g.forEach((e) => {
+      const [px, py] = P(e.x / e.n, e.y / e.n);
+      const q = e.ok / e.n;
+      n += e.n;
+      ok += e.ok;
+      const l = new InkLine(ring(px, py, 0.1 + 0.035 * Math.sqrt(e.n)), { width: 3, hex: rateHex(q), progress: 0 });
+      api.scene.add(l.object);
+      const t = text(`${Math.round(q * 100)} %`, { font: 'monoMedium', size: 0.12, hex: rateHex(q), anchorX: 'center', anchorY: 'top', opacity: 0 });
+      t.position.set(px, py - 0.12 - 0.035 * Math.sqrt(e.n), 0.02);
+      api.scene.add(t);
+      objs.push(l, t);
+    });
+    const info = text(`${n} Fahrten · ${Math.round((100 * ok) / Math.max(1, n))} % mit Spiel`, { font: 'monoMedium', size: 0.2, hex: T.ink, anchorY: 'top', opacity: 0 });
+    info.position.set(1.0, -0.6, 0.01);
+    api.scene.add(info);
+    return { objs, info };
+  });
+  const RX = 1.0;
+  api.text(0, 'je Lage alle Fahrten aller Modelle · Größe = Zahl der Fahrten', { font: 'mono', size: 0.15, hex: T.ink, anchorY: 'top' }, [RX, 2.5], { delay: 0.3 });
+  api.text(0, 'grün ab 67 % mit Spiel · gelb 34–66 % · rot darunter · grau: Trainingslage (19.11.)', { ...lab, size: 0.14, anchorY: 'top' }, [RX, 2.18], { delay: 0.3 });
+  const rows = [
+    ['Nah am Roboter leicht', 'oben im Bild (y ≈ −24) greifen fast alle Modelle, ab y ≈ −183 (untere Hälfte) deutlich seltener'],
+    ['Fern vom Training schlechter', 'wo kaum Trainingslagen liegen, greifen die Modelle öfter daneben (Modelle: G2, G2b, G2c und DAgger-Varianten)'],
+  ];
+  rows.forEach(([t, b], i) => api.row(0, i + 1, t, b, 1.6 - i * 1.15, { x: RX, width: 5.6, size: 0.24, delay: 0.6 + i * 0.15 }));
+  api.text(1, 'Regler unten: Drehklasse wählen (Testfahrten 58–145°)', { ...lab, size: 0.15, anchorY: 'top' }, [RX, -1.25], { delay: 0.2 });
+  api.text(0, `${runs.length} Fahrten 24.–26.11., alle Modelle`, { ...lab }, [X0 + 0.7, -3.95], { delay: 0.8 });
+  return {
+    update(S) {
+      const k = S.s1 > 0 && S.rot !== undefined ? Math.min(CL.length - 1, Math.floor((S.rot ?? 0) * CL.length)) : 0;
+      layers.forEach((L, i) => {
+        const on = i === k ? S.s0 : 0;
+        L.objs.forEach((o) => {
+          if (o.isObject3D === undefined && o.object) { o.object.visible = on > 0; o.progress = on; } else o.opacity = on;
+        });
+        L.info.opacity = on;
+      });
+    },
+  };
+}
+
+// ---------------------------------------------------------------- 6.16 Stand, offen, weiter
+function sheetOutlook(api) {
+  const cols = [
+    ['STAND', T.good, [
+      ['Die Policy greift an der Anlage', 'G2b mit geplantem Endabstieg, 86–91 % (Bewertung offen)'],
+      ['Die Pipeline läuft', 'Aufnahme mit Noise Injection, Training, DAgger, Ausführung mit Glättung'],
+      ['619 Episoden', 'echte Bilder, automatisch aufgenommen'],
+    ]],
+    ['OFFEN', T.signal, [
+      ['M4 im Gesamtablauf', 'M4 greift, M2 legt ab – in der VM getestet, an der Anlage noch nicht'],
+      ['Bewertung der Greifquote', 'streng oder Erfolg + Warnung'],
+      ['VM-Läufe, C2 mit DAgger', 'für 6.9 und 6.11, Daten am PC'],
+    ]],
+    ['WEITER', MODULE_COLOR.M4, [
+      ['Greifer', 'mehr Hub oder Sauggreifer statt 2,45 mm Spiel'],
+      ['Neuer Datensatz', 'Endanflug 0,02 m/s, Kameralicht, fester Weißabgleich, Start per M1'],
+      ['RTC und Licht-Augmentierung', 'glattere Übergänge zwischen Blöcken, robuster gegen Licht'],
+      ['Imitation Learning am IKR', 'andere Arme, Greifer und Objekte mit derselben Pipeline'],
+    ]],
+  ];
+  const CW = 4.75;
+  cols.forEach(([title, hex, rows], c) => {
+    const x = X0 + 0.7 + c * (CW + 0.2);
+    api.text(0, title, { font: 'monoMedium', size: 0.2, hex, letterSpacing: 0.08, anchorY: 'top' }, [x, 2.55], { delay: 0.1 + c * 0.3 });
+    api.line(0, [[x, 2.15], [x + CW - 0.2, 2.15]], { width: 1.6, hex }, { delay: 0.15 + c * 0.3, dur: 0.4 });
+    rows.forEach(([t, b], i) => {
+      const y = 1.85 - i * 1.25;
+      api.text(0, t, { font: 'sansMedium', size: 0.24, anchorY: 'top', maxWidth: CW - 0.3 }, [x, y], { delay: 0.3 + c * 0.3 + i * 0.1 });
+      api.text(0, b, { font: 'sans', size: 0.18, hex: T.inkSoft, anchorY: 'top', maxWidth: CW - 0.3, lineHeight: 1.3 }, [x, y - 0.38], { delay: 0.35 + c * 0.3 + i * 0.1 });
+    });
+  });
+  api.text(0, 'Weiter in Akt 7: Mögliche Verbesserungen (7.4)', { font: 'mono', size: 0.14, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 1.2 });
+}
+
+// ---------------------------------------------------------------- 6.3 Diffusion Policy erklärt
 function sheetDiffusion(api) {
   const pc = api.ctx.data.m4.policy;
   const sim = api.ctx.data.m4.sim;
@@ -272,7 +764,7 @@ function sheetDiffusion(api) {
     counter.opacity = clamp01(v * 8) || dots[0].material.opacity;
   }, { delay: 0, dur: 3.2 });
   api.text(1, `Das Netz sagt in ${pc.inference_steps} Schritten vorher, welches Rauschen weg muss – aus Zufall wird eine glatte Bahn, passend zu Bild und Zustand.`, { font: 'sans', size: 0.2, hex: T.inkSoft, anchorY: 'top', maxWidth: FX1 - FX0 }, [FX0, FY0 - 0.45], { delay: 0.4 });
-  // Schritt 2: die ersten n_action Takte werden gefahren, dann neu vorhergesagt
+  // Schritt 2: die ersten n_action Takte sind nutzbar; alle replan Takte kommt ein neuer Block (Mittel in 6.4)
   api.add(2, (v) => dots.forEach((m, k) => {
     const used = k < pc.n_action;
     m.scale.setScalar(1 + (used ? 0.5 : 0) * v);
@@ -280,69 +772,65 @@ function sheetDiffusion(api) {
   }), { delay: 0, dur: 0.6 });
   const xm = kx(pc.n_action - 0.5);
   api.line(2, [[kx(0), FY1 - 0.5], [xm - 0.05, FY1 - 0.5]], { width: 2.2, hex: MODULE_COLOR.M4 }, { delay: 0.3 });
-  api.text(2, `${pc.n_action} Takte werden gefahren (≈ ${fmt(pc.n_action / 15, 1)} s)`, { font: 'monoMedium', size: 0.15, hex: MODULE_COLOR.M4, anchorY: 'bottom' }, [kx(0), FY1 - 0.42], { delay: 0.35 });
-  api.text(2, 'Rest verworfen, neu vorhergesagt', { font: 'mono', size: 0.14, hex: T.inkSoft, anchorY: 'top' }, [xm + 0.1, FY0 + 0.45], { delay: 0.45 });
+  api.text(2, `${pc.n_action} Takte nutzbar (≈ ${fmt(pc.n_action / 15, 1)} s)`, { font: 'monoMedium', size: 0.15, hex: MODULE_COLOR.M4, anchorY: 'bottom' }, [kx(0), FY1 - 0.42], { delay: 0.35 });
+  api.text(2, `Rest ungenutzt · alle ${pc.replan} Takte ein neuer Block, Überlappungen gemittelt`, { font: 'mono', size: 0.14, hex: T.inkSoft, anchorY: 'top', maxWidth: FX1 - xm - 0.2 }, [xm + 0.1, FY0 + 0.6], { delay: 0.45 });
   const rows = [
     ['Lernen durch Nachmachen', 'die Policy ahmt die aufgezeichneten Fahrten nach – samt der Korrekturen aus dem Rauschen'],
     ['Takt', `eine Vorhersage dauert ~${sim.predict_ms} ms, länger als ein 15-Hz-Takt – sie läuft deshalb neben dem Servostrom (60 Hz)`],
   ];
   rows.forEach(([t, b], i) => api.row(2, i + 1, t, b, -2.45, { x: IX + i * 7.3, width: 6.2, size: 0.25, delay: 0.6 + i * 0.15 }));
   api.text(2, `Quelle: m4_behavior_cloning/bc/config.py (horizon ${pc.horizon}, n_action_steps ${pc.n_action}, ${pc.inference_steps} DDIM-Schritte), bc/diffusion.py`, { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 0.9 });
+  api.text(2, 'Was steckt in den Kästchen? Ein echter Takt der Anlage.', { font: 'sansMedium', size: 0.24, hex: MODULE_COLOR.M4, anchorX: 'right', anchorY: 'bottom' }, [7.3, -3.7], { delay: 1.2 });
 }
 
 // ---------------------------------------------------------------- 6.5 Policy fährt selbst (Simulation)
 function sheetSim(api) {
   const s = api.ctx.data.m4.sim;
-  const f = s.figure;
-  const card = new PhotoCard(f.url, { width: 13.2, aspect: f.h / f.w, border: 0.05, bottom: 0.05 });
-  card.object.position.set(0, 1.0, 0.01); // unter dem Stempel
-  card.opacity = 0;
-  api.add(0, card, { delay: 0.1, dur: 0.6 });
-  const simObjs = [card];
-  simObjs.push(api.text(0, 'Simulation mit Platzhalterbildern · gestrichelt: Sollbahn · grün: 10 Fahrten der Policy', { font: 'mono', size: 0.14, hex: T.inkSoft, anchorY: 'top' }, [X0 + 0.7, -0.75], { delay: 0.3 }));
-  const d = (k) => ({ delay: 0.6 + k * 0.15 });
-  const facts = [
-    [`${s.success[0]} / ${s.success[1]}`, 'Fahrten erfolgreich (gegriffen und übergeben)'],
-    [`${fmt(s.grip_mm[0])}–${fmt(s.grip_mm[1])} mm`, 'vom Greifpunkt entfernt'],
-    [`${fmt(s.path_p95_mm[0])}–${fmt(s.path_p95_mm[1])} mm`, 'neben der Bahn (95 %)'],
-    [`${s.train_min} min`, `Training: ${s.episodes} Episoden, ${s.steps} Schritte, ${s.gpu}`],
-  ];
-  facts.forEach(([big, small], i) => {
-    const x = X0 + 0.7 + i * 3.7;
-    simObjs.push(api.text(0, big, { font: 'title', size: 0.42, hex: i === 0 ? T.good : T.ink, anchorY: 'top' }, [x, -1.15], d(i)));
-    simObjs.push(api.text(0, small, { font: 'sans', size: 0.17, hex: T.inkSoft, anchorY: 'top', maxWidth: 3.4 }, [x, -1.7], d(i)));
-  });
-  const simStamp = api.stamp(0, 'SIMULATION', [5.4, 3.5], { size: 0.26, rot: -0.05, hex: MODULE_COLOR.M4 }, { delay: 1.0 }); // neben dem Titel
-  simObjs.push(simStamp);
   const p = api.ctx.data.m4.plant;
-  if (!p) return;
-  // Schritt 1: an der Anlage mit echten Bildern – Simulation blendet aus
-  api.fade(1, simObjs, { dur: 0.5 });
-  const pf = p.figure;
-  const pcard = new PhotoCard(pf.url, { width: 8.6, aspect: pf.h / pf.w, border: 0.05, bottom: 0.05 });
-  pcard.object.position.set(X0 + 0.7 + 4.3, 0.55, 0.02);
-  pcard.opacity = 0;
-  api.add(1, pcard, { delay: 0.4, dur: 0.6 });
-  api.text(1, 'Anlagentest: waagerechter Abstand zum Greifpunkt über der Höhe, je Fahrt', { font: 'mono', size: 0.13, hex: T.inkSoft, anchorY: 'top' }, [X0 + 0.7, -1.95], { delay: 0.6 });
-  const RX = 2.35;
-  const pfacts = [
-    [`${fmt(p.plant_median_mm)} mm`, `Greifpunkt an der Anlage im Median daneben, ${p.plant_le10[0]} von ${p.plant_le10[1]} Probegriffen ≤ 10 mm, Drehfehler meist < ${p.rot_err_deg}°`, T.good],
-    [`${fmt(p.vm_median_mm)} mm`, `VM-Test mit ${p.vm_runs} Fahrten eines Tags, der nicht im Training war (${p.vm_le10_pct} % ≤ 10 mm)`, T.ink],
-    [`${p.demos}`, `Demonstrationen mit echten Bildern, automatisch aufgenommen`, T.ink],
+  const photo = (step, f, x, y, w, timing) => {
+    const c = new PhotoCard(f.url, { width: w, aspect: f.h / f.w, border: 0.05, bottom: 0.05 });
+    c.object.position.set(x, y, 0.02);
+    c.opacity = 0;
+    return api.add(step, c, timing);
+  };
+  // Schritt 0: Simulation – nur die Höhe des TCP über der Zeit
+  const simObjs = [];
+  const SW = 8.2;
+  simObjs.push(photo(0, s.figure, X0 + 0.7 + SW / 2, 0.75, SW, { delay: 0.1, dur: 0.6 }));
+  simObjs.push(api.text(0, 'Simulation (Durchstich 17.09., Platzhalterbilder) · gestrichelt: Sollbahn · grün: 10 Fahrten der Policy', { font: 'mono', size: 0.14, hex: T.inkSoft, anchorY: 'top', maxWidth: SW }, [X0 + 0.7, -1.4], { delay: 0.3 }));
+  simObjs.push(api.text(0, 'Die Fahrten haben die Form der Sollbahn, laufen ihr aber zeitlich hinterher – der Ort stimmt trotzdem.', { font: 'sans', size: 0.22, hex: T.ink, anchorY: 'top', maxWidth: SW }, [X0 + 0.7, -1.95], { delay: 0.5 }));
+  const RX = X0 + SW + 1.3;
+  const facts = [
+    [`${s.success[0]} / ${s.success[1]}`, 'Fahrten erfolgreich', T.good],
+    [`${fmt(s.grip_mm[0])}–${fmt(s.grip_mm[1])} mm`, 'vom Greifpunkt entfernt', T.ink],
+    [`${fmt(s.path_p95_mm[0])}–${fmt(s.path_p95_mm[1])} mm`, 'neben der Bahn (95 %)', T.ink],
+    [`${s.train_min} min`, `Training: ${s.episodes} Episoden, ${s.gpu}`, T.ink],
   ];
-  pfacts.forEach(([big, small, hex], i) => {
-    const y = 2.45 - i * 1.35;
-    api.text(1, big, { font: 'title', size: 0.46, hex, anchorY: 'top' }, [RX, y], { delay: 0.7 + i * 0.15 });
-    api.text(1, small, { font: 'sans', size: 0.18, hex: T.inkSoft, anchorY: 'top', maxWidth: 3.4, lineHeight: 1.3 }, [RX + 2.3, y - 0.02], { delay: 0.8 + i * 0.15 });
+  facts.forEach(([big, small, hex], i) => {
+    const y = 2.45 - i * 1.25;
+    simObjs.push(api.text(0, big, { font: 'title', size: 0.42, hex, anchorY: 'top' }, [RX, y], { delay: 0.6 + i * 0.15 }));
+    simObjs.push(api.text(0, small, { font: 'sans', size: 0.18, hex: T.inkSoft, anchorY: 'top', maxWidth: 3.4 }, [RX, y - 0.52], { delay: 0.7 + i * 0.15 }));
   });
+  simObjs.push(api.stamp(0, 'SIMULATION', [5.4, 3.5], { size: 0.26, rot: -0.05, hex: MODULE_COLOR.M4 }, { delay: 1.0 }));
+  // Schritt 1: an der Anlage, C2 ohne Glättung (16.11.)
+  api.fade(1, simObjs, { dur: 0.5 });
+  const PW = 6.9;
+  const LX = X0 + 0.6 + PW / 2;
+  const GX = LX + PW + 0.5;
+  const fy = 0.85;
+  photo(1, p.figure, LX, fy, PW, { delay: 0.4, dur: 0.6 });
+  const fh = (PW * p.figure.h) / p.figure.w;
+  const yb = fy - fh / 2 - 0.25;
+  const block = (step, x, title, big, lines, hex, k) => {
+    api.text(step, title, { font: 'monoMedium', size: 0.16, hex: T.inkSoft, anchorY: 'top' }, [x, yb], { delay: k });
+    api.text(step, big, { font: 'title', size: 0.42, hex, anchorY: 'top' }, [x, yb - 0.32], { delay: k + 0.1 });
+    api.text(step, lines, { font: 'sans', size: 0.17, hex: T.inkSoft, anchorY: 'top', maxWidth: PW - 0.2, lineHeight: 1.3 }, [x, yb - 0.9], { delay: k + 0.2 });
+  };
+  const x1 = LX - PW / 2;
+  block(1, x1, `16.11. · MODELL C2 · ${p.demos} EPISODEN · OHNE GLÄTTUNG`, `${fmt(p.plant_median_mm)} mm`,
+    `Greifpunkt im Median daneben (vorhergesagt), ${p.plant_le10[0]} von ${p.plant_le10[1]} Probegriffen ≤ 10 mm. Bis PRE_PICK folgt die Policy, im Abstieg driftet sie ${p.drift_mm[0]}–${p.drift_mm[1]} mm zur Seite. VM-Replay vorher: ${fmt(p.vm_median_mm)} mm.`, T.signal, 0.7);
   api.stamp(1, 'AN DER ANLAGE', [5.4, 3.5], { size: 0.26, rot: -0.05, hex: T.good }, { delay: 1.0 });
-  // Schritt 2: wo der Fehler entsteht und was daraus folgt
-  const rows = [
-    ['Bis PRE_PICK genau, darunter Drift', `bis ${p.follow_mm[1]} mm auf der Bahn, im senkrechten Abstieg ${p.drift_mm[0]}–${p.drift_mm[1]} mm zur Seite: solche Zustände fehlen in den Daten, der Trichter dämpft dort das Rauschen auf null`],
-    ['Folgerung', `gezielter Versatz im Anflug (${p.offset_mm[0]}–${p.offset_mm[1]} mm, ${p.offset_deg[0]}–${p.offset_deg[1]}°), Policy nur für den Griff – den Transport plant der Planer –, später DAgger`],
-  ];
-  rows.forEach(([t, b], i) => api.row(2, i + 1, t, b, -2.4, { x: X0 + 0.7 + i * 7.3, width: 6.4, size: 0.25, delay: 0.1 + i * 0.15 }));
-  api.text(2, 'Quelle: Doku Modul 4, Kap. 10 (Durchstich, VM-Test, Anlagentest C2)', { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 0.5 });
+  api.text(1, 'Quelle: Berichte/2026-09-17_Durchstich_Policy, Berichte/2026-11-16_Anlagentest_var_C2, Berichte/2026-11-13_VM-Replay', { font: 'mono', size: 0.13, hex: T.inkSoft }, [X0 + 0.7, -3.95], { delay: 0.9 });
 }
 
 // ---------------------------------------------------------------- 6.7 Takt & Sicherheit
@@ -786,11 +1274,19 @@ export function sheetScenes(storyboard) {
     sheetScene(e('1.6'), 4, sheet16),
     sheetScene(e('2.4'), 1, sheet24),
     sheetScene(e('4.6'), 2, sheet47),
-    sheetScene(e('6.3'), 2, sheetFunnel),
-    sheetScene(e('6.4'), 3, sheetDiffusion, { durations: [1.6, 4.0, 1.6] }),
-    sheetScene(e('6.5'), 3, sheetSim),
-    sheetScene(e('6.6'), 2, sheetJitter),
-    sheetScene(e('6.7'), 2, sheetTiming),
+    sheetScene(e('6.2'), 2, sheetIL),
+    sheetScene(e('6.4'), 3, sheetObs),
+    sheetScene(e('6.7'), 2, sheetFunnel),
+    sheetScene(e('6.3'), 3, sheetDiffusion, { durations: [1.6, 4.0, 1.6] }),
+    sheetScene(e('6.9'), 2, sheetSim),
+    sheetScene(e('6.11'), 1, sheetAfterDagger),
+    sheetScene(e('6.12'), 2, sheetSmooth),
+    sheetScene(e('6.13'), 1, sheetLastMm),
+    sheetScene(e('6.14'), 2, sheetAccuracy),
+    { ...sheetScene(e('6.15'), 2, sheetHeat), scrub: { 2: 'rot' }, scrubLabel: 'ziehen: Drehklasse wählen' },
+    sheetScene(e('6.16'), 1, sheetOutlook),
+    sheetScene(e('6.8'), 2, sheetJitter),
+    sheetScene(e('A.9'), 2, sheetTiming),
     sheetScene(e('3.6'), 2, sheet36),
     sheetScene(e('5.9'), 2, sheet75),
     sheetScene(e('7.4'), 2, sheet74),

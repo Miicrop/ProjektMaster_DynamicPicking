@@ -20,6 +20,7 @@ export const T = {
   detect: '#2FE05F', // Bildverarbeitungs-Overlay auf Fotos (klassisches OpenCV-Grün)
   part: '#7B4FA0', // das Bauteil (lila 3D-Druck)
   board: '#3A3F45', // dunkle Platte im Arbeitsbereich
+  waypoint: '#D9A21B', // M4: Wegpunkte ANFLUG, PRE_PICK, PICK (gelb)
 };
 
 // Modulfarben: Blöcke im Architekturbild, Kopflinie der Modulakte, Datenkarten. Kein Rot, kein Lila.
